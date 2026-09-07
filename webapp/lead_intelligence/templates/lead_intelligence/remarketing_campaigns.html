@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Campañas de remarketing{% endblock %}
+{% block content %}<main class="rm-page">
+{% include 'lead_intelligence/_remarketing_ui.html' %}
+<h1>Campañas de remarketing</h1>
+<p>Recupera conversaciones de leads contactados que todavía no respondieron. Cada respuesta detiene la secuencia.</p>
+{% if not gateway_ready %}<p class="rm-warning">El canal de envío aún no está conectado. Puedes preparar y simular campañas; no se enviarán mensajes.</p>{% endif %}
+<a class="rm-button" href="{% url 'analisis_crm:remarketing_campaign_new' %}">Nueva campaña</a>
+{% for campaign in campaigns %}<section class="rm-card">
+<div class="rm-inline"><h2><a href="{% url 'analisis_crm:remarketing_campaign_edit' campaign.pk %}">{{ campaign.name }}</a></h2><span class="rm-status">{{ campaign.get_status_display }}</span></div>
+<p>{{ campaign.steps.count }} plantillas · máximo {{ campaign.daily_limit }} mensajes/día · horario {{ campaign.start_hour }}:00–{{ campaign.end_hour }}:00 Lima</p>
+<p class="rm-help">Estados: {{ campaign.allowed_statuses|join:', ' }} · Canales: {{ campaign.allowed_channels|join:', ' }}</p>
+<div class="rm-inline"><form method="post" action="{% url 'analisis_crm:remarketing_campaign_action' campaign.pk %}">{% csrf_token %}
+{% if campaign.status == 'active' %}<button name="action" value="pause">Pausar</button>{% else %}<button name="action" value="activate">Activar programación</button>{% endif %}
+<button name="action" value="duplicate">Duplicar</button></form>
+<a href="{% url 'analisis_crm:remarketing_deliveries' %}?campaign={{ campaign.pk }}">Ver resultados</a></div>
+</section>{% empty %}<section class="rm-card"><h2>Crea tu primera secuencia</h2><p>Empieza con plantillas a los 120, 240 y 360 minutos. Podrás modificar los pasos antes de activar.</p></section>{% endfor %}
+</main>{% endblock %}

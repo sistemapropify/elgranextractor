@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Configurar remarketing{% endblock %}
+{% block content %}<main class="rm-page">
+{% include 'lead_intelligence/_remarketing_ui.html' %}
+<h1>{% if campaign.pk %}{{ campaign.name }}{% else %}Nueva campaña{% endif %}</h1>
+<p>Condición base: contactado sin respuesta posterior del cliente. Los tiempos se cuentan desde el primer contacto válido, sin sumarse entre sí.</p>
+{% if not editable %}<p class="rm-warning">Esta configuración está protegida. Pausa si está activa; si ya tiene inscripciones, duplícala para crear otra versión y conservar los resultados.</p>{% endif %}
+<form method="post" id="campaign-form">{% csrf_token %}
+<fieldset {% if not editable %}disabled{% endif %}>
+<section class="rm-card"><h2>Condiciones y límites</h2>{{ form.non_field_errors }}<div class="rm-grid">
+{% for field in form %}<div>{{ field.label_tag }}{{ field }}{{ field.errors }}{% if field.help_text %}<span class="rm-help">{{ field.help_text }}</span>{% endif %}</div>{% endfor %}
+</div></section>
+<section class="rm-card"><h2>Plantillas y momentos de envío</h2>
+<p class="rm-help">120 = 2 horas, 240 = 4 horas, 360 = 6 horas desde el contacto. Variables: {% verbatim %}{{nombre}}, {{propiedad}}, {{agente}}{% endverbatim %}. Si faltan datos, se retiene la inscripción.</p>
+{{ steps.management_form }}{{ steps.non_form_errors }}
+<div id="steps">{% for step in steps %}<div class="rm-card rm-step">{{ step.as_p }}</div>{% endfor %}</div>
+<button type="button" id="add-step">Agregar plantilla</button>
+</section>
+<button type="submit">Guardar campaña</button>
+</fieldset></form>
+<template id="empty-step"><div class="rm-card rm-step">{{ steps.empty_form.as_p }}</div></template>
+{% if campaign.pk %}<section class="rm-card"><h2>Simular con un lead</h2><p>Consulta la elegibilidad y los tiempos sin inscribir ni enviar. El envío real vuelve a comprobar horario, ventana y conversación.</p>
+<form method="get" class="rm-inline"><div><label for="lead_id">ID del lead</label><input id="lead_id" type="number" min="1" name="lead_id" required></div><button>Simular</button></form>
+{% if preview %}{% if preview.reason %}<p class="rm-warning">{{ preview.reason }}</p>{% endif %}
+{% for item in preview.steps %}<h3>{{ item.title }} · {{ item.due|date:'d/m/Y H:i' }}</h3><p>{% if item.fits %}Dentro de la ventana; sujeto a horario y límites.{% else %}Se omitiría: fuera de la ventana.{% endif %}</p><blockquote>{{ item.body }}</blockquote>{% endfor %}{% endif %}
+</section>{% endif %}
+<script>
+document.getElementById('add-step').addEventListener('click', function () {
+ const total = document.getElementById('id_steps-TOTAL_FORMS');
+ const template = document.getElementById('empty-step').innerHTML.replace(/__prefix__/g, total.value);
+ document.getElementById('steps').insertAdjacentHTML('beforeend', template);
+ total.value = Number(total.value) + 1;
+});
+</script>
+</main>{% endblock %}

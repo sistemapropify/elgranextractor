@@ -2,13 +2,33 @@ from django.urls import path
 from . import views
 from lead_intelligence import views as intelligence_views
 from lead_intelligence import analytics_api as lead_analytics_api
+from lead_intelligence import remarketing_views
+from lead_intelligence import control_views
+from prospects import app_updates
 
 app_name = 'analisis_crm'
 
 urlpatterns = [
-    # La entrada histórica "Leads CRM" ahora sirve el dashboard gerencial de
-    # Prometeo. Las vistas de detalle antiguas se conservan temporalmente.
-    path('', intelligence_views.management_dashboard, name='dashboard'),
+    path('control/apk/', app_updates.updates, name='mobile_updates'),
+    path('', control_views.board, name='home'),
+    path('control/', control_views.board, name='control_board'),
+    path('control/sincronizar/', control_views.sync_lead, name='control_sync'),
+    path('control/leads/<int:lead_id>/', control_views.lead_detail, name='control_lead'),
+    path('control/leads/<int:lead_id>/compromiso/', control_views.add_commitment, name='control_commitment'),
+    path('control/leads/<int:lead_id>/asignar/', control_views.assign, name='control_assign'),
+    path('control/pendientes/<int:obligation_id>/accion/', control_views.obligation_action, name='control_action'),
+    path('control/reglas/', control_views.rules, name='control_rules'),
+    path('control/directorio/', control_views.directory, name='control_directory'),
+    path('control/directorio/<int:member_id>/', control_views.directory, name='control_member'),
+    path('api/control/snapshot/', control_views.ingest, name='control_ingest'),
+    path('remarketing/campanas/', remarketing_views.campaigns, name='remarketing_campaigns'),
+    path('remarketing/campanas/nueva/', remarketing_views.campaign_edit, name='remarketing_campaign_new'),
+    path('remarketing/campanas/<int:campaign_id>/', remarketing_views.campaign_edit, name='remarketing_campaign_edit'),
+    path('remarketing/campanas/<int:campaign_id>/accion/', remarketing_views.campaign_action, name='remarketing_campaign_action'),
+    path('remarketing/envios/', remarketing_views.deliveries_report, name='remarketing_deliveries'),
+    path('api/remarketing/receipt/', remarketing_views.delivery_receipt, name='remarketing_receipt'),
+    # El control es la entrada operativa; el embudo conserva su URL nombrada.
+    path('resumen/', intelligence_views.management_dashboard, name='dashboard'),
     path('cohortes/', intelligence_views.cohorts_dashboard, name='cohorts'),
     path(
         'calidad-atencion/',

@@ -121,6 +121,9 @@ webapp/*.xlsx
 webapp/~$*.xlsx
 
 # Test artifacts
+.test-deps/
+.local-integration/
+.mobile-implementation/
 eval_output*.txt
 eval_stderr*.txt
 

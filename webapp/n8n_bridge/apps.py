@@ -6,6 +6,9 @@ class N8NBridgeConfig(AppConfig):
     name = "n8n_bridge"
 
     def ready(self):
+        import sys
+        if 'run_lead_control' in sys.argv:
+            return
         from intelligence.skills.registry import SkillRegistry
         from intelligence.skills.propiedades.informacion_inicial_propiedad import (
             InformacionInicialPropiedadSkill,

@@ -47,7 +47,8 @@
     <div>
       <div class="pli-kicker">Inteligencia de Leads</div>
       <h1>Dashboard de remarketing</h1>
-      <p>Analiza TODAS las plantillas de seguimiento autorizadas. Cada plantilla es independiente: intento 1 = primer envío; 2+ = reenvíos de la misma plantilla.</p>
+      <p><a href="{% url 'analisis_crm:remarketing_campaigns' %}">Configurar campañas</a> · <a href="{% url 'analisis_crm:remarketing_deliveries' %}">Envíos y resultados del programador</a></p>
+      <p>Analiza todas las plantillas de seguimiento autorizadas, sus lanzamientos diarios y resultados comerciales posteriores.</p>
     </div>
     <form class="pli-filter pli-filter-wide" method="get" id="rm-filter">
       <div><label for="from">Desde</label><input id="from" name="from" type="date" value="{{ date_from|date:'Y-m-d' }}"></div>

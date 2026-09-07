@@ -1,9 +1,16 @@
 from django.urls import path
 from . import mobile_api, views
+from . import control_api
+from . import app_updates
 
 app_name = 'prospects'
 
 urlpatterns = [
+    path('api/mobile/version/publish/', app_updates.publish_api, name='publish_version'),
+    path('api/mobile/apk/<int:asset_id>/', app_updates.download_apk, name='download_apk'),
+    path('api/mobile/notification-device/', control_api.register_device, name='notification_device'),
+    path('api/mobile/crm-alerts/', control_api.alerts, name='crm_alerts'),
+    path('api/mobile/crm-alerts/<int:pk>/', control_api.alert_detail, name='crm_alert_detail'),
     # Autenticación propia del módulo (Propify, independiente de Prometeo)
     path('login/', views.propify_login, name='login'),
     path('logout/', views.propify_logout, name='logout'),

@@ -377,3 +377,222 @@ class PlantillaMensaje(models.Model):
 
     def __str__(self):
         return self.titulo
+
+
+class RemarketingCampaign(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = 'draft', 'Borrador'
+        ACTIVE = 'active', 'Activa'
+        PAUSED = 'paused', 'Pausada'
+
+    name = models.CharField(max_length=160)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT)
+    revision = models.PositiveIntegerField(default=1)
+    # Positive allowlists: a CRM status/channel that is unknown never opts in.
+    allowed_statuses = models.JSONField(default=list)
+    allowed_channels = models.JSONField(default=list)
+    agent_ids = models.JSONField(default=list, blank=True)
+    contact_sender = models.CharField(max_length=10, default='agent', choices=[('agent', 'Humano'), ('any', 'Humano o bot')])
+    daily_limit = models.PositiveIntegerField(default=100)
+    hourly_limit = models.PositiveIntegerField(default=20)
+    contact_limit = models.PositiveIntegerField(default=3)
+    min_gap_minutes = models.PositiveIntegerField(default=60)
+    window_margin_minutes = models.PositiveIntegerField(default=10)
+    start_hour = models.PositiveSmallIntegerField(default=9)
+    end_hour = models.PositiveSmallIntegerField(default=18)
+    weekdays = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.name
+
+
+class RemarketingStep(models.Model):
+    campaign = models.ForeignKey(RemarketingCampaign, on_delete=models.CASCADE, related_name='steps')
+    title = models.CharField(max_length=160)
+    body = models.TextField()
+    delay_minutes = models.PositiveIntegerField()
+
+    class Meta:
+        ordering = ['delay_minutes', 'pk']
+        constraints = [models.UniqueConstraint(fields=['campaign', 'delay_minutes'], name='rm_unique_step_delay')]
+
+
+class RemarketingEnrollment(models.Model):
+    campaign = models.ForeignKey(RemarketingCampaign, on_delete=models.PROTECT, related_name='enrollments')
+    revision = models.PositiveIntegerField()
+    source_lead_id = models.BigIntegerField(db_index=True)
+    contact_key = models.CharField(max_length=128, db_index=True)
+    episode_key = models.CharField(max_length=64, unique=True)
+    anchor_at = models.DateTimeField()
+    last_inbound_at = models.DateTimeField()
+    # These snapshots are immutable, including policy and rendered messages.
+    policy = models.JSONField(default=dict)
+    context = models.JSONField(default=dict)
+    status = models.CharField(max_length=16, default='active', db_index=True)
+    stop_reason = models.CharField(max_length=200, blank=True)
+    response_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class RemarketingDelivery(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Programado'
+        SENDING = 'sending', 'Enviando'
+        ACCEPTED = 'accepted', 'Aceptado por proveedor'
+        SENT = 'sent', 'Enviado'
+        DELIVERED = 'delivered', 'Entregado'
+        FAILED = 'failed', 'Fallido'
+        UNCERTAIN = 'uncertain', 'Resultado incierto'
+        SKIPPED = 'skipped', 'Omitido'
+        CANCELLED = 'cancelled', 'Cancelado'
+
+    enrollment = models.ForeignKey(RemarketingEnrollment, on_delete=models.PROTECT, related_name='deliveries')
+    position = models.PositiveIntegerField()
+    title = models.CharField(max_length=160)
+    body = models.TextField()
+    due_at = models.DateTimeField(db_index=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
+    idempotency_key = models.UUIDField(unique=True)
+    attempted_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    response_at = models.DateTimeField(null=True, blank=True)
+    provider_message_id = models.CharField(max_length=200, blank=True)
+    reason = models.CharField(max_length=240, blank=True)
+
+    class Meta:
+        ordering = ['due_at', 'pk']
+        constraints = [models.UniqueConstraint(fields=['enrollment', 'position'], name='rm_unique_delivery_step')]
+
+
+class RemarketingRuntime(models.Model):
+    """Singleton mutex for quota reservations, and persistent source scan cursor."""
+    scan_after_id = models.BigIntegerField(default=0)
+
+
+class LeadControlPolicy(models.Model):
+    name = models.CharField(max_length=120, default='Control comercial')
+    active_statuses = models.JSONField(default=list)
+    closed_statuses = models.JSONField(default=list)
+    start_hour = models.PositiveSmallIntegerField(default=9)
+    end_hour = models.PositiveSmallIntegerField(default=18)
+    weekdays = models.JSONField(default=list)
+    holidays = models.JSONField(default=list, blank=True)
+    first_minutes = models.PositiveIntegerField(default=5)
+    first_supervisor = models.PositiveIntegerField(default=15)
+    first_manager = models.PositiveIntegerField(default=30)
+    reply_minutes = models.PositiveIntegerField(default=15)
+    reply_supervisor = models.PositiveIntegerField(default=30)
+    reply_manager = models.PositiveIntegerField(default=60)
+    visit_minutes = models.PositiveIntegerField(default=10)
+    visit_supervisor = models.PositiveIntegerField(default=20)
+    visit_manager = models.PositiveIntegerField(default=30)
+    assignment_minutes = models.PositiveIntegerField(default=2)
+    followup_hours = models.PositiveIntegerField(default=24)
+    stale_minutes = models.PositiveIntegerField(default=15)
+    digest_hour = models.PositiveSmallIntegerField(default=17)
+    revision = models.PositiveIntegerField(default=1)
+    scan_after_id = models.BigIntegerField(default=0)
+    scan_lease_token = models.CharField(max_length=32, blank=True)
+    scan_lease_until = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class LeadControlMember(models.Model):
+    name = models.CharField(max_length=150)
+    identity_type = models.CharField(max_length=15, choices=[('django', 'Django'), ('intelligence', 'Prometeo'), ('propify', 'Propify / APK')])
+    identity_id = models.CharField(max_length=100)
+    mobile_identity_id = models.CharField(max_length=100, blank=True)
+    source_user_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    role = models.CharField(max_length=15, choices=[('agent', 'Agente'), ('supervisor', 'Supervisor'), ('manager', 'Gerencia')], default='agent')
+    email = models.EmailField(blank=True)
+    supervisor = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT, related_name='team')
+    active = models.BooleanField(default=True)
+    away_until = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['identity_type', 'identity_id'], name='lc_unique_identity')]
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class LeadControlState(models.Model):
+    source_lead_id = models.BigIntegerField(unique=True)
+    crm_agent_id = models.BigIntegerField(null=True, blank=True)
+    owner_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    name = models.CharField(max_length=200, blank=True)
+    property_title = models.CharField(max_length=300, blank=True)
+    status_name = models.CharField(max_length=100, blank=True)
+    active = models.BooleanField(default=True, db_index=True)
+    quality = models.CharField(max_length=20, default='unknown')
+    snapshot = models.JSONField(default=dict)
+    observed_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=240, blank=True)
+    entered_at = models.DateTimeField(null=True, blank=True)
+    assignment_since = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class LeadObligation(models.Model):
+    lead = models.ForeignKey(LeadControlState, on_delete=models.PROTECT, related_name='obligations')
+    action = models.OneToOneField(RecommendedAction, on_delete=models.PROTECT, related_name='control')
+    event_key = models.CharField(max_length=64, unique=True)
+    kind = models.CharField(max_length=30, db_index=True)
+    started_at = models.DateTimeField()
+    original_due_at = models.DateTimeField()
+    supervisor_at = models.DateTimeField()
+    manager_at = models.DateTimeField()
+    calendar = models.JSONField(default=dict)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    resolved_evidence = models.JSONField(default=dict)
+
+
+class LeadControlEvent(models.Model):
+    lead = models.ForeignKey(LeadControlState, on_delete=models.PROTECT, related_name='events')
+    obligation = models.ForeignKey(LeadObligation, on_delete=models.PROTECT, related_name='events', null=True, blank=True)
+    kind = models.CharField(max_length=40)
+    actor = models.CharField(max_length=140, default='system')
+    payload = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
+class LeadControlNotice(models.Model):
+    obligation = models.ForeignKey(LeadObligation, on_delete=models.PROTECT, related_name='notices')
+    recipient = models.ForeignKey(LeadControlMember, null=True, blank=True, on_delete=models.PROTECT, related_name='notices')
+    dedupe_key = models.CharField(max_length=160, unique=True)
+    level = models.CharField(max_length=20)
+    channel = models.CharField(max_length=15)
+    destination = models.CharField(max_length=512, blank=True)
+    device_id = models.BigIntegerField(null=True, blank=True)
+    status = models.CharField(max_length=20, default='pending', db_index=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    provider_id = models.CharField(max_length=250, blank=True)
+    last_error = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+
+class LeadControlDigest(models.Model):
+    recipient = models.ForeignKey(LeadControlMember, on_delete=models.PROTECT, related_name='digests')
+    day = models.DateField()
+    payload = models.JSONField(default=dict)
+    email_status = models.CharField(max_length=20, default='pending')
+    emailed_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['recipient', 'day'], name='lc_unique_daily_digest')]
+        ordering = ['-day', '-id']

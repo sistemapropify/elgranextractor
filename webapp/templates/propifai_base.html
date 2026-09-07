@@ -522,6 +522,18 @@
                     <span>Dashboard General</span>
                 </a>
 
+                <!-- Accesos directos de leads -->
+                <a href="/analisis-crm/" class="nav-item {% if request.path == '/analisis-crm/' or request.path == '/analisis-crm/control/' %}active{% endif %}">
+                    <span class="nav-icon">&#x1F3AF;</span>
+                    <span>Control de leads</span>
+                </a>
+                <a href="/analisis-crm/remarketing/campanas/" class="nav-item {% if '/analisis-crm/remarketing/campanas/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F4E8;</span>
+                    <span>Campa&ntilde;as y plantillas</span>
+                </a>
+                <a href="/analisis-crm/control/apk/" class="nav-item {% if '/analisis-crm/control/apk/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F4F1;</span><span>APK y alertas</span>
+                </a>
                 <!-- ===== GESTIÓN INMOBILIARIA ===== -->
                 <div class="nav-section-title" style="margin-top: 12px;">Gesti&oacute;n Inmobiliaria</div>
 
@@ -699,6 +711,19 @@
                 <!-- ===== MARKETING Y PROSPECCIÓN ===== -->
                 <div class="nav-section-title" style="margin-top: 12px;">Marketing & Prospecci&oacute;n</div>
 
+                <div class="nav-item has-submenu {% if '/analisis-crm/remarketing/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F4AC;</span>
+                        <span>Remarketing</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="{% url 'analisis_crm:remarketing_campaigns' %}" class="submenu-item {% if '/remarketing/campanas/' in request.path %}active{% endif %}"><span>Campa&ntilde;as y plantillas</span></a>
+                        <a href="{% url 'analisis_crm:remarketing_deliveries' %}" class="submenu-item {% if '/remarketing/envios/' in request.path %}active{% endif %}"><span>Env&iacute;os y resultados</span></a>
+                        <a href="{% url 'analisis_crm:remarketing' %}" class="submenu-item {% if request.path == '/analisis-crm/remarketing/' %}active{% endif %}"><span>An&aacute;lisis hist&oacute;rico</span></a>
+                    </div>
+                </div>
+
                 <!-- Prospección con submenú -->
                 <div class="nav-item has-submenu {% if '/prospects/' in request.path %}active{% endif %}">
                     <a href="#" class="nav-link submenu-toggle">
@@ -750,10 +775,13 @@
                         <span class="nav-icon">&#x1F4C8;</span><span>Inteligencia de Leads</span><span class="submenu-arrow">&#x25BC;</span>
                     </a>
                     <div class="submenu-items">
-                        <a href="/analisis-crm/" class="submenu-item {% if request.path == '/analisis-crm/' %}active{% endif %}"><span>Resumen y embudo</span></a>
+                        <a href="/analisis-crm/" class="submenu-item {% if request.path == '/analisis-crm/' or '/analisis-crm/control/' in request.path %}active{% endif %}"><span>Centro de control</span></a>
+                        <a href="{% url 'analisis_crm:remarketing_campaigns' %}" class="submenu-item {% if '/remarketing/campanas/' in request.path %}active{% endif %}"><span>Campa&ntilde;as y plantillas</span></a>
+                        <a href="{% url 'analisis_crm:dashboard' %}" class="submenu-item {% if '/analisis-crm/resumen/' in request.path %}active{% endif %}"><span>Resultados y embudo</span></a>
                         <a href="/analisis-crm/cohortes/" class="submenu-item {% if '/cohortes/' in request.path %}active{% endif %}"><span>Cohortes</span></a>
                         <a href="/analisis-crm/agenda/" class="submenu-item {% if '/analisis-crm/agenda/' in request.path %}active{% endif %}"><span>Análisis de agenda</span></a>
                         <a href="/analisis-crm/calidad-atencion/" class="submenu-item {% if '/calidad-atencion/' in request.path %}active{% endif %}"><span>Calidad de atenci&oacute;n</span></a>
+                         <a href="/analisis-crm/remarketing/" class="submenu-item {% if request.path == '/analisis-crm/remarketing/' %}active{% endif %}"><span>An&aacute;lisis de remarketing</span></a>
                         <a href="/analisis-crm/calidad-motor/" class="submenu-item {% if '/calidad-motor/' in request.path %}active{% endif %}"><span>Calidad del motor IA</span></a>
                         <a href="/analisis-crm/propiedades/" class="submenu-item {% if '/analisis-crm/propiedades/' in request.path %}active{% endif %}"><span>Rendimiento de propiedades</span></a>
                         <a href="/analisis-crm/calidad-motor-ia/" class="submenu-item {% if '/calidad-motor-ia/' in request.path %}active{% endif %}"><span>Motor IA de respuestas</span></a>

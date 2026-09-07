@@ -1,0 +1,3 @@
+# Optional server dependency for direct Firebase HTTP v1 notifications.
+# SMTP and internal notices use Django and do not need this package.
+google-auth>=2.0,<3.0

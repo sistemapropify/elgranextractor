@@ -14,6 +14,37 @@ broker real.
 from celery import shared_task
 
 
+@shared_task(name='lead_intelligence.tasks.procesar_control_leads')
+def procesar_control_leads():
+    from django.core.management import call_command
+    from .control_notifications import enabled
+    if not enabled('LEAD_CONTROL_SCHEDULER_ENABLED'):
+        return {'status': 'disabled'}
+    call_command('process_lead_control')
+    return {'status': 'processed'}
+
+
+@shared_task(name='lead_intelligence.tasks.procesar_plazos_leads')
+def procesar_plazos_leads():
+    from django.core.management import call_command
+    from .control_notifications import enabled
+    if not enabled('LEAD_CONTROL_SCHEDULER_ENABLED'):
+        return {'status': 'disabled'}
+    call_command('process_lead_control', tick_only=True, notify=enabled('LEAD_CONTROL_NOTIFY_ENABLED'))
+    return {'status': 'processed'}
+
+
+@shared_task(name="lead_intelligence.tasks.procesar_remarketing")
+def procesar_remarketing():
+    from django.core.management import call_command
+    from .remarketing_gateway import config
+    # Explicit opt-in; no existing campaign is activated by installation.
+    if str(config('REMARKETING_SCHEDULER_ENABLED')).lower() not in ('1', 'true'):
+        return {'status': 'disabled'}
+    call_command('process_remarketing', send=str(config('REMARKETING_SEND_ENABLED')).lower() in ('1', 'true'))
+    return {'status': 'processed'}
+
+
 @shared_task(name="lead_intelligence.tasks.analizar_conversaciones_lead")
 def analizar_conversaciones_lead(
     date_from=None,

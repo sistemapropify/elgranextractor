@@ -80,8 +80,9 @@ class LeadIntelligenceRoutingTests(SimpleTestCase):
             re.compile(r"\b(?:INSERT|UPDATE|DELETE|MERGE|ALTER|DROP|CREATE)\b"),
         )
 
-    def test_existing_menu_url_points_to_management_dashboard(self):
-        self.assertEqual(reverse("analisis_crm:dashboard"), "/analisis-crm/")
+    def test_management_summary_has_its_own_section(self):
+        self.assertEqual(reverse("analisis_crm:dashboard"), "/analisis-crm/resumen/")
+        self.assertEqual(reverse("analisis_crm:home"), "/analisis-crm/")
         self.assertEqual(
             reverse("analisis_crm:management_summary_api"),
             "/analisis-crm/api/management/summary/",

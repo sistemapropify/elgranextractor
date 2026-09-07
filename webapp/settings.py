@@ -19,7 +19,16 @@ import environ
 
 BASE_DIR = Path(__file__).resolve().parent
 env = environ.Env()
-environ.Env.read_env(BASE_DIR / '.env')
+# The local service file is the source of truth for runtime integrations.
+# Explicitly override inherited empty values, otherwise a blank parent value
+# prevents Firebase and other configured services from starting.
+environ.Env.read_env(BASE_DIR / '.env', overwrite=True)
+
+# Integraciones de alertas móviles. Se declaran como ajustes para que las
+# vistas, los procesos en segundo plano y el panel de control consulten la
+# misma configuración cargada desde .env.
+LEAD_CONTROL_FIREBASE_PROJECT_ID = os.environ.get('LEAD_CONTROL_FIREBASE_PROJECT_ID', '')
+GOOGLE_APPLICATION_CREDENTIALS = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '')
 
 # Metadatos de actualización in-app de propitools; se controlan por variables de entorno.
 MOBILE_APP_LATEST_VERSION_CODE = env('MOBILE_APP_LATEST_VERSION_CODE', default=1)

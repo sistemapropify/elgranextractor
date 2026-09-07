@@ -22,6 +22,11 @@ class IntelligenceConfig(AppConfig):
         4. Pre-calcula embeddings del Semantic Router (F1-001)
         5. Pre-carga modelo de embeddings (SPEC-014)
         """
+        # The deterministic portfolio monitor does not run agents, embeddings,
+        # user registration or chat handlers. Keep its startup independent of AI.
+        if 'run_lead_control' in sys.argv:
+            logger.info('Control de leads: inicio sin precarga de modelos IA.')
+            return
         # ── Verificar si estamos en proceso principal ──
         # Evitar precarga durante migraciones, collectstatic, shell, test
         # CRITICO: Incluir gunicorn para evitar que workers carguen el modelo

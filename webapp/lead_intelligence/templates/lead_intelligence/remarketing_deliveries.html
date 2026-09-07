@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Envíos de remarketing{% endblock %}
+{% block content %}<main class="rm-page">
+{% include 'lead_intelligence/_remarketing_ui.html' %}
+<h1>Envíos y resultados</h1>
+<p>Envíos registrados por el programador. Aceptado por el proveedor no significa entregado. La respuesta incluye respuestas negativas.</p>
+<form class="rm-card rm-inline" method="get">
+<div><label for="from">Desde</label><input id="from" name="from" type="date" value="{{ date_from|date:'Y-m-d' }}"></div>
+<div><label for="to">Hasta</label><input id="to" name="to" type="date" value="{{ date_to|date:'Y-m-d' }}"></div>
+<div><label for="campaign">Campaña</label><select id="campaign" name="campaign"><option value="">Todas</option>{% for campaign in campaigns %}<option value="{{ campaign.pk }}" {% if selected_campaign == campaign.pk %}selected{% endif %}>{{ campaign.name }}</option>{% endfor %}</select></div>
+<div><label for="granularity">Agrupar por</label><select id="granularity" name="granularity"><option value="hour" {% if granularity == 'hour' %}selected{% endif %}>Hora</option><option value="day" {% if granularity == 'day' %}selected{% endif %}>Día</option><option value="week" {% if granularity == 'week' %}selected{% endif %}>Semana</option><option value="month" {% if granularity == 'month' %}selected{% endif %}>Mes</option></select></div>
+<button>Consultar</button><button name="export" value="csv">Exportar CSV</button>
+<div><label for="step">Paso / plantilla (opcional)</label><input id="step" name="step" type="number" min="1" value="{{ selected_step|default_if_none:'' }}" placeholder="Todos"></div>
+</form>
+<section class="rm-card"><h2>Conversaciones recuperadas</h2><p>{{ responded }} episodios con respuesta atribuida de {{ reached }} episodios con envío confirmado: <strong>{{ recovery_rate|default_if_none:'—' }}{% if recovery_rate != None %}%{% endif %}</strong>.</p><p class="rm-help">Cada episodio cuenta una vez, aunque reciba varias plantillas. Resultado provisional del conjunto filtrado; una respuesta no implica interés positivo.</p></section>
+<section class="rm-card rm-table-wrap"><h2>Volumen y respuesta</h2>
+<table><thead><tr><th>Período (Lima)</th><th>Enviados</th><th>Entregados confirmados</th><th>Contactos</th><th>Respuestas</th><th>Respuesta provisional</th><th>Respuesta a 24 h</th><th>Programados</th><th>Aceptados</th><th>Fallidos</th><th>Inciertos / en proceso</th><th>Omitidos / cancelados</th></tr></thead><tbody>
+{% for row in rows %}<tr><td>{{ row.period }}</td><td>{{ row.sent }}</td><td>{{ row.delivered }}</td><td>{{ row.contacts }}</td><td>{{ row.responses }}</td><td>{{ row.rate|default_if_none:'—' }}{% if row.rate != None %}%{% endif %}</td><td>{{ row.mature_rate|default_if_none:'—' }}{% if row.mature_rate != None %}%{% endif %}</td><td>{{ row.pending }}</td><td>{{ row.accepted }}</td><td>{{ row.failed }}</td><td>{{ row.uncertain }}</td><td>{{ row.skipped }}</td></tr>{% empty %}<tr><td colspan="12">No hay registros en este período.</td></tr>{% endfor %}
+</tbody></table><p class="rm-help">La tasa a 24 h usa solo envíos que completaron 24 horas de observación. Entregados muestra confirmaciones recibidas; la ausencia de confirmación no equivale a fallo. Programados se agrupan por su fecha prevista; envíos por la fecha real.</p></section>
+<section class="rm-card rm-table-wrap"><h2>Últimos 200 pasos del período</h2><table><thead><tr><th>Campaña / Lead</th><th>Plantilla</th><th>Previsto</th><th>Estado</th><th>Motivo</th></tr></thead><tbody>
+{% for item in deliveries %}<tr><td>{{ item.enrollment.campaign.name }}<br>Lead #{{ item.enrollment.source_lead_id }}</td><td>{{ item.position }} · {{ item.title }}</td><td>{{ item.due_at|date:'d/m/Y H:i' }}</td><td>{{ item.get_status_display }}</td><td>{{ item.reason|default:'—' }}</td></tr>{% empty %}<tr><td colspan="5">Sin pasos.</td></tr>{% endfor %}
+</tbody></table></section>
+</main>{% endblock %}

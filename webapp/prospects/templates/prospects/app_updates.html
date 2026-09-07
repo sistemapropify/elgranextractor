@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="lc-page">
+{% include 'lead_intelligence/_control_ui.html' %}
+<h1>APK · Alertas y actualizaciones</h1>
+<p>Propitools usa los mismos pendientes del centro de control. Aquí puedes verificar la conexión de los teléfonos y publicar una versión para que aparezca al abrir la aplicación.</p>
+<div class="lc-grid">
+<div class="lc-card lc-kpi"><strong>{{ device_count }}</strong>Teléfonos registrados activos</div>
+<div class="lc-card lc-kpi"><strong>{{ member_count }}</strong>Personas con identidad móvil vinculada</div>
+<div class="lc-card lc-kpi"><strong>{{ accepted_count }}</strong>Avisos aceptados por Firebase</div>
+<div class="lc-card lc-kpi"><strong>{{ uncertain_count }}</strong>Avisos sin confirmación</div>
+</div>
+<div class="lc-card"><h2>Conexión de las alertas</h2>
+<p>Envío desde el servidor: <strong>{% if push_enabled %}habilitado{% else %}desactivado{% endif %}</strong>.</p>
+<p>Proyecto Firebase del servidor: <strong>{% if firebase_configured and firebase_credential_configured %}credencial configurada; falta una entrega de prueba{% elif firebase_configured %}proyecto indicado, falta la credencial{% else %}pendiente de configurar{% endif %}</strong>.</p>
+<p>Publicación automática desde GitHub: <strong>{% if publish_configured %}credencial configurada{% else %}pendiente de configurar{% endif %}</strong>.</p>
+<p>Para recibir avisos, la persona debe figurar en <a href="{% url 'analisis_crm:control_directory' %}">Directorio</a> con su identidad de Propify, iniciar sesión en la nueva APK y permitir las notificaciones. Un aviso aceptado por Firebase todavía no significa que fue leído.</p></div>
+<div class="lc-card"><h2>Versiones publicadas</h2><div class="lc-table"><table><thead><tr><th>Versión</th><th>Compilación</th><th>Publicación</th><th>Instalador</th></tr></thead><tbody>
+{% for version in versions %}<tr><td>{{ version.version_name }}</td><td>{{ version.version_code }}</td><td>{% if version.published %}Publicada{% else %}Borrador{% endif %}</td><td><a href="{{ version.download_url }}" rel="noopener">Descargar APK</a></td></tr>{% empty %}<tr><td colspan="4">Todavía no hay una actualización publicada.</td></tr>{% endfor %}
+</tbody></table></div></div>
+<details class="lc-card"><summary>Publicar una actualización manualmente</summary>
+<p>Usa un APK con la misma firma que la versión instalada y un número de compilación mayor. La URL debe permitir descargar el archivo sin iniciar sesión. Al publicar, los teléfonos verán la actualización; Android pedirá confirmar su instalación.</p>
+<form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Publicar esta actualización</button></form></details>
+</div>
+{% endblock %}

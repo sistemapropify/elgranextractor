@@ -22,7 +22,7 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 # Configuración específica para usar base de datos como backend
 app.conf.update(
     # Usar base de datos como broker (solución temporal)
-    broker_url='memory://',
+    broker_url=settings.CELERY_BROKER_URL,
     result_backend='django-db',
     
     # Configuración de tareas
@@ -74,6 +74,21 @@ app.conf.update(
     
     # Configuración de beat (tareas periódicas)
     beat_schedule={
+        'plazos-leads-cada-minuto': {
+            'task': 'lead_intelligence.tasks.procesar_plazos_leads',
+            'schedule': 60.0,
+            'options': {'queue': 'notificaciones', 'expires': 55},
+        },
+        'control-leads-cada-minuto': {
+            'task': 'lead_intelligence.tasks.procesar_control_leads',
+            'schedule': 60.0,
+            'options': {'queue': 'default'},
+        },
+        'procesar-remarketing-cada-minuto': {
+            'task': 'lead_intelligence.tasks.procesar_remarketing',
+            'schedule': 60.0,
+            'options': {'queue': 'default'},
+        },
         'revisar-fuentes-activas-cada-hora': {
             'task': 'colas.tasks.revisar_fuentes_activas',
             'schedule': 3600.0,  # Cada hora
