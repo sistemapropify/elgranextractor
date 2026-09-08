@@ -73,12 +73,17 @@ def signed_prospect_photo(prospect):
         return raw_url
 
 
+def _post_login_target(request):
+    """Conserva la ficha solicitada y usa el dashboard como destino inicial."""
+    destination = safe_next_url(request)
+    if destination.rstrip('/') in ('/prospects', '/prospects/login'):
+        return '/marketing/prospeccion/'
+    return destination
+
+
 def propify_login(request):
-    """Login de Propify. Tras loguear SIEMPRE se abre el dashboard cartográfico
-    de prospección (/marketing/prospeccion/)."""
-    dashboard_url = '/marketing/prospeccion/'
     if request.method == 'GET' and get_web_propify_principal(request) is not None:
-        return redirect(dashboard_url)
+        return redirect(_post_login_target(request))
 
     error = ''
     username = ''
@@ -96,12 +101,12 @@ def propify_login(request):
                 request.session[WEB_TOKEN_SESSION_KEY] = principal.token
                 request.session[WEB_PROFILE_SESSION_KEY] = principal.profile
                 request.session.set_expiry(60 * 60 * 24 * 30)  # conservar login 30 días
-                return redirect(dashboard_url)
+                return redirect(_post_login_target(request))
 
     return render(request, 'prospects/propify_login.html', {
         'error': error,
         'username': username,
-        'next': dashboard_url,
+        'next': _post_login_target(request),
     })
 
 
