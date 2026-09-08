@@ -413,6 +413,7 @@
             </div>
         </div>
 
+        <div id="runCoverage" style="font-size:12px;overflow-wrap:anywhere;" aria-live="polite"></div>
         <hr style="border-color:var(--border-color);margin:12px 0;">
 
         <h3 style="margin:0 0 8px;font-size:13px;font-weight:600;">
@@ -600,6 +601,7 @@ function control(action) {
     const requestTimeout = setTimeout(() => requestController.abort(), 20000);
     if ((action === 'start' || action === 'preview')) {
         document.getElementById('btnStart').disabled = true;
+        document.getElementById('btnPreview').disabled = true;
         document.getElementById('terminalTitle').textContent = 'Iniciando...';
     }
 
@@ -635,6 +637,7 @@ function control(action) {
             } else if (action === 'pause') {
                 updateUI('paused');
             } else if (action === 'resume') {
+                connectSSE(currentJobId);
                 updateUI('running');
             } else if (action === 'stop') {
                 updateUI('stopped');
@@ -774,6 +777,7 @@ function clearTerminal() {
 
 // ── UI State ──
 function updateUI(estado) {
+    document.getElementById('btnPreview').disabled = ['idle', 'running', 'paused'].includes(estado);
     const btnStart = document.getElementById('btnStart');
     const btnPause = document.getElementById('btnPause');
     const btnResume = document.getElementById('btnResume');
@@ -853,6 +857,17 @@ function loadStats(jobId) {
             document.getElementById('statProgreso').textContent = (data.progreso || 0) + '%';
             document.getElementById('statPortal').textContent = data.portal_actual || '—';
             document.getElementById('statOrigen').textContent = data.origen || '—';
+            const coverage = document.getElementById('runCoverage');
+            coverage.replaceChildren();
+            for (const portal of data.portales || []) {
+                const row = document.createElement('p');
+                const source = portal.source || {}, discovery = portal.discovery || {};
+                row.textContent = `${portal.nombre}: ${discovery.unique_ids ?? '—'} IDs · ` +
+                    `${portal.pending ?? 0} pendientes · ${discovery.stop_reason || 'en curso'}\n` +
+                    `${source.source_url || 'URL aún no registrada'}`;
+                row.style.whiteSpace = 'pre-line';
+                coverage.appendChild(row);
+            }
         })
         .catch(err => console.warn('No se pudo actualizar el estado:', err));
 }

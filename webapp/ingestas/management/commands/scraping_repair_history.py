@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from uuid import UUID
 from django.core.management.base import BaseCommand, CommandError
+from django.core.exceptions import ValidationError
 from ingestas.scraping_history import apply_plan, rollback_batch
 
 
@@ -26,6 +27,6 @@ class Command(BaseCommand):
                 if len(proposals) > 1000:
                     raise ValueError('Máximo 1000 propiedades por lote para acotar los bloqueos SQL.')
                 result = apply_plan(proposals, apply=options['apply'])
-        except (ValueError, KeyError, TypeError, OSError) as exc:
+        except (ValueError, KeyError, TypeError, OSError, ValidationError) as exc:
             raise CommandError(str(exc)) from exc
         self.stdout.write(json.dumps(result))

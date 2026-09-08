@@ -44,4 +44,6 @@ RUN useradd --create-home --uid 10001 worker \
 USER worker
 # Populate package fingerprint caches at build time; CI repeats this with networking disabled.
 RUN python -m scrapi.worker_smoke
+HEALTHCHECK --interval=30s --timeout=20s --start-period=240s --retries=3 \
+    CMD ["python", "manage.py", "scraping_health"]
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]

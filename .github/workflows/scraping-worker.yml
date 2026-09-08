@@ -13,10 +13,14 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Startup shell syntax
+        run: bash -n startup.sh deploy/scraping/entrypoint.sh
       - name: Build exact worker image
         run: docker build --platform linux/amd64 --build-arg SCRAPING_REVISION="$GITHUB_SHA" -f deploy/scraping/Dockerfile -t scraping-worker:test .
       - name: Browser works without downloads or network
         run: docker run --rm --network none --entrypoint python scraping-worker:test -m scrapi.worker_smoke
+      - name: Dashboard preview, filters and resume in a real browser
+        run: docker run --rm --network none --entrypoint python scraping-worker:test -m scrapi.dashboard_smoke
       - name: Database, adapters and dashboard regressions
         run: docker run --rm --network none -e CAMOUFOX_EXECUTABLE_PATH= -e CAMOUFOX_AUTO_INSTALL=1 -e CAMOUFOX_HEADLESS=0 --entrypoint python scraping-worker:test manage.py test ingestas.tests scrapi.test_camoufox_launcher --settings=ingestas.scraping_test_settings --noinput
       - name: Model and migration consistency

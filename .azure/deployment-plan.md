@@ -31,20 +31,21 @@ from a worker image release.
 ## Deliverables and validation
 - [x] Worker Dockerfile, pinned browser manifest, entrypoint and smoke check.
 - [x] CI workflow for Linux browser launch and isolated SQL Server tests (prepared, not executed).
-- [ ] Successful CI build and real Linux browser launch.
-- [x] Isolated SQLite database tests and additive migrations 0017/0018.
+- [x] Successful CI build and real Linux browser launch, including network-disabled runtime.
+- [x] Isolated SQLite and SQL Server database tests; additive migrations 0016–0019.
 - [x] Worker/web coordination and rollback instructions in deploy/scraping/README.md.
 - [ ] Azure validation before production release.
 
 ## Deployment gate
-The local host currently has no Docker executable. A Linux image build and smoke
-run must pass in CI or an available Docker host before production activation.
+The local host has no Docker/WSL runtime. Linux image build, network-disabled
+browser launch and isolated SQL Server tests passed in GitHub Actions run
+34240278527 on commit 8122c8cc. Require successful checks on the final release commit.
 Deployment target sizing and identity configuration must use the existing Azure
 context; do not create a parallel environment implicitly.
 
 ## Validation proof
 
-- 88 tests passed with `manage.py test ingestas.tests scrapi.test_camoufox_launcher
+- 103 local tests passed with `manage.py test ingestas.tests scrapi.test_camoufox_launcher
   --settings=ingestas.scraping_test_settings --noinput` in the isolated local runtime.
 - `manage.py makemigrations --check --dry-run --settings=ingestas.scraping_test_settings`:
   no model/migration drift. SQLite test databases apply migrations; production untouched.
@@ -58,9 +59,16 @@ context; do not create a parallel environment implicitly.
   Marketplace scroll reached 144 distinct IDs with a 120-row sample cap.
 - Browser archive, Python base image, Microsoft repository bootstrap and SQL test
   image hashes verified from public official registries/releases. Python Linux
-  wheels downloaded and recorded with SHA256. Docker build still unexecuted.
+  wheels downloaded and recorded with SHA256. Docker build passed in CI.
+- Integration branch `codex/scraping-integral-20260908` starts at shared revision
+  f4ead8d4. Other modules and the mobile startup migration were preserved.
+- Historical repair application and guarded rollback use an atomic SQL journal;
+  tests cover dry run, conflicting updates, tampering and rollback after new data.
+- Dashboard browser fixture passed locally; final CI also exercises this fixture.
+- Worker health is scoped by hostname; metrics export and graceful shutdown implemented.
 
-Production gates remain open: Linux/SQL CI, latest shared revision integration,
-real SQL migration review, deployment topology/resources and pilot extraction.
+Production gates remain open: successful final-commit CI, real SQL migration review,
+deployment topology/resources and pilot extraction. Initial Linux/SQL validation
+and integration against the observed shared revision are complete.
 No Azure resource writes, production database migrations or historical repairs
 were performed.

@@ -1694,6 +1694,7 @@ def _decorate_scraping_job(job):
         )
     job.portales_detalle = [
         {
+            'portal': portal,
             'nombre': SCRAPING_PORTAL_LABELS.get(portal, portal.title()),
             'estado': (resultados.get(portal) or {}).get('estado'),
             'detectadas': (resultados.get(portal) or {}).get('detectadas'),
@@ -2050,10 +2051,14 @@ class ScrapingControlView(LoginRequiredMixin, View):
                 )
 
             if job.estado == 'paused':
-                updated = ScrapingJob.objects.filter(
-                    id=job_id, estado='paused'
-                ).update(estado='running')
-                execution_mode = 'existing'
+                with transaction.atomic():
+                    current = ScrapingJob.objects.select_for_update().get(pk=job_id)
+                    alive = bool(current.execution_token and current.lease_expires_at
+                                 and current.lease_expires_at > timezone.now())
+                    updates = {'estado': 'running'} if alive else {
+                        'estado': 'idle', 'execution_token': None, 'lease_expires_at': None}
+                    updated = ScrapingJob.objects.filter(pk=job_id, estado='paused').update(**updates)
+                execution_mode = ('existing' if alive else _launch_scraping_job(job.pk)) if updated else None
             elif job.estado in ('error', 'stopped'):
                 # El proceso anterior ya no está vivo: liberar Camoufox,
                 # volver el job reclamable y despachar desde sus checkpoints.
@@ -2201,6 +2206,14 @@ class ScrapingStatusView(LoginRequiredMixin, View):
 
         ultimos_logs = ScrapingLog.objects.filter(job=job).order_by('-id')[:50]
         _decorate_scraping_job(job)
+        runs = {str(run.token): run for run in job.ejecuciones_portal.all()}
+        tokens = (job.parametros or {}).get('lifecycle_runs') or {}
+        for entry in job.portales_detalle:
+            run = runs.get(tokens.get(entry['portal']))
+            if run:
+                entry['discovery'] = run.discovery or {}
+                entry['source'] = run.source_config or {}
+                entry['pending'] = run.candidates.filter(status__in=['pending', 'error']).count()
 
         return JsonResponse({
             'id': job.id,

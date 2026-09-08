@@ -5,9 +5,9 @@ from datetime import timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from django.test import TestCase
+from django.test import TestCase, SimpleTestCase, RequestFactory, override_settings
 from django.utils import timezone
 from colas.scraping_tasks import _release_for_shutdown
 from ingestas.lifecycle import start_or_resume_portal_run
@@ -71,6 +71,32 @@ class HistoryRepairTests(TestCase):
 
 
 class WorkerShutdownTests(TestCase):
+    @override_settings(SCRAPING_EXECUTION_MODE='external')
+    def test_resume_after_paused_worker_shutdown_dispatches_again(self):
+        from ingestas.views import ScrapingControlView
+        job = ScrapingJob.objects.create(estado='paused', execution_token=None)
+        request = RequestFactory().post('/ingestas/scraping/control/', {'action': 'resume', 'job_id': job.pk})
+        request.user = SimpleNamespace(is_authenticated=True)
+        with patch('ingestas.views._launch_scraping_job', return_value='external') as launch:
+            response = ScrapingControlView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        launch.assert_called_once_with(job.pk)
+        job.refresh_from_db()
+        self.assertEqual(job.estado, 'idle')
+
+    def test_live_paused_worker_resumes_without_second_dispatch(self):
+        from ingestas.views import ScrapingControlView
+        job = ScrapingJob.objects.create(estado='paused', execution_token=uuid.uuid4(),
+            lease_expires_at=timezone.now()+timedelta(seconds=180))
+        request = RequestFactory().post('/ingestas/scraping/control/', {'action': 'resume', 'job_id': job.pk})
+        request.user = SimpleNamespace(is_authenticated=True)
+        with patch('ingestas.views._launch_scraping_job') as launch:
+            response = ScrapingControlView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        launch.assert_not_called()
+        job.refresh_from_db()
+        self.assertEqual(job.estado, 'running')
+
     def test_shutdown_preserves_checkpoint_and_releases_claim(self):
         token = uuid.uuid4()
         job = ScrapingJob.objects.create(estado='running', execution_token=token,
@@ -114,3 +140,63 @@ class DetailRecoveryTests(IsolatedAsyncioTestCase):
             with self.assertRaises(ScrapingInterrupted):
                 await prepare_detail('urbania', None, None, {'ID': '1'}, emit)
         enrich.assert_not_awaited()
+
+
+class PendingReplayTests(SimpleTestCase):
+    def test_failed_pending_detail_does_not_starve_later_candidate(self):
+        from scrapi.paged_engine import run_paged
+        page = SimpleNamespace(set_viewport_size=AsyncMock())
+        browser = SimpleNamespace(new_page=AsyncMock(return_value=page))
+        context = MagicMock()
+        context.__aenter__ = AsyncMock(return_value=browser)
+        context.__aexit__ = AsyncMock(return_value=False)
+        state = {'pending': [{'id': '1', 'raw': {'ID': '1'}}, {'id': '2', 'raw': {'ID': '2'}}],
+                 'discovery': {'complete': True, 'stop_reason': 'next_disabled', 'unique_ids': 2}}
+        saved, events = [], []
+        def save(rows):
+            saved.extend(rows)
+            return {'total': len(saved)}
+        def progress(payload):
+            events.append(payload)
+            return True
+        with patch('camoufox.async_api.AsyncCamoufox', return_value=context), \
+             patch('scrapi.camoufox_launcher.camoufox_kwargs', return_value={}), \
+             patch('scrapi.paged_engine.guarded_navigation', AsyncMock()), \
+             patch('scrapi.paged_engine.prepare_detail', AsyncMock(side_effect=[RuntimeError('gone'), {'id_origen': '2'}])):
+            result = run_paged('urbania', source_url='https://urbania.pe/buscar/casas',
+                               resume_state=state, progress_callback=progress, batch_callback=save)
+        self.assertEqual(saved, [{'id_origen': '2'}])
+        self.assertEqual(result.discovery.details_failed, 1)
+        self.assertTrue(result.discovery.complete)  # Coverage evidence remains; pending still blocks finalization.
+        self.assertTrue(any(e.get('candidate_error', {}).get('id') == '1' for e in events))
+
+    @override_settings(ALLOWED_HOSTS=['testserver'])
+    def test_anonymous_requests_cannot_read_logs_or_status(self):
+        from django.contrib.auth.models import AnonymousUser
+        from ingestas.views import ScrapingStreamView, ScrapingStatusView
+        for view in (ScrapingStreamView, ScrapingStatusView):
+            request = RequestFactory().get('/ingestas/scraping/stream/1/?poll=1')
+            request.user = AnonymousUser()
+            self.assertEqual(view.as_view()(request, job_id=1).status_code, 302)
+
+
+class WorkerHealthTests(TestCase):
+    def test_another_host_cannot_mask_missing_worker(self):
+        from ingestas.models import ScrapingWorker
+        from ingestas.scraping_health import worker_health
+        ScrapingWorker.objects.create(identity='other', heartbeat_at=timezone.now())
+        self.assertTrue(worker_health()['ready'])
+        self.assertFalse(worker_health('this-host')['ready'])
+
+    def test_metrics_report_expired_lease_and_no_worker_without_writes(self):
+        import io
+        import json
+        from django.core.management import call_command
+        job = ScrapingJob.objects.create(estado='running', lease_expires_at=timezone.now()-timedelta(seconds=1))
+        output = io.StringIO()
+        call_command('scraping_metrics', stdout=output)
+        report = json.loads(output.getvalue())
+        self.assertIn('execution.lease_expired', report['issues'])
+        self.assertIn('worker.unavailable', report['issues'])
+        job.refresh_from_db()
+        self.assertEqual(job.estado, 'running')

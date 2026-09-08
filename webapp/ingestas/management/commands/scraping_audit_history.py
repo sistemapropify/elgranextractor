@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 from django.core.management.base import BaseCommand
+from django.core.exceptions import ValidationError
 from ingestas.models import PropiedadesCompetencia
 from ingestas.scraping_history import PORTALS, propose
 
@@ -24,7 +25,7 @@ class Command(BaseCommand):
                 last_id = prop.pk
                 try:
                     proposal = propose(prop)
-                except (ValueError, TypeError, KeyError):
+                except (ValueError, TypeError, KeyError, ValidationError):
                     skipped += 1
                     continue
                 if proposal:
