@@ -882,71 +882,11 @@ function initMap() {
 
     // La Drawing Library fue retirada por Google en mayo de 2026.
     // La visualización de zonas no debe depender de las herramientas de dibujo.
-    const drawingAvailable = Boolean(
-        google.maps.drawing &&
-        google.maps.drawing.DrawingManager &&
-        google.maps.drawing.OverlayType
-    );
-
-    if (drawingAvailable) {
-        drawingManager = new google.maps.drawing.DrawingManager({
-            drawingMode: null,
-            drawingControl: false,
-            polygonOptions: {
-                fillColor: ZONE_COLORS.fillNew,
-                fillOpacity: 0.4,
-                strokeColor: ZONE_COLORS.new,
-                strokeWeight: 2,
-                editable: true,
-                draggable: true
-            },
-            rectangleOptions: {
-                fillColor: ZONE_COLORS.fillNew,
-                fillOpacity: 0.4,
-                strokeColor: ZONE_COLORS.new,
-                strokeWeight: 2,
-                editable: true,
-                draggable: true
-            },
-            circleOptions: {
-                fillColor: ZONE_COLORS.fillNew,
-                fillOpacity: 0.4,
-                strokeColor: ZONE_COLORS.new,
-                strokeWeight: 2,
-                editable: true,
-                draggable: true
-            },
-            markerOptions: {
-                draggable: true,
-                animation: google.maps.Animation.DROP
-            }
-        });
-        drawingManager.setMap(map);
-
-        google.maps.event.addListener(drawingManager, 'overlaycomplete', function(event) {
-            if (selectedShape) selectedShape.setMap(null);
-            selectedShape = event.overlay;
-            selectedShape.type = event.type;
-            google.maps.event.clearListeners(selectedShape, 'click');
-            google.maps.event.addListener(selectedShape, 'click', function() {
-                selectShape(this);
-            });
-            drawingManager.setDrawingMode(null);
-            resetDrawButtons();
-            updateZoneDataFromShape(selectedShape);
-            showAlert('Forma dibujada. Asigna un nombre y guarda.', 'success');
-        });
-        setupDrawButtons();
-    } else {
-        document.querySelectorAll('.btn-draw').forEach(function(btn) {
-            btn.disabled = true;
-            btn.title = 'Herramienta de dibujo en migración';
-        });
-        showAlert(
-            'Los cuadrantes existentes están disponibles. La creación y edición está temporalmente deshabilitada mientras se migra la herramienta de dibujo.',
-            'warning'
-        );
-    }
+    // Google retiró DrawingManager (Maps JS v3.65+). El polígono se dibuja
+    // manualmente: cada clic añade un vértice; doble clic (o volver a pulsar el
+    // botón Polígono) termina la forma y la deja lista para nombrar y guardar.
+    installPolygonTool(map);
+    setupDrawButtons();
 
     // Cargar zonas existentes
     loadZones();
@@ -977,39 +917,131 @@ function initMap() {
 // ============================================================
 
 function setupDrawButtons() {
-    const drawModes = {
-        'draw-polygon': google.maps.drawing.OverlayType.POLYGON,
-        'draw-rectangle': google.maps.drawing.OverlayType.RECTANGLE,
-        'draw-circle': google.maps.drawing.OverlayType.CIRCLE,
-        'draw-marker': google.maps.drawing.OverlayType.MARKER,
-        'draw-select': null
-    };
-
-    Object.entries(drawModes).forEach(([id, mode]) => {
-        const btn = document.getElementById(id);
-        if (!btn) return;
-
-        btn.addEventListener('click', function() {
-            resetDrawButtons();
-            if (mode === null) {
-                // Modo selección
-                drawingManager.setDrawingMode(null);
-                if (selectedShape) {
-                    selectedShape.setEditable(true);
-                    selectedShape.setDraggable(true);
-                }
-                showAlert('Modo selección activado. Haz clic en una zona para editarla.', 'info');
-            } else {
-                this.classList.add('active');
-                drawingManager.setDrawingMode(mode);
-                showAlert(`Modo ${this.textContent.trim()} activado. Dibuja sobre el mapa.`, 'info');
-            }
+    var polyBtn = document.getElementById('draw-polygon');
+    if (polyBtn) {
+        polyBtn.addEventListener('click', function() {
+            if (window.__polyTool) window.__polyTool.toggle();
         });
+    }
+
+    // Rectángulo/círculo/marcador ya no están disponibles: Google retiró
+    // DrawingManager en Maps JS v3.65+. Se mantiene el dibujo de polígono.
+    ['draw-rectangle', 'draw-circle', 'draw-marker'].forEach(function(id) {
+        var b = document.getElementById(id);
+        if (b) {
+            b.disabled = true;
+            b.title = 'No disponible (Google retiró DrawingManager; usa Polígono)';
+        }
     });
+
+    var selBtn = document.getElementById('draw-select');
+    if (selBtn) {
+        selBtn.addEventListener('click', function() {
+            if (window.__polyTool) window.__polyTool.cancel();
+            resetDrawButtons();
+            selBtn.classList.add('active');
+            showAlert('Modo selección: haz clic sobre una zona para ver/editar sus datos.', 'info');
+        });
+    }
 }
 
 function resetDrawButtons() {
-    document.querySelectorAll('.btn-draw').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.btn-draw').forEach(function(btn) {
+        btn.classList.remove('active');
+    });
+}
+
+// Dibujo manual de polígono (reemplazo del DrawingManager retirado por Google).
+// clic = añade vértice · doble clic o volver a pulsar Polígono = terminar.
+function installPolygonTool(mapInstance) {
+    var state = { active: false, path: [], overlay: null };
+
+    function paintPreview() {
+        if (!state.overlay) {
+            state.overlay = new google.maps.Polygon({
+                map: mapInstance,
+                paths: state.path,
+                fillColor: ZONE_COLORS.fillNew,
+                fillOpacity: 0.35,
+                strokeColor: ZONE_COLORS.new,
+                strokeWeight: 2,
+                editable: false,
+                draggable: false
+            });
+        } else {
+            state.overlay.setPath(state.path);
+        }
+    }
+
+    function quit() {
+        state.active = false;
+        mapInstance.setOptions({ draggableCursor: '' });
+        if (state.overlay) { state.overlay.setMap(null); state.overlay = null; }
+        state.path = [];
+    }
+
+    function finishPolygon() {
+        if (!state.active) return;
+        // El doble clic añade un vértice duplicado; se descarta el último repetido.
+        if (state.path.length > 1) {
+            var a = state.path[state.path.length - 1];
+            var b = state.path[state.path.length - 2];
+            if (a && b && Math.abs(a.lat() - b.lat()) < 1e-9 && Math.abs(a.lng() - b.lng()) < 1e-9) {
+                state.path.pop();
+            }
+        }
+        state.active = false;
+        mapInstance.setOptions({ draggableCursor: '' });
+        resetDrawButtons();
+
+        if (state.path.length < 3) {
+            quit();
+            showAlert('Un polígono necesita al menos 3 puntos. Inténtalo de nuevo.', 'warning');
+            return;
+        }
+
+        var shape = state.overlay || new google.maps.Polygon({ map: mapInstance, paths: state.path });
+        state.overlay = null;
+        state.path = [];
+        shape.setOptions({
+            fillColor: ZONE_COLORS.fillSelected,
+            fillOpacity: 0.4,
+            strokeColor: ZONE_COLORS.selected,
+            strokeWeight: 3,
+            editable: true,
+            draggable: true
+        });
+        shape.type = 'polygon';
+        google.maps.event.clearListeners(shape, 'click');
+        google.maps.event.addListener(shape, 'click', function() { selectShape(shape); });
+        selectedShape = shape;
+        updateZoneDataFromShape(shape);
+        showZoneInfo(shape);
+        showAlert('Polígono terminado. Escribe el nombre y pulsa Guardar.', 'success');
+    }
+
+    function togglePolygon() {
+        if (state.active) { finishPolygon(); return; }
+        quit();
+        resetDrawButtons();
+        var btn = document.getElementById('draw-polygon');
+        if (btn) btn.classList.add('active');
+        state.active = true;
+        state.path = [];
+        mapInstance.setOptions({ draggableCursor: 'crosshair' });
+        showAlert('Clic en el mapa para añadir vértices. Doble clic (o pulsa Polígono otra vez) para terminar.', 'info');
+    }
+
+    google.maps.event.addListener(mapInstance, 'click', function(e) {
+        if (!state.active) return;
+        state.path.push(e.latLng);
+        paintPreview();
+    });
+    google.maps.event.addListener(mapInstance, 'dblclick', function() {
+        if (state.active) { state.path.pop(); finishPolygon(); }
+    });
+
+    window.__polyTool = { toggle: togglePolygon, cancel: quit };
 }
 
 // ============================================================
@@ -1044,11 +1076,12 @@ function updateZoneDataFromShape(shape) {
 }
 
 function getShapeCoordinates(shape) {
-    if (shape.type === 'polygon' || shape.type === google.maps.drawing.OverlayType.POLYGON) {
+    var kind = String(shape.type || '').toLowerCase();
+    if (shape instanceof google.maps.Polygon || kind === 'polygon') {
         return shape.getPath().getArray().map(function(latLng) {
             return { lat: latLng.lat(), lng: latLng.lng() };
         });
-    } else if (shape.type === 'rectangle' || shape.type === google.maps.drawing.OverlayType.RECTANGLE) {
+    } else if (shape instanceof google.maps.Rectangle || kind === 'rectangle') {
         var bounds = shape.getBounds();
         var ne = bounds.getNorthEast();
         var sw = bounds.getSouthWest();
@@ -1058,14 +1091,14 @@ function getShapeCoordinates(shape) {
             { lat: sw.lat(), lng: ne.lng() },
             { lat: sw.lat(), lng: sw.lng() }
         ];
-    } else if (shape.type === 'circle' || shape.type === google.maps.drawing.OverlayType.CIRCLE) {
+    } else if (shape instanceof google.maps.Circle || kind === 'circle') {
         var center = shape.getCenter();
         var radius = shape.getRadius();
         return {
             center: { lat: center.lat(), lng: center.lng() },
             radius: radius
         };
-    } else if (shape.type === 'marker' || shape.type === google.maps.drawing.OverlayType.MARKER) {
+    } else if (shape instanceof google.maps.Marker || kind === 'marker') {
         var pos = shape.getPosition();
         return { lat: pos.lat(), lng: pos.lng() };
     }
