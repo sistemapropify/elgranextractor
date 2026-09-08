@@ -1,6 +1,8 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status, generics
+from rest_framework.authentication import BaseAuthentication, SessionAuthentication
 from rest_framework.decorators import action
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.views import APIView
@@ -19,11 +21,32 @@ from .services import (
 )
 
 
+class PrometeoSessionAuthentication(BaseAuthentication):
+    """Autentica con la sesión propia de Prometeo (request.current_user).
+
+    El sistema no usa la sesión de Django auth (request.user): el login guarda
+    el usuario en ``session['user_id']`` y el middleware de ``intelligence`` lo
+    deja en ``request.current_user``. Sin esta clase, DRF devuelve 401
+    'credentials not provided' en escrituras aunque el usuario esté logueado.
+    """
+    def authenticate(self, request):
+        user = getattr(request, 'current_user', None)
+        if user is None:
+            return None
+        if not getattr(user, 'is_active', False):
+            raise AuthenticationFailed('Usuario inactivo.')
+        return (user, None)
+
+    def authenticate_header(self, request):
+        return 'Session'
+
+
 class ZonaValorViewSet(viewsets.ModelViewSet):
     """
     ViewSet para gestionar zonas de valor (polígonos) con jerarquía.
     """
     serializer_class = ZonaValorSerializer
+    authentication_classes = [PrometeoSessionAuthentication, SessionAuthentication]
     permission_classes = [IsAuthenticatedOrReadOnly]
     
     def get_queryset(self):
