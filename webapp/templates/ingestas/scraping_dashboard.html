@@ -266,7 +266,8 @@
     .stats-panel { grid-row: auto; }
 }
 
-/* ── Refuerzo anti-descuadre: layout robusto aunque haya CSS global encima ── */
+/* ── Refuerzo: layout 2 columnas — izq: Control | Estadísticas ·
+   der: Terminal | Tabla "Propiedades Scrapeadas" ── */
 .scraping-layout,
 .control-panel,
 .stats-panel,
@@ -281,36 +282,48 @@
 .scraping-layout {
     display: grid !important;
     grid-template-columns: 320px minmax(0, 1fr) !important;
-    grid-template-rows: auto minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
     gap: 16px !important;
-    align-items: start !important;
+    align-items: stretch !important;
     width: 100%;
     max-width: 100%;
+    height: auto !important;
+    min-height: 0 !important;
 }
 
 .control-panel {
     grid-area: 1 / 1 / 2 / 2 !important;
     width: 100%;
     min-width: 0;
+    align-self: start !important;
 }
 .stats-panel {
     grid-area: 2 / 1 / 3 / 2 !important;
     width: 100%;
     min-width: 0;
+    align-self: start !important;
 }
 .terminal-panel {
-    grid-area: 1 / 2 / 3 / 3 !important;
+    grid-area: 1 / 2 / 2 / 3 !important;
     width: 100%;
     min-width: 0;
-    min-height: 420px;
+    min-height: 360px;
+    align-self: stretch !important;
 }
 .terminal-body {
     min-height: 0;
+    max-height: 380px;
     flex: 1 1 auto;
 }
 .table-section {
+    grid-area: 2 / 2 / 3 / 3 !important;
     width: 100%;
-    max-width: 100%;
+    min-width: 0;
+    margin-top: 0 !important;
+    align-self: start !important;
+}
+#tablaContainer {
+    max-height: 360px !important;
 }
 .table-section .table-header {
     flex-wrap: wrap;
@@ -322,6 +335,22 @@
 .data-table th,
 .data-table td {
     white-space: nowrap;
+}
+
+/* Pantallas estrechas: una sola columna apilada en el orden lógico */
+@media (max-width: 900px) {
+    .scraping-layout {
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-rows: auto !important;
+    }
+    .control-panel,
+    .stats-panel,
+    .terminal-panel,
+    .table-section {
+        grid-area: auto !important;
+        align-self: auto !important;
+    }
+    .terminal-panel { min-height: 320px; }
 }
 </style>
 {% endblock %}
@@ -527,9 +556,8 @@
             </div>
         </div>
     </div>
-</div>
 
-{# ═══ TABLA DE PROPIEDADES ═══ #}
+    {# ═══ TABLA DE PROPIEDADES (columna derecha, bajo la terminal) ═══ #}
 <div class="table-section">
     <div class="table-header">
         <h3><i class="bi bi-table"></i> Propiedades Scrapeadas</h3>
@@ -599,6 +627,7 @@
         </table>
     </div>
 </div>
+</div>  {# cierre .scraping-layout #}
 
 {% endblock %}
 {% block extra_js %}
