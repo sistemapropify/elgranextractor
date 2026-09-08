@@ -179,6 +179,22 @@ if [ "$SCRAPING_EXECUTION_MODE" = "watchdog" ]; then
     echo "  Watchdog log: $SCRAPING_WATCHDOG_LOG"
 fi
 
+# Analysis and shadow jobs survive web-worker recycling through the SQL queue.
+export DURABLE_EXECUTION_MODE="${DURABLE_EXECUTION_MODE:-external}"
+if [ "$DURABLE_EXECUTION_MODE" = "external" ] && [ "${DURABLE_WORKER_ENABLED:-1}" = "1" ]; then
+    (
+        set +e
+        cd "$APP_ROOT/webapp"
+        while true; do
+            echo "[$(date -u)] Starting durable analysis/shadow worker..."
+            python manage.py run_durable_worker
+            exit_code=$?
+            echo "[$(date -u)] Durable worker exited ($exit_code); restarting in 10s."
+            sleep 10
+        done
+    ) >> /home/LogFiles/durable-worker.log 2>&1 &
+fi
+
 # ── Start Gunicorn ──
 echo "[6/6] Starting Gunicorn..."
 echo "  Port: ${PORT:-8000}"

@@ -10,7 +10,7 @@
 # ya existía ahí junto a management_access_required, que extiende) y
 # _parameters (parseo de from/to/cohort compartido por todos los dashboards).
 import json
-from datetime import datetime, time as dt_time
+from datetime import datetime, time as dt_time, timedelta
 
 from django.db import connections
 from django.http import JsonResponse
@@ -101,20 +101,10 @@ def property_dashboard_api(request):
 @analytics_access_required
 @require_POST
 def evaluacion_automatica(request):
-    """Dispara una evaluación incremental de leads (canales programada/tiempo real).
-
-    Es el disparador que usa el cron de GitHub Actions (header
-    ``X-Analytics-API-Key``, mismo mecanismo que los endpoints de analítica del
-    puente externo del CRM). Cuerpo JSON opcional:
-        {"stages": "entered"|"contacted"|"bidirectional",
-         "lookback_hours": 24,
-         "workers": 2}
-    Responde 202 al instante; la evaluación corre en un hilo en segundo plano y
-    su progreso se ve en "Ejecuciones del analizador" (AnalysisRun/Steps).
-    """
-    from django.core.management import call_command
-
+    """Encola evaluación y reconciliación shadow persistentes en Azure SQL."""
     from .management.commands.analyze_lead_conversations import reset_cancel
+    from lead_intelligence.durable_jobs import enqueue_durable_job, wake_durable_worker
+    from lead_intelligence.models import DurableJob
 
     try:
         payload = json.loads(request.body or b"{}")
@@ -123,10 +113,7 @@ def evaluacion_automatica(request):
 
     stages = str(payload.get("stages") or "entered")
     if stages not in ("entered", "contacted", "bidirectional"):
-        return JsonResponse(
-            {"status": "error", "detail": "stages inválido"},
-            status=400,
-        )
+        return JsonResponse({"status": "error", "detail": "stages inválido"}, status=400)
     try:
         lookback_hours = int(payload.get("lookback_hours") or 0)
         workers = int(payload.get("workers") or 2)
@@ -141,48 +128,51 @@ def evaluacion_automatica(request):
             status=400,
         )
 
-    # Evita superponer evaluaciones (el cron corre cada 15 min y la programada
-    # puede tardar más de una pasada): si ya hay un run activo, se omite.
+    now = timezone.now()
+    bucket = f"{now:%Y%m%d%H}:{now.minute // 15}"
+    local_today = timezone.localdate()
+    days = max(1, (max(lookback_hours, 1) + 23) // 24)
+    shadow_job, _ = enqueue_durable_job(
+        DurableJob.Kind.SHADOW_RECONCILE,
+        {
+            "date_from": (local_today - timedelta(days=days - 1)).isoformat(),
+            "date_to": local_today.isoformat(),
+            "workers": 1,
+        },
+        f"shadow-reconcile:{bucket}",
+    )
+
+    # Shadow siempre se reconcilia. Un análisis principal activo no debe impedir
+    # capturar mensajes nuevos del CRM ni completar el hilo comparativo.
     if _has_fresh_running_run(clean_stale=True):
+        wake_durable_worker()
         return JsonResponse(
             {
                 "status": "already_running",
                 "stages": stages,
                 "lookback_hours": lookback_hours,
+                "shadow_job_id": shadow_job.id,
             },
             status=202,
         )
 
     reset_cancel()
-
-    def _ejecutar():
-        from io import StringIO
-
-        from django.db import close_old_connections
-
-        close_old_connections()
-        try:
-            buf = StringIO()
-            call_command(
-                "analyze_lead_conversations",
-                stages=stages,
-                lookback_hours=lookback_hours,
-                workers=workers,
-                stdout=buf,
-                stderr=buf,
-            )
-        finally:
-            close_old_connections()
-
-    from threading import Thread
-
-    Thread(target=_ejecutar, daemon=True).start()
+    analysis_job, _ = enqueue_durable_job(
+        DurableJob.Kind.LEAD_ANALYSIS,
+        {"stages": stages, "lookback_hours": lookback_hours, "workers": workers},
+        f"lead-analysis:{stages}:{lookback_hours}:{bucket}",
+    )
+    wake_durable_worker()
     return JsonResponse(
-        {"status": "started", "stages": stages, "lookback_hours": lookback_hours},
+        {
+            "status": "queued",
+            "stages": stages,
+            "lookback_hours": lookback_hours,
+            "analysis_job_id": analysis_job.id,
+            "shadow_job_id": shadow_job.id,
+        },
         status=202,
     )
-
-
 def get_visit_intent_leads(date_from, date_to, status="confirmed", agent_id=None, limit=100):
     """Leads con intención de visita confirmada por la IA, enriquecidos con el CRM.
 

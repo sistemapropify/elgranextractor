@@ -247,6 +247,18 @@ class Conversation(models.Model):
     def __str__(self):
         return f"Conversación {self.session_id[:8]}... ({self.user})"
 
+    @property
+    def title(self):
+        saved = (self.metadata or {}).get('title')
+        if isinstance(saved, str) and saved.strip():
+            return ' '.join(saved.split())[:120]
+        for message in self.messages or []:
+            if isinstance(message, dict) and message.get('role') == 'user':
+                text = message.get('content')
+                if isinstance(text, str) and text.strip():
+                    return ' '.join(text.split())[:120]
+        return 'Nueva conversación'
+
 
 class Fact(models.Model):
     """

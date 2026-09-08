@@ -75,6 +75,7 @@ class LeadIntelligenceRoutingTests(SimpleTestCase):
         )
         self.assertNotIn("lead_status" + "_history", source)
         result_source = inspect.getsource(_lead_result_rows)
+        self.assertIn("l.updated_at", result_source)
         self.assertNotRegex(
             result_source,
             re.compile(r"\b(?:INSERT|UPDATE|DELETE|MERGE|ALTER|DROP|CREATE)\b"),
@@ -716,7 +717,7 @@ class CohortTemplateTests(SimpleTestCase):
         self.assertNotIn("Activo " + "48 h", content)
         self.assertNotIn("Calificación " + "provisional", content)
         self.assertNotIn("Comparación diaria", content)
-        self.assertEqual(content.count("|unlocalize"), 5)
+        self.assertEqual(content.count("|unlocalize"), 7)
 
     def test_overview_chart_script_matches_base_template_contract(self):
         template_path = (
@@ -729,7 +730,8 @@ class CohortTemplateTests(SimpleTestCase):
         extra_js = content.split("{% block extra_js %}", 1)[1].split(
             "{% endblock %}", 1
         )[0]
-        self.assertNotIn("<script", extra_js)
+        self.assertEqual(extra_js.count("<script>"), 1)
+        self.assertEqual(extra_js.count("</script>"), 1)
         self.assertIn('id="incomingLeadsChart"', content)
         self.assertIn("drawIncomingLeadsChart", extra_js)
         self.assertIn("ctx.setLineDash([7, 5])", extra_js)
@@ -755,6 +757,9 @@ class ManagementApiTests(SimpleTestCase):
             "cohorts": [{"cohort_date": date(2026, 7, 24), "total": 60}],
             "data_quality": {},
             "qualification_ready": False,
+            "captaciones_cohort": {}, "compradores_cohort": {}, "otros_cohort": {},
+            "source_counts": [], "captaciones_source_counts": [],
+            "compradores_source_counts": [], "otros_source_counts": [], "agent_load": [],
         }
         request = self.factory.get(
             "/analisis-crm/api/management/summary/?from=2026-07-24&to=2026-07-24&cohort=2026-07-24"
@@ -952,14 +957,16 @@ class EvaluacionAutomaticaApiTests(SimpleTestCase):
         self.assertEqual(resp.status_code, 400)
 
     @patch.dict("os.environ", {"ANALYTICS_BRIDGE_API_KEY": "clave-test"})
+    @patch("lead_intelligence.durable_jobs.wake_durable_worker")
+    @patch("lead_intelligence.durable_jobs.enqueue_durable_job")
     @patch(
         "lead_intelligence.analytics_api._has_fresh_running_run",
         return_value=False,
     )
-    @patch("threading.Thread")
-    def test_api_key_valida_dispara_202(self, thread_cls, _run):
+    def test_api_key_valida_dispara_202(self, _run, enqueue, wake):
         from django.test import Client
 
+        enqueue.side_effect = [(Mock(id=10), True), (Mock(id=11), True)]
         resp = Client().post(
             self.URL,
             data=b'{"stages":"entered","lookback_hours":24,"workers":2}',
@@ -967,17 +974,25 @@ class EvaluacionAutomaticaApiTests(SimpleTestCase):
             HTTP_X_ANALYTICS_API_KEY="clave-test",
         )
         self.assertEqual(resp.status_code, 202)
-        self.assertEqual(resp.json().get("status"), "started")
-        self.assertTrue(thread_cls.called)
+        self.assertEqual(resp.json().get("status"), "queued")
+        self.assertEqual(resp.json()["analysis_job_id"], 11)
+        self.assertEqual(resp.json()["shadow_job_id"], 10)
+        self.assertEqual(enqueue.call_count, 2)
+        wake.assert_called_once_with()
 
     @patch.dict("os.environ", {"ANALYTICS_BRIDGE_API_KEY": "clave-test"})
+    @patch("lead_intelligence.durable_jobs.wake_durable_worker")
+    @patch("lead_intelligence.durable_jobs.enqueue_durable_job")
     @patch(
         "lead_intelligence.analytics_api._has_fresh_running_run",
         return_value=True,
     )
-    def test_ya_en_curso_omite(self, _run):
+    def test_ya_en_curso_omite_analisis_pero_reconcilia_shadow(
+        self, _run, enqueue, wake
+    ):
         from django.test import Client
 
+        enqueue.return_value = (Mock(id=20), True)
         resp = Client().post(
             self.URL,
             data=b'{"stages":"entered","lookback_hours":24}',
@@ -986,6 +1001,9 @@ class EvaluacionAutomaticaApiTests(SimpleTestCase):
         )
         self.assertEqual(resp.status_code, 202)
         self.assertEqual(resp.json().get("status"), "already_running")
+        self.assertEqual(resp.json()["shadow_job_id"], 20)
+        enqueue.assert_called_once()
+        wake.assert_called_once_with()
 
 
 class VisitIntentApiTests(SimpleTestCase):

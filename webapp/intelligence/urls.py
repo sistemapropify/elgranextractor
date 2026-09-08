@@ -1,7 +1,7 @@
 from django.urls import path, re_path
 from django.views.decorators.csrf import csrf_exempt
 from . import views
-from . import learning_views
+from . import learning_views, conversation_views
 import uuid
 
 app_name = 'intelligence'
@@ -64,6 +64,8 @@ urlpatterns = [
     
     # Chat Web Interactivo (SPEC-007)
     path('chat-web/', views.chat_web, name='chat_web'),
+    path('chat-web/conversations/', conversation_views.chat_web_conversations, name='chat_web_conversations'),
+    path('chat-web/conversations/<uuid:conversation_id>/', conversation_views.chat_web_conversation_detail, name='chat_web_conversation_detail'),
     path('chat-web/api/', csrf_exempt(views.chat_web_api), name='chat_web_api'),
     path('chat-web/stream/', csrf_exempt(views.chat_web_stream), name='chat_web_stream'),
     path('chat-web/upload/', csrf_exempt(views.chat_web_upload), name='chat_web_upload'),

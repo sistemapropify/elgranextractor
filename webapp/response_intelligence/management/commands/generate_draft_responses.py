@@ -243,6 +243,7 @@ class Command(BaseCommand):
             rows = _lead_result_rows(
                 __import__("datetime").date.fromisoformat(date_from),
                 __import__("datetime").date.fromisoformat(date_to),
+                activity_scope=(mode == "shadow_live"),
             )
         if options["limit"] > 0:
             rows = rows[: options["limit"]]
@@ -266,7 +267,7 @@ class Command(BaseCommand):
                 _lead_id, detail = future.result()
                 self.stdout.write(f"Lead #{_lead_id}: {detail}")
                 if detail.startswith("created="):
-                    created_total += int(detail.split("=")[1])
+                    created_total += int(detail.split("=", 1)[1].split(",", 1)[0])
 
         self.stdout.write(
             self.style.SUCCESS(

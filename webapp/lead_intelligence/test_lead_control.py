@@ -199,7 +199,7 @@ class ControlTests(TestCase):
     def request(self, user_id='30', method='get', data=None):
         request = getattr(RequestFactory(), method)('/', data=data or {})
         request.user = SimpleNamespace(pk=user_id, is_authenticated=True, is_superuser=False)
-        request._messages = Mock()
+        request._messages = []
         return request
 
     def test_pages_render_for_scoped_users(self):

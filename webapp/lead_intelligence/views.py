@@ -16,6 +16,7 @@ from intelligence.permissions import get_user_profile
 from .contextual_analysis import ANALYSIS_VERSION
 from .models import AnalysisRun
 from .property_dashboard import get_property_dashboard
+from .remarketing import get_remarketing_dashboard
 from .services import (
     LEAD_RESULT_STAGES,
     get_analysis_quality_dashboard,
@@ -307,6 +308,10 @@ def remarketing_analizar_api(request):
     )
 
 
+
+
+
+
 @management_access_required
 def analysis_quality_dashboard(request):
     date_from, date_to, _ = _parameters(request)
@@ -584,20 +589,7 @@ def conversation_review(request):
 @management_access_required
 @require_POST
 def run_analysis(request):
-    """Dispara el análisis IA (DeepSeek) de conversaciones de leads.
-
-    Con un broker Celery real la ejecución se encola en segundo plano; con el
-    broker memory:// actual se ejecuta el comando de forma síncrona para que el
-    botón funcione siempre. El comando es incremental y registra su progreso en
-    ``AnalysisRun`` (modelo ``lead_intelligence.AnalysisRun``).
-    """
-    from io import StringIO
-
-    from django.core.management import call_command
-
-    from colas.celery import app as celery_app
-
-    from .tasks import analizar_conversaciones_lead
+    """Encola el análisis en Azure SQL y despierta el worker recuperable."""
     from .management.commands.analyze_lead_conversations import reset_cancel
 
     date_from, date_to, _ = _parameters(request)
@@ -620,49 +612,26 @@ def run_analysis(request):
     # Limpiar cualquier señal de cancelación previa antes de iniciar.
     reset_cancel()
 
-    broker = str(getattr(celery_app.conf, "broker_url", "") or "")
-    async_capable = not broker.startswith("memory")
-    if async_capable:
-        analizar_conversaciones_lead.delay(
-            date_from=date_from.isoformat(),
-            date_to=date_to.isoformat(),
-            force=force,
-        )
-        messages.success(
-            request,
-            f"Análisis IA encolado para el periodo {period}. "
-            "Consulta el progreso en “Ejecuciones del analizador”.",
-        )
-    else:
-        # Broker memory:// (sin worker distribuible): ejecutamos el análisis en
-        # un hilo en segundo plano para que el botón responda al instante y el
-        # progreso se vea en "Ejecuciones del analizador" (latido cada 10 leads).
-        from threading import Thread
+    from lead_intelligence.durable_jobs import enqueue_durable_job, wake_durable_worker
+    from lead_intelligence.models import DurableJob
 
-        def _ejecutar_analisis():
-            from django.db import close_old_connections
-
-            close_old_connections()
-            try:
-                buf = StringIO()
-                call_command(
-                    "analyze_lead_conversations",
-                    date_from=date_from.isoformat(),
-                    date_to=date_to.isoformat(),
-                    force=force,
-                    stdout=buf,
-                    stderr=buf,
-                )
-            finally:
-                close_old_connections()
-
-        Thread(target=_ejecutar_analisis, daemon=True).start()
-        messages.success(
-            request,
-            f"Análisis IA iniciado en segundo plano para el periodo {period}. "
-            "Consulta el progreso en “Ejecuciones del analizador”.",
-        )
-
+    bucket = timezone.now().strftime("%Y%m%d%H%M%S")
+    job, _ = enqueue_durable_job(
+        DurableJob.Kind.LEAD_ANALYSIS,
+        {
+            "date_from": date_from.isoformat(),
+            "date_to": date_to.isoformat(),
+            "force": force,
+            "workers": 1,
+        },
+        f"lead-analysis:manual:{date_from}:{date_to}:{bucket}",
+    )
+    wake_durable_worker()
+    messages.success(
+        request,
+        f"Análisis IA encolado como trabajo durable #{job.id} para {period}. "
+        "La ejecución sobrevivirá a reinicios y reintentará fallos transitorios.",
+    )
     return redirect(back_url)
 
 
@@ -677,6 +646,17 @@ def cancel_analysis(request):
     from .management.commands.analyze_lead_conversations import request_cancel
 
     request_cancel()
+    from lead_intelligence.models import DurableJob
+
+    DurableJob.objects.using("default").filter(
+        kind=DurableJob.Kind.LEAD_ANALYSIS,
+        status__in=[DurableJob.Status.PENDING, DurableJob.Status.RUNNING],
+    ).update(
+        status=DurableJob.Status.CANCELLED,
+        completed_at=timezone.now(),
+        lease_until=None,
+        error_summary="Cancelada por el usuario desde el dashboard.",
+    )
     updated = AnalysisRun.objects.using("default").filter(
         status=AnalysisRun.Status.RUNNING,
         rules_version=ANALYSIS_VERSION,

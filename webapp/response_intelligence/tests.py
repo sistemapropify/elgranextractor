@@ -460,6 +460,68 @@ class GenerateCommandTests(SimpleTestCase):
         from .management.commands.generate_draft_responses import Command
 
         self.assertEqual(Command._property_code_from_messages([{"text": "hola"}]), "")
+    def test_event_key_es_estable_y_distingue_turnos(self):
+        from .shadow_context import message_event_key
+
+        first = {
+            "sender": "lead",
+            "text": "Más información",
+            "timestamp": "2026-08-21T10:00:00-05:00",
+            "position": 1,
+        }
+        self.assertEqual(
+            message_event_key(lead_id=3561, message=first, index=1),
+            message_event_key(lead_id=3561, message=dict(first), index=1),
+        )
+        second = dict(first, position=2)
+        self.assertNotEqual(
+            message_event_key(lead_id=3561, message=first, index=1),
+            message_event_key(lead_id=3561, message=second, index=2),
+        )
+
+    @mock.patch(
+        "response_intelligence.management.commands.generate_draft_responses."
+        "PromptAssemblyService.assemble"
+    )
+    @mock.patch(
+        "response_intelligence.management.commands.generate_draft_responses."
+        "analyze_chat_history"
+    )
+    def test_shadow_reconcilia_todos_los_mensajes_del_lead(
+        self, analyze, assemble
+    ):
+        from .management.commands.generate_draft_responses import Command
+
+        analyze.return_value = {
+            "messages": [
+                {"sender": "lead", "text": "primero", "position": 1},
+                {"sender": "agent", "text": "respuesta", "position": 2},
+                {"sender": "lead", "text": "segundo", "position": 3},
+            ]
+        }
+        assemble.return_value = {
+            "memory": {},
+            "intent_category": "otro",
+            "system_prompt": "s",
+            "user_prompt": "u",
+            "few_shot": [],
+            "property_data_used": [],
+        }
+
+        from .models import BotResponseDraft
+        with mock.patch.object(BotResponseDraft, "objects") as drafts:
+            drafts.using.return_value.filter.return_value.order_by.return_value = []
+            _lead_id, detail = Command._process_lead(
+                {"id": 3561, "chat_history": "[]"},
+                mode="shadow_live",
+                all_messages=False,
+                include_first_message=False,
+                dry_run=True,
+            )
+            drafts.using.return_value.create.assert_not_called()
+
+        self.assertEqual(detail, "created=2")
+        self.assertEqual(assemble.call_count, 2)
 
 
 class LLMGenerateResponseTests(SimpleTestCase):

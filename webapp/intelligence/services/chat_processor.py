@@ -3010,6 +3010,10 @@ INSTRUCCIONES:
 
         messages = conversation.messages or []
         messages.append(msg)
+        conversation.messages = messages
+
+        if not (conversation.metadata or {}).get('title'):
+            conversation.metadata = {**(conversation.metadata or {}), 'title': conversation.title}
 
         if len(messages) > 50:
             messages = messages[-50:]

@@ -596,3 +596,41 @@ class LeadControlDigest(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=['recipient', 'day'], name='lc_unique_daily_digest')]
         ordering = ['-day', '-id']
+
+
+class DurableJob(models.Model):
+    """Cola SQL durable para trabajos que no deben pertenecer al proceso web."""
+
+    class Kind(models.TextChoices):
+        LEAD_ANALYSIS = "lead_analysis", "Análisis de leads"
+        SHADOW_RECONCILE = "shadow_reconcile", "Reconciliación shadow"
+        SCRAPING = "scraping", "Scraping"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pendiente"
+        RUNNING = "running", "En ejecución"
+        COMPLETED = "completed", "Completado"
+        FAILED = "failed", "Fallido"
+        CANCELLED = "cancelled", "Cancelado"
+
+    kind = models.CharField(max_length=32, choices=Kind.choices, db_index=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
+    dedupe_key = models.CharField(max_length=160, unique=True)
+    payload = models.JSONField(default=dict, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    max_attempts = models.PositiveSmallIntegerField(default=3)
+    lease_until = models.DateTimeField(null=True, blank=True, db_index=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    error_summary = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "prometeo_durable_job"
+        ordering = ["created_at", "id"]
+        indexes = [
+            models.Index(
+                fields=["status", "lease_until"], name="durable_status_lease"
+            )
+        ]

@@ -47,6 +47,7 @@ class IntelligenceConfig(AppConfig):
             'collectstatic' in sys.argv,
             'flush' in sys.argv,
             'test' in sys.argv,
+            'run_durable_worker' in sys.argv,
             'shell' in sys.argv,
             _is_gunicorn,                # FIX-504: detecta gunicorn incluso si es ruta completa
             _is_production,              # FIX-504: variable PRODUCTION=true salta todo lo pesado

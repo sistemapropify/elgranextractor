@@ -1,0 +1,75 @@
+{
+  "schema_version": "1",
+  "cases": [
+    {
+      "id": "scope_any_area",
+      "query": "muéstrame terrenos en cualquier distrito con más de 200 metros",
+      "objective": "search_properties",
+      "expected": ["property_type eq Terreno", "land_area gt 200"],
+      "forbidden": ["district eq cualquiera"]
+    },
+    {
+      "id": "multiple_districts",
+      "query": "busca casas en Cayma o Yanahuara",
+      "objective": "search_properties",
+      "expected": ["property_type eq Casa", "district in [Cayma, Yanahuara]"]
+    },
+    {
+      "id": "vague_bedrooms",
+      "query": "quiero una casa con pocos cuartos",
+      "objective": "search_properties",
+      "expected_ambiguities": ["bedrooms"]
+    },
+    {
+      "id": "field_comparison",
+      "query": "propiedades con más baños que habitaciones",
+      "objective": "search_properties",
+      "expected": ["bathrooms gt bedrooms"]
+    },
+    {
+      "id": "combined_constraints",
+      "query": "casas de máximo 3 dormitorios, con más baños que habitaciones, en Cayma o Yanahuara y por debajo de 300 mil dólares",
+      "objective": "search_properties",
+      "expected": [
+        "property_type eq Casa",
+        "bedrooms lte 3",
+        "bathrooms gt bedrooms",
+        "district in [Cayma, Yanahuara]",
+        "price lt 300000 USD"
+      ]
+    },
+    {
+      "id": "district_exclusion",
+      "query": "terrenos en cualquier distrito menos Cerro Colorado",
+      "objective": "search_properties",
+      "expected": ["property_type eq Terreno", "district not_in [Cerro Colorado]"]
+    },
+    {
+      "id": "range_area",
+      "query": "departamentos entre 100 y 150 metros cuadrados",
+      "objective": "search_properties",
+      "expected": ["property_type eq Departamento", "built_area between [100, 150]"]
+    },
+    {
+      "id": "conversation_add",
+      "context": "casas en Cayma",
+      "query": "también pueden ser de Yanahuara",
+      "objective": "search_properties",
+      "expected": ["district in [Cayma, Yanahuara]"]
+    },
+    {
+      "id": "conversation_replace",
+      "context": "terrenos en Cayma con menos de 300 metros",
+      "query": "mejor sin límite de distrito y desde 500 metros",
+      "objective": "search_properties",
+      "expected": ["property_type eq Terreno", "land_area gte 500"],
+      "forbidden": ["district", "land_area lte 300"]
+    },
+    {
+      "id": "currency_and_price",
+      "query": "departamentos por menos de $150,000",
+      "objective": "search_properties",
+      "expected": ["property_type eq Departamento", "price lt 150000 USD"]
+    }
+  ]
+}

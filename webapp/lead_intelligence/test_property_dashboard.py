@@ -1,5 +1,6 @@
 import inspect
 import re
+from unittest.mock import patch
 from types import SimpleNamespace
 
 from django.template.loader import get_template
@@ -117,10 +118,14 @@ class PropertyDashboardTests(SimpleTestCase):
 
         self.assertNotRegex(lead_source, forbidden)
         self.assertNotRegex(visit_source, forbidden)
-        self.assertIn("e.property_id", visit_source)
-        self.assertIn("e.lead_id", visit_source)
-        self.assertIn("event_type", visit_source)
-        self.assertIn("e.lead_id IS NOT NULL", visit_source)
+        with patch("lead_intelligence.property_dashboard.resolve_visits_for_leads") as resolver:
+            resolver.return_value = [
+                {"event_property_id": 10, "resolved_lead_id": 101},
+                {"event_property_id": 99, "resolved_lead_id": 101},
+                {"event_property_id": None, "resolved_lead_id": 101},
+            ]
+            self.assertEqual(_load_visit_pairs([10], [101]), {(10, 101)})
+            resolver.assert_called_once_with([101])
 
     def test_dashboard_route_and_template_compile(self):
         self.assertEqual(

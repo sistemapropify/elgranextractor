@@ -46,25 +46,25 @@ def decide_initial_property_response(text, config, context=None):
 
     data = skill_result.data
     evidence = {"resolution": "exact_code"}
-    if identity["title_hint"] and not title_is_consistent(
-        identity["title_hint"], data["title"]
-    ):
-        evidence["warning"] = {
-            "code": "TITLE_CODE_MISMATCH",
-            "title_hint": identity["title_hint"],
-            "property_title": data["title"],
-        }
-
-    enabled_types = set(getattr(config, "enabled_property_types", None) or [])
-    if data["property_type"] != "propiedad" and data["property_type"] not in enabled_types:
+    hint = identity["title_hint"]
+    title_ok = title_is_consistent(hint, data["title"])
+    desc_ok = title_is_consistent(hint, data.get("description") or "")
+    addr_ok = title_is_consistent(hint, data.get("map_address") or "")
+    code_upper = str(data.get("code") or "").upper()
+    hint_upper = str(hint).upper()
+    code_ok = bool(hint and code_upper) and (code_upper in hint_upper or hint_upper in code_upper)
+    if hint and not (title_ok or desc_ok or addr_ok or code_ok):
         return _failure(
-            "PROPERTY_TYPE_DISABLED",
+            "TITLE_CODE_MISMATCH",
             property_code=code,
-            evidence={**evidence, "property_type": data["property_type"]},
+            evidence={**evidence, "title_hint": hint, "property_title": data["title"],
+                      "property_description": data.get("description") or "",
+                      "map_address": data.get("map_address") or ""},
         )
 
+    # Preserve the current live responder's inventory policy for every type.
     status = str(data.get("property_status") or "").lower().strip()
-    if data.get("is_visible") is False or status in BLOCKED_STATUSES:
+    if status != "disponible":
         return _failure(
             "PROPERTY_NOT_PUBLISHABLE",
             property_code=code,

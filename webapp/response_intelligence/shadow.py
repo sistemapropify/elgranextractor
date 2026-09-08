@@ -398,15 +398,24 @@ def maybe_generate_shadow_draft(
     return None
 
 
-def spawn_shadow_draft(**kwargs):
-    """Lanza la generación en un hilo daemon para no bloquear la respuesta real."""
-    try:
-        thread = threading.Thread(
-            target=maybe_generate_shadow_draft,
-            kwargs=kwargs,
-            daemon=True,
-        )
-        thread.start()
-        return thread
-    except Exception:  # noqa: BLE001
+def spawn_shadow_draft(*, source_event_id=None, **kwargs):
+    """Persiste la generación shadow antes de despertar el worker."""
+    if not shadow_mode_enabled():
         return None
+    import hashlib
+    import json
+
+    from lead_intelligence.durable_jobs import enqueue_durable_job, wake_durable_worker
+    from lead_intelligence.models import DurableJob
+
+    payload = {key: value for key, value in kwargs.items() if value not in (None, "")}
+    fingerprint = hashlib.sha256(
+        json.dumps({"event_id": source_event_id, "message": payload}, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+    job, _ = enqueue_durable_job(
+        DurableJob.Kind.SHADOW_RECONCILE,
+        {"client_message": payload},
+        f"shadow-message:{fingerprint}",
+    )
+    wake_durable_worker()
+    return job

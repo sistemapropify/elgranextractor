@@ -22,6 +22,8 @@ from n8n_bridge.services.initial_property_responder import (
     process_initial_message,
 )
 from n8n_bridge.services.initial_property_validator import validate_property_payload
+from n8n_bridge.services.initial_property_decision import decide_initial_property_response
+from intelligence.skills.propiedades.informacion_inicial_propiedad import normalize_property_type
 
 
 class InitialPropertyDetectorTests(SimpleTestCase):
@@ -95,6 +97,57 @@ class InitialPropertyRendererTests(SimpleTestCase):
         self.assertNotIn("horario de atención.", daytime)
         self.assertIn("estado de la casa en horario de atención.", nighttime)
 
+
+class InitialPropertyDecisionTests(SimpleTestCase):
+    def test_hotel_clasificado_como_otros_se_reconoce_por_titulo(self):
+        self.assertEqual(
+            normalize_property_type(
+                "Otros", "HOTEL EQUIPADO EN VENTA RIVERO - CERCADO"
+            ),
+            "hotel",
+        )
+        self.assertEqual(
+            normalize_property_type("Otros", "Inmueble comercial en Cercado"),
+            "",
+        )
+
+    @patch(
+        "n8n_bridge.services.initial_property_decision."
+        "AgenteRespuestaInicialWhatsApp"
+    )
+    def test_prop_hotel_usa_plantilla_determinista(self, agent_cls):
+        agent_cls.return_value.resolve.return_value = SimpleNamespace(
+            success=True,
+            metadata={},
+            data={
+                "property_id": 262,
+                "code": "PROP000262",
+                "title": "HOTEL EQUIPADO EN VENTA RIVERO - CERCADO",
+                "property_type": "hotel",
+                "location": "Arequipa",
+                "price": {"amount": "650000", "currency": "USD"},
+                "features": [
+                    {"field": "built_area", "value": "468", "source": "property_specs.built_area"},
+                    {"field": "land_area", "value": "468", "source": "property_specs.land_area"},
+                ],
+                "is_visible": True,
+                "property_status": "Disponible",
+            },
+        )
+        config = SimpleNamespace(
+            enabled_property_types=[
+                "casa", "departamento", "terreno", "local_comercial"
+            ],
+            message_templates={},
+            timezone_name="America/Lima",
+        )
+        result = decide_initial_property_response(
+            "Más detalles sobre el Hotel de Rivero (PROP000262)", config
+        )
+        self.assertTrue(result["success"])
+        self.assertIn("Este hotel está ubicado en Arequipa", result["reply_text"])
+        self.assertIn("468 m² de área construida", result["reply_text"])
+        self.assertIn("US$ 650,000", result["reply_text"])
 
 class ScheduleGuardTests(SimpleTestCase):
     def test_initial_window_is_start_inclusive_end_exclusive(self):

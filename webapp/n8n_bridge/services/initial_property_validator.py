@@ -8,6 +8,8 @@ ALLOWED_FIELDS = {
     "departamento": {"bedrooms", "built_area", "bathrooms"},
     "terreno": {"land_area"},
     "local_comercial": {"built_area", "bathrooms", "garage_spaces"},
+    "hotel": {"built_area", "land_area", "bathrooms"},
+    "otro": {"built_area", "bedrooms", "bathrooms"},
 }
 
 

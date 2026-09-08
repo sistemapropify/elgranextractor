@@ -65,7 +65,7 @@ class MobileReleaseTests(TestCase):
     def post(self, data, auth='Bearer '+('x'*40)):
         return app_updates.publish_api(RequestFactory().post('/', json.dumps(data), content_type='application/json', HTTP_AUTHORIZATION=auth))
 
-    @patch('prospects.app_updates.requests.get')
+    @patch('requests.get')
     def test_publishing_authenticated_idempotent_and_immutable(self, github_get):
         github_get.return_value = MagicMock(status_code=200)
         data = {'version_code':100, 'version_name':'1.1', 'min_supported_version_code':1, 'download_url':'https://example.com/app.apk','sha256':'a'*64}

@@ -47,6 +47,7 @@ class Command(BaseCommand):
     )
 
     def add_arguments(self, parser):
+        parser.add_argument("--fail-on-error", action="store_true", help="Exit with an error when any lead fails so a durable worker can retry.")
         parser.add_argument("--from", dest="date_from")
         parser.add_argument("--to", dest="date_to")
         parser.add_argument("--lead-id", type=int)
@@ -372,7 +373,7 @@ class Command(BaseCommand):
                 run.heartbeat_at = run.completed_at
                 run.error_summary = "Cancelada por el usuario desde el dashboard."
             else:
-                run.status = AnalysisRun.Status.COMPLETED
+                run.status = AnalysisRun.Status.FAILED if failed else AnalysisRun.Status.COMPLETED
                 run.completed_at = timezone.now()
                 run.heartbeat_at = run.completed_at
                 run.error_summary = (
@@ -394,7 +395,7 @@ class Command(BaseCommand):
             )
             AnalysisRunStep.objects.using("default").create(
                 run=run,
-                status="cancelled" if _cancel_event.is_set() else "completed",
+                status="cancelled" if _cancel_event.is_set() else ("failed" if failed else "completed"),
                 message=(
                     f"Fin · analizados={analyzed}, omitidos={skipped}, "
                     f"fallidos={failed}, cancelados={cancelled}"
@@ -407,3 +408,5 @@ class Command(BaseCommand):
                 f"cancelados: {cancelled}."
             )
         )
+        if failed and options.get("fail_on_error"):
+            raise CommandError(f"{failed} conversaciones fallidas; consulta AnalysisRunStep.")

@@ -25,13 +25,15 @@ def _plain(value):
     return "".join(ch for ch in value if not unicodedata.combining(ch)).lower().strip()
 
 
-def normalize_property_type(value):
+def normalize_property_type(value, title=""):
     normalized = re.sub(r"\s+", " ", _plain(value))
     if normalized in TYPE_ALIASES:
         return TYPE_ALIASES[normalized]
     for candidate, canonical in TYPE_ALIASES.items():
         if candidate in normalized:
             return canonical
+    if re.search(r"\bhotel(?:ero|era)?\b", _plain(title)):
+        return "hotel"
     return ""
 
 
@@ -110,7 +112,7 @@ class InformacionInicialPropiedadSkill(BaseSkill):
         row = dict(zip(columns, rows[0]))
         # Sin restricción de tipo: cualquier propiedad se puede responder.
         # Los tipos no reconocidos (p. ej. "Otros"/hotel) se tratan como "otro".
-        property_type = normalize_property_type(row.get("property_type_name")) or "otro"
+        property_type = normalize_property_type(row.get("property_type_name"), row.get("title")) or "otro"
 
         feature_order = {
             "casa": ("bedrooms", "built_area", "bathrooms"),
@@ -118,6 +120,7 @@ class InformacionInicialPropiedadSkill(BaseSkill):
             "terreno": ("land_area",),
             "local_comercial": ("built_area", "bathrooms", "garage_spaces"),
             "otro": ("built_area", "bedrooms", "bathrooms"),
+            "hotel": ("built_area", "bathrooms"),
         }[property_type]
         features = [
             {"field": field, "value": row[field], "source": f"property_specs.{field}"}

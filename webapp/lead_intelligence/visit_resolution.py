@@ -11,7 +11,7 @@ from .models import LeadEventResolution
 
 logger = logging.getLogger(__name__)
 
-VISIT_RESOLUTION_VERSION = "visit-link-v1"
+VISIT_RESOLUTION_VERSION = "appointment-link-v2"
 AUTO_RESOLUTION_THRESHOLD = Decimal("0.9000")
 
 
@@ -19,6 +19,8 @@ VISIT_RESOLUTION_SQL = r"""
 WITH visit_events AS (
     SELECT
         e.id AS event_id,
+        CASE WHEN LOWER(LTRIM(RTRIM(et.name))) = 'visita'
+             THEN 'visit' ELSE 'capture' END AS event_kind,
         e.lead_id AS direct_lead_id,
         e.contact_id AS event_contact_id,
         e.property_id AS event_property_id,
@@ -38,7 +40,7 @@ WITH visit_events AS (
     FROM dbo.[event] e
     INNER JOIN dbo.event_type et ON et.id = e.event_type_id
     LEFT JOIN dbo.contact ec ON ec.id = e.contact_id
-    WHERE LOWER(LTRIM(RTRIM(et.name))) = 'visita'
+    WHERE LOWER(LTRIM(RTRIM(et.name))) IN ('visita', 'captacion', 'captación')
 ),
 candidate_evidence AS (
     SELECT
@@ -155,6 +157,7 @@ ranked_candidates AS (
 )
 SELECT
     visit.event_id,
+    visit.event_kind,
     CASE
         WHEN visit.direct_lead_id IS NOT NULL THEN visit.direct_lead_id
         WHEN ranked.confidence >= 0.9000
@@ -205,7 +208,7 @@ def _dict_rows(cursor):
 
 
 def load_visit_resolutions():
-    """Resolve every CRM visit using SELECT-only queries."""
+    """Resolve CRM visits and capture appointments using SELECT-only queries."""
     with connections["propifai"].cursor() as cursor:
         cursor.execute(VISIT_RESOLUTION_SQL)
         return _dict_rows(cursor)
@@ -213,6 +216,7 @@ def load_visit_resolutions():
 
 def _evidence(row):
     return {
+        "event_kind": row.get("event_kind", "visit"),
         "contact_id_match": bool(row.get("contact_id_match")),
         "phone_match": bool(row.get("phone_match")),
         "property_match": bool(row.get("property_match")),
@@ -293,7 +297,7 @@ def persist_visit_resolutions(rows):
         )
 
 
-def resolve_visits_for_leads(lead_ids, persist=True):
+def resolve_appointments_for_leads(lead_ids, persist=True):
     selected_ids = {int(lead_id) for lead_id in lead_ids if lead_id is not None}
     if not selected_ids:
         return []
@@ -307,25 +311,34 @@ def resolve_visits_for_leads(lead_ids, persist=True):
         try:
             persist_visit_resolutions(rows)
         except DatabaseError:
-            logger.exception("No se pudo persistir la resolución de visitas")
+            logger.exception("No se pudo persistir la resolución de citas")
     return rows
+
+
+def resolve_visits_for_leads(lead_ids, persist=True):
+    """Keep property-visit consumers separate from capture appointments."""
+    return [row for row in resolve_appointments_for_leads(lead_ids, persist=persist)
+            if row.get("event_kind", "visit") == "visit"]
 
 
 def apply_visit_resolutions(lead_rows, persist=True):
     lead_rows = list(lead_rows)
-    resolutions = resolve_visits_for_leads(
-        (row.get("id") for row in lead_rows),
-        persist=persist,
+    resolutions = resolve_appointments_for_leads(
+        (row.get("id") for row in lead_rows), persist=persist,
     )
     first_by_lead = {}
     for resolution in resolutions:
         lead_id = int(resolution["resolved_lead_id"])
         registered_at = resolution.get("event_created_at")
-        if registered_at is None:
+        kind = resolution.get("event_kind", "visit")
+        if registered_at is None or kind not in ("visit", "capture"):
             continue
-        current = first_by_lead.get(lead_id)
-        if current is None or registered_at < current:
-            first_by_lead[lead_id] = registered_at
+        dates = first_by_lead.setdefault(lead_id, {})
+        for field in (f"first_{kind}_at", "first_appointment_at"):
+            if dates.get(field) is None or registered_at < dates[field]:
+                dates[field] = registered_at
     for row in lead_rows:
-        row["first_visit_at"] = first_by_lead.get(int(row["id"]))
+        dates = first_by_lead.get(int(row["id"]), {})
+        for field in ("first_visit_at", "first_capture_at", "first_appointment_at"):
+            row[field] = dates.get(field)
     return lead_rows

@@ -38,6 +38,8 @@ LEAD_RESULT_STAGES = {
     "qualified": "Calificados",
     "visit_intent": "Intención de visita",
     "visit_registered": "Visita registrada",
+    "capture_registered": "Cita de captación registrada",
+    "appointment_registered": "Cita comercial registrada",
     "unconfirmed_contact": "Sin contacto confirmado",
     "no_valid_conversation": "Sin conversación verificable",
     "empty_chat_history": "chat_history vacío",
@@ -396,16 +398,20 @@ def build_daily_incoming(metrics_by_date, date_from, date_to):
     return series
 
 
-def _lead_result_rows(date_from, date_to, lead_id=None, segment=None):
+def _lead_result_rows(date_from, date_to, lead_id=None, segment=None, activity_scope=False):
     params = []
     where = []
     if lead_id is not None:
         where.append("l.id = %s")
         params.append(lead_id)
     else:
+        timestamp_expression = (
+            "COALESCE(l.updated_at, l.date_entry, l.created_at)"
+            if activity_scope else "COALESCE(l.date_entry, l.created_at)"
+        )
         where.append(
-            """CAST(
-                SWITCHOFFSET(COALESCE(l.date_entry, l.created_at), '-05:00')
+            f"""CAST(
+                SWITCHOFFSET({timestamp_expression}, '-05:00')
                 AS date
             ) BETWEEN %s AND %s"""
         )
@@ -639,6 +645,8 @@ def _prepare_lead_result(row, assessment=None, assignment_timeline=None):
     row["assignment_timeline"] = assignment_timeline
     row["media_gap_risk"] = possible_missing_media(analysis["messages"])
     row["visit_registered"] = row["first_visit_at"] is not None
+    row["capture_registered"] = row.get("first_capture_at") is not None
+    row["appointment_registered"] = row.get("first_appointment_at") is not None
     row["campaign_segment"] = _campaign_segment(row.get("campaign_name"))
     row["campaign_label"] = (
         "Captaciones"
@@ -1662,6 +1670,8 @@ def _funnel_from_metrics(metrics):
         "visit_registered": sum(
             metric["first_visit_at"] is not None for metric in metrics
         ),
+        "capture_registered": sum(metric.get("first_capture_at") is not None for metric in metrics),
+        "appointment_registered": sum(metric.get("first_appointment_at") is not None for metric in metrics),
     }
     entered = funnel["entered"]
     funnel["context_unavailable"] = max(
@@ -1680,6 +1690,8 @@ def _funnel_from_metrics(metrics):
         "qualified",
         "visit_intent",
         "visit_registered",
+        "capture_registered",
+        "appointment_registered",
     ):
         funnel[f"{key}_pct"] = (
             round(funnel[key] / entered * 100, 1) if entered else 0
@@ -1865,6 +1877,8 @@ def get_management_dashboard(
                 "source": row.get("source"),
                 "source_category": _source_category(row.get("source")),
                 "first_visit_at": row["first_visit_at"],
+                "first_capture_at": row.get("first_capture_at"),
+                "first_appointment_at": row.get("first_appointment_at"),
                 "agent_id": responsible["agent_id"],
                 "agent_name": responsible["agent_name"],
                 "current_agent_id": row["agent_id"],

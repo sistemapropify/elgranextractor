@@ -172,6 +172,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+# ODBC Driver 18 cifra por defecto las conexiones. En desarrollo y en Azure
+# SQL con certificado administrado, explicitar estos parámetros evita que el
+# driver intente negociar una cadena incompatible o rechace el certificado.
+MSSQL_EXTRA_PARAMS = env(
+    'MSSQL_EXTRA_PARAMS',
+    default='Encrypt=yes;TrustServerCertificate=no;',
+)
 
 DATABASES = {
     'default': {
@@ -183,6 +190,7 @@ DATABASES = {
         'PORT': env('DB_PORT', default='1433'),
         'OPTIONS': {
             'driver': 'ODBC Driver 18 for SQL Server',
+            'extra_params': MSSQL_EXTRA_PARAMS,
         },
     },
     'propifai': {
@@ -194,6 +202,7 @@ DATABASES = {
         'PORT': env('PROPIFAI_DB_PORT', default='1433'),
         'OPTIONS': {
             'driver': 'ODBC Driver 18 for SQL Server',
+            'extra_params': MSSQL_EXTRA_PARAMS,
         },
     }
 }
