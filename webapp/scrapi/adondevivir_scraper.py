@@ -487,7 +487,7 @@ async def extraer_coordenadas_desde_detalle(page, url):
     """Navega a una pagina de detalle y extrae coordenadas de mapLatOf/mapLngOf (base64)."""
     exito = await navegar_con_cloudflare(page, url, timeout=30)
     if not exito:
-        return None, None, "", None
+        raise RuntimeError('navigation.failed: Adondevivir no confirmó la carga de la ficha')
 
     await asyncio.sleep(2)
 

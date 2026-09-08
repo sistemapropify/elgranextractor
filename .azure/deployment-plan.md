@@ -45,7 +45,7 @@ context; do not create a parallel environment implicitly.
 
 ## Validation proof
 
-- 103 local tests passed with `manage.py test ingestas.tests scrapi.test_camoufox_launcher
+- 105 local tests passed with `manage.py test ingestas.tests scrapi.test_camoufox_launcher
   --settings=ingestas.scraping_test_settings --noinput` in the isolated local runtime.
 - `manage.py makemigrations --check --dry-run --settings=ingestas.scraping_test_settings`:
   no model/migration drift. SQLite test databases apply migrations; production untouched.

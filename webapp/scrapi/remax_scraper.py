@@ -326,7 +326,8 @@ async def navegar_con_cloudflare(page, url, timeout=30):
         await page.goto(url, wait_until='domcontentloaded', timeout=60000)
     except Exception as e:
         print(f"   [WARN] Error en navegacion: {e}")
-    await esperar_cloudflare(page, timeout)
+    if not await esperar_cloudflare(page, timeout):
+        raise RuntimeError('navigation.blocked: Remax no confirmó acceso al contenido')
     await page.wait_for_timeout(1000)
     return await page.title()
 

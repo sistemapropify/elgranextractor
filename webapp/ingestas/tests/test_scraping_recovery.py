@@ -123,6 +123,30 @@ class WorkerShutdownTests(TestCase):
 
 
 class DetailRecoveryTests(IsolatedAsyncioTestCase):
+    async def test_unresolved_navigation_never_becomes_an_empty_success(self):
+        import importlib
+        page = SimpleNamespace(goto=AsyncMock(), title=AsyncMock(return_value='Just a moment'),
+                               wait_for_timeout=AsyncMock())
+        for portal in ('urbania', 'properati', 'remax'):
+            source = importlib.import_module(f'scrapi.{portal}_scraper')
+            with patch.object(source, 'esperar_cloudflare', AsyncMock(return_value=False)):
+                with self.assertRaisesRegex(RuntimeError, 'navigation.blocked'):
+                    await source.navegar_con_cloudflare(page, 'https://example.test/')
+        from scrapi import adondevivir_scraper as ado
+        with patch.object(ado, 'navegar_con_cloudflare', AsyncMock(return_value=False)):
+            with self.assertRaisesRegex(RuntimeError, 'navigation.failed'):
+                await ado.extraer_coordenadas_desde_detalle(page, 'https://example.test/')
+
+    async def test_image_storage_is_explicit_and_shared_with_recovery(self):
+        source = SimpleNamespace(subir_imagen_a_blob=MagicMock(return_value='https://account.blob.core.windows.net/propiedadesimagenes/photo.jpg'))
+        normalized = {'id_origen': '1', 'imagen_url': 'https://example.test/photo.jpg'}
+        with patch('scrapi.paged_engine.enrich', AsyncMock()), patch('scrapi.paged_engine.normalize', side_effect=lambda *args: dict(normalized)):
+            await prepare_detail('properati', source, SimpleNamespace(url='https://www.properati.com.pe/detalle/1'), {'ID': '1'}, AsyncMock())
+            source.subir_imagen_a_blob.assert_not_called()
+            row = await prepare_detail('properati', source, SimpleNamespace(url='https://www.properati.com.pe/detalle/1'), {'ID': '1'}, AsyncMock(), store_images=True)
+            self.assertIn('.blob.core.windows.net/', row['imagen_url'])
+            source.subir_imagen_a_blob.assert_called_once()
+
     async def test_transient_failure_retries_and_normalizes(self):
         events = []
         async def emit(**event):

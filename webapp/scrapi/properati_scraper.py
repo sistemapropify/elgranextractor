@@ -498,7 +498,8 @@ async def navegar_con_cloudflare(page, url, timeout=30):
         await page.goto(url, wait_until='domcontentloaded', timeout=60000)
     except Exception as e:
         print(f"   [WARN] Error en navegacion: {e}")
-    await esperar_cloudflare(page, timeout)
+    if not await esperar_cloudflare(page, timeout):
+        raise RuntimeError('navigation.blocked: Properati no confirmó acceso al contenido')
     await page.wait_for_timeout(2000)
     return await page.title()
 
@@ -850,12 +851,6 @@ async def extraer_detalle(page, prop):
     if not url:
         return
 
-    # El listado puede traer coordenadas pero no imagen. En ese caso todavia
-    # debemos abrir la ficha para completar y respaldar la imagen en Blob.
-    imagen_actual = str(prop.get('Imagen URL') or '')
-    if prop.get('Coordenadas') and '/propiedadesimagenes/' in imagen_actual:
-        return
-
     try:
         await navegar_con_cloudflare(page, url, timeout=30)
         await page.wait_for_timeout(2000)
@@ -864,14 +859,8 @@ async def extraer_detalle(page, prop):
         # Priorizar la imagen obtenida en el listado y usar el detalle como respaldo.
         imagen_url = prop.get('Imagen URL') or extraer_imagen_desde_html(html_content)
         if imagen_url:
-            blob_url = subir_imagen_a_blob(imagen_url, prop)
-            if blob_url:
-                prop['Imagen URL'] = blob_url
-                prop['Imagen URL Original'] = imagen_url
-                print(f"   [OK] Imagen subida a Blob: {blob_url}")
-            elif not prop.get('Imagen URL'):
-                prop['Imagen URL'] = imagen_url
-                print(f"   [OK] Imagen: {imagen_url}")
+            # Storage belongs to the worker after navigation and validation succeed.
+            prop['Imagen URL'] = imagen_url
 
         lat, lng = extraer_coordenadas_desde_html(html_content)
 

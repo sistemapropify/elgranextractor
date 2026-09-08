@@ -114,6 +114,8 @@ async def enrich(portal, source, page, raw):
     if urlsplit(page.url).path.rstrip('/') != urlsplit(url).path.rstrip('/'):
         raise RuntimeError('detail.unexpected_redirect: no se cargó la ficha solicitada')
     title = (await page.title()).lower()
+    if not title.strip():
+        raise RuntimeError('detail.not_ready: la ficha no terminó de cargar')
     if any(marker in title for marker in ('just a moment', 'access denied', 'attention required')):
         raise RuntimeError('detail.blocked: la ficha no superó la página de acceso')
 
@@ -150,14 +152,15 @@ async def prepare_detail(portal, source, page, raw, emit, *, store_images=False)
         except Exception as exc:
             await emit(event='detail.retry' if attempt < 3 else 'detail.failed',
                        level='warning' if attempt < 3 else 'error', property_id=key,
-                       attempt=attempt, error_type=type(exc).__name__, message=str(exc))
+                       attempt=attempt, error_type=type(exc).__name__,
+                       message=f'{type(exc).__name__}: {exc or "se agotó el tiempo de respuesta"}')
             if attempt == 3:
                 raise
             await asyncio.sleep(attempt * 2)
-    if portal == 'adondevivir' and store_images and raw.get('imagen_url'):
+    if portal in ('adondevivir', 'properati') and store_images and row.get('imagen_url'):
         try:
             blob_image = await asyncio.wait_for(asyncio.to_thread(
-                source.subir_imagen_a_blob, raw['imagen_url'], raw), timeout=60)
+                source.subir_imagen_a_blob, row['imagen_url'], raw), timeout=60)
         except Exception as exc:
             blob_image = None
             await emit(event='image.failed', level='warning', property_id=key,

@@ -47,7 +47,7 @@ El workflow `scraping-worker.yml` construye la imagen, abre/cierra el navegador 
 red, ejecuta las regresiones y prueba migraciones/persistencia contra un SQL Server
 aislado. No publica imágenes ni despliega recursos. La primera ejecución completa
 pasó; la rama ejecuta nuevamente estos controles con cada actualización del scraper.
-La batería local final contiene 103 pruebas; también se verificó el dashboard real
+La batería local final contiene 105 pruebas; también se verificó el dashboard real
 en Camoufox con respuestas HTTP aisladas: vista previa, CSRF, URLs, filtros, logs
 como texto, cobertura y reanudación.
 
