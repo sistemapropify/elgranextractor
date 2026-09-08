@@ -218,6 +218,11 @@ def _missing_camoufox_dependencies() -> list[str]:
 
 def ensure_camoufox_system_dependencies(progress_callback=None) -> None:
     """Espera la instalacion de startup y valida las librerias nativas."""
+    # Las .so (libgtk/libX11-xcb/libasound) son exclusivas de Linux. En Windows
+    # y macOS Camoufox usa las dependencias que trae su propio binario, por lo
+    # que este chequeo no aplica y no debe bloquear la ejecucion local.
+    if not sys.platform.startswith('linux'):
+        return
     if not is_headless_server():
         return
 

@@ -89,15 +89,29 @@ rm -f "$CAMOUFOX_DEPS_READY"
 touch "$CAMOUFOX_DEPS_INSTALLING"
 (
     set +e
+    # ODBC y Camoufox corren en paralelo; apt puede estar bloqueado por el
+    # otro proceso (dpkg lock). Timeout de lock + reintentos evitan que una
+    # instalacion falle por contencion y deje al scraper sin librerias.
+    APT_LOCK="-o DPkg::Lock::Timeout=600 -o APT::Get::force-yes"
     echo "[$(date -u)] Installing Camoufox native dependencies..."
-    timeout 180 apt-get update -qq
-    if timeout 300 apt-get install -y -qq         libgtk-3-0 libx11-xcb1 libasound2; then
-        touch "$CAMOUFOX_DEPS_READY"
-        echo "[$(date -u)] Camoufox native dependencies installed."
-    elif timeout 300 apt-get install -y -qq         libgtk-3-0t64 libx11-xcb1 libasound2t64; then
-        touch "$CAMOUFOX_DEPS_READY"
-        echo "[$(date -u)] Camoufox t64 native dependencies installed."
-    else
+    for attempt in 1 2 3; do
+        timeout 180 apt-get update -qq $APT_LOCK 2>/dev/null
+        if timeout 300 apt-get install -y -qq $APT_LOCK \
+                libgtk-3-0 libx11-xcb1 libasound2 \
+           || timeout 300 apt-get install -y -qq $APT_LOCK \
+                libgtk-3-0t64 libx11-xcb1 libasound2t64; then
+            if ldconfig -p 2>/dev/null | grep -q 'libgtk-3.so.0' \
+               || [ -e /usr/lib/x86_64-linux-gnu/libgtk-3.so.0 ] \
+               || [ -e /usr/lib/aarch64-linux-gnu/libgtk-3.so.0 ]; then
+                touch "$CAMOUFOX_DEPS_READY"
+                echo "[$(date -u)] Camoufox native dependencies installed (attempt $attempt)."
+                break
+            fi
+        fi
+        echo "[$(date -u)] apt attempt $attempt did not provide the Camoufox libs; retrying in 10s..."
+        sleep 10
+    done
+    if [ ! -f "$CAMOUFOX_DEPS_READY" ]; then
         echo "[$(date -u)] ERROR installing Camoufox native dependencies."
     fi
     rm -f "$CAMOUFOX_DEPS_INSTALLING"
