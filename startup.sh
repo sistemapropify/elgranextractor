@@ -89,17 +89,21 @@ rm -f "$CAMOUFOX_DEPS_READY"
 touch "$CAMOUFOX_DEPS_INSTALLING"
 (
     set +e
-    # ODBC y Camoufox corren en paralelo; apt puede estar bloqueado por el
-    # otro proceso (dpkg lock). Timeout de lock + reintentos evitan que una
-    # instalacion falle por contencion y deje al scraper sin librerias.
-    APT_LOCK="-o DPkg::Lock::Timeout=600 -o APT::Get::force-yes"
+    # apt puede estar bloqueado por la instalacion ODBC en paralelo (dpkg lock):
+    # timeout de lock + reintentos evitan que una instalacion falle por contencion.
+    APT="timeout 300 apt-get -y -qq -o DPkg::Lock::Timeout=600"
     echo "[$(date -u)] Installing Camoufox native dependencies..."
+    # Debian bullseye quedo fuera de soporte el 31-ago-2026: sus repos ya no
+    # sirven desde deb.debian.org (404/expired). Se redirigen a archive.debian.org
+    # y se permite metadata vencida para poder instalar libgtk/libasound/libx11-xcb.
+    if grep -rqs 'bullseye' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null; then
+        sed -i 's|http://deb.debian.org/debian-security|http://archive.debian.org/debian-security|g; s|http://deb.debian.org/debian|http://archive.debian.org/debian|g; s|https://deb.debian.org/debian-security|http://archive.debian.org/debian-security|g; s|https://deb.debian.org/debian|http://archive.debian.org/debian|g' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null
+        sed -i 's|^deb |deb [check-valid-until=no] |' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null
+    fi
     for attempt in 1 2 3; do
-        timeout 180 apt-get update -qq $APT_LOCK 2>/dev/null
-        if timeout 300 apt-get install -y -qq $APT_LOCK \
-                libgtk-3-0 libx11-xcb1 libasound2 \
-           || timeout 300 apt-get install -y -qq $APT_LOCK \
-                libgtk-3-0t64 libx11-xcb1 libasound2t64; then
+        timeout 300 apt-get -o Acquire::Check-Valid-Until=false update -qq
+        if $APT install libgtk-3-0 libx11-xcb1 libasound2 \
+           || $APT install libgtk-3-0t64 libx11-xcb1 libasound2t64; then
             if ldconfig -p 2>/dev/null | grep -q 'libgtk-3.so.0' \
                || [ -e /usr/lib/x86_64-linux-gnu/libgtk-3.so.0 ] \
                || [ -e /usr/lib/aarch64-linux-gnu/libgtk-3.so.0 ]; then
