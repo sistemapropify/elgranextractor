@@ -180,6 +180,20 @@ class PropertyProspect(models.Model):
         verbose_name='Usuario que tomó la prospección',
         help_text='Username Propify del agente que marcó esta captación como suya.',
     )
+    tomada_en = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Fecha y hora en que se tomó la prospección',
+    )
+
+    # ── Estado de captación (CAPTADO / NO CAPTADO) ──────────────
+    # Por defecto toda captación nueva es NO CAPTADO; solo se marca CAPTADO
+    # cuando la propiedad efectivamente pasa a cartera (editable).
+    captado = models.BooleanField(
+        default=False,
+        verbose_name='Captado',
+        help_text='True = CAPTADO · False = NO CAPTADO',
+    )
 
     # ── GPS (solo coordenadas — dirección se llena manual) ───────
     latitude = models.DecimalField(

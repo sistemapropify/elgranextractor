@@ -526,7 +526,8 @@ def tomar_prospeccion(request, pk):
                     'tomada_por_username': actual,
                 }, status=409)
             locked.tomada_por_username = username
-            locked.save(update_fields=['tomada_por_username'])
+            locked.tomada_en = timezone.now()
+            locked.save(update_fields=['tomada_por_username', 'tomada_en'])
             return JsonResponse({'ok': True, 'tomada_por_username': username})
 
         # accion == 'soltar'
@@ -539,7 +540,8 @@ def tomar_prospeccion(request, pk):
                 'tomada_por_username': actual,
             }, status=403)
         locked.tomada_por_username = ''
-        locked.save(update_fields=['tomada_por_username'])
+        locked.tomada_en = None
+        locked.save(update_fields=['tomada_por_username', 'tomada_en'])
         return JsonResponse({'ok': True, 'tomada_por_username': ''})
 
 
@@ -612,6 +614,8 @@ def prospect_dashboard(request):
             'origen': prospect.get_origin_display() or prospect.origin or '',
             'creado': prospect.created_at.strftime('%d/%m/%Y %H:%M') if prospect.created_at else '',
             'tomada_por_username': prospect.tomada_por_username or '',
+            'tomada_en': prospect.tomada_en.strftime('%d/%m/%Y %H:%M') if prospect.tomada_en else '',
+            'captado': bool(prospect.captado),
         })
 
     districts = sorted({p.district for p in prospects if p.district})

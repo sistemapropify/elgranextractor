@@ -297,6 +297,34 @@
         cursor: default;
     }
     .ppc-tomar:disabled { opacity: .55; cursor: wait; }
+    /* Variante "tomada": nombre arriba y fecha/hora abajo */
+    .ppc-tomar-tomada {
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        padding: 4px 10px;
+        border-radius: 10px;
+    }
+    .ppc-tomar-fecha {
+        font-size: 10px;
+        font-weight: 500;
+        opacity: .8;
+        white-space: nowrap;
+    }
+
+    /* Estado CAPTADO / NO CAPTADO */
+    .ppc-captado {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        margin-top: 4px;
+        width: fit-content;
+    }
+    .ppc-captado.captado-si { background: #3fb95022; color: #3fb950; border: 1px solid #3fb95055; }
+    .ppc-captado.captado-no { background: #8b949e22; color: #8b949e; border: 1px solid #8b949e55; }
 
     .ppc-summary { display: flex; gap: 12px; align-items: flex-start; }
     .ppc-thumb {
@@ -550,6 +578,13 @@
     }
 
     // ── "Tomar prospección": delegado único en el panel (tomar/soltar) ──
+    function nuevaFechaHoraLocal() {
+        function pad(n) { return (n < 10 ? '0' : '') + n; }
+        var d = new Date();
+        return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() +
+            ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
     function controlTomarHtml(p) {
         if (!p) return '';
         var pid = p.id != null ? p.id : '';
@@ -559,16 +594,22 @@
             return '<button type="button" class="ppc-tomar ppc-tomar-libre" ' +
                 'data-prospect="' + pid + '" data-accion="tomar">Tomar Prospección</button>';
         }
+        var fecha = (p.tomada_en || '').toString().trim();
+        var fechaHtml = fecha
+            ? '<span class="ppc-tomar-fecha">📅 ' + escaparHtml(fecha) + '</span>'
+            : '';
         var esMia = actual && tomada === actual;
         if (esMia) {
-            return '<button type="button" class="ppc-tomar ppc-tomar-propia" ' +
+            return '<button type="button" class="ppc-tomar ppc-tomar-propia ppc-tomar-tomada" ' +
                 'data-prospect="' + pid + '" data-accion="soltar" ' +
-                'title="Soltar prospección (vuelve a quedar libre)">👤 ' +
-                escaparHtml(tomada) + ' ✕</button>';
+                'title="Soltar prospección (vuelve a quedar libre)">' +
+                '<span>👤 ' + escaparHtml(tomada) + ' ✕</span>' + fechaHtml +
+                '</button>';
         }
-        return '<span class="ppc-tomar ppc-tomar-ajena" ' +
-            'title="Prospección tomada por ' + escaparHtml(tomada) + '">👤 ' +
-            escaparHtml(tomada) + '</span>';
+        return '<span class="ppc-tomar ppc-tomar-ajena ppc-tomar-tomada" ' +
+            'title="Prospección tomada por ' + escaparHtml(tomada) + '">' +
+            '<span>👤 ' + escaparHtml(tomada) + '</span>' + fechaHtml +
+            '</span>';
     }
 
     function initTomarProspeccion() {
@@ -599,8 +640,13 @@
                 if (data && data.ok) {
                     for (var i = 0; i < todasPropiedadesJSON.length; i++) {
                         if (String(todasPropiedadesJSON[i].id) === String(pid)) {
-                            todasPropiedadesJSON[i].tomada_por_username = data.tomada_por_username || '';
-                        }
+                                    todasPropiedadesJSON[i].tomada_por_username = data.tomada_por_username || '';
+                                    if (accion === 'tomar') {
+                                        todasPropiedadesJSON[i].tomada_en = nuevaFechaHoraLocal();
+                                    } else {
+                                        todasPropiedadesJSON[i].tomada_en = '';
+                                    }
+                                }
                     }
                     sincronizarPanel();
                 } else {
@@ -669,6 +715,8 @@
                     ((p.telefono && String(p.telefono).trim())
                         ? '<div class="ppc-sub">Tel: ' + escaparHtml(p.telefono) + '</div>' : '') +
                     (p.status ? '<div class="ppc-status">' + escaparHtml(p.status) + '</div>' : '') +
+                    '<div class="ppc-captado ' + (p.captado ? 'captado-si' : 'captado-no') + '">' +
+                        (p.captado ? '✓ CAPTADO' : 'NO CAPTADO') + '</div>' +
                     '<div class="ppc-hint">▶ Clic para ver todos los datos</div>' +
                 '</div>' +
             '</div>'

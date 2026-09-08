@@ -1000,6 +1000,17 @@
                 {% endfor %}
               </select>
             </div>
+
+            <div class="field-group full">
+              <label for="id_captado">Captado</label>
+              <select id="id_captado" name="captado">
+                <option value="1" {% if form.captado.value %}selected{% endif %}>✓ CAPTADO</option>
+                <option value="0" {% if not form.captado.value %}selected{% endif %}>NO CAPTADO</option>
+              </select>
+              <small style="display:block;margin-top:4px;color:var(--text-muted);">
+                NO CAPTADO por defecto. Marca CAPTADO cuando la propiedad pase a cartera.
+              </small>
+            </div>
             {% endif %}
 
             <div class="field-group full">

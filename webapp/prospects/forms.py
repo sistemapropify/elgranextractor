@@ -59,7 +59,7 @@ class ProspectCaptureForm(forms.ModelForm):
 
 class ProspectEditForm(ProspectCaptureForm):
     class Meta(ProspectCaptureForm.Meta):
-        fields = [*ProspectCaptureForm.Meta.fields, 'status']
+        fields = [*ProspectCaptureForm.Meta.fields, 'status', 'captado']
         widgets = {
             'owner_name':     forms.TextInput(attrs={'placeholder': 'Nombre del propietario'}),
             'phone':          forms.TextInput(attrs={'placeholder': 'Ej: 959 234 871', 'inputmode': 'tel'}),
