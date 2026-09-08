@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 
 import requests
 from django.conf import settings
+from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.utils.http import url_has_allowed_host_and_scheme
 from rest_framework.authentication import BaseAuthentication, get_authorization_header
@@ -239,6 +240,11 @@ def propify_web_required(view_func):
     def wrapped(request, *args, **kwargs):
         principal = get_web_propify_principal(request)
         if principal is None:
+            if 'application/json' in request.headers.get('Accept', ''):
+                return JsonResponse({
+                    'ok': False,
+                    'error': 'Tu sesión venció. Vuelve a ingresar con Propify y reintenta el guardado.',
+                }, status=401)
             query = urlencode({'next': request.get_full_path()})
             return redirect(f'/prospects/login/?{query}')
         request.propify_user = principal

@@ -1,7 +1,6 @@
 import base64
 import json
 import logging
-import math
 import os
 import re
 from uuid import uuid4
@@ -30,6 +29,14 @@ from .propify_auth import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _form_errors_response(form, status=400):
+    errors = {field: [str(error) for error in field_errors]
+              for field, field_errors in form.errors.items()}
+    first_error = next((message for values in errors.values() for message in values),
+                       'Revisa los datos ingresados.')
+    return JsonResponse({'ok': False, 'error': first_error, 'errors': errors}, status=status)
 
 
 def _guardar_foto_azure(foto):
@@ -74,11 +81,12 @@ def signed_prospect_photo(prospect):
 
 
 def _post_login_target(request):
-    """Conserva la ficha solicitada y usa el dashboard como destino inicial."""
-    destination = safe_next_url(request)
-    if destination.rstrip('/') in ('/prospects', '/prospects/login'):
-        return '/marketing/prospeccion/'
-    return destination
+    """Destino tras el login de Propify. Si no hay un 'next' profundo (o el next
+    es la lista/landing por defecto), se abre el dashboard cartográfico."""
+    destino = safe_next_url(request)
+    if not destino or destino.rstrip('/') in ('/prospects', '/prospects/login'):
+        destino = '/marketing/prospeccion/'
+    return destino
 
 
 def propify_login(request):
@@ -176,6 +184,7 @@ class CaptureView(View):
     def get(self, request):
         return render(request, 'prospects/capture.html', {
             'mode': 'new',
+            'form': ProspectCaptureForm(),
             'property_types': PropertyProspect.PROPERTY_TYPES,
             'google_maps_api_key': getattr(
                 settings,
@@ -185,35 +194,31 @@ class CaptureView(View):
         })
 
     def post(self, request):
-        form = ProspectCaptureForm(request.POST, request.FILES)
-        if not request.POST.get('origin'):
-            form.add_error('origin', 'Selecciona el origen de la prospección.')
-        if not form.is_valid():
-            errors = {
-                field: [str(error) for error in field_errors]
-                for field, field_errors in form.errors.items()
-            }
-            first_error = next(
-                (message for field_errors in errors.values() for message in field_errors),
-                'Revisa los datos ingresados.',
-            )
+        foto = request.FILES.get('photo')
+        if request.POST.get('photo_expected') == '1' and not foto:
+            logger.warning('Captura web sin la foto anunciada: usuario_propify_id=%s', request.propify_user.pk)
             return JsonResponse({
                 'ok': False,
-                'error': first_error,
-                'errors': errors,
+                'error': 'La foto seleccionada no llegó al servidor. Selecciónala nuevamente y vuelve a guardar.',
             }, status=400)
+        form = ProspectCaptureForm(request.POST, request.FILES)
+        if not form.is_valid():
+            logger.warning(
+                'Captura web inválida: usuario_propify_id=%s campos=%s foto_recibida=%s',
+                request.propify_user.pk, list(form.errors), bool(foto),
+            )
+            return _form_errors_response(form)
 
         prospect = form.save(commit=False)
         prospect.agent = None
         prospect.mobile_user = request.propify_user.mobile_user
         prospect.captured_by_username = request.propify_user.username
         prospect.status = 'pendiente'
-        foto = request.FILES.get('photo')
         if foto:
             try:
                 prospect.photo = _guardar_foto_azure(foto)
             except Exception:
-                logger.exception('No se pudo subir la foto de la captura web.')
+                logger.exception('No se pudo subir la foto de la captura web: usuario_propify_id=%s', request.propify_user.pk)
                 return JsonResponse({
                     'ok': False,
                     'error': 'No se pudo subir la foto. Inténtalo nuevamente.',
@@ -229,9 +234,14 @@ class CaptureView(View):
 
         # Tras guardar, volver automáticamente al dashboard de prospección
         # (/marketing/prospeccion/) en vez de abrir la página de detalle.
+        logger.info(
+            'Captura web guardada: prospecto_id=%s usuario_propify_id=%s foto_guardada=%s foto_bytes=%s',
+            prospect.pk, request.propify_user.pk, bool(prospect.photo), foto.size if foto else 0,
+        )
         return JsonResponse({
             'ok': True,
             'prospect_id': prospect.pk,
+            'photo_saved': bool(prospect.photo),
             'redirect_url': '/marketing/prospeccion/',
         })
 
@@ -247,14 +257,16 @@ class ProspectDetailView(View):
     """
 
     def get_prospect(self, request, pk):
-        # El módulo de prospección es colaborativo: cualquier usuario que haya
-        # iniciado sesión con Propify puede consultar y editar las captaciones
-        # del equipo. La autenticación sigue siendo obligatoria por el decorador.
+        # Espacio colaborativo: cualquier usuario Propify autenticado puede
+        # consultar y editar las captaciones del equipo.
         return get_object_or_404(PropertyProspect, pk=pk)
 
     def get(self, request, pk):
         prospect = self.get_prospect(request, pk)
         form = ProspectEditForm(instance=prospect)
+        return self.render_form(request, prospect, form)
+
+    def render_form(self, request, prospect, form, status=200):
         return render(request, 'prospects/capture.html', {
             'prospect': prospect,
             'form': form,
@@ -267,62 +279,59 @@ class ProspectDetailView(View):
                 'GOOGLE_MAPS_API_KEY',
                 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',
             ),
-        })
+        }, status=status)
 
     def post(self, request, pk):
         prospect = self.get_prospect(request, pk)
-        # Las coordenadas llegan a veces vacías/'' en el cliente; si el prospecto
-        # ya tiene GPS, se preservan para no invalidar el formulario ni borrarlas.
+        original_photo = prospect.photo.name
+        wants_json = 'application/json' in request.headers.get('Accept', '')
+        # Sin nueva ubicación se conserva el par guardado. Una ubicación nueva
+        # incompleta o inválida debe avisarse, no mezclarse con la anterior.
         post_data = request.POST.copy()
-
-        def _normalizar_coord(key, actual):
-            raw = (post_data.get(key) or '').strip()
-            if raw:
-                try:
-                    val = float(raw)
-                except (TypeError, ValueError):
-                    raw = ''
-                else:
-                    # Rechazar NaN/Infinito (el JS a veces escribe 'NaN')
-                    if not math.isfinite(val):
-                        raw = ''
-            if not raw:
-                raw = str(actual) if actual is not None else ''
-            post_data[key] = raw
-
-        _normalizar_coord('latitude', prospect.latitude)
-        _normalizar_coord('longitude', prospect.longitude)
+        if not any((post_data.get(key) or '').strip() for key in ('latitude', 'longitude')):
+            post_data['latitude'] = str(prospect.latitude) if prospect.latitude is not None else ''
+            post_data['longitude'] = str(prospect.longitude) if prospect.longitude is not None else ''
 
         form = ProspectEditForm(post_data, request.FILES, instance=prospect)
+        response_status = 400
         if form.is_valid():
             saved = form.save(commit=False)
             # Si tenía borrador y ya tiene datos, pasa a pendiente
             if saved.status == 'borrador' and (saved.phone or saved.owner_name):
                 saved.status = 'pendiente'
             foto_edit = request.FILES.get('photo')
-            if foto_edit:
-                saved.photo = _guardar_foto_azure(foto_edit)
-            saved.save()
-            messages.success(request, 'Prospecto actualizado correctamente.')
-            # Tras guardar, regresar automáticamente al dashboard de prospección
-            return redirect('marketing_prospeccion_dashboard')
+            try:
+                if foto_edit:
+                    saved.photo = _guardar_foto_azure(foto_edit)
+            except Exception:
+                logger.exception('No se pudo subir la foto al editar el prospecto pk=%s', pk)
+                form.add_error('photo', 'No se pudo subir la foto. Inténtalo nuevamente.')
+                response_status = 500
+            else:
+                try:
+                    saved.save()
+                except Exception:
+                    logger.exception('No se pudo guardar la edición del prospecto pk=%s', pk)
+                    form.add_error(None, 'El servidor no pudo guardar los cambios. Inténtalo nuevamente.')
+                    response_status = 500
+                else:
+                    if wants_json:
+                        return JsonResponse({
+                            'ok': True, 'prospect_id': saved.pk,
+                            'photo_saved': bool(saved.photo),
+                            'redirect_url': '/marketing/prospeccion/',
+                        })
+                    messages.success(request, 'Prospecto actualizado correctamente.')
+                    return redirect('marketing_prospeccion_dashboard')
         logger.warning(
             'ProspectEditForm inválido pk=%s errores=%s',
             prospect.pk,
-            dict(form.errors),
+            list(form.errors),
         )
-        return render(request, 'prospects/capture.html', {
-            'prospect': prospect,
-            'form': form,
-            'photo_url': signed_prospect_photo(prospect),
-            'mode': 'detail',
-            'property_types': PropertyProspect.PROPERTY_TYPES,
-            'google_maps_api_key': getattr(
-                settings,
-                'GOOGLE_MAPS_API_KEY',
-                'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',
-            ),
-        })
+        if wants_json:
+            return _form_errors_response(form, status=response_status)
+        prospect.photo = original_photo
+        return self.render_form(request, prospect, form, status=response_status)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -345,8 +354,7 @@ class ProcessImageView(View):
                 'error': 'El procesamiento con IA solo está disponible desde móvil o tablet.',
             }, status=403)
 
-        # Igual que la edición manual, el procesamiento pertenece al espacio
-        # compartido de prospecciones y no se restringe al creador.
+        # El procesamiento también pertenece al espacio compartido.
         prospect = get_object_or_404(PropertyProspect, pk=pk)
 
         if not prospect.photo:
@@ -457,8 +465,7 @@ No incluyas explicaciones, solo el JSON."""
 # ─────────────────────────────────────────────────────────────────────────────
 @propify_web_required
 def prospect_list(request):
-    # La prospección es colaborativa: la lista contiene las captaciones de todo
-    # el equipo, igual que el dashboard cartográfico.
+    # Igual que el dashboard, la lista muestra las captaciones de todo el equipo.
     qs = PropertyProspect.objects.all().order_by('-created_at', '-pk')
 
     status_filter = request.GET.get('status', '')
@@ -538,8 +545,6 @@ def prospect_dashboard(request):
             'es_captacion': True,
             'primera_imagen': photo_url,
             'agente': agent_name,
-            # Todas las captaciones son editables por cualquier usuario Propify
-            # autenticado; la vista de detalle aplica esa misma regla.
             'url': f'/prospects/{prospect.pk}/detail/',
             'status': prospect.get_status_display(),
             'telefono': prospect.phone or '',
