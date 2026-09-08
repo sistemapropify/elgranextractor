@@ -1,0 +1,46 @@
+name: Scraping worker validation
+on:
+  push:
+    branches: ['codex/scraping-*']
+  workflow_dispatch:
+  pull_request:
+    paths: ['webapp/scrapi/**', 'webapp/ingestas/**', 'webapp/colas/scraping_tasks.py', 'webapp/intelligence/skills/scrapi/**', 'deploy/scraping/**', '.github/workflows/scraping-worker.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Build exact worker image
+        run: docker build --platform linux/amd64 --build-arg SCRAPING_REVISION="$GITHUB_SHA" -f deploy/scraping/Dockerfile -t scraping-worker:test .
+      - name: Browser works without downloads or network
+        run: docker run --rm --network none --entrypoint python scraping-worker:test -m scrapi.worker_smoke
+      - name: Database, adapters and dashboard regressions
+        run: docker run --rm --network none -e CAMOUFOX_EXECUTABLE_PATH= -e CAMOUFOX_AUTO_INSTALL=1 -e CAMOUFOX_HEADLESS=0 --entrypoint python scraping-worker:test manage.py test ingestas.tests scrapi.test_camoufox_launcher --settings=ingestas.scraping_test_settings --noinput
+      - name: Model and migration consistency
+        run: docker run --rm --network none --entrypoint python scraping-worker:test manage.py makemigrations --check --dry-run --settings=ingestas.scraping_test_settings
+      - name: SQL Server migration and persistence tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          db_password="$(openssl rand -hex 24)!aA9"
+          echo "::add-mask::$db_password"
+          docker network create scraping-test
+          docker run -d --name scraping-sql --network scraping-test -e ACCEPT_EULA=Y -e MSSQL_PID=Developer -e MSSQL_SA_PASSWORD="$db_password" mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-22.04@sha256:ea73825f3d88a23c355ac2f9fdc6bd960fec90171c12c572109b36a558f77bb8
+          ready=0
+          for attempt in $(seq 1 60); do
+            if docker exec -e SQLCMDPASSWORD="$db_password" scraping-sql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -Q 'SELECT 1' >/dev/null 2>&1; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1
+          docker run --rm --network scraping-test --entrypoint python \
+            -e SCRAPING_TEST_SQL=1 -e SCRAPING_DB_PASSWORD="$db_password" \
+            scraping-worker:test manage.py test ingestas.tests.test_scraping_integrity ingestas.tests.test_publication_lifecycle ingestas.tests.test_scraping_recovery \
+            --settings=ingestas.scraping_test_settings --noinput
+      - name: Remove isolated SQL test resources
+        if: always()
+        run: |
+          docker rm -f scraping-sql || true
+          docker network rm scraping-test || true

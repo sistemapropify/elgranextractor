@@ -1,10 +1,16 @@
+from unittest.mock import patch
+
 from django.test import SimpleTestCase
 
 from colas.scraping_tasks import _instanciar_skill
 from scrapi.facebook_marketplace_scraper import (
     DEFAULT_IDLE_SCROLLS,
     DEFAULT_MAX_ITEMS,
+    DEFAULT_SEARCH_URL,
+    LOGIN_WAIT_SECONDS,
     MIN_SCROLL_ROUNDS,
+    classify_arequipa_location,
+    is_arequipa_item,
     parse_detail_html,
     parse_listing_html,
     parse_price,
@@ -17,6 +23,28 @@ class FacebookMarketplaceParserTests(SimpleTestCase):
         self.assertGreaterEqual(DEFAULT_MAX_ITEMS, 1500)
         self.assertGreater(DEFAULT_IDLE_SCROLLS, 5)
         self.assertGreaterEqual(MIN_SCROLL_ROUNDS, 20)
+        self.assertGreaterEqual(LOGIN_WAIT_SECONDS, 600)
+        self.assertIn("/marketplace/110200712339125/search/", DEFAULT_SEARCH_URL)
+        self.assertIn("radius=65", DEFAULT_SEARCH_URL)
+
+    def test_strict_arequipa_scope_rejects_other_cities(self):
+        self.assertTrue(classify_arequipa_location("Cayma, Arequipa"))
+        self.assertTrue(classify_arequipa_location("Cerro Colorado"))
+        self.assertFalse(classify_arequipa_location("Tacna"))
+        self.assertFalse(classify_arequipa_location("Juliaca, Puno"))
+        self.assertIsNone(classify_arequipa_location("Perú"))
+
+    def test_coordinates_must_be_inside_65_km_radius(self):
+        self.assertTrue(is_arequipa_item({
+            "latitude": -16.409047,
+            "longitude": -71.537451,
+            "location": "Arequipa",
+        }))
+        self.assertFalse(is_arequipa_item({
+            "latitude": -18.0066,
+            "longitude": -70.2463,
+            "location": "Arequipa",
+        }))
 
     def test_auth_required_marker_is_non_retryable(self):
         from types import SimpleNamespace
@@ -77,3 +105,19 @@ class FacebookMarketplaceParserTests(SimpleTestCase):
     def test_task_registry_can_instantiate_facebook_skill(self):
         skill = _instanciar_skill("facebook_marketplace")
         self.assertEqual(skill.name, "scraper_facebook_marketplace")
+
+    @patch("scrapi.facebook_marketplace_scraper.run_scraper")
+    def test_skill_forwards_saved_id_queue_to_skip_infinite_scroll(self, run_scraper):
+        run_scraper.return_value = [{"id_origen": "2"}]
+        skill = _instanciar_skill("facebook_marketplace")
+
+        result = skill.execute({
+            "start_page": 72,
+            "resume_item_ids": ["1", "2", "3"],
+        })
+
+        self.assertTrue(result.success)
+        self.assertEqual(
+            run_scraper.call_args.kwargs["resume_item_ids"],
+            ["1", "2", "3"],
+        )

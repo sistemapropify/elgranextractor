@@ -8,6 +8,7 @@ from colas.scraping_tasks import (
     _actualizar_contadores,
     _run_scraping,
     _error_camoufox_no_reintentable,
+    _mensaje_error_camoufox_no_reintentable,
     _resultado_portal_valido,
 )
 from ingestas.views import _decorate_scraping_job
@@ -111,6 +112,9 @@ class ScrapingJobReportingTests(SimpleTestCase):
             )
         )
         self.assertTrue(_error_camoufox_no_reintentable(result))
+        message = _mensaje_error_camoufox_no_reintentable(result)
+        self.assertIn('sesion autenticada', message)
+        self.assertNotIn('dependencias nativas', message)
 
     def test_missing_linux_library_is_not_retried(self):
         result = SimpleNamespace(
@@ -120,6 +124,10 @@ class ScrapingJobReportingTests(SimpleTestCase):
             )
         )
         self.assertTrue(_error_camoufox_no_reintentable(result))
+        self.assertIn(
+            'dependencias nativas',
+            _mensaje_error_camoufox_no_reintentable(result),
+        )
 
     def test_transient_browser_failure_can_be_retried(self):
         result = SimpleNamespace(message="Timeout esperando respuesta del portal")
@@ -136,7 +144,7 @@ class ScrapingJobReportingTests(SimpleTestCase):
     def test_success_with_detected_properties_is_valid(self):
         result = SimpleNamespace(
             success=True,
-            data={"total": 3, "nuevas": 1, "actualizadas": 2},
+            data={"total": 3, "nuevas": 1, "actualizadas": 2, 'discovery': {'complete': True}},
         )
 
         self.assertTrue(_resultado_portal_valido(result))
@@ -144,7 +152,7 @@ class ScrapingJobReportingTests(SimpleTestCase):
     def test_resumed_portal_with_exhausted_checkpoint_is_valid(self):
         result = SimpleNamespace(
             success=True,
-            data={'total': 0, 'resume_complete': True},
+            data={'total': 0, 'resume_complete': True, 'discovery': {'complete': True}},
         )
         self.assertTrue(_resultado_portal_valido(result))
 
@@ -170,7 +178,7 @@ class ScrapingJobReportingTests(SimpleTestCase):
             base,
         )
 
-        job_model.objects.filter.assert_called_once_with(id=7)
+        job_model.objects.filter.assert_called_once_with(id=7, execution_token=job.execution_token)
         job_model.objects.filter.return_value.update.assert_called_once_with(
             total_propiedades=16,
             procesadas=16,

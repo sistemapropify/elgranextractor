@@ -1,280 +1,37 @@
-"""
-ScraperProperatiSkill â€” Skill independiente.
-
-Scrapea propiedades de Properati.com.pe y las guarda en PropiedadesCompetencia.
-Reutiliza la lÃ³gica de extracciÃ³n de scrapi/properati_scraper.py.
-"""
-
-from __future__ import annotations
-
-import asyncio
-import logging
-import os
-import time as _time
-from datetime import datetime
-from typing import Any, Callable, Dict
-
-from intelligence.skills.base import BaseSkill, SkillResult
+"""Properati: extractor específico con recorrido y persistencia compartidos."""
+from intelligence.skills.base import BaseSkill
+from scrapi.paged_engine import run_paged
+from scrapi.source_config import requested_url
 from .db_utils import guardar_propiedades
-
-logger = logging.getLogger(__name__)
-
-# Anti-cuelgue: timeouts (mismo criterio que REMAX). Perfil efímero (sin user_data_dir).
-CAMOUFOX_LAUNCH_TIMEOUT = int(os.environ.get('CAMOUFOX_LAUNCH_TIMEOUT', '600'))
-CAMOUFOX_TOTAL_TIMEOUT = int(os.environ.get('CAMOUFOX_TOTAL_TIMEOUT', '2700'))
+from .paged_skill import execute_paged_skill
 
 
-def _ejecutar_scraping(
-    max_paginas: int = 0,
-    start_page: int = 1,
-    progress_callback: Callable[[Dict[str, Any]], bool] | None = None,
-    batch_callback: Callable[[list[Dict[str, Any]]], Dict[str, int]] | None = None,
-) -> list[Dict[str, Any]]:
-    """
-    Ejecuta el scraping de Properati y retorna lista de propiedades estandarizadas.
-    
-    Args:
-        max_paginas: MÃ¡ximo de pÃ¡ginas a scrapear. 0 = todas.
-    
-    Returns:
-        Lista de dicts con formato estandarizado listo para guardar en DB.
-    """
-    from scrapi import properati_scraper as properati_source
-    from scrapi.properati_scraper import (
-        TOTAL_PAGINAS, GUARDAR_CADA_N_PAGINAS, BASE_URL,
-        estandarizar, extraer_listado, extraer_detalle,
-        navegar_con_cloudflare, manejar_sigint,
-        mapear_a_formato_remax,
-    )
-    from camoufox.async_api import AsyncCamoufox
-    from scrapi.camoufox_launcher import camoufox_kwargs
-    import signal
-
-    async def _run():
-        # Cada ejecuciÃ³n es independiente. Una seÃ±al de detenciÃ³n anterior no
-        # puede cancelar silenciosamente el siguiente trabajo.
-        properati_source.detener = False
-        todas_raw = []
-        paginas = max_paginas if max_paginas > 0 else TOTAL_PAGINAS
-        pagina_inicial = max(1, min(int(start_page or 1), paginas))
-
-        async def emit_progress(**payload):
-            if not progress_callback:
-                return True
-            return await asyncio.to_thread(progress_callback, payload)
-
-        def estandarizar_lote(raw_items):
-            fecha_extraccion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            estandarizadas = []
-            for prop in raw_items:
-                try:
-                    mapeada = mapear_a_formato_remax(prop)
-                    std = estandarizar(mapeada, fecha_extraccion, "Properati")
-                    std['fuente'] = 'properati'
-                    std['datos_crudos'] = {
-                        k: str(v) if not isinstance(v, (dict, list, type(None))) else v
-                        for k, v in prop.items()
-                    }
-                    estandarizadas.append(std)
-                except Exception as exc:
-                    logger.warning("[properati] Error estandarizando: %s", exc)
-            return estandarizadas
-
-        try:
-            signal.signal(signal.SIGINT, manejar_sigint)
-        except (ValueError, RuntimeError):
-            pass
-
-        t0 = _time.monotonic()
-        if not await emit_progress(
-            percent=0,
-            processed=0,
-            message=(
-                f'Properati: lanzando navegador Camoufox '
-                f'(timeout {CAMOUFOX_LAUNCH_TIMEOUT}s)'
-            ),
-        ):
-            return []
-
-        async with AsyncCamoufox(
-            **camoufox_kwargs(),
-        ) as browser:
-            page = await browser.new_page()
-            await page.set_viewport_size({"width": 1920, "height": 1080})
-
-            print("=" * 60)
-            print(f"SCRAPER PROPERATI - {paginas} paginas")
-            print("=" * 60)
-
-            for n in range(pagina_inicial, paginas + 1):
-                if properati_source.detener:
-                    break
-                if not await emit_progress(
-                    percent=int(((n - 1) / max(paginas, 1)) * 70),
-                    processed=len(todas_raw),
-                    message=f'Properati: leyendo página {n} de {paginas}',
-                ):
-                    break
-                url = BASE_URL if n == 1 else f"{BASE_URL}/{n}"
-                print(f"\n[Pagina {n}/{paginas}]: {url}")
-                try:
-                    await navegar_con_cloudflare(page, url)
-                    props = await extraer_listado(page)
-
-                    # Enriquecer y persistir cada ficha inmediatamente. Antes
-                    # se guardaba la pagina solo al terminar todos los detalles
-                    # y la tabla parecia congelada durante varios minutos.
-                    for detail_index, prop in enumerate(props, 1):
-                        if properati_source.detener:
-                            break
-                        # Completar tanto coordenadas como imagenes.
-                        if (not prop.get('Coordenadas') or '/propiedadesimagenes/' not in str(prop.get('Imagen URL') or '')):
-                            await extraer_detalle(page, prop)
-                            await asyncio.sleep(0.15)
-
-                        saved = None
-                        if batch_callback:
-                            batch = estandarizar_lote([prop])
-                            if batch:
-                                saved = await asyncio.to_thread(
-                                    batch_callback, batch
-                                )
-                        if not await emit_progress(
-                            percent=int(((n - 1) / max(paginas, 1)) * 99),
-                            processed=(saved or {}).get(
-                                'total', len(todas_raw) + detail_index
-                            ),
-                            nuevas=(saved or {}).get('nuevas'),
-                            actualizadas=(saved or {}).get('actualizadas'),
-                            errores=(saved or {}).get('errores'),
-                            message=(
-                                f'Properati: página {n}/{paginas} · ficha '
-                                f'{detail_index}/{len(props)} guardada'
-                            ),
-                        ):
-                            break
-
-                    todas_raw.extend(props)
-                    print(f"   -> {len(props)} props (total: {len(todas_raw)})")
-                    if not await emit_progress(
-                        percent=int((n / max(paginas, 1)) * 99),
-                        processed=len(todas_raw),
-                        checkpoint_page=n,
-                        message=f'Properati: página {n} completada y confirmada',
-                    ):
-                        break
-                except Exception as e:
-                    print(f"   [ERROR] Pagina {n}: {e}")
-                    raise RuntimeError(
-                        f"Properati fallo en pagina {n}; checkpoint previo conservado"
-                    ) from e
-
-            await page.close()
-
-        estandarizadas = estandarizar_lote(todas_raw)
-        await emit_progress(
-            percent=99,
-            processed=len(estandarizadas),
-            message='Properati: consolidando resultados finales',
-        )
-        return estandarizadas
-
-    # Timeout total: nunca quedarse "activo" indefinidamente
-    try:
-        return asyncio.run(
-            asyncio.wait_for(_run(), timeout=CAMOUFOX_TOTAL_TIMEOUT)
-        )
-    except asyncio.TimeoutError:
-        raise RuntimeError(
-            f'PROPERATI superó el timeout total de {CAMOUFOX_TOTAL_TIMEOUT}s '
-            f'sin terminar. Se canceló para no quedar colgado.'
-        )
+def _ejecutar_scraping(max_paginas=0, start_page=1, source_url=None, url=None,
+                       progress_callback=None, batch_callback=None, resume_state=None):
+    return run_paged('properati', max_paginas=max_paginas, start_page=start_page,
+        source_url=requested_url('properati', {'source_url': source_url or url}),
+        progress_callback=progress_callback, batch_callback=batch_callback, resume_state=resume_state)
 
 
 class ScraperProperatiSkill(BaseSkill):
-    name = "scraper_properati"
-    description = (
-        "Scrapea propiedades de Properati.com.pe en Arequipa y las guarda "
-        "en la tabla PropiedadesCompetencia."
-    )
-    category = "custom"
+    name = 'scraper_properati'
+    description = 'Extrae Properati desde la búsqueda configurada, con cobertura y recuperación verificables.'
+    category = 'custom'
     access_level = 1
     is_active = True
-
     parameters_schema = {
-        'max_paginas': {
-            'type': 'integer',
-            'description': 'MÃ¡ximo de pÃ¡ginas a scrapear. 0 = todas (default: 0).',
-            'required': False,
-        },
+        'source_url': {'type': 'string', 'description': 'URL de búsqueda del portal.', 'required': False},
+        'max_paginas': {'type': 'integer', 'description': 'Tope de seguridad; alcanzarlo produce cobertura incompleta.', 'required': False},
     }
 
-    def validate_params(self, params: Dict[str, Any]) -> bool:
-        return True
-
-    def execute(
-        self,
-        params: Dict[str, Any],
-        context: Dict[str, Any] = None,
-    ) -> SkillResult:
+    def validate_params(self, params):
         try:
-            max_paginas = params.get('max_paginas', 0)
-            start_page = params.get('start_page', 1)
-            progress_callback = (context or {}).get('progress_callback')
-            incremental = {
-                'total': 0,
-                'nuevas': 0,
-                'actualizadas': 0,
-                'errores': 0,
-            }
+            requested_url('properati', params)
+            return int(params.get('max_paginas') or 0) >= 0
+        except (ValueError, TypeError):
+            return False
 
-            def guardar_lote(propiedades_lote):
-                resultado_lote = guardar_propiedades(
-                    propiedades_lote, fuente='properati'
-                )
-                for key in incremental:
-                    incremental[key] += int(resultado_lote.get(key, 0) or 0)
-                return incremental.copy()
-
-            propiedades = _ejecutar_scraping(
-                max_paginas,
-                start_page=start_page,
-                progress_callback=progress_callback,
-                batch_callback=guardar_lote,
-            )
-
-            if not propiedades:
-                return SkillResult.error(
-                    message=(
-                        'Properati no devolviÃ³ propiedades. La ejecuciÃ³n no se '
-                        'considera exitosa; revise navegaciÃ³n, Cloudflare y logs.'
-                    ),
-                    skill_name=self.name,
-                )
-
-            # Segunda pasada: persiste coordenadas y detalles obtenidos despuÃ©s
-            # del guardado incremental. Los contadores conservan la primera
-            # clasificaciÃ³n nueva/actualizada para no contar dos veces.
-            guardar_propiedades(propiedades, fuente='properati')
-            resultado = incremental
-
-            return SkillResult.ok(
-                data={
-                    'portal': 'properati',
-                    **resultado,
-                },
-                message=(
-                    f"Properati: {resultado['nuevas']} nuevas, "
-                    f"{resultado['actualizadas']} actualizadas, "
-                    f"{resultado['errores']} errores / {resultado['total']} total"
-                ),
-                skill_name=self.name,
-            )
-
-        except Exception as e:
-            logger.exception(f"[properati] Error en ejecuciÃ³n: {e}")
-            return SkillResult.error(
-                message=f"Error en scraper Properati: {e}",
-                skill_name=self.name,
-            )
+    def execute(self, params, context=None):
+        return execute_paged_skill(self, 'properati', _ejecutar_scraping,
+                                  guardar_propiedades, params, context)
 

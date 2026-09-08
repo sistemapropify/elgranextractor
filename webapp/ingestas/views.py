@@ -1,4 +1,5 @@
 import os
+import socket
 import tempfile
 import pandas as pd
 import sys
@@ -1684,7 +1685,7 @@ def _decorate_scraping_job(job):
     job.estado_efectivo = job.estado
     job.estado_display = job.get_estado_display()
     job.mensaje_error_display = job.mensaje_error
-    if job.estado == 'completed' and job.detectadas_display <= 0:
+    if job.estado == 'completed' and job.detectadas_display <= 0 and parametros.get('mode') != 'preview':
         job.estado_efectivo = 'error'
         job.estado_display = 'Error: sin resultados'
         job.mensaje_error_display = (
@@ -1696,6 +1697,8 @@ def _decorate_scraping_job(job):
             'nombre': SCRAPING_PORTAL_LABELS.get(portal, portal.title()),
             'estado': (resultados.get(portal) or {}).get('estado'),
             'detectadas': (resultados.get(portal) or {}).get('detectadas'),
+            'discovery': (resultados.get(portal) or {}).get('discovery') or {},
+            'source': (parametros.get('sources') or {}).get(portal) or {},
         }
         for portal in portales
     ]
@@ -1798,7 +1801,9 @@ def _reconcile_stale_scraping_jobs():
     stale_ids = list(set(stale_ids + stale_idle_ids))
     if not stale_ids:
         return 0
-    return ScrapingJob.objects.filter(id__in=stale_ids).update(
+    return ScrapingJob.objects.filter(id__in=stale_ids).filter(
+        Q(lease_expires_at__isnull=True) | Q(lease_expires_at__lte=timezone.now())
+    ).exclude(estado='paused').update(
         estado='error',
         execution_token=None,
         completado_en=timezone.now(),
@@ -1828,8 +1833,8 @@ def _launch_scraping_job(job_id):
     if execution_mode == 'celery':
         scraping_task.apply_async(args=(job_id,), retry=False)
         return 'celery'
-    if execution_mode == 'watchdog':
-        return 'watchdog'
+    if execution_mode in ('watchdog', 'external'):
+        return execution_mode
 
     thread = threading.Thread(
         target=scraping_task_run,
@@ -1859,7 +1864,7 @@ def _acquire_scraping_start_lock() -> bool:
         row = cursor.fetchone()
     return bool(row and int(row[0]) >= 0)
 
-class ScrapingDashboardView(TemplateView):
+class ScrapingDashboardView(LoginRequiredMixin, TemplateView):
     """Dashboard principal de scraping con terminal, controles y tabla."""
     template_name = 'ingestas/scraping_dashboard.html'
 
@@ -1885,6 +1890,19 @@ class ScrapingDashboardView(TemplateView):
         for recent_job in jobs_recientes:
             _decorate_scraping_job(recent_job)
 
+        from .scraping_config import get_urls_portales
+        from .scraping_health import worker_health
+        if str(getattr(settings, 'SCRAPING_EXECUTION_MODE', os.environ.get('SCRAPING_EXECUTION_MODE', ''))) == 'external':
+            try:
+                ctx['scraping_worker'] = worker_health()
+            except Exception:
+                ctx['scraping_worker'] = {'ready': False, 'message': 'No se pudo consultar el worker'}
+        try:
+            ctx['urls_portales'] = get_urls_portales()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('scraping.config.read_failed')
+            ctx['scraping_config_error'] = 'No se pudo leer la configuración. Revise el error antes de iniciar.'
         ctx.update({
             'ultimo_job': ultimo_job,
             'stats_por_portal': stats,
@@ -1897,17 +1915,43 @@ class ScrapingDashboardView(TemplateView):
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
-@method_decorator(csrf_exempt, name='dispatch')
-class ScrapingControlView(View):
+class ScrapingControlView(LoginRequiredMixin, View):
     """Controla la ejecución del scraping: start, pause, resume, stop."""
 
     def post(self, request):
         action = request.POST.get('action')
         job_id = request.POST.get('job_id')
 
-        if action == 'start':
+        from .scraping_config import get_urls_portales, save_urls_portales
+        from scrapi.source_config import DEFAULT_URLS, source_snapshot, validate_urls
+        if action == 'save_urls':
+            try:
+                urls = save_urls_portales(json.loads(request.POST.get('urls', '{}')))
+                return JsonResponse({'success': True, 'urls': urls})
+            except (ValueError, TypeError) as exc:
+                return JsonResponse({'success': False, 'error': str(exc)}, status=400)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception('scraping.config.save_failed')
+                return JsonResponse({'success': False, 'error': 'No se guardó la configuración. Revise los logs del servidor.'}, status=503)
+
+        if action in ('start', 'preview'):
             portales_str = request.POST.get('portales', '')
             portales = [p.strip() for p in portales_str.split(',') if p.strip()]
+            portales = list(dict.fromkeys(portales or SCRAPING_DEFAULT_PORTALS))
+            try:
+                if any(p not in DEFAULT_URLS for p in portales):
+                    raise ValueError('Portal de scraping no admitido.')
+                urls = (validate_urls(json.loads(request.POST['urls'])) if 'urls' in request.POST
+                        else get_urls_portales())
+                sources = {p: source_snapshot(p, urls.get(p)) for p in portales}
+                max_items = int(request.POST.get('max_items') or 1500)
+                if not 1 <= max_items <= 100000:
+                    raise ValueError('El límite de Marketplace debe estar entre 1 y 100000.')
+            except (ValueError, TypeError) as exc:
+                return JsonResponse({'success': False, 'error': str(exc)}, status=400)
+            except Exception:
+                return JsonResponse({'success': False, 'error': 'No se pudo leer la configuración; no se inició el trabajo.'}, status=503)
 
             _reconcile_stale_scraping_jobs()
             with transaction.atomic():
@@ -1942,11 +1986,24 @@ class ScrapingControlView(View):
                 # cerrar solo esos procesos y liberar sus locks antes de crear
                 # el contexto persistente del siguiente trabajo.
                 stale_browsers_terminated = _terminate_scraping_browsers()
+                execution_scope = (
+                    'local_interactive'
+                    if os.name == 'nt' and 'facebook_marketplace' in portales
+                    else 'portable'
+                )
                 job = ScrapingJob.objects.create(
                     # Solo el primer ejecutor puede reclamar este trabajo.
                     estado='idle',
                     execution_token=None,
-                    parametros={'portales': portales or None},
+                    parametros={
+                        'portales': portales or None,
+                        'execution_scope': execution_scope,
+                        'execution_host': socket.gethostname(),
+                        'sources': sources,
+                        'urls': urls,
+                        'limits': {'max_items': max_items},
+                        'mode': 'preview' if action == 'preview' else 'scrape',
+                    },
                 )
 
             try:
@@ -2001,6 +2058,13 @@ class ScrapingControlView(View):
                 # El proceso anterior ya no está vivo: liberar Camoufox,
                 # volver el job reclamable y despachar desde sus checkpoints.
                 _terminate_scraping_browsers()
+                parametros = dict(job.parametros or {})
+                if (
+                    os.name == 'nt'
+                    and 'facebook_marketplace' in (parametros.get('portales') or [])
+                ):
+                    parametros['execution_scope'] = 'local_interactive'
+                    parametros['execution_host'] = socket.gethostname()
                 updated = ScrapingJob.objects.filter(
                     id=job_id, estado__in=('error', 'stopped')
                 ).update(
@@ -2009,6 +2073,7 @@ class ScrapingControlView(View):
                     completado_en=None,
                     mensaje_error=None,
                     portal_actual=None,
+                    parametros=parametros,
                 )
                 execution_mode = _launch_scraping_job(job.id) if updated else None
             else:
@@ -2040,13 +2105,37 @@ class ScrapingControlView(View):
         return JsonResponse({'success': False, 'error': 'Acción inválida'})
 
 
-class ScrapingStreamView(View):
+class ScrapingStreamView(LoginRequiredMixin, View):
     """
     SSE endpoint: transmite logs en tiempo real del ScrapingJob.
     El frontend abre una conexión EventSource a esta URL.
     """
 
     def get(self, request, job_id):
+        if request.GET.get('poll') == '1':
+            raw_id = request.GET.get('last_id', '0')
+            last_id = int(raw_id) if raw_id.isdigit() else 0
+            query = ScrapingLog.objects.filter(job_id=job_id, id__gt=last_id).order_by('id')
+            through = request.GET.get('through_id', '')
+            if through.isdigit():
+                query = query.filter(id__lte=int(through))
+            snapshot_id = ScrapingLog.objects.filter(job_id=job_id).order_by('-id').values_list('id', flat=True).first() or 0
+            for field in ('nivel', 'portal', 'evento', 'propiedad_id'):
+                if request.GET.get(field):
+                    query = query.filter(**{field: request.GET[field]})
+            if request.GET.get('q'):
+                query = query.filter(mensaje__icontains=request.GET['q'][:200])
+            logs = list(query[:200])
+            job = ScrapingJob.objects.filter(pk=job_id).first()
+            if not job:
+                return JsonResponse({'error': 'Trabajo no encontrado'}, status=404)
+            ended = job.estado in ('completed', 'error', 'stopped') and len(logs) < 200
+            return JsonResponse({'logs': [{'id': log.id, 'nivel': log.nivel, 'mensaje': log.mensaje,
+                'portal': log.portal, 'propiedad_id': log.propiedad_id, 'evento': log.evento,
+                'contexto': log.contexto, 'timestamp': log.timestamp.isoformat()} for log in logs],
+                'last_id': logs[-1].id if logs else last_id, 'has_more': len(logs) == 200,
+                'through_id': int(through) if through.isdigit() else snapshot_id,
+                'ended': ended, 'estado': job.estado, 'mensaje_error': job.mensaje_error})
         def event_stream():
             raw_last_id = (
                 request.headers.get('Last-Event-ID')
@@ -2057,7 +2146,7 @@ class ScrapingStreamView(View):
             while True:
                 logs = ScrapingLog.objects.filter(
                     job_id=job_id, id__gt=ultimo_id
-                ).order_by('id')
+                ).order_by('id')[:200]
 
                 for log in logs:
                     ultimo_id = log.id
@@ -2067,13 +2156,15 @@ class ScrapingStreamView(View):
                         'mensaje': log.mensaje,
                         'portal': log.portal,
                         'propiedad_id': log.propiedad_id,
-                        'timestamp': log.timestamp.strftime('%H:%M:%S'),
+                        'timestamp': log.timestamp.isoformat(),
+                        'evento': log.evento,
+                        'contexto': log.contexto,
                     })
                     yield f"id: {log.id}\ndata: {data}\n\n"
 
                 # Verificar si el job terminó
                 job = ScrapingJob.objects.filter(id=job_id).first()
-                if job and job.estado in ('completed', 'error', 'stopped'):
+                if job and job.estado in ('completed', 'error', 'stopped') and len(logs) < 200:
                     _decorate_scraping_job(job)
                     data = json.dumps({
                         'type': 'job_end',
@@ -2087,7 +2178,8 @@ class ScrapingStreamView(View):
                     yield f"data: {data}\n\n"
                     break
 
-                time_module.sleep(0.5)
+                yield ': heartbeat\n\n'
+                time_module.sleep(2)
 
         response = StreamingHttpResponse(
             event_stream(),
@@ -2098,7 +2190,7 @@ class ScrapingStreamView(View):
         return response
 
 
-class ScrapingStatusView(View):
+class ScrapingStatusView(LoginRequiredMixin, View):
     """Retorna JSON con el estado actual del job."""
 
     def get(self, request, job_id):
@@ -2156,12 +2248,15 @@ class ScrapingPropiedadesView(ListView):
         fuente = self.request.GET.get('fuente')
         distrito = self.request.GET.get('distrito')
         tipo = self.request.GET.get('tipo')
+        estado = self.request.GET.get('estado')
         if fuente:
             qs = qs.filter(fuente=fuente)
         if distrito:
             qs = qs.filter(distrito__icontains=distrito)
         if tipo:
             qs = qs.filter(tipo_inmueble=tipo)
+        if estado:
+            qs = qs.filter(estado_publicacion=estado)
         # Las inserciones más recientes siempre aparecen arriba. El ID
         # descendente resuelve de forma estable los lotes que comparten fecha.
         return qs.order_by('-fecha_extraccion', '-id')
@@ -2187,6 +2282,7 @@ class ScrapingPropiedadesView(ListView):
             self.request.GET.get('fuente'),
             self.request.GET.get('distrito'),
             self.request.GET.get('tipo'),
+            self.request.GET.get('estado'),
         ])
         return ctx
 

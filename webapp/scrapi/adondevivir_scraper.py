@@ -505,13 +505,9 @@ async def extraer_coordenadas_desde_detalle(page, url):
             texto_tipo = tipo_match.group(1).strip()
             tipo_prop = texto_tipo.split("\u00b7")[0].split("Â·")[0].strip()
 
-        if not tipo_prop:
-            bread_match = re.search(
-                r'<a\s+href="/[^/]+\.html"[^>]*>\s*([A-Za-z]+)\s*</a>',
-                html_content
-            )
-            if bread_match:
-                tipo_prop = bread_match.group(1).strip()
+        # A location breadcrumb (e.g. Lima) is not a property type.
+        from scrapi.normalization import property_type
+        tipo_prop = property_type(tipo_prop) or ''
 
         if not tipo_prop:
             re_match = re.search(
@@ -519,7 +515,7 @@ async def extraer_coordenadas_desde_detalle(page, url):
                 html_content
             )
             if re_match:
-                tipo_prop = re_match.group(1).strip()
+                tipo_prop = property_type(re_match.group(1)) or ''
 
         # --- Extraer coordenadas ---
         lat, lng = None, None
@@ -550,6 +546,7 @@ async def extraer_coordenadas_desde_detalle(page, url):
 
     except Exception as e:
         print(f"    [!] Error extrayendo coordenadas de detalle: {e}")
+        raise RuntimeError(f'detail.extraction_failed: {e}') from e
 
     return None, None, tipo_prop, None
 
@@ -703,7 +700,7 @@ async def extraer_listado(page):
                 const card = link.closest(
                     '[data-to-posting], [class*="posting-card-layout"], [class*="postingCard"]'
                 ) || link.parentElement;
-                if (card && !seen.has(card)) {
+                if (card && !seen.has(card) && !directCards.some(parent => parent.contains(link))) {
                     seen.add(card);
                     cards.push(card);
                 }
@@ -711,7 +708,7 @@ async def extraer_listado(page):
             const results = [];
 
             cards.forEach(card => {
-                const dataId = card.getAttribute('data-id') || '';
+                let dataId = card.getAttribute('data-id') || '';
                 const postingType = card.getAttribute('data-posting-type') || '';
                 const toPosting = card.getAttribute('data-to-posting') || '';
 
@@ -792,8 +789,9 @@ async def extraer_listado(page):
                 }
 
                 const url = toPosting
-                    ? 'https://www.adondevivir.com' + toPosting
+                    ? new URL(toPosting, 'https://www.adondevivir.com').href
                     : (linkEl ? linkEl.href : '');
+                if (!dataId) dataId = (url.match(/-([0-9]{6,})(?:[.]html)?(?:[?#]|$)/) || [])[1] || '';
 
                 let lat = '', lng = '', tipoSchema = '';
                 const script = card.querySelector('script[type="application/ld+json"]');
@@ -849,39 +847,24 @@ async def extraer_listado(page):
         print("  Cards: 0")
         return []
 
+    # Deduplicate publications, not DOM nodes; retain malformed rows for QA.
+    unique_cards = {}
+    missing_cards = []
     for card in cards_data:
-        soles_str = card.get("precio_soles", "")
-        dolares_str = card.get("precio_dolares", "")
-        texto = card.get("precio_texto", "")
-
-        if not soles_str and not dolares_str:
-            soles_val, dolares_val = parsear_precio_soles_dolares(texto)
-            card["precio_soles"] = soles_val
-            card["precio_dolares"] = dolares_val
+        key = str(card.get('id') or '').strip()
+        if key:
+            if key not in unique_cards or (card.get('precio_texto') and not unique_cards[key].get('precio_texto')):
+                unique_cards[key] = card
         else:
-            if soles_str:
-                m = re.search(r'[\d,]+', str(soles_str))
-                if m:
-                    try:
-                        card["precio_soles"] = int(m.group().replace(",", ""))
-                    except ValueError:
-                        card["precio_soles"] = None
-            if dolares_str:
-                m = re.search(r'[\d,]+', str(dolares_str))
-                if m:
-                    try:
-                        card["precio_dolares"] = int(m.group().replace(",", ""))
-                    except ValueError:
-                        card["precio_dolares"] = None
-
-        del card["precio_texto"]
-
-    print(f"  Cards: {len(cards_data)}")
-    with_coords = sum(1 for c in cards_data if c.get("latitud") and c.get("longitud"))
-    print(f"  Con coordenadas: {with_coords}")
-
+            missing_cards.append(card)
+    cards_data = list(unique_cards.values()) + missing_cards
+    from scrapi.normalization import prices
+    for card in cards_data:
+        parsed = prices(card.get('precio_texto'))
+        card['precio_soles'] = parsed['precio_soles']
+        card['precio_dolares'] = parsed['precio_usd']
+        card.pop('precio_texto', None)
     return cards_data
-
 
 async def obtener_numero_paginas(page):
     """Obtiene el numero total de paginas del listado."""
@@ -935,151 +918,9 @@ async def obtener_total_propiedades(page):
 
 
 async def main():
-    import random as _random
-    signal.signal(signal.SIGINT, manejar_sigint)
-    global detener
-
-    todas_las_propiedades = []
-
-    print("=" * 70)
-    print("SCRAPER ADONDEVIVIR - Arequipa")
-    print(f"Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    print("=" * 70)
-
-    async with AsyncCamoufox(**camoufox_kwargs()) as browser:
-        context = await browser.new_context()
-        page = await context.new_page()
-
-        # ============================================================
-        # FASE 1: Extraer listado completo
-        # ============================================================
-        print(f"\n{'=' * 70}")
-        print(f"FASE 1: Extrayendo listado de propiedades...")
-        print(f"{'=' * 70}")
-
-        print(f"\n[Pagina 1] Navegando...")
-        await navegar_con_cloudflare(page, LISTING_URL)
-
-        total_paginas = await obtener_numero_paginas(page)
-        print(f"Total de paginas detectadas: {total_paginas}")
-
-        print(f"\n[Pagina 1] Extrayendo...")
-        props = await extraer_listado(page)
-        todas_las_propiedades.extend(props)
-        print(f"  [OK] Pagina 1: {len(props)} props (total: {len(todas_las_propiedades)})")
-
-        if detener:
-            guardar_excel([mapear_a_formato_remax(p) for p in todas_las_propiedades])
-            return
-
-        for pagina in range(2, total_paginas + 1):
-            if detener:
-                break
-
-            # Delay aleatorio entre paginas para evitar rate limiting de Cloudflare
-            await asyncio.sleep(_random.uniform(2.0, 6.0))
-
-            url_pagina = f"https://www.adondevivir.com/inmuebles-en-venta-en-arequipa-pagina-{pagina}.html"
-            print(f"\n[Pagina {pagina}] Navegando...")
-
-            exito = await navegar_con_cloudflare(page, url_pagina)
-            if not exito:
-                print(f"  [!] Error al cargar pagina {pagina}, saltando...")
-                continue
-
-            props = await extraer_listado(page)
-            todas_las_propiedades.extend(props)
-            print(f"  [OK] Pagina {pagina}: {len(props)} props (total: {len(todas_las_propiedades)})")
-
-            if pagina % GUARDAR_CADA_N_PAGINAS == 0:
-                print(f"\n[Guardado] Automatico (pagina {pagina})...")
-                guardar_excel([mapear_a_formato_remax(p) for p in todas_las_propiedades])
-
-        # ============================================================
-        # FASE 2: Visitar detalles para propiedades sin coordenadas
-        # ============================================================
-        props_a_visitar = [
-            p for p in todas_las_propiedades
-            if not p.get("latitud")
-            or not p.get("longitud")
-            or not p.get("tipo")
-            or not p.get("imagen_url")
-            or "blob.core.windows.net" not in str(p.get("imagen_url"))
-        ]
-
-        if props_a_visitar and not detener:
-            print(f"\n{'=' * 70}")
-            print(f"FASE 2: Visitando {len(props_a_visitar)} detalles (coordenadas + tipo)...")
-            print(f"{'=' * 70}")
-
-            for i, prop in enumerate(props_a_visitar, 1):
-                if detener:
-                    break
-
-                url = prop.get("url", "")
-                if not url:
-                    print(f"  [{i}/{len(props_a_visitar)}] Sin URL, saltando...")
-                    continue
-
-                print(f"  [{i}/{len(props_a_visitar)}] Visitando detalle...")
-                lat, lng, tipo_prop, imagen_url = await extraer_coordenadas_desde_detalle(page, url)
-
-                cambios = []
-                if lat and lng:
-                    prop["latitud"] = lat
-                    prop["longitud"] = lng
-                    cambios.append(f"coords={lat},{lng}")
-                if tipo_prop:
-                    prop["tipo"] = tipo_prop
-                    cambios.append(f"tipo={tipo_prop}")
-
-                imagen_origen = imagen_url or prop.get("imagen_url")
-                if imagen_origen and "blob.core.windows.net" not in str(imagen_origen):
-                    imagen_blob = subir_imagen_a_blob(imagen_origen, prop)
-                    if imagen_blob:
-                        prop["imagen_url"] = imagen_blob
-                        cambios.append("imagen=blob")
-                elif imagen_origen:
-                    prop["imagen_url"] = imagen_origen
-
-                if cambios:
-                    print(f"    [OK] {'; '.join(cambios)}")
-                else:
-                    print(f"    [!] No se encontraron datos adicionales")
-
-                if i % 10 == 0:
-                    print(f"\n[Guardado] Automatico ({i} detalles visitados)...")
-                    guardar_excel([mapear_a_formato_remax(p) for p in todas_las_propiedades])
-
-    # Post-procesamiento: mapear tipos Schema.org
-    for prop in todas_las_propiedades:
-        if prop.get("tipo") and not any(palabra in prop["tipo"] for palabra in ["Casa", "Departamento", "Terreno", "Local", "Oficina", "Alojamiento"]):
-            prop["tipo"] = mapear_tipo_schemaorg(prop["tipo"])
-
-    # Final
-    print(f"\n{'=' * 70}")
-    print(f"RESUMEN FINAL")
-    print(f"{'=' * 70}")
-    print(f"Total propiedades extraidas: {len(todas_las_propiedades)}")
-
-    with_coords = sum(1 for p in todas_las_propiedades if p.get("latitud") and p.get("longitud"))
-    print(f"Propiedades con coordenadas: {with_coords}")
-
-    if todas_las_propiedades:
-        # Convertir todas al formato estandarizado antes de guardar
-        todas_estandarizadas = [mapear_a_formato_remax(p) for p in todas_las_propiedades]
-        guardar_excel(todas_estandarizadas)
-
-    print(f"\n[OK] Scraping completado!")
-    print(f"Archivo: {OUTPUT_FILE}")
+    from scrapi.standalone import export_portal
+    await asyncio.to_thread(export_portal, 'adondevivir')
 
 
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n\n[!] Proceso interrumpido por el usuario.")
-    except Exception as e:
-        print(f"\n[ERROR] General: {e}")
-        import traceback
-        traceback.print_exc()
+if __name__ == '__main__':
+    asyncio.run(main())

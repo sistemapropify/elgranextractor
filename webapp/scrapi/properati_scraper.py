@@ -15,7 +15,7 @@ from captura.azure_storage import upload_bytes
 # CONFIGURACIÃ“N
 # ============================================================
 BASE_URL = "https://www.properati.com.pe/s/arequipa"  # Pagina 1
-TOTAL_PAGINAS = 30  # Properati muestra ~30 paginas para Arequipa
+TOTAL_PAGINAS = 300  # Safety ceiling, not the portal total.
 SITE_DOMAIN = "https://www.properati.com.pe"
 OUTPUT_FILE = f"properati_arequipa_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
@@ -920,104 +920,13 @@ async def extraer_detalle(page, prop):
         print(f"   [ERROR] Error en detalle: {e}")
         import traceback
         traceback.print_exc()
+        raise RuntimeError(f'detail.extraction_failed: {e}') from e
 
 
 async def main():
-    global detener
-    todas = []
-
-    signal.signal(signal.SIGINT, manejar_sigint)
-
-    async with AsyncCamoufox(
-        **camoufox_kwargs(),
-    ) as browser:
-
-        page = await browser.new_page()
-        await page.set_viewport_size({"width": 1920, "height": 1080})
-
-        # FASE 1: Extraer todas las paginas del listado
-        print("=" * 60)
-        print("FASE 1: Scrapeando paginas de listado de Properati")
-        print(f"Total paginas: {TOTAL_PAGINAS} | Guardando Excel cada {GUARDAR_CADA_N_PAGINAS} paginas")
-        print(f"URL base: {BASE_URL}")
-        print("Presiona Ctrl+C para guardar y salir")
-        print("=" * 60)
-
-        for n in range(1, TOTAL_PAGINAS + 1):
-            if detener:
-                print(f"\n[!] Deteniendo por solicitud del usuario...")
-                break
-
-            if n == 1:
-                url = BASE_URL
-            else:
-                url = f"{BASE_URL}/{n}"
-
-            print(f"\n[Pagina {n}/{TOTAL_PAGINAS}]: {url}")
-            try:
-                titulo = await navegar_con_cloudflare(page, url)
-                print(f"   Titulo: {titulo}")
-
-                props = await extraer_listado(page)
-                todas.extend(props)
-                print(f"   -> {len(props)} propiedades extraidas (total: {len(todas)})")
-
-                # Guardado periodico cada N paginas
-                if n % GUARDAR_CADA_N_PAGINAS == 0 and todas:
-                    guardar_excel([mapear_a_formato_remax(p) for p in todas])
-
-            except Exception as e:
-                print(f"   [ERROR] en pagina {n}: {e}")
-                import traceback
-                traceback.print_exc()
-
-        print(f"\n[OK] FASE 1 completa: {len(todas)} propiedades encontradas")
-
-        if not detener and todas:
-            # FASE 2: Visitar fichas de detalle para propiedades SIN coordenadas
-            sin_coords = [p for p in todas if not p.get('Coordenadas')]
-            print(f"\nPropiedades sin coordenadas desde listado: {len(sin_coords)}")
-
-            if sin_coords:
-                print("\n" + "=" * 60)
-                print("FASE 2: Extrayendo coordenadas desde paginas de detalle")
-                print("=" * 60)
-
-                for i, prop in enumerate(sin_coords):
-                    if detener:
-                        print(f"\n[!] Deteniendo por solicitud del usuario...")
-                        break
-
-                    prop_id = prop.get('ID', '')
-                    ubic = prop.get('Ubicacion', '')
-                    print(f"\n[{i+1}/{len(sin_coords)}] ID: {prop_id} - {ubic}")
-                    await extraer_detalle(page, prop)
-                    await asyncio.sleep(0.5)
-
-        await page.close()
-
-    # FASE 3: Exportar a Excel (siempre guarda al final)
-    print("\n" + "=" * 60)
-    print("FASE 3: Exportando Excel")
-    print("=" * 60)
-
-    # Convertir todas al formato estandarizado antes de guardar
-    todas_estandarizadas = [mapear_a_formato_remax(p) for p in todas]
-    guardar_excel(todas_estandarizadas)
-    con_coords = sum(1 for p in todas if p.get('Coordenadas'))
-    print(f"\n[OK] DESCARGADO -> {OUTPUT_FILE}")
-    print(f"Total: {len(todas)} | Con coordenadas: {con_coords} | Sin coordenadas: {len(todas)-con_coords}")
+    from scrapi.standalone import export_portal
+    await asyncio.to_thread(export_portal, 'properati')
 
 
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n[!] Interrupcion por teclado. El Excel se guardo con el progreso actual.")
-        sys.exit(0)
-
-
-
-
-
-
+    asyncio.run(main())

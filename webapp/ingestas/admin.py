@@ -4,7 +4,7 @@ from django.db.models import Count
 from django.http import HttpResponseRedirect
 from django.urls import path
 from django.utils.html import format_html
-from .models import CampoDinamico, MapeoFuente, PropiedadRaw, MigracionPendiente, PropiedadesCompetencia, ScrapingJob, ScrapingLog
+from .models import CampoDinamico, EjecucionPortal, MapeoFuente, PropiedadRaw, MigracionPendiente, PropiedadesCompetencia, ScrapingJob, ScrapingLog
 
 
 @admin.register(CampoDinamico)
@@ -238,13 +238,29 @@ class MigracionPendienteAdmin(admin.ModelAdmin):
 class PropiedadesCompetenciaAdmin(admin.ModelAdmin):
     list_display = (
         'fuente', 'id_origen', 'tipo_inmueble', 'precio_usd',
-        'distrito', 'fecha_extraccion'
+        'distrito', 'estado_publicacion', 'ultima_vez_vista',
+        'fecha_retiro_confirmado', 'fecha_extraccion'
     )
-    list_filter = ('fuente', 'tipo_inmueble', 'distrito', 'fecha_extraccion')
+    list_filter = (
+        'fuente', 'estado_publicacion', 'tipo_inmueble', 'distrito',
+        'fecha_extraccion',
+    )
     search_fields = ('id_origen', 'titulo', 'distrito', 'descripcion')
     readonly_fields = ('creado_en', 'actualizado_en')
     date_hierarchy = 'fecha_extraccion'
     ordering = ('-fecha_extraccion',)
+
+
+@admin.register(EjecucionPortal)
+class EjecucionPortalAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'portal', 'estado', 'es_confiable', 'es_linea_base',
+        'propiedades_vistas', 'posibles_retiradas', 'retiros_confirmados',
+        'iniciado_en', 'completado_en',
+    )
+    list_filter = ('portal', 'estado', 'es_confiable', 'es_linea_base')
+    readonly_fields = ('token', 'iniciado_en', 'completado_en')
+    search_fields = ('portal', 'token', 'motivo_no_confiable')
 
 
 @admin.register(ScrapingJob)

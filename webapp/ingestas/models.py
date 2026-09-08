@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.db import models
 
@@ -39,7 +41,7 @@ class MapeoFuente(models.Model):
 
 class PropiedadRaw(models.Model):
     """Modelo base para propiedades inmobiliarias con campos fijos y dinámicos."""
-    
+
     # Opciones para tipo de propiedad (estandarizadas)
     TIPO_PROPIEDAD_CHOICES = [
         ('Terreno', 'Terreno'),
@@ -48,7 +50,7 @@ class PropiedadRaw(models.Model):
         ('Oficina', 'Oficina'),
         ('Otros', 'Otros'),
     ]
-    
+
     # Campos base fijos
     fuente_excel = models.CharField(max_length=100)
     fecha_ingesta = models.DateTimeField(auto_now_add=True)
@@ -155,7 +157,7 @@ class PropiedadRaw(models.Model):
     # Campos dinámicos se almacenan en JSON
     def default_atributos_extras():
         return {}
-    
+
     atributos_extras = models.JSONField(default=default_atributos_extras, null=True, blank=True)  # Para campos no migrados aún
 
     class Meta:
@@ -257,6 +259,13 @@ class PropiedadesCompetencia(models.Model):
         ('Alquiler', 'Alquiler'),
         ('Ambos', 'Compra y Alquiler'),
         ('No especificado', 'No especificado'),
+    ]
+
+    ESTADO_PUBLICACION_CHOICES = [
+        ('sin_verificar', 'Sin verificar'),
+        ('activa', 'Activa'),
+        ('posible_retirada', 'Posible retirada'),
+        ('retirada', 'Retirada'),
     ]
 
     # ── Identificación ──
@@ -370,6 +379,43 @@ class PropiedadesCompetencia(models.Model):
         verbose_name='Agencia / Agente'
     )
 
+    # ── Ciclo de vida en el portal ──
+    estado_publicacion = models.CharField(
+        max_length=24,
+        choices=ESTADO_PUBLICACION_CHOICES,
+        default='sin_verificar',
+        db_index=True,
+        verbose_name='Estado de publicación',
+    )
+    primera_vez_vista = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Primera vez vista',
+    )
+    ultima_vez_vista = models.DateTimeField(
+        null=True, blank=True, db_index=True,
+        verbose_name='Última vez vista',
+    )
+    fecha_primera_ausencia = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Primera ausencia detectada',
+    )
+    fecha_retiro_confirmado = models.DateTimeField(
+        null=True, blank=True, db_index=True,
+        verbose_name='Retiro confirmado',
+    )
+    ausencias_consecutivas = models.PositiveSmallIntegerField(
+        default=0,
+        verbose_name='Ausencias consecutivas',
+    )
+    ultima_ejecucion_vista = models.ForeignKey(
+        'EjecucionPortal',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='publicaciones_ultima_vista',
+        verbose_name='Última ejecución donde fue vista',
+    )
+
     # ── Respaldo RAW para QA ──
     datos_crudos = models.JSONField(
         null=True, blank=True,
@@ -387,10 +433,10 @@ class PropiedadesCompetencia(models.Model):
         verbose_name_plural = "Propiedades de Competencia"
         unique_together = ['fuente', 'id_origen']
         indexes = [
-            models.Index(fields=['fuente']),
-            models.Index(fields=['fuente', 'fecha_extraccion']),
-            models.Index(fields=['tipo_inmueble']),
-            models.Index(fields=['distrito']),
+            models.Index(fields=['fuente'], name='prop_comp_fuente_idx'),
+            models.Index(fields=['fuente', 'fecha_extraccion'], name='prop_comp_fuente_fecha_idx'),
+            models.Index(fields=['tipo_inmueble'], name='prop_comp_tipo_idx'),
+            models.Index(fields=['distrito'], name='prop_comp_distrito_idx'),
         ]
         ordering = ['-fecha_extraccion']
 
@@ -403,6 +449,8 @@ class ScrapingJob(models.Model):
     Estado de un trabajo de scraping en ejecución.
     Permite controlar (pausar/reanudar/detener) desde el dashboard.
     """
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+    lease_expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     ESTADOS = [
         ('idle', 'Inactivo'),
@@ -479,6 +527,70 @@ class ScrapingJob(models.Model):
         return f"Scraping #{self.id} - {self.get_estado_display()}"
 
 
+class ScrapingWorker(models.Model):
+    identity = models.CharField(max_length=128, primary_key=True)
+    heartbeat_at = models.DateTimeField()
+    revision = models.CharField(max_length=64, default='development')
+
+    class Meta:
+        db_table = 'scraping_workers'
+
+
+class EjecucionPortal(models.Model):
+    """Ejecución confiable usada para detectar altas, ausencias y retiros."""
+
+    ESTADOS = [
+        ('running', 'Ejecutando'),
+        ('completed', 'Completada'),
+        ('incomplete', 'Incompleta'),
+        ('error', 'Error'),
+    ]
+
+    token = models.UUIDField(
+        default=uuid.uuid4, unique=True, editable=False,
+        verbose_name='Token estable de ejecución',
+    )
+    job = models.ForeignKey(
+        ScrapingJob,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ejecuciones_portal',
+        verbose_name='Trabajo de scraping',
+    )
+    portal = models.CharField(max_length=50, db_index=True)
+    source_key = models.CharField(max_length=64, default='', db_index=True)
+    source_config = models.JSONField(default=dict, blank=True)
+    discovery = models.JSONField(default=dict, blank=True)
+    estado = models.CharField(
+        max_length=20, choices=ESTADOS, default='running', db_index=True,
+    )
+    es_confiable = models.BooleanField(default=False)
+    es_linea_base = models.BooleanField(default=False)
+    propiedades_vistas = models.PositiveIntegerField(default=0)
+    posibles_retiradas = models.PositiveIntegerField(default=0)
+    retiros_confirmados = models.PositiveIntegerField(default=0)
+    motivo_no_confiable = models.TextField(null=True, blank=True)
+    iniciado_en = models.DateTimeField(auto_now_add=True)
+    completado_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'scraping_ejecuciones_portal'
+        verbose_name = 'Ejecución de portal'
+        verbose_name_plural = 'Ejecuciones de portales'
+        ordering = ['-iniciado_en']
+        indexes = [
+            models.Index(fields=['portal', 'estado'], name='ejec_portal_estado_idx'),
+            models.Index(
+                fields=['portal', 'es_confiable', 'completado_en'],
+                name='ejec_portal_conf_fin_idx',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.portal} · {self.token} · {self.get_estado_display()}"
+
+
 class ScrapingLog(models.Model):
     """
     Log individual de cada propiedad procesada durante un scraping.
@@ -505,6 +617,8 @@ class ScrapingLog(models.Model):
     mensaje = models.TextField(
         verbose_name='Mensaje'
     )
+    evento = models.CharField(max_length=80, default='message', db_index=True)
+    contexto = models.JSONField(default=dict, blank=True)
     portal = models.CharField(
         max_length=50, null=True, blank=True,
         verbose_name='Portal'
@@ -528,9 +642,59 @@ class ScrapingLog(models.Model):
         return f"[{self.nivel}] {self.mensaje[:80]}"
 
     @classmethod
-    def log(cls, job, nivel, mensaje, portal=None, propiedad_id=None):
+    def log(cls, job, nivel, mensaje, portal=None, propiedad_id=None,
+            evento='message', contexto=None):
         """Crea un log y lo retorna (útil para SSE)."""
+        from scrapi.telemetry import sanitize
         return cls.objects.create(
-            job=job, nivel=nivel, mensaje=mensaje,
+            job=job, nivel=nivel, mensaje=sanitize(mensaje),
             portal=portal, propiedad_id=propiedad_id,
+            evento=evento, contexto=sanitize(contexto or {}),
         )
+
+
+class ScrapingCandidate(models.Model):
+    """Durable discovery queue and idempotent observation for one portal run."""
+    run = models.ForeignKey(EjecucionPortal, on_delete=models.CASCADE, related_name='candidates')
+    source_id = models.CharField(max_length=100)
+    raw = models.JSONField(default=dict)
+    page = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=20, default='pending', db_index=True)
+    save_outcome = models.CharField(max_length=20, default='')
+    error = models.TextField(default='', blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'scraping_candidates'
+        constraints = [models.UniqueConstraint(fields=['run', 'source_id'], name='scrap_run_candidate_uq')]
+        indexes = [models.Index(fields=['run', 'page', 'status'], name='scrap_candidate_pending_idx')]
+
+
+class ScrapingHistoryRepair(models.Model):
+    batch = models.UUIDField(db_index=True)
+    propiedad = models.ForeignKey(PropiedadesCompetencia, on_delete=models.PROTECT)
+    source = models.CharField(max_length=50)
+    source_id = models.CharField(max_length=100)
+    changes = models.JSONField()
+    raw_sha256 = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    rolled_back_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'scraping_history_repairs'
+        constraints = [models.UniqueConstraint(fields=['batch', 'propiedad'], name='scrap_repair_property_uq')]
+
+
+class PublicacionFuente(models.Model):
+    """Absences belong to a search scope, including overlapping searches."""
+    source_key = models.CharField(max_length=64, db_index=True)
+    propiedad = models.ForeignKey(PropiedadesCompetencia, on_delete=models.CASCADE, related_name='fuentes_observadas')
+    last_run = models.ForeignKey(EjecucionPortal, on_delete=models.SET_NULL, null=True)
+    misses = models.PositiveIntegerField(default=0)
+    state = models.CharField(max_length=20, default='activa')
+    first_missing_at = models.DateTimeField(null=True, blank=True)
+    retired_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'scraping_publicacion_fuente'
+        constraints = [models.UniqueConstraint(fields=['source_key', 'propiedad'], name='scrap_source_property_uq')]

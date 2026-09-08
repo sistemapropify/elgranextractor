@@ -75,6 +75,7 @@ class CamoufoxLauncherTests(unittest.TestCase):
                 patch.object(launcher, '_boot_id', return_value='same-boot'),
                 patch.object(launcher.os, 'kill', side_effect=OSError),
                 patch.object(launcher.time, 'sleep') as sleep,
+                patch.object(launcher.subprocess, 'run', return_value=types.SimpleNamespace(returncode=0, stderr='', stdout='')),
                 patch.dict(sys.modules, {'camoufox.pkgman': pkgman}),
             ):
                 self.assertEqual(launcher.ensure_camoufox_installed(), browser)

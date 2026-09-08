@@ -80,6 +80,7 @@ echo "[2/6] Camoufox deferred to scraper execution."
 # Instalar en segundo plano las bibliotecas nativas requeridas por Camoufox.
 # Gunicorn puede iniciar de inmediato; el launcher espera este marcador antes
 # de abrir el navegador. /tmp se recrea en cada arranque del contenedor.
+if [ "${SCRAPING_EXECUTION_MODE:-watchdog}" != "external" ]; then
 CAMOUFOX_DEPS_LOG="/home/LogFiles/camoufox-deps.log"
 CAMOUFOX_DEPS_INSTALLING="/tmp/propifai-camoufox-deps.installing"
 CAMOUFOX_DEPS_READY="/tmp/propifai-camoufox-deps.ready"
@@ -102,6 +103,9 @@ touch "$CAMOUFOX_DEPS_INSTALLING"
     rm -f "$CAMOUFOX_DEPS_INSTALLING"
 ) >> "$CAMOUFOX_DEPS_LOG" 2>&1 &
 echo "  Camoufox native dependency installation started in background."
+else
+    echo "  Scraping external: browser dependencies belong to the dedicated worker image."
+fi
 
 # ── Collect Static Files ──
 # NOTA: No usar --clear porque borra STATIC_ROOT antes de copiar.

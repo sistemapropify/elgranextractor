@@ -18,6 +18,35 @@ class ScrapingDashboardStateTests(SimpleTestCase):
     def test_dashboard_template_compiles(self):
         self.assertIsNotNone(get_template("ingestas/scraping_dashboard.html"))
 
+    @override_settings(ALLOWED_HOSTS=['testserver'])
+    def test_control_requires_login(self):
+        from django.contrib.auth.models import AnonymousUser
+        request = self.factory.post('/ingestas/scraping/control/', {'action':'start'})
+        request.user = AnonymousUser()
+        self.assertEqual(ScrapingControlView.as_view()(request).status_code, 302)
+
+    def test_control_requires_csrf(self):
+        from django.middleware.csrf import CsrfViewMiddleware
+        request = self.factory.post('/ingestas/scraping/control/', {'action':'start'})
+        request.user = MagicMock(is_authenticated=True)
+        view = ScrapingControlView.as_view()
+        response = CsrfViewMiddleware(view).process_view(request, view, (), {})
+        self.assertEqual(response.status_code, 403)
+
+    @patch('ingestas.scraping_config.save_urls_portales', side_effect=RuntimeError('storage unavailable'))
+    def test_configuration_failure_is_not_reported_as_saved(self, save):
+        request = self.factory.post('/ingestas/scraping/control/', {'action':'save_urls','urls':'{}'})
+        request.user = MagicMock(is_authenticated=True)
+        response = ScrapingControlView.as_view()(request)
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(json.loads(response.content)['success'])
+
+    @override_settings(SCRAPING_EXECUTION_MODE='external')
+    @patch('ingestas.views.threading.Thread')
+    def test_external_worker_mode_does_not_launch_inside_web(self, thread):
+        self.assertEqual(_launch_scraping_job(42), 'external')
+        thread.assert_not_called()
+
     @patch("ingestas.views.ScrapingJob")
     def test_reconcile_marks_old_active_jobs_as_error(self, job_model):
         queryset = MagicMock()
@@ -35,7 +64,7 @@ class ScrapingDashboardStateTests(SimpleTestCase):
         self.assertEqual(idle_filters["estado"], "idle")
         active_filters = job_model.objects.filter.call_args_list[1].kwargs
         self.assertEqual(active_filters["estado__in"], ("running", "paused"))
-        queryset.filter.assert_called_once()
+        self.assertEqual(queryset.filter.call_count, 2)
         update = queryset.update.call_args.kwargs
         self.assertEqual(update["estado"], "error")
         self.assertIsNone(update["execution_token"])
@@ -85,6 +114,7 @@ class ScrapingDashboardStateTests(SimpleTestCase):
             {"action": "pause", "job_id": "7"},
         )
 
+        request.user = MagicMock(is_authenticated=True)
         response = ScrapingControlView.as_view()(request)
 
         self.assertEqual(response.status_code, 200)
@@ -105,6 +135,7 @@ class ScrapingDashboardStateTests(SimpleTestCase):
             {"action": "stop", "job_id": "7"},
         )
 
+        request.user = MagicMock(is_authenticated=True)
         response = ScrapingControlView.as_view()(request)
 
         self.assertEqual(response.status_code, 200)

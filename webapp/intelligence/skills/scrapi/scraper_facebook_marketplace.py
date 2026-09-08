@@ -6,6 +6,8 @@ from typing import Any, Dict
 
 from intelligence.skills.base import BaseSkill, SkillResult
 from .db_utils import guardar_propiedades
+from scrapi.contracts import outcome
+from scrapi.source_config import requested_url
 
 
 class ScraperFacebookMarketplaceSkill(BaseSkill):
@@ -19,6 +21,7 @@ class ScraperFacebookMarketplaceSkill(BaseSkill):
     is_active = True
 
     parameters_schema = {
+        "source_url": {"type": "string", "description": "URL de búsqueda configurada.", "required": False},
         "max_items": {
             "type": "integer",
             "description": "Máximo de anuncios visibles a procesar.",
@@ -32,8 +35,11 @@ class ScraperFacebookMarketplaceSkill(BaseSkill):
     }
 
     def validate_params(self, params: Dict[str, Any]) -> bool:
-        url = str(params.get("search_url") or "")
-        return not url or "facebook.com/marketplace/" in url
+        try:
+            requested_url('facebook_marketplace', params)
+            return int(params.get('max_items') or 1500) > 0
+        except (ValueError, TypeError):
+            return False
 
     def execute(self, params: Dict[str, Any], context: Dict[str, Any] = None) -> SkillResult:
         from scrapi.facebook_marketplace_scraper import (
@@ -43,34 +49,54 @@ class ScraperFacebookMarketplaceSkill(BaseSkill):
         )
 
         progress_callback = (context or {}).get("progress_callback")
+        lifecycle_run_id = (context or {}).get("lifecycle_run_id")
         incremental = {"total": 0, "nuevas": 0, "actualizadas": 0, "errores": 0}
 
         def save_batch(rows):
-            result = guardar_propiedades(rows, fuente="facebook_marketplace")
+            result = guardar_propiedades(
+                rows,
+                fuente="facebook_marketplace",
+                lifecycle_run_id=lifecycle_run_id,
+                execution_token=(context or {}).get('execution_token'),
+            )
             for key in incremental:
-                incremental[key] += int(result.get(key, 0) or 0)
+                incremental[key] = (int(result.get(key, 0) or 0) if lifecycle_run_id
+                                    else incremental[key] + int(result.get(key, 0) or 0))
             return incremental.copy()
 
         try:
             rows = run_scraper(
-                search_url=params.get("search_url") or DEFAULT_SEARCH_URL,
+                search_url=requested_url('facebook_marketplace', params),
                 max_items=int(params.get("max_items") or DEFAULT_MAX_ITEMS),
                 start_index=int(params.get("start_page") or 1),
+                resume_item_ids=params.get("resume_item_ids") or None,
+                resume_state=params.get('resume_state'),
                 progress_callback=progress_callback,
                 batch_callback=save_batch,
             )
         except Exception as exc:
+            import logging
+            import traceback
+            logging.getLogger(__name__).exception('marketplace.failed')
+            if progress_callback:
+                progress_callback({'event': 'scraping.failed', 'level': 'error', 'message': str(exc),
+                                   'error_type': type(exc).__name__, 'traceback': traceback.format_exc()})
             return SkillResult.error(
                 message=f"Error en scraper Facebook Marketplace: {exc}",
                 skill_name=self.name,
             )
+        discovery = outcome(rows)
+        if lifecycle_run_id:
+            from ingestas.scraping_store import run_counters
+            incremental.update(run_counters(lifecycle_run_id))
         if not rows:
-            if int(params.get("start_page") or 1) > 1:
+            if int(params.get("start_page") or 1) > 1 or incremental['total']:
                 return SkillResult.ok(
                     data={
                         "portal": "facebook_marketplace",
                         **incremental,
-                        "resume_complete": True,
+                        'discovery': discovery,
+                        "resume_complete": discovery['complete'],
                     },
                     message="Facebook Marketplace: no quedan fichas después del checkpoint.",
                     skill_name=self.name,
@@ -80,9 +106,9 @@ class ScraperFacebookMarketplaceSkill(BaseSkill):
                 skill_name=self.name,
             )
         return SkillResult.ok(
-            data={"portal": "facebook_marketplace", **incremental},
+            data={"portal": "facebook_marketplace", **incremental, 'discovery': discovery},
             message=(
-                f"Facebook Marketplace completado: {incremental['nuevas']} nuevas, "
+                f"Facebook Marketplace ({discovery['stop_reason']}): {incremental['nuevas']} nuevas, "
                 f"{incremental['actualizadas']} actualizadas, {incremental['errores']} errores."
             ),
             skill_name=self.name,

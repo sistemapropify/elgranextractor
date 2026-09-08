@@ -10,7 +10,7 @@ from scrapi.camoufox_launcher import camoufox_kwargs
 
 BASE_URL = "https://www.remax.pe/web/search/all/propertys/list/?departament__in=4&page={}"
 SITE_DOMAIN = "https://www.remax.pe"
-TOTAL_PAGES = 32
+TOTAL_PAGES = 300  # Safety ceiling; the common engine verifies completion.
 OUTPUT_FILE = f"remax_arequipa_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
 # Control de guardado periodico
@@ -554,92 +554,14 @@ async def extraer_detalle(page, prop):
 
     except Exception as e:
         print(f"   [ERROR] Error en detalle: {e}")
+        raise RuntimeError(f'detail.extraction_failed: {e}') from e
         prop['Google Maps Link'] = f"https://www.google.com/maps/search/?api=1&query={prop['Ubicacion Full'].replace(' ', '+')}"
 
 
 async def main():
-    global detener
-    todas = []
-
-    # Registrar manejador de Ctrl+C
-    signal.signal(signal.SIGINT, manejar_sigint)
-
-    async with AsyncCamoufox(
-        **camoufox_kwargs(
-            persistent_context=True,
-            user_data_dir='./camoufox_session',
-        ),
-    ) as browser:
-
-        page = await browser.new_page()
-        await page.set_viewport_size({"width": 1920, "height": 1080})
-
-        # FASE 1: Extraer todas las paginas del listado
-        print("=" * 60)
-        print("FASE 1: Scrapeando paginas de listado")
-        print(f"Total paginas: {TOTAL_PAGES} | Guardando Excel cada {GUARDAR_CADA_N_PAGINAS} paginas")
-        print("Presiona Ctrl+C para guardar y salir")
-        print("=" * 60)
-
-        for n in range(1, TOTAL_PAGES + 1):
-            if detener:
-                print(f"\n[!] Deteniendo por solicitud del usuario...")
-                break
-
-            url = BASE_URL.format(n)
-            print(f"\n[Pagina {n}/{TOTAL_PAGES}]: {url}")
-            try:
-                titulo = await navegar_con_cloudflare(page, url)
-                print(f"   Titulo: {titulo}")
-
-                props = await extraer_listado(page)
-                todas.extend(props)
-                print(f"   -> {len(props)} propiedades extraidas (total: {len(todas)})")
-
-                # Guardado periodico cada N paginas
-                if n % GUARDAR_CADA_N_PAGINAS == 0 and todas:
-                    guardar_excel(todas)
-
-            except Exception as e:
-                print(f"   [ERROR] en pagina {n}: {e}")
-                import traceback
-                traceback.print_exc()
-
-        print(f"\n[OK] FASE 1 completa: {len(todas)} propiedades encontradas")
-
-        if not detener and todas:
-            # FASE 2: Visitar cada ficha de detalle
-            print("\n" + "=" * 60)
-            print("FASE 2: Extrayendo coordenadas y detalles")
-            print("=" * 60)
-
-            for i, prop in enumerate(todas):
-                if detener:
-                    print(f"\n[!] Deteniendo por solicitud del usuario...")
-                    break
-
-                distrito = prop.get('Distrito', '')
-                prop_id = prop.get('ID', '')
-                print(f"\n[{i+1}/{len(todas)}] ID: {prop_id} - {distrito}")
-                await extraer_detalle(page, prop)
-                await asyncio.sleep(0.5)
-
-        await page.close()
-
-    # FASE 3: Exportar a Excel (siempre guarda al final)
-    print("\n" + "=" * 60)
-    print("FASE 3: Exportando Excel")
-    print("=" * 60)
-
-    guardar_excel(todas)
-    con_coords = sum(1 for p in todas if p.get('Coordenadas'))
-    print(f"\n[OK] DESCARGADO -> {OUTPUT_FILE}")
-    print(f"Total: {len(todas)} | Con coordenadas: {con_coords} | Sin coordenadas: {len(todas)-con_coords}")
+    from scrapi.standalone import export_portal
+    await asyncio.to_thread(export_portal, 'remax')
 
 
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n[!] Interrupcion por teclado. El Excel se guardo con el progreso actual.")
-        sys.exit(0)
+    asyncio.run(main())

@@ -1,6 +1,6 @@
 {% if page_obj %}
 <tr>
-    <td colspan="25" style="padding:7px 10px;color:var(--terminal-info);background:rgba(56,139,253,.06);">
+    <td colspan="29" style="padding:7px 10px;color:var(--terminal-info);background:rgba(56,139,253,.06);">
         Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }}
         de {{ page_obj.paginator.count }} propiedades, ordenadas por extracción reciente.
     </td>
@@ -10,6 +10,17 @@
 <tr>
     <td style="font-size:10px;">{{ p.id }}</td>
     <td><span class="badge-fuente badge-{{ p.fuente }}">{{ p.fuente }}</span></td>
+    <td style="white-space:nowrap;">
+        {% if p.estado_publicacion == 'activa' %}
+        <span style="color:#3fb950;">● Activa</span>
+        {% elif p.estado_publicacion == 'posible_retirada' %}
+        <span style="color:#d29922;">● Posible retirada ({{ p.ausencias_consecutivas }})</span>
+        {% elif p.estado_publicacion == 'retirada' %}
+        <span style="color:#f85149;">● Retirada</span>
+        {% else %}
+        <span style="color:#8b949e;">● Sin verificar</span>
+        {% endif %}
+    </td>
     <td style="font-size:10px;">{{ p.tipo_inmueble|default:'—' }}</td>
     <td>{% if p.precio_usd %}${{ p.precio_usd|floatformat:0 }}{% else %}—{% endif %}</td>
     <td>{% if p.precio_soles %}S/{{ p.precio_soles|floatformat:0 }}{% else %}—{% endif %}</td>
@@ -44,10 +55,13 @@
     <td style="font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="{{ p.descripcion|default:'' }}">{{ p.descripcion|default:'—'|truncatechars:50 }}</td>
     <td style="font-size:10px;max-width:100px;overflow:hidden;text-overflow:ellipsis;">{{ p.amenities|default:'—'|truncatechars:30 }}</td>
     <td style="font-size:10px;color:var(--terminal-info);white-space:nowrap;">{{ p.fecha_extraccion|date:'d/m/Y H:i'|default:'—' }}</td>
+    <td style="font-size:10px;white-space:nowrap;">{{ p.ultima_vez_vista|date:'d/m/Y H:i'|default:'—' }}</td>
+    <td style="font-size:10px;white-space:nowrap;">{{ p.fecha_primera_ausencia|date:'d/m/Y H:i'|default:'—' }}</td>
+    <td style="font-size:10px;white-space:nowrap;">{{ p.fecha_retiro_confirmado|date:'d/m/Y H:i'|default:'—' }}</td>
 </tr>
 {% empty %}
 <tr>
-    <td colspan="25" style="text-align:center;color:var(--terminal-info);padding:20px;">
+    <td colspan="29" style="text-align:center;color:var(--terminal-info);padding:20px;">
         <i class="bi bi-inbox" style="font-size:20px;display:block;margin-bottom:4px;"></i>
         No hay propiedades scrapeadas aún
     </td>

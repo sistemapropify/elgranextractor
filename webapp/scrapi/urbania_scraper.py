@@ -20,10 +20,7 @@ from scrapi.camoufox_launcher import camoufox_kwargs
 # CAMBIA esta URL según lo que quieras scrapear.
 # ============================================================
 BASE_PATTERN = "https://urbania.pe/buscar/venta-de-departamentos-en-arequipa--arequipa?page={}"
-# Urbania solo muestra unos pocos números (ej. 1..5) pero hay muchas más
-# páginas. Esto es solo un TOPE DE SEGURIDAD; el scraper se detiene solo
-# cuando una página ya no devuelve propiedades (no hay más resultados).
-TOTAL_PAGINAS = 300
+TOTAL_PAGINAS = 300  # Tope de seguridad, nunca prueba de fin del listado.
 SITE_DOMAIN = "https://urbania.pe"
 OUTPUT_FILE = f"urbania_arequipa_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
@@ -32,17 +29,8 @@ detener = False
 
 
 def construir_url_pagina(url_base, n):
-    """Devuelve la URL del listado de Urbania para la página ``n``.
-
-    Reemplaza (o añade) el parámetro ``page`` de la URL que el usuario pegó,
-    para poder recorrer página por página hasta que no queden resultados.
-    """
-    from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
-
-    partes = urlparse(str(url_base).strip())
-    params = dict(parse_qsl(partes.query, keep_blank_values=True))
-    params['page'] = str(int(n))
-    return urlunparse(partes._replace(query=urlencode(params)))
+    from scrapi.source_config import page_url
+    return page_url('urbania', url_base, n)
 
 
 def guardar_excel(todas):
@@ -170,6 +158,7 @@ async def extraer_listado(page):
                     ubicacion: location,
                     descripcion: description,
                     imagen: imgSrc,
+                    titulo: title,
                 });
             }
             return results;
@@ -205,7 +194,7 @@ async def extraer_listado(page):
             'Longitud':        '',
             'Coordenadas':     '',
             'Google Maps Link':'',
-            'Titulo':          '',
+            'Titulo':          item.get('titulo', ''),
         })
 
     return props
@@ -308,7 +297,7 @@ async def extraer_detalle(page, prop):
 
         # Parsear caracteristicas para extraer area, dormitorios, banos, estac.
         feats = prop.get('Caracteristicas', '')
-        m_area = re.search(r'(\d+)\s*m²\s*tot', feats)
+        m_area = re.search(r'(?<![\d.,])(\d+(?:[.,]\d+)*)\s*m²\s*tot', feats)
         m_dorm = re.search(r'(\d+)\s*dorm', feats)
         m_bano = re.search(r'(\d+)\s*bañ', feats)
         m_estac = re.search(r'(\d+)\s*estac', feats)
@@ -320,103 +309,13 @@ async def extraer_detalle(page, prop):
 
     except Exception as e:
         print(f"   [ERROR] Error en detalle: {e}")
+        raise RuntimeError(f'detail.extraction_failed: {e}') from e
 
 
 async def main():
-    global detener
-    todas = []
-    # Permite pasar la URL del listado como argumento:
-    #   python urbania_scraper.py "https://urbania.pe/buscar/venta-de-propiedades-en-arequipa--arequipa?page=1"
-    base_url = (
-        sys.argv[1].strip()
-        if len(sys.argv) > 1 and sys.argv[1].strip().startswith("http")
-        else BASE_PATTERN
-    )
-    print(f"\n[Urbania] Listado de origen: {base_url}")
-
-    # Registrar manejador de Ctrl+C
-    signal.signal(signal.SIGINT, manejar_sigint)
-
-    async with AsyncCamoufox(
-        **camoufox_kwargs(
-            persistent_context=True,
-            user_data_dir='./camoufox_session_urbania',
-        ),
-    ) as browser:
-
-        page = await browser.new_page()
-        await page.set_viewport_size({"width": 1920, "height": 1080})
-
-        # FASE 1: Extraer todas las paginas del listado
-        print("=" * 60)
-        print("FASE 1: Scrapeando paginas de listado")
-        print(f"Total paginas: {TOTAL_PAGINAS} | Guardando Excel cada {GUARDAR_CADA_N_PAGINAS} paginas")
-        print("Presiona Ctrl+C para guardar y salir")
-        print("=" * 60)
-
-        for n in range(1, TOTAL_PAGINAS + 1):
-            if detener:
-                print(f"\n[!] Deteniendo por solicitud del usuario...")
-                break
-
-            url = construir_url_pagina(base_url, n)
-            print(f"\n[Pagina {n}/{TOTAL_PAGINAS}]: {url}")
-            try:
-                titulo = await navegar_con_cloudflare(page, url)
-                print(f"   Titulo: {titulo}")
-
-                props = await extraer_listado(page)
-                if not props and n > 1:
-                    # No hay más propiedades: se terminaron las páginas reales.
-                    print(f"   [FIN] Pagina {n} sin propiedades: no hay mas paginas.")
-                    break
-                todas.extend(props)
-                print(f"   -> {len(props)} propiedades extraidas (total: {len(todas)})")
-
-                # Guardado periodico cada N paginas
-                if n % GUARDAR_CADA_N_PAGINAS == 0 and todas:
-                    guardar_excel(todas)
-
-            except Exception as e:
-                print(f"   [ERROR] en pagina {n}: {e}")
-                import traceback
-                traceback.print_exc()
-
-        print(f"\n[OK] FASE 1 completa: {len(todas)} propiedades encontradas")
-
-        if not detener and todas:
-            # FASE 2: Visitar cada ficha de detalle
-            print("\n" + "=" * 60)
-            print("FASE 2: Extrayendo coordenadas y detalles")
-            print("=" * 60)
-
-            for i, prop in enumerate(todas):
-                if detener:
-                    print(f"\n[!] Deteniendo por solicitud del usuario...")
-                    break
-
-                prop_id = prop.get('ID', '')
-                ubic = prop.get('Ubicacion', '')
-                print(f"\n[{i+1}/{len(todas)}] ID: {prop_id} - {ubic}")
-                await extraer_detalle(page, prop)
-                await asyncio.sleep(0.5)
-
-        await page.close()
-
-    # FASE 3: Exportar a Excel (siempre guarda al final)
-    print("\n" + "=" * 60)
-    print("FASE 3: Exportando Excel")
-    print("=" * 60)
-
-    guardar_excel(todas)
-    con_coords = sum(1 for p in todas if p.get('Coordenadas'))
-    print(f"\n[OK] DESCARGADO -> {OUTPUT_FILE}")
-    print(f"Total: {len(todas)} | Con coordenadas: {con_coords} | Sin coordenadas: {len(todas)-con_coords}")
+    from scrapi.standalone import export_portal
+    await asyncio.to_thread(export_portal, 'urbania')
 
 
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n[!] Interrupcion por teclado. El Excel se guardo con el progreso actual.")
-        sys.exit(0)
+    asyncio.run(main())

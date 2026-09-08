@@ -91,11 +91,24 @@ def ensure_camoufox_installed(progress_callback=None) -> Path:
     ni en el CLI actual. La ruta se controla mediante ``XDG_CACHE_HOME`` antes
     de que el proceso Python arranque.
     """
+    executable = os.environ.get('CAMOUFOX_EXECUTABLE_PATH')
+    if executable:
+        binary = Path(executable)
+        if not binary.is_file():
+            raise RuntimeError('runtime.browser_missing: ' + str(binary))
+        if os.environ.get('CAMOUFOX_AUTO_INSTALL') == '0':
+            from camoufox.multiversion import get_active_path
+            active = get_active_path()
+            if not active or Path(active).resolve() != binary.parent.resolve():
+                raise RuntimeError('runtime.browser_registry_mismatch: rebuild the pinned worker image')
+        return binary.parent
     installed = _installed_path()
     if installed is not None:
         _notify(progress_callback, f'Camoufox: navegador encontrado en {installed}')
         return installed
 
+    if os.environ.get('CAMOUFOX_AUTO_INSTALL', '1') == '0':
+        raise RuntimeError('runtime.browser_missing: rebuild the worker image; automatic installation is disabled')
     install_dir = get_install_dir()
     install_dir.mkdir(parents=True, exist_ok=True)
     lock = install_dir / ".propifai-fetch.lock"
@@ -230,5 +243,11 @@ def camoufox_kwargs(**overrides) -> dict:
     ensure_camoufox_system_dependencies(progress_callback)
     ensure_camoufox_installed(progress_callback)
     kwargs = dict(_DEFAULTS, headless=is_headless_server())
+    if os.environ.get('CAMOUFOX_HEADLESS') == '1':
+        kwargs['headless'] = True
+    if os.environ.get('CAMOUFOX_EXECUTABLE_PATH'):
+        from camoufox.addons import DefaultAddons
+        kwargs.update(executable_path=os.environ['CAMOUFOX_EXECUTABLE_PATH'],
+                      exclude_addons=[DefaultAddons.UBO])
     kwargs.update(overrides)
     return kwargs

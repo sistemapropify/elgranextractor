@@ -91,6 +91,13 @@
     accent-color: #238636;
 }
 
+.facebook-session-help {
+    margin: 2px 0 12px 24px;
+    color: var(--terminal-warning);
+    font-size: 11px;
+    line-height: 1.35;
+}
+
 /* ── Estadísticas ── */
 .stats-panel {
     grid-row: 2 / 3;
@@ -270,6 +277,7 @@
         <h3><i class="bi bi-play-circle"></i> Control</h3>
 
         <div class="control-buttons">
+            <button class="btn-scraping" id="btnPreview" onclick="control('preview')">Vista previa</button>
             <button class="btn-scraping primary" id="btnStart" onclick="control('start')">
                 <i class="bi bi-play-fill"></i> Iniciar
             </button>
@@ -285,11 +293,72 @@
         </div>
 
         <div class="portal-checkboxes">
+            {% if scraping_worker %}<p>{{ scraping_worker.message }} · {{ scraping_worker.heartbeat_at|default:'sin registro' }}</p>{% endif %}
+            <small>Vista previa prueba los portales seleccionados y muestra datos en los logs, sin guardar propiedades.</small>
             <label><input type="checkbox" class="portal-cb" value="remax" checked> Remax</label>
             <label><input type="checkbox" class="portal-cb" value="adondevivir" checked> Adondevivir</label>
             <label><input type="checkbox" class="portal-cb" value="properati" checked> Properati</label>
             <label><input type="checkbox" class="portal-cb" value="urbania" checked> Urbania</label>
             <label><input type="checkbox" class="portal-cb" value="facebook_marketplace"> Facebook Marketplace</label>
+            <div class="facebook-session-help">
+                La primera ejecución abrirá Facebook en Camoufox. Inicia sesión
+                una sola vez para habilitar el scroll completo (1000+ anuncios).
+                Al terminar el primer scroll se guardan todos los IDs; si el
+                proceso se corta, continúa las fichas sin repetir el scroll.
+                Mientras esté activo, Windows no apagará la pantalla ni entrará
+                en suspensión o hibernación.
+            </div>
+        </div>
+
+        {# ═══ URLs de listado por portal (se guardan y se reutilizan) ═══ #}
+        <div class="urls-section" style="margin-top:12px;padding:12px;border:1px solid var(--border-color,#30363d);border-radius:10px;">
+            <h4 style="margin:0 0 4px;font-size:13px;font-weight:600;">URL de listado por portal</h4>
+            {% if scraping_config_error %}<p role="alert">{{ scraping_config_error }}</p>{% endif %}
+            <p style="margin:0 0 10px;font-size:11px;color:var(--text-subtle,#7d8590);">
+                Pega la URL de la búsqueda que quieres scrapear (puede llevar <code>{n}</code> o
+                <code>{page}</code> para la paginación). Se guarda una vez y se reutiliza;
+                solo se edita cuando quieras cambiar la búsqueda.
+            </p>
+            <div style="display:grid;gap:6px;">
+                <label style="display:flex;gap:6px;align-items:center;font-size:12px;">
+                    <span style="min-width:130px;">Urbania</span>
+                    <input type="text" class="url-input" data-portal="urbania" style="flex:1;"
+                           value="{{ urls_portales.urbania|default:'' }}"
+                           placeholder="https://urbania.pe/buscar/...?page={n}">
+                </label>
+                <label style="display:flex;gap:6px;align-items:center;font-size:12px;">
+                    <span style="min-width:130px;">Remax</span>
+                    <input type="text" class="url-input" data-portal="remax" style="flex:1;"
+                           value="{{ urls_portales.remax|default:'' }}"
+                           placeholder="URL del listado Remax">
+                </label>
+                <label style="display:flex;gap:6px;align-items:center;font-size:12px;">
+                    <span style="min-width:130px;">Adondevivir</span>
+                    <input type="text" class="url-input" data-portal="adondevivir" style="flex:1;"
+                           value="{{ urls_portales.adondevivir|default:'' }}"
+                           placeholder="URL del listado Adondevivir">
+                </label>
+                <label style="display:flex;gap:6px;align-items:center;font-size:12px;">
+                    <span style="min-width:130px;">Properati</span>
+                    <input type="text" class="url-input" data-portal="properati" style="flex:1;"
+                           value="{{ urls_portales.properati|default:'' }}"
+                           placeholder="URL del listado Properati">
+                </label>
+                <label style="display:flex;gap:6px;align-items:center;font-size:12px;">
+                    <span style="min-width:130px;">Facebook Mkt</span>
+                    <input type="text" class="url-input" data-portal="facebook_marketplace" style="flex:1;"
+                           value="{{ urls_portales.facebook_marketplace|default:'' }}"
+                           placeholder="URL del Marketplace">
+                </label>
+            </div>
+            <button type="button" class="btn-scraping" id="btnGuardarUrls"
+                    style="margin-top:10px;" onclick="guardarUrls()">
+                💾 Guardar URLs
+            </button>
+            <label style="display:block;margin-top:10px;">Límite de anuncios de Marketplace
+                <input id="maxMarketplaceItems" type="number" min="1" max="100000" value="1500">
+            </label>
+            <small>Alcanzar este límite deja el recorrido incompleto. El total del feed puede ser mayor.</small>
         </div>
     </div>
 
@@ -379,6 +448,18 @@
                 </button>
             </span>
         </div>
+        <div style="display:flex;gap:6px;padding:8px;flex-wrap:wrap;">
+            <select id="logLevel" aria-label="Nivel de logs" onchange="if(currentJobId) connectSSE(currentJobId)">
+                <option value="">Todos los niveles</option><option>error</option><option>warning</option><option>info</option><option>debug</option>
+            </select>
+            <select id="logPortal" aria-label="Portal de logs" onchange="if(currentJobId) connectSSE(currentJobId)">
+                <option value="">Todos los portales</option><option>urbania</option><option>remax</option><option>properati</option><option>adondevivir</option><option>facebook_marketplace</option>
+            </select>
+            <input id="logSearch" placeholder="Buscar en el historial…" aria-label="Buscar logs" onchange="if(currentJobId) connectSSE(currentJobId)">
+            <input id="logEvent" placeholder="Evento: detail.failed" aria-label="Filtrar evento" onchange="if(currentJobId) connectSSE(currentJobId)">
+            <input id="logProperty" placeholder="ID de propiedad" aria-label="Filtrar propiedad" onchange="if(currentJobId) connectSSE(currentJobId)">
+            <button type="button" onclick="exportLogs()">Exportar logs filtrados</button>
+        </div>
         <div class="terminal-body" id="terminalBody">
             <div class="terminal-empty" id="terminalEmpty">
                 <i class="bi bi-terminal" style="font-size:24px;display:block;margin-bottom:8px;"></i>
@@ -409,6 +490,13 @@
                 <option value="Oficina">Oficina</option>
                 <option value="Local">Local</option>
             </select>
+            <select id="filterEstado" onchange="loadTable()">
+                <option value="">Todos los estados</option>
+                <option value="sin_verificar">Sin verificar</option>
+                <option value="activa">Activa</option>
+                <option value="posible_retirada">Posible retirada</option>
+                <option value="retirada">Retirada</option>
+            </select>
         </div>
     </div>
     <div id="tablaContainer" style="overflow-x:auto;max-height:300px;overflow-y:auto;">
@@ -417,6 +505,7 @@
                 <tr>
                     <th>ID</th>
                     <th>Portal</th>
+                    <th>Estado</th>
                     <th>Tipo</th>
                     <th>Precio USD</th>
                     <th>Precio S/.</th>
@@ -440,10 +529,13 @@
                     <th>Descripción</th>
                     <th>Amenities</th>
                     <th>Fecha</th>
+                    <th>Última vez vista</th>
+                    <th>Primera ausencia</th>
+                    <th>Retiro confirmado</th>
                 </tr>
             </thead>
             <tbody id="tablaBody">
-                <tr><td colspan="25" style="text-align:center;color:var(--terminal-info);padding:20px;">Cargando...</td></tr>
+                <tr><td colspan="29" style="text-align:center;color:var(--terminal-info);padding:20px;">Cargando...</td></tr>
             </tbody>
         </table>
     </div>
@@ -456,6 +548,35 @@ let currentJobId = null;
 let eventSource = null;
 let tableRequest = null;
 
+// ── URLs de listado por portal ──
+function recogerUrls() {
+    const urls = {};
+    document.querySelectorAll('.url-input').forEach(i => {
+        const v = (i.value || '').trim();
+        if (v) urls[i.dataset.portal] = v;
+    });
+    return urls;
+}
+
+function guardarUrls() {
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+    const fd = new FormData();
+    fd.append('action', 'save_urls');
+    fd.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+    fd.append('urls', JSON.stringify(recogerUrls()));
+    appendLog('info', 'Guardando URLs de los portales...');
+    fetch('/ingestas/scraping/control/', { method: 'POST', body: fd })
+        .then(r => r.json().catch(() => ({ success: false, error: 'Respuesta inválida' })))
+        .then(d => {
+            if (d.success) {
+                appendLog('info', 'URLs guardadas correctamente.');
+            } else {
+                appendLog('error', d.error || 'No se pudieron guardar las URLs.');
+            }
+        })
+        .catch(e => appendLog('error', 'Error al guardar URLs: ' + e.message));
+}
+
 // ── Control ──
 function control(action) {
     const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
@@ -463,11 +584,13 @@ function control(action) {
     formData.append('action', action);
     formData.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
 
-    if (action === 'start') {
+    if ((action === 'start' || action === 'preview')) {
         const checked = Array.from(document.querySelectorAll('.portal-cb:checked'))
             .map(cb => cb.value);
         if (checked.length === 0) { alert('Selecciona al menos un portal'); return; }
         formData.append('portales', checked.join(','));
+        formData.append('urls', JSON.stringify(recogerUrls()));
+        formData.append('max_items', document.getElementById('maxMarketplaceItems').value);
         appendLog('info', 'Portales seleccionados: ' + checked.join(', '));
     } else {
         formData.append('job_id', currentJobId);
@@ -475,7 +598,7 @@ function control(action) {
 
     const requestController = new AbortController();
     const requestTimeout = setTimeout(() => requestController.abort(), 20000);
-    if (action === 'start') {
+    if ((action === 'start' || action === 'preview')) {
         document.getElementById('btnStart').disabled = true;
         document.getElementById('terminalTitle').textContent = 'Iniciando...';
     }
@@ -505,7 +628,7 @@ function control(action) {
     })
     .then(data => {
         if (data.success) {
-            if (action === 'start') {
+            if ((action === 'start' || action === 'preview')) {
                 currentJobId = data.job_id;
                 connectSSE(data.job_id);
                 updateUI('running');
@@ -523,7 +646,7 @@ function control(action) {
             currentJobId = err.data.job_id;
             updateUI(err.data.estado || 'running');
             if (err.data.estado === 'running') connectSSE(currentJobId);
-        } else if (action === 'start') {
+        } else if ((action === 'start' || action === 'preview')) {
             updateUI('inactive');
         }
         const message = err.name === 'AbortError'
@@ -538,54 +661,106 @@ function control(action) {
 function connectSSE(jobId) {
     if (eventSource) eventSource.close();
     clearTerminal();
-
-    eventSource = new EventSource(`/ingestas/scraping/stream/${jobId}/`);
-    eventSource.onmessage = function(e) {
-        const data = JSON.parse(e.data);
-
-        if (data.type === 'job_end') {
-            const endLabels = {
-                completed: ['success', '✅ Scraping completado'],
-                stopped: ['warning', '⏹️ Scraping detenido'],
-                error: ['error', '❌ Scraping finalizado con error'],
-            };
-            const endLabel = endLabels[data.estado] || ['info', 'ℹ️ Scraping finalizado'];
-            appendLog(
-                endLabel[0],
-                `${endLabel[1]}: ${data.total} detectadas, ${data.nuevas} nuevas, ${data.actualizadas} actualizadas, ${data.errores} errores`
-            );
-            if (data.mensaje_error) {
-                appendLog('error', data.mensaje_error);
+    let stopped = false, cursor = 0, timer = null, failures = 0, request = null;
+    const stream = { close() { stopped = true; clearTimeout(timer); if (request) request.abort(); } };
+    eventSource = stream;
+    async function poll() {
+        if (stopped) return;
+        let delay = 1500;
+        request = new AbortController();
+        const timeout = setTimeout(() => request.abort(), 15000);
+        try {
+            const params = logQuery(cursor);
+            const response = await fetch(`/ingestas/scraping/stream/${jobId}/?${params}`, { signal: request.signal });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            if (stopped) return;
+            data.logs.forEach(log => appendLog(log.nivel, log.mensaje, log.portal, log.timestamp, log.evento, log.contexto));
+            cursor = data.last_id;
+            failures = 0;
+            if (data.ended) {
+                if (data.mensaje_error) appendLog('warning', data.mensaje_error);
+                updateUI(data.estado);
+                stream.close();
+                if (eventSource === stream) eventSource = null;
+                loadStats(jobId);
+                return;
             }
-            updateUI(data.estado);
-            eventSource.close();
-            eventSource = null;
-            loadStats(jobId);
-            return;
+            delay = data.has_more ? 50 : 1500;
+        } catch (error) {
+            if (!stopped && failures++ === 0) appendLog('warning', 'Conexión interrumpida; recuperando eventos desde el último recibido.');
+            delay = Math.min(15000, 1500 * (failures + 1));
+        } finally {
+            clearTimeout(timeout);
+            if (!stopped) timer = setTimeout(poll, delay);
         }
+    }
+    poll();
+}
 
-        appendLog(data.nivel, data.mensaje, data.portal);
-    };
+function logQuery(cursor) {
+    const params = new URLSearchParams({poll: '1', last_id: String(cursor)});
+    for (const [id, key] of [['logLevel', 'nivel'], ['logSearch', 'q'], ['logPortal', 'portal'], ['logEvent', 'evento'], ['logProperty', 'propiedad_id']]) {
+        const value = document.getElementById(id)?.value;
+        if (value) params.set(key, value);
+    }
+    return params;
+}
 
-    eventSource.onerror = function() {
-        console.warn('SSE error, reconectando...');
-    };
+async function exportLogs() {
+    if (!currentJobId) return;
+    let cursor = 0, through = null;
+    const lines = [];
+    const exportJobId = currentJobId;
+    try {
+        do {
+            const query = logQuery(cursor);
+            if (through !== null) query.set('through_id', String(through));
+            const response = await fetch(`/ingestas/scraping/stream/${exportJobId}/?${query}`, {signal: AbortSignal.timeout(15000)});
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            through = data.through_id;
+            lines.push(...data.logs.map(log => JSON.stringify(log)));
+            cursor = data.last_id;
+            if (!data.has_more) break;
+        } while (true);
+        const url = URL.createObjectURL(new Blob([lines.join('\n')], {type: 'application/x-ndjson'}));
+        const link = document.createElement('a');
+        link.href = url; link.download = `scraping-${exportJobId}.jsonl`; link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { appendLog('error', 'No se pudo exportar: ' + error.message); }
 }
 
 // ── Terminal ──
-function appendLog(nivel, mensaje, portal) {
+function appendLog(nivel, mensaje, portal, timestamp, evento, contexto) {
     const body = document.getElementById('terminalBody');
     const empty = document.getElementById('terminalEmpty');
     if (empty) empty.style.display = 'none';
 
-    const now = new Date();
-    const ts = now.toTimeString().slice(0, 8);
+    const now = timestamp ? new Date(timestamp) : new Date();
+    const ts = now.toLocaleTimeString();
     const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌', debug: '🔍' };
 
     const line = document.createElement('div');
     line.className = 'terminal-line';
-    line.innerHTML = `<span class="ts">${ts}</span><span class="level-${nivel}">${icons[nivel] || ''} ${mensaje}</span>`;
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'ts';
+    timeSpan.textContent = ts;
+    const messageSpan = document.createElement('span');
+    messageSpan.className = 'level-' + (Object.hasOwn(icons, nivel) ? nivel : 'info');
+    messageSpan.textContent = `${icons[nivel] || ''} ${portal ? '[' + portal + '] ' : ''}${mensaje}`;
+    line.append(timeSpan, messageSpan);
+    if (contexto && Object.keys(contexto).length) {
+        const details = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.textContent = evento || 'Detalles';
+        const pre = document.createElement('pre');
+        pre.textContent = JSON.stringify(contexto, null, 2);
+        details.append(summary, pre);
+        line.appendChild(details);
+    }
     body.appendChild(line);
+    while (body.childElementCount > 1000) body.firstElementChild.remove();
     body.scrollTop = body.scrollHeight;
 }
 
@@ -687,12 +862,14 @@ function loadTable() {
     const fuente = document.getElementById('filterFuente').value;
     const distrito = document.getElementById('filterDistrito').value;
     const tipo = document.getElementById('filterTipo').value;
+    const estado = document.getElementById('filterEstado').value;
     const params = new URLSearchParams();
     params.set('page', '1');
     params.set('limit', '25');
     if (fuente) params.set('fuente', fuente);
     if (distrito) params.set('distrito', distrito);
     if (tipo) params.set('tipo', tipo);
+    if (estado) params.set('estado', estado);
 
     if (tableRequest) tableRequest.abort();
     tableRequest = new AbortController();
