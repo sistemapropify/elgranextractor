@@ -592,7 +592,7 @@ window.onGoogleMapsLoaded = function() {
     if (typeof window.initMap === 'function') window.initMap();
 };
 </script>
-<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places,geometry,drawing&callback=onGoogleMapsLoaded" async defer></script>
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places,geometry&callback=onGoogleMapsLoaded" async defer></script>
 {% endblock %}
 
 {% block content %}
