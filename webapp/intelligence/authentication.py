@@ -85,7 +85,7 @@ def get_authenticated_user(request) -> User | None:
         request.session.flush()
         return None
     try:
-        return User.objects.get(id=user_id)
+        return User.objects.get(id=user_id, is_active=True)
     except (User.DoesNotExist, ValueError):
         return None
 

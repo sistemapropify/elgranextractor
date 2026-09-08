@@ -16,7 +16,8 @@ def test_labels():
     labels.extend(f'intelligence.tests.{path.stem}'
                   for path in sorted((root / 'intelligence/tests').glob('test_semantic*.py')))
     labels += ['intelligence.tests.test_reasoning_contracts',
-               'intelligence.tests.test_chat_web_conversations']
+               'intelligence.tests.test_chat_web_conversations',
+               'intelligence.tests.test_scraping_session_access']
     return labels
 
 

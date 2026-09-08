@@ -10,6 +10,7 @@ from django.shortcuts import render, redirect
 from django.views.generic import FormView, View, TemplateView, ListView, DetailView
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import AccessMixin
 from django.core.files.storage import FileSystemStorage
 from django.http import JsonResponse
 
@@ -1865,7 +1866,24 @@ def _acquire_scraping_start_lock() -> bool:
         row = cursor.fetchone()
     return bool(row and int(row[0]) >= 0)
 
-class ScrapingDashboardView(LoginRequiredMixin, TemplateView):
+class ScrapingLoginRequiredMixin(AccessMixin):
+    """Accept the same validated session as Prometeo's login middleware.
+
+    Prometeo sets current_user while Django may still expose AnonymousUser.
+    Requiring only Django auth sends an existing Prometeo session back and
+    forth between login_view and this dashboard.
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        current_user = getattr(request, 'current_user', None)
+        django_user = getattr(request, 'user', None)
+        if not (getattr(current_user, 'is_active', False)
+                or getattr(django_user, 'is_authenticated', False)):
+            return self.handle_no_permission()
+        return super().dispatch(request, *args, **kwargs)
+
+
+class ScrapingDashboardView(ScrapingLoginRequiredMixin, TemplateView):
     """Dashboard principal de scraping con terminal, controles y tabla."""
     template_name = 'ingestas/scraping_dashboard.html'
 
@@ -1916,7 +1934,7 @@ class ScrapingDashboardView(LoginRequiredMixin, TemplateView):
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
-class ScrapingControlView(LoginRequiredMixin, View):
+class ScrapingControlView(ScrapingLoginRequiredMixin, View):
     """Controla la ejecución del scraping: start, pause, resume, stop."""
 
     def post(self, request):
@@ -2110,7 +2128,7 @@ class ScrapingControlView(LoginRequiredMixin, View):
         return JsonResponse({'success': False, 'error': 'Acción inválida'})
 
 
-class ScrapingStreamView(LoginRequiredMixin, View):
+class ScrapingStreamView(ScrapingLoginRequiredMixin, View):
     """
     SSE endpoint: transmite logs en tiempo real del ScrapingJob.
     El frontend abre una conexión EventSource a esta URL.
@@ -2195,7 +2213,7 @@ class ScrapingStreamView(LoginRequiredMixin, View):
         return response
 
 
-class ScrapingStatusView(LoginRequiredMixin, View):
+class ScrapingStatusView(ScrapingLoginRequiredMixin, View):
     """Retorna JSON con el estado actual del job."""
 
     def get(self, request, job_id):
