@@ -265,6 +265,64 @@
     .terminal-panel { grid-row: auto; }
     .stats-panel { grid-row: auto; }
 }
+
+/* ── Refuerzo anti-descuadre: layout robusto aunque haya CSS global encima ── */
+.scraping-layout,
+.control-panel,
+.stats-panel,
+.terminal-panel,
+.table-section,
+.urls-section,
+.terminal-header,
+.terminal-body {
+    box-sizing: border-box;
+}
+
+.scraping-layout {
+    display: grid !important;
+    grid-template-columns: 320px minmax(0, 1fr) !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+    gap: 16px !important;
+    align-items: start !important;
+    width: 100%;
+    max-width: 100%;
+}
+
+.control-panel {
+    grid-area: 1 / 1 / 2 / 2 !important;
+    width: 100%;
+    min-width: 0;
+}
+.stats-panel {
+    grid-area: 2 / 1 / 3 / 2 !important;
+    width: 100%;
+    min-width: 0;
+}
+.terminal-panel {
+    grid-area: 1 / 2 / 3 / 3 !important;
+    width: 100%;
+    min-width: 0;
+    min-height: 420px;
+}
+.terminal-body {
+    min-height: 0;
+    flex: 1 1 auto;
+}
+.table-section {
+    width: 100%;
+    max-width: 100%;
+}
+.table-section .table-header {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.table-filters {
+    flex-wrap: wrap;
+}
+.data-table th,
+.data-table td {
+    white-space: nowrap;
+}
 </style>
 {% endblock %}
 
