@@ -169,6 +169,18 @@ class PropertyProspect(models.Model):
     origin_other = models.CharField(max_length=120, blank=True, verbose_name='Otro origen')
     marketplace_url = models.URLField(max_length=500, blank=True, verbose_name='Enlace Marketplace')
 
+    # ── Asignación ("tomar prospección") ─────────────────────────
+    # Username Propify del agente que marcó la captación como suya.
+    # Vacío = nadie la ha tomado. Solo quien la tomó puede soltarla.
+    tomada_por_username = models.CharField(
+        max_length=150,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name='Usuario que tomó la prospección',
+        help_text='Username Propify del agente que marcó esta captación como suya.',
+    )
+
     # ── GPS (solo coordenadas — dirección se llena manual) ───────
     latitude = models.DecimalField(
         max_digits=10, decimal_places=7,

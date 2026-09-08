@@ -260,6 +260,44 @@
         cursor: pointer;
     }
     #selected-property .prospect-panel-card:hover { border-color: var(--accent-blue, #58a6ff); }
+
+    /* ── Botón "Tomar prospección" (arriba a la derecha de la tarjeta) ── */
+    .ppc-tomar-row {
+        display: flex;
+        justify-content: flex-end;
+        margin: -2px -2px 8px 0;
+    }
+    .ppc-tomar {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.4;
+        border: 1px solid var(--border-color, #30363d);
+        text-decoration: none;
+    }
+    .ppc-tomar-libre,
+    .ppc-tomar-propia {
+        background: #ffffff;
+        color: #0d1117;
+        border-color: #ffffff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+        cursor: pointer;
+    }
+    .ppc-tomar-libre:hover,
+    .ppc-tomar-propia:hover { background: #e6edf3; }
+    .ppc-tomar-propia { border-color: #3fb950; }
+    .ppc-tomar-ajena {
+        background: #21262d;
+        color: #3fb950;
+        border-color: #3fb95066;
+        cursor: default;
+    }
+    .ppc-tomar:disabled { opacity: .55; cursor: wait; }
+
     .ppc-summary { display: flex; gap: 12px; align-items: flex-start; }
     .ppc-thumb {
         width: 84px;
@@ -368,6 +406,9 @@
 {{ block.super }}
 <script>
 (function () {
+    // Usuario Propify que está viendo el panel (identidad para "tomar prospección").
+    var USUARIO_ACTUAL = '{{ usuario_actual_username|default:""|escapejs }}';
+
     // Filtro por teléfono: '' = todas, 'con' = con teléfono, 'sin' = sin teléfono
     var filtroTelefono = '';
 
@@ -479,6 +520,8 @@
 
         container.querySelectorAll('.prospect-panel-card').forEach(function (card) {
             card.addEventListener('click', function (e) {
+                // El clic en el botón "tomar" no expande/contrae la tarjeta.
+                if (e.target.closest('.ppc-tomar')) return;
                 // El clic dentro del detalle (ya expandido) no contrae la tarjeta.
                 if (e.target.closest('.prospect-detail-inline')) return;
                 var detalle = card.querySelector('.prospect-detail-inline');
@@ -505,6 +548,72 @@
             });
         });
     }
+
+    // ── "Tomar prospección": delegado único en el panel (tomar/soltar) ──
+    function controlTomarHtml(p) {
+        if (!p) return '';
+        var pid = p.id != null ? p.id : '';
+        var tomada = (p.tomada_por_username || '').trim();
+        var actual = USUARIO_ACTUAL || '';
+        if (!tomada) {
+            return '<button type="button" class="ppc-tomar ppc-tomar-libre" ' +
+                'data-prospect="' + pid + '" data-accion="tomar">Tomar Prospección</button>';
+        }
+        var esMia = actual && tomada === actual;
+        if (esMia) {
+            return '<button type="button" class="ppc-tomar ppc-tomar-propia" ' +
+                'data-prospect="' + pid + '" data-accion="soltar" ' +
+                'title="Soltar prospección (vuelve a quedar libre)">👤 ' +
+                escaparHtml(tomada) + ' ✕</button>';
+        }
+        return '<span class="ppc-tomar ppc-tomar-ajena" ' +
+            'title="Prospección tomada por ' + escaparHtml(tomada) + '">👤 ' +
+            escaparHtml(tomada) + '</span>';
+    }
+
+    function initTomarProspeccion() {
+        var container = document.getElementById('selected-property');
+        if (!container || container.getAttribute('data-tomar-init')) return;
+        container.setAttribute('data-tomar-init', '1');
+        container.addEventListener('click', function (e) {
+            var el = e.target && e.target.closest ? e.target.closest('.ppc-tomar') : null;
+            if (!el || !el.hasAttribute('data-accion')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            var pid = el.getAttribute('data-prospect');
+            var accion = el.getAttribute('data-accion');
+            if (!pid) return;
+            el.disabled = true;
+            fetch('/prospects/' + encodeURIComponent(pid) + '/tomar/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json',
+                },
+                body: 'accion=' + encodeURIComponent(accion),
+            }).then(function (r) {
+                return r.json().catch(function () {
+                    return { ok: false, error: 'El servidor respondió con un formato inesperado.' };
+                });
+            }).then(function (data) {
+                if (data && data.ok) {
+                    for (var i = 0; i < todasPropiedadesJSON.length; i++) {
+                        if (String(todasPropiedadesJSON[i].id) === String(pid)) {
+                            todasPropiedadesJSON[i].tomada_por_username = data.tomada_por_username || '';
+                        }
+                    }
+                    sincronizarPanel();
+                } else {
+                    if (window.alert) window.alert((data && data.error) ? data.error : 'No se pudo completar la acción.');
+                    sincronizarPanel();
+                }
+            }).catch(function () {
+                if (window.alert) window.alert('Error de red. Inténtalo de nuevo.');
+                sincronizarPanel();
+            });
+        });
+    }
+    initTomarProspeccion();
 
     // ── Modal de foto (clic en la miniatura de la tarjeta) ──────
     function _cerrarModalFoto() {
@@ -545,6 +654,8 @@
         var precio = (p.precio && String(p.precio).trim())
             ? ((p.moneda === 'PEN' ? 'S/ ' : '$ ') + p.precio) : '';
         return (
+            // Botón "tomar prospección" arriba a la derecha.
+            '<div class="ppc-tomar-row">' + controlTomarHtml(p) + '</div>' +
             // Resumen con UNA foto a la izquierda; el detalle va debajo a todo el ancho.
             '<div class="ppc-summary">' +
                 (img

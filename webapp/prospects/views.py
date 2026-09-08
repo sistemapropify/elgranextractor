@@ -7,9 +7,10 @@ from uuid import uuid4
 
 import requests
 from django.contrib import messages
-from django.db import DatabaseError, connection
+from django.db import DatabaseError, connection, transaction
 from django.utils import timezone
 from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
@@ -488,6 +489,60 @@ def prospect_list(request):
     })
 
 
+@csrf_exempt
+@propify_web_required
+def tomar_prospeccion(request, pk):
+    """Tomar / soltar una captación del dashboard de prospección.
+
+    - 'tomar':   asigna la captación al usuario actual SOLO si nadie la tomó.
+    - 'soltar':  la libera SOLO si la tomó el usuario actual.
+    Regresa JSON con el nuevo estado para que el panel se repinte al instante.
+    """
+    prospect = get_object_or_404(PropertyProspect, pk=pk)
+    principal = getattr(request, 'propify_user', None)
+    username = str(getattr(principal, 'username', '') or '').strip()
+    if not username:
+        return JsonResponse({'ok': False, 'error': 'Sesión de usuario inválida.'}, status=401)
+
+    accion = (request.POST.get('accion') or request.GET.get('accion') or '').strip().lower()
+    if accion not in ('tomar', 'soltar'):
+        return JsonResponse({'ok': False, 'error': 'Acción inválida.'}, status=400)
+
+    with transaction.atomic():
+        locked = PropertyProspect.objects.select_for_update().get(pk=pk)
+        actual = (locked.tomada_por_username or '').strip()
+
+        if accion == 'tomar':
+            if actual:
+                if actual == username:
+                    return JsonResponse({
+                        'ok': True,
+                        'tomada_por_username': actual,
+                        'nota': 'Ya la tenías tomada.',
+                    })
+                return JsonResponse({
+                    'ok': False,
+                    'error': f'Esta prospección ya la tomó {actual}.',
+                    'tomada_por_username': actual,
+                }, status=409)
+            locked.tomada_por_username = username
+            locked.save(update_fields=['tomada_por_username'])
+            return JsonResponse({'ok': True, 'tomada_por_username': username})
+
+        # accion == 'soltar'
+        if not actual:
+            return JsonResponse({'ok': True, 'tomada_por_username': '', 'nota': 'Ya estaba libre.'})
+        if actual != username:
+            return JsonResponse({
+                'ok': False,
+                'error': f'Solo {actual} puede soltar esta prospección.',
+                'tomada_por_username': actual,
+            }, status=403)
+        locked.tomada_por_username = ''
+        locked.save(update_fields=['tomada_por_username'])
+        return JsonResponse({'ok': True, 'tomada_por_username': ''})
+
+
 @propify_web_required
 def prospect_dashboard(request):
     """Dashboard cartográfico con las captaciones de todos los agentes."""
@@ -556,6 +611,7 @@ def prospect_dashboard(request):
             'contrato': prospect.get_contract_type_display() or '',
             'origen': prospect.get_origin_display() or prospect.origin or '',
             'creado': prospect.created_at.strftime('%d/%m/%Y %H:%M') if prospect.created_at else '',
+            'tomada_por_username': prospect.tomada_por_username or '',
         })
 
     districts = sorted({p.district for p in prospects if p.district})
@@ -566,8 +622,11 @@ def prospect_dashboard(request):
     tipos_presentes = sorted({
         (p.get_property_type_display() or 'Prospección') for p in prospects
     })
+    principal_actual = getattr(request, 'propify_user', None)
+    usuario_actual_username = str(getattr(principal_actual, 'username', '') or '').strip()
     return render(request, 'prospects/dashboard.html', {
         'todas_propiedades_json': data,
+        'usuario_actual_username': usuario_actual_username,
         'distritos_arequipa': districts,
         'tipos_propiedad': tipos_presentes,
         'google_maps_api_key': getattr(

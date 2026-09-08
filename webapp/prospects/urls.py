@@ -33,6 +33,9 @@ urlpatterns = [
     # Detalle / edición manual
     path('<int:pk>/detail/', views.ProspectDetailView.as_view(), name='detail'),
 
+    # Tomar / soltar prospección (dashboard cartográfico)
+    path('<int:pk>/tomar/', views.tomar_prospeccion, name='tomar'),
+
     # Procesar con Qwen3-VL (POST → JSON)
     path('<int:pk>/process/', views.ProcessImageView.as_view(), name='process'),
 ]
