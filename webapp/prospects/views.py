@@ -11,7 +11,7 @@ from django.db import DatabaseError, connection, transaction
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
+from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.conf import settings
@@ -631,6 +631,7 @@ def prospect_dashboard(request):
     return render(request, 'prospects/dashboard.html', {
         'todas_propiedades_json': data,
         'usuario_actual_username': usuario_actual_username,
+        'puede_metricas': _propify_puede_metricas(request),
         'distritos_arequipa': districts,
         'tipos_propiedad': tipos_presentes,
         'google_maps_api_key': getattr(
@@ -652,4 +653,146 @@ def prospect_dashboard(request):
             'with_phone': with_phone,
             'without_phone': without_phone,
         },
+    })
+
+
+# ── Métricas gerenciales (prospección) ──────────────────────────
+
+def _propify_rol_db(username):
+    """Lee el rol del usuario en la tabla `users` de dbpropify_be (alias 'propifai')."""
+    if not username:
+        return ''
+    try:
+        from django.db import connections
+        with connections['propifai'].cursor() as cursor:
+            for col in ('role', 'rol', 'rol_name', 'nombre_rol'):
+                try:
+                    cursor.execute(f'SELECT {col} FROM users WHERE username = %s', [username])
+                    row = cursor.fetchone()
+                    if row and row[0]:
+                        return str(row[0])
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return ''
+
+
+def _propify_puede_metricas(request):
+    principal = getattr(request, 'propify_user', None)
+    username = str(getattr(principal, 'username', '') or '').strip()
+    rol = _propify_rol_db(username).lower()
+    return any(tok in rol for tok in ('gerente', 'desarrollador', 'developer'))
+
+
+def _agente_captacion(prospect, mobile_actors, agents_by_id):
+    agent = agents_by_id.get(prospect.agent_id)
+    if agent is not None:
+        nombre = ' '.join(part for part in (agent.first_name, agent.last_name) if part).strip()
+        return nombre or agent.username or f'Usuario {agent.pk}'
+    actor = mobile_actors.get(prospect.pk, {})
+    return actor.get('captured_by_username') or actor.get('mobile_username') or 'Usuario APK'
+
+
+def _bucket_key(dt_local, gran):
+    if gran == 'hora':
+        return (dt_local.year, dt_local.month, dt_local.day, dt_local.hour), dt_local.strftime('%d/%m %H:00')
+    if gran == 'semana':
+        iso = dt_local.isocalendar()
+        return (iso.year, iso.week), f'{iso.year}-S{iso.week:02d}'
+    if gran == 'mes':
+        return (dt_local.year, dt_local.month), dt_local.strftime('%m/%Y')
+    if gran == 'anio':
+        return (dt_local.year,), str(dt_local.year)
+    return (dt_local.year, dt_local.month, dt_local.day), dt_local.strftime('%d/%m/%Y')
+
+
+def _metricas_datos(gran, agente_filtro):
+    prospects = list(PropertyProspect.objects.all().order_by('created_at', 'pk'))
+    mobile_actors = _mobile_capture_actors()
+    agent_ids = {p.agent_id for p in prospects if p.agent_id}
+    agent_model = PropertyProspect._meta.get_field('agent').remote_field.model
+    agents_by_id = {a.pk: a for a in agent_model.objects.filter(pk__in=agent_ids)}
+    serie = {}
+    orden = []
+    agentes = set()
+    for pr in prospects:
+        if pr.created_at is None:
+            continue
+        label = _agente_captacion(pr, mobile_actors, agents_by_id)
+        agentes.add(label)
+        if agente_filtro and agente_filtro != 'total' and label != agente_filtro:
+            continue
+        dt_local = timezone.localtime(pr.created_at)
+        key, texto = _bucket_key(dt_local, gran)
+        if key not in serie:
+            serie[key] = 0
+            orden.append((key, texto))
+        serie[key] += 1
+    puntos = [{'label': texto, 'count': serie[key]} for key, texto in orden]
+    return puntos, sorted(agentes)
+
+
+def _render_chart_metricas(puntos, gran, agente_filtro):
+    try:
+        import base64 as _b64
+        from io import BytesIO
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+    except Exception:
+        return ''
+    labels = [p['label'] for p in puntos]
+    values = [p['count'] for p in puntos]
+    if not labels:
+        return ''
+    try:
+        fig, ax = plt.subplots(figsize=(12, 4.6), facecolor='#0d1117')
+        ax.set_facecolor('#0d1117')
+        ax.plot(range(len(labels)), values, color='#58a6ff', linewidth=2, marker='o', markersize=4)
+        ax.fill_between(range(len(labels)), values, color='#58a6ff', alpha=0.15)
+        for spine in ax.spines.values():
+            spine.set_color('#30363d')
+        ax.tick_params(colors='#8b949e')
+        ax.set_xticks(range(len(labels)))
+        ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=8)
+        ax.set_title(f'Evolución de captaciones · {gran} · {agente_filtro}', color='#e6edf3', fontsize=12)
+        ax.grid(True, color='#21262d')
+        buf = BytesIO()
+        fig.tight_layout()
+        fig.savefig(buf, format='png', facecolor=fig.get_facecolor())
+        plt.close(fig)
+        return _b64.b64encode(buf.getvalue()).decode('ascii')
+    except Exception:
+        return ''
+
+
+@propify_web_required
+def prospect_metricas(request):
+    """Dashboard gerencial: evolución de captaciones por agente y granularidad."""
+    if not _propify_puede_metricas(request):
+        if 'application/json' in request.headers.get('Accept', ''):
+            return JsonResponse({'ok': False, 'error': 'No tienes permisos gerenciales.'}, status=403)
+        return HttpResponseForbidden('No tienes permisos para ver métricas gerenciales.')
+    gran = (request.GET.get('gran', '') or 'dia').strip().lower()
+    if gran not in ('hora', 'dia', 'semana', 'mes', 'anio'):
+        gran = 'dia'
+    agente_filtro = (request.GET.get('agente', '') or 'total').strip()
+    puntos, agentes = _metricas_datos(gran, agente_filtro)
+    chart_b64 = _render_chart_metricas(puntos, gran, agente_filtro)
+    total = sum(p['count'] for p in puntos)
+    return render(request, 'prospects/metricas.html', {
+        'chart_b64': chart_b64,
+        'granularidad': gran,
+        'agente_filtro': agente_filtro,
+        'agentes': agentes,
+        'total': total,
+        'puntos': puntos,
+        'granularidades': [
+            ('hora', 'Hora'),
+            ('dia', 'Día'),
+            ('semana', 'Semana'),
+            ('mes', 'Mes'),
+            ('anio', 'Año'),
+        ],
     })

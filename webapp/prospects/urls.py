@@ -26,6 +26,7 @@ urlpatterns = [
     # Lista
     path('', views.prospect_list, name='list'),
     path('dashboard/', views.prospect_dashboard, name='dashboard'),
+    path('metricas/', views.prospect_metricas, name='metricas'),
 
     # Captura nueva (GET = form, POST = guarda foto+GPS)
     path('capture/', views.CaptureView.as_view(), name='capture'),
