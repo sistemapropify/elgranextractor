@@ -124,59 +124,92 @@ async def _esperar_carga_real(page, timeout=30):
 
     Returns: (listo, titulo). Un título vacío o de challenge se considera
     'todavía no listo'; solo un título real (contenido servido) cuenta.
+    Siempre acotado por reloj (nunca excede ``timeout``), e imprime avances
+    para que el proceso no parezca congelado.
     """
+    print(f"      [espera] comprobando documento (hasta {timeout}s)...")
     inicio = asyncio.get_event_loop().time()
-    while asyncio.get_event_loop().time() - inicio < timeout:
+    ultimo_aviso = 0.0
+    while True:
+        transcurrido = asyncio.get_event_loop().time() - inicio
+        if transcurrido >= timeout:
+            break
         try:
             titulo = (await page.title() or '').strip()
         except Exception:
             titulo = ''
         if titulo and not _titulo_bloqueado(titulo):
             return True, titulo
+        if transcurrido - ultimo_aviso >= 5:
+            print(f"      [espera] título actual={titulo[:60]!r} ({int(transcurrido)}s/{int(timeout)}s)")
+            ultimo_aviso = transcurrido
         await asyncio.sleep(1.5)
     return False, ''
 
 
-async def esperar_cloudflare(page, timeout=30):
+async def esperar_cloudflare(page, timeout=20):
     """Espera a que Cloudflare resuelva el challenge (listado o ficha).
 
-    Si el documento no tiene un título real (challenge o carga lenta) se
-    recarga la página hasta 2 veces: muchos challenges se despejan en cuanto
-    la cookie emitida ya está disponible, algo que la espera pasiva no logra.
+    ACOTADO a ~52 s como máximo (fase pasiva + 1 reload + fase corta) para
+    NUNCA pasarse del presupuesto de 100 s que paged_engine.prepare_detail
+    impone vía asyncio.wait_for. Si el challenge no se despeja, devuelve
+    False y navegar_con_cloudflare arma un error visible con diagnóstico.
     """
     print("   Esperando resolucion de Cloudflare...")
-    ok, titulo = await _esperar_carga_real(page, timeout)
+    fase1 = min(int(timeout or 20), 20)
+    ok, titulo = await _esperar_carga_real(page, fase1)
     if ok:
         print(f"   Cloudflare resuelto! Titulo: {titulo}")
         return True
-    for intento in (1, 2):
-        print(f"   [WARN] Sin documento real (intento {intento}/2); recargando...")
-        try:
-            await page.reload(wait_until='domcontentloaded', timeout=60000)
-        except Exception as exc:
-            print(f"   [WARN] Error en reload: {exc}")
-        ok, titulo = await _esperar_carga_real(page, 15)
-        if ok:
-            print(f"   Cloudflare resuelto tras reload! Titulo: {titulo}")
-            return True
+    print("   [WARN] Challenge no resuelto pasivamente; recargando una vez...")
+    try:
+        await page.reload(wait_until='domcontentloaded', timeout=20000)
+    except Exception as exc:
+        print(f"   [WARN] Error en reload: {exc}")
+    ok, titulo = await _esperar_carga_real(page, 12)
+    if ok:
+        print(f"   Cloudflare resuelto tras reload! Titulo: {titulo}")
+        return True
     print("   [WARN] Timeout esperando Cloudflare")
     return False
 
 
-async def navegar_con_cloudflare(page, url, timeout=30):
+async def navegar_con_cloudflare(page, url, timeout=20):
     """Navega a una URL esperando que Cloudflare se resuelva.
 
-    A diferencia de la versión anterior no traga los errores de navegación:
-    si el goto falla o la URL final ya no es la ficha solicitada, se levanta
-    una excepción para que paged_engine.prepare_detail reintente limpio.
+    No traga errores ni oculta el motivo del fallo: si el goto falla, si
+    Cloudflare no se despeja o si la URL final ya no es la ficha solicitada,
+    levanta un RuntimeError con diagnóstico (título, estado HTTP y URL final)
+    para que paged_engine.prepare_detail reintente y el log muestre qué
+    respondió Urbania realmente.
     """
     try:
-        await page.goto(url, wait_until='domcontentloaded', timeout=60000)
+        await page.goto(url, wait_until='domcontentloaded', timeout=30000)
     except Exception as exc:
         print(f"   [WARN] Error en navegacion: {exc}")
         raise RuntimeError(f'navigation.failed: {exc}') from exc
     if not await esperar_cloudflare(page, timeout):
-        raise RuntimeError('navigation.blocked: Urbania no confirmó acceso al contenido')
+        try:
+            titulo_obs = (await page.title() or '').strip()
+        except Exception:
+            titulo_obs = ''
+        status = getattr(page, '_scraping_document_status', None)
+        detalle = 'navigation.blocked: Urbania no confirmó acceso al contenido'
+        partes = []
+        if titulo_obs:
+            partes.append(f'título={titulo_obs[:80]!r}')
+        if status is not None:
+            partes.append(f'HTTP {status}')
+        try:
+            final = page.url
+            if final and 'about:' not in final:
+                partes.append(final[:160])
+        except Exception:
+            pass
+        if partes:
+            detalle += ' (' + '; '.join(partes) + ')'
+        print(f"   [BLOCKED] {detalle}")
+        raise RuntimeError(detalle)
     # Verificar que seguimos en Urbania y en la misma ficha solicitada.
     try:
         from scrapi.source_config import validate_url
