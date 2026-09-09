@@ -424,6 +424,12 @@
             <option value="otros">Otros</option>
         </select>
     </div>
+    <div class="capture-filters__field">
+        <label for="prospect-filter-agente">Agente</label>
+        <select id="prospect-filter-agente">
+            <option value="">Todos</option>
+        </select>
+    </div>
     <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-clear-filters" onclick="limpiarFiltrosProspeccion()">
         <i class="fas fa-times"></i> Limpiar filtros
     </button>
@@ -450,28 +456,51 @@
         return !!(p.telefono && String(p.telefono).trim());
     }
 
-    // ¿El marcador cumple los filtros activos (teléfono + distrito + tipo)?
+    // ¿El marcador cumple los filtros activos (teléfono + distrito + tipo + agente)?
     function marcadorCoincide(m) {
         if (!m || !m._propertyData) return false;
         var p = m._propertyData;
         var distrito = (document.getElementById('prospect-filter-distrito') || {}).value || '';
         var tipo = (document.getElementById('prospect-filter-tipo') || {}).value || '';
         var origenFiltro = ((document.getElementById('prospect-filter-origen') || {}).value || '').toLowerCase();
+        var agenteFiltro = ((document.getElementById('prospect-filter-agente') || {}).value || '').trim();
         var d = (p.distrito_nombre || '').toString().trim()
               || (p.distrito || '').toString().trim()
               || (m._distrito || '');
         var t = (p.tipo_propiedad || '').toString().trim();
         var o = (p.origen || '').toString().toLowerCase();
+        var agente = (p.agente || '').toString().trim();
         var conTelefono = telefonoMarcador(p);
 
         var okDistrito = !distrito || d === distrito;
         var okTipo = !tipo || t === tipo;
         var okOrigen = !origenFiltro || o === origenFiltro;
+        var okAgente = !agenteFiltro || agente === agenteFiltro;
         var okTelefono = !filtroTelefono
             || (filtroTelefono === 'con' && conTelefono)
             || (filtroTelefono === 'sin' && !conTelefono);
-        return okDistrito && okTipo && okOrigen && okTelefono;
+        return okDistrito && okTipo && okOrigen && okAgente && okTelefono;
     }
+
+    // Llena el selector de agentes con los agentes que realmente tienen captaciones.
+    function poblarFiltroAgente() {
+        var sel = document.getElementById('prospect-filter-agente');
+        if (!sel || sel.options.length > 1) return;
+        var todas = (typeof todasPropiedadesJSON !== 'undefined') ? todasPropiedadesJSON : [];
+        var agentes = [];
+        todas.forEach(function(p) {
+            var a = (p.agente || '').toString().trim();
+            if (a && agentes.indexOf(a) === -1) agentes.push(a);
+        });
+        agentes.sort(function(x, y) { return x.localeCompare(y); });
+        agentes.forEach(function(a) {
+            var op = document.createElement('option');
+            op.value = a;
+            op.textContent = a;
+            sel.appendChild(op);
+        });
+    }
+    poblarFiltroAgente();
 
     function actualizarEstadoTarjetasTelefono() {
         var sinCard = document.getElementById('stat-sin-telefono');
@@ -807,9 +836,11 @@
         var distritoSel = document.getElementById('prospect-filter-distrito');
         var tipoSel = document.getElementById('prospect-filter-tipo');
         var origenSel = document.getElementById('prospect-filter-origen');
+        var agenteSel = document.getElementById('prospect-filter-agente');
         if (distritoSel) distritoSel.value = '';
         if (tipoSel) tipoSel.value = '';
         if (origenSel) origenSel.value = '';
+        if (agenteSel) agenteSel.value = '';
         filtroTelefono = '';
         prospectoSeleccionadoId = null;
         idsExpandidos.clear();
@@ -941,6 +972,7 @@
         var distritoSel = document.getElementById('prospect-filter-distrito');
         var tipoSel = document.getElementById('prospect-filter-tipo');
         var origenSel = document.getElementById('prospect-filter-origen');
+        var agenteSel = document.getElementById('prospect-filter-agente');
         function reiniciarSeleccionYAplicarFiltros() {
             prospectoSeleccionadoId = null;
             idsExpandidos.clear();
@@ -949,6 +981,7 @@
         if (distritoSel) distritoSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
         if (tipoSel) tipoSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
         if (origenSel) origenSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
+        if (agenteSel) agenteSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
 
         // Una vez que el mapa cargue sus marcadores, poblar el panel derecho
         // con todas las captaciones visibles y mantenerlos sincronizados.
