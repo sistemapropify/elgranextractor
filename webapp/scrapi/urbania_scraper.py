@@ -310,6 +310,45 @@ async def extraer_listado(page):
             'Titulo':          item.get('titulo', ''),
         })
 
+    # El listado expone su estado en window.__PRELOADED_STATE__ con la
+    # geolocalización de cada aviso (postingGeolocation.geolocation). Como el
+    # listado NO está bloqueado por Cloudflare (a diferencia de las fichas),
+    # esto captura coordenadas desde la página de búsqueda sin abrir cada ficha.
+    try:
+        geo_por_id = await page.evaluate("""() => {
+            const out = {};
+            try {
+                const st = window.__PRELOADED_STATE__;
+                const list = (st && st.listStore && st.listStore.listPostings) || [];
+                for (const p of list) {
+                    const g = p && p.postingGeolocation && p.postingGeolocation.geolocation;
+                    if (g && g.latitude != null && g.longitude != null && p.postingId != null) {
+                        const la = Number(g.latitude), lo = Number(g.longitude);
+                        if (la > -18.5 && la < -0.1 && lo > -81.5 && lo < -68.5) {
+                            out[String(p.postingId)] = [la, lo];
+                        }
+                    }
+                }
+            } catch (e) { /* el estado puede no existir en otras vistas */ }
+            return out;
+        }""")
+    except Exception:
+        geo_por_id = {}
+
+    con_geo = 0
+    if isinstance(geo_por_id, dict):
+        for p in props:
+            par = geo_por_id.get(str(p['ID']))
+            if par:
+                lat, lng = par[0], par[1]
+                p['Latitud']          = lat
+                p['Longitud']         = lng
+                p['Coordenadas']      = f"{lat},{lng}"
+                p['Google Maps Link'] = f"https://www.google.com/maps?q={lat},{lng}"
+                con_geo += 1
+        if con_geo:
+            print(f"   [OK] {con_geo}/{len(props)} avisos con coordenadas desde el listado")
+
     return props
 
 
