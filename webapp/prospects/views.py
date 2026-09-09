@@ -659,36 +659,57 @@ def prospect_dashboard(request):
 # ── Métricas gerenciales (prospección) ──────────────────────────
 
 def _propify_rol_db(username):
-    """Lee el rol del usuario en la tabla `users` de dbpropify_be (alias 'propifai')."""
+    """Lee el rol del usuario en dbpropify_be (alias 'propifai').
+
+    Tabla ``dbo.user`` (username -> role_id) y ``dbo.role`` (id -> name).
+    Devuelve el nombre del rol (p. ej. 'Desarrollador') o '' si falla.
+    """
     if not username:
         return ''
     try:
         from django.db import connections
         with connections['propifai'].cursor() as cursor:
-            for col in ('role', 'rol', 'rol_name', 'nombre_rol'):
-                try:
-                    cursor.execute(f'SELECT {col} FROM users WHERE username = %s', [username])
-                    row = cursor.fetchone()
-                    if row and row[0]:
-                        return str(row[0])
-                except Exception:
-                    continue
+            cursor.execute('SELECT role_id FROM [dbo].[user] WHERE username = %s', [username])
+            row = cursor.fetchone()
+            if not row or row[0] is None:
+                return ''
+            role_id = row[0]
+            cursor.execute('SELECT name FROM [dbo].[role] WHERE id = %s', [role_id])
+            r2 = cursor.fetchone()
+            return str(r2[0]) if r2 and r2[0] else str(role_id)
     except Exception:
-        pass
-    return ''
+        return ''
+
+
+_ROLES_METRICAS = ('gerente', 'desarrollador', 'developer', 'admin')
 
 
 def _propify_puede_metricas(request):
     principal = getattr(request, 'propify_user', None)
-    username = str(getattr(principal, 'username', '') or '').strip()
+    username = str(getattr(principal, 'username', '') or '').strip().lower()
     if not username:
         return False
     # En desarrollo local (DEBUG) se muestra a cualquier usuario logueado para
-    # poder probar; en producción se exige el rol gerente/desarrollador.
+    # poder probar; en producción se exige rol gerente/desarrollador.
     if settings.DEBUG:
         return True
+    # 0) Lista explícita de usuarios con acceso gerencial (independiente de la BD)
+    if username in ('adminpropify',):
+        return True
+    # 1) Rol leído de dbpropify_be (tabla users, alias 'propifai')
     rol = _propify_rol_db(username).lower()
-    return any(tok in rol for tok in ('gerente', 'desarrollador', 'developer'))
+    if any(tok in rol for tok in _ROLES_METRICAS):
+        return True
+    # 2) Rol que pudiera venir en el propio perfil del login de Propify
+    perfil = getattr(principal, 'profile', None) or {}
+    for clave in ('rol', 'role', 'roles', 'perfil', 'nivel'):
+        valor = str(perfil.get(clave, '') or '').lower()
+        if any(tok in valor for tok in _ROLES_METRICAS):
+            return True
+    # 3) El propio nombre de usuario indica el rol (p. ej. 'desarrollador')
+    if any(tok in username for tok in _ROLES_METRICAS):
+        return True
+    return False
 
 
 def _agente_captacion(prospect, mobile_actors, agents_by_id):
