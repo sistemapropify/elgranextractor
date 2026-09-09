@@ -36,11 +36,10 @@ class ScraperUrbaniaSkill(BaseSkill):
 
     def execute(self, params, context=None):
         params = dict(params or {})
-        # Urbania está bloqueando las fichas de detalle (anti-bot) para esta IP
-        # de producción: abrirlas se congela o falla. En modo "solo listado" se
-        # capturan los 30 avisos por página (precio, m², dormitorios, baños,
-        # ubicación, título e imagen) sin navegar a la ficha. Para volver a
-        # intentar obtener coordenadas se puede pasar {'solo_listado': False}.
-        params.setdefault('solo_listado', True)
+        # Las coordenadas (mapLatOf/mapLngOf en base64) solo existen en la ficha
+        # de detalle, así que por defecto se abre la ficha de cada aviso. Si una
+        # ficha queda bloqueada por anti-bot, el motor la guarda con los datos
+        # del listado y la deja pendiente. Para solo listar (sin abrir fichas)
+        # se puede pasar {'solo_listado': True}.
         return execute_paged_skill(self, 'urbania', _ejecutar_scraping,
                                   guardar_propiedades, params, context)

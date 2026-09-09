@@ -313,6 +313,29 @@ async def extraer_listado(page):
     return props
 
 
+def _coordenadas_desde_html(html):
+    """Extrae lat/lng de la ficha desde mapLatOf/mapLngOf (base64) del HTML.
+
+    Urbania sirve las coordenadas en variables inline que pueden llevar o no
+    prefijo const/let/var. Retorna (lat, lng) si decodifican a una ubicación
+    válida dentro de Perú; si no, (None, None).
+    """
+    if not html:
+        return None, None
+    m_lat = re.search(r'(?:const|let|var)?\s*mapLatOf\s*=\s*["\']([^"\']+)["\']', html)
+    m_lng = re.search(r'(?:const|let|var)?\s*mapLngOf\s*=\s*["\']([^"\']+)["\']', html)
+    if not (m_lat and m_lng):
+        return None, None
+    lat = decodificar_coordenadas(m_lat.group(1))
+    lng = decodificar_coordenadas(m_lng.group(1))
+    if lat is None or lng is None:
+        return None, None
+    # Filtro de sanidad: coordenadas dentro de Perú
+    if -18.5 < lat < -0.1 and -81.5 < lng < -68.5:
+        return lat, lng
+    return None, None
+
+
 async def extraer_detalle(page, prop):
     """
     Navega a la ficha de detalle y extrae coordenadas + datos extra.
@@ -331,35 +354,17 @@ async def extraer_detalle(page, prop):
     await page.wait_for_timeout(2000)
 
     try:
-        # Extraer coordenadas via evaluate - buscar las variables JS
-        coords_data = await page.evaluate("""
-            () => {
-                // Buscar en el HTML las variables mapLatOf y mapLngOf
-                const html = document.documentElement.innerHTML;
-                const latMatch = html.match(/const\\s+mapLatOf\\s*=\\s*["']([^"']+)["']/);
-                const lngMatch = html.match(/const\\s+mapLngOf\\s*=\\s*["']([^"']+)["']/);
-                return {
-                    latB64: latMatch ? latMatch[1] : null,
-                    lngB64: lngMatch ? lngMatch[1] : null
-                };
-            }
-        """)
-
-        if coords_data and coords_data.get('latB64') and coords_data.get('lngB64'):
-            lat = decodificar_coordenadas(coords_data['latB64'])
-            lng = decodificar_coordenadas(coords_data['lngB64'])
-            if lat and lng:
-                # Filtro de sanidad: coordenadas de Peru
-                if -18.5 < lat < -0.1 and -81.5 < lng < -68.5:
-                    prop['Latitud']          = lat
-                    prop['Longitud']         = lng
-                    prop['Coordenadas']      = f"{lat},{lng}"
-                    prop['Google Maps Link'] = f"https://www.google.com/maps?q={lat},{lng}"
-                    print(f"   [OK] Coordenadas: {lat}, {lng}")
-                else:
-                    print(f"   [WARN] Coords fuera de Peru: {lat},{lng}")
-            else:
-                print(f"   [WARN] No se pudieron decodificar coordenadas")
+        # Las coordenadas están en variables inline de la ficha (mapLatOf/mapLngOf,
+        # en base64). Se parsean en Python sobre el HTML renderizado para tolerar
+        # los prefijos (const/let/var) y espacios que usa cada plantilla de Urbania.
+        html_ficha = await page.content()
+        lat, lng = _coordenadas_desde_html(html_ficha)
+        if lat is not None and lng is not None:
+            prop['Latitud']          = lat
+            prop['Longitud']         = lng
+            prop['Coordenadas']      = f"{lat},{lng}"
+            prop['Google Maps Link'] = f"https://www.google.com/maps?q={lat},{lng}"
+            print(f"   [OK] Coordenadas: {lat}, {lng}")
         else:
             print(f"   [WARN] Sin coordenadas en la pagina")
 
