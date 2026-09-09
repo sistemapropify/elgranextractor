@@ -93,12 +93,17 @@ touch "$CAMOUFOX_DEPS_INSTALLING"
     # timeout de lock + reintentos evitan que una instalacion falle por contencion.
     APT="timeout 300 apt-get -y -qq -o DPkg::Lock::Timeout=600"
     echo "[$(date -u)] Installing Camoufox native dependencies..."
+    # Reparar fuentes: un sed previo pudo dejar listas con doble 'deb ...' (p. ej.
+    # mssql-release.list = 'deb [check-valid-until=no] deb [arch=...] ...') que
+    # rompe TODA la lectura de fuentes de apt (URI parse) e impide instalar todo.
+    sed -i 's/^deb \[check-valid-until=no\] deb /deb /' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null
+    sed -i 's/^deb \[check-valid-until=no\] //' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null
     # Debian bullseye quedo fuera de soporte el 31-ago-2026: sus repos ya no
-    # sirven desde deb.debian.org (404/expired). Se redirigen a archive.debian.org
-    # y se permite metadata vencida para poder instalar libgtk/libasound/libx11-xcb.
+    # sirven desde deb.debian.org (404/expired). Se redirigen a archive.debian.org.
+    # La metadata vencida se tolera con -o Acquire::Check-Valid-Until=false (no se
+    # alteran las lineas 'deb' para no corromper list files con opciones).
     if grep -rqs 'bullseye' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null; then
         sed -i 's|http://deb.debian.org/debian-security|http://archive.debian.org/debian-security|g; s|http://deb.debian.org/debian|http://archive.debian.org/debian|g; s|https://deb.debian.org/debian-security|http://archive.debian.org/debian-security|g; s|https://deb.debian.org/debian|http://archive.debian.org/debian|g' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null
-        sed -i 's|^deb |deb [check-valid-until=no] |' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null
     fi
     for attempt in 1 2 3; do
         timeout 300 apt-get -o Acquire::Check-Valid-Until=false update -qq
