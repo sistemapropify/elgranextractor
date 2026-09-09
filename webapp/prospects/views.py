@@ -681,6 +681,12 @@ def _propify_rol_db(username):
 def _propify_puede_metricas(request):
     principal = getattr(request, 'propify_user', None)
     username = str(getattr(principal, 'username', '') or '').strip()
+    if not username:
+        return False
+    # En desarrollo local (DEBUG) se muestra a cualquier usuario logueado para
+    # poder probar; en producción se exige el rol gerente/desarrollador.
+    if settings.DEBUG:
+        return True
     rol = _propify_rol_db(username).lower()
     return any(tok in rol for tok in ('gerente', 'desarrollador', 'developer'))
 
