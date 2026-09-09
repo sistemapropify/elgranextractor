@@ -6,6 +6,7 @@ import signal
 import sys
 import json
 from datetime import datetime
+from urllib.parse import urlsplit
 from camoufox.async_api import AsyncCamoufox
 from scrapi.camoufox_launcher import camoufox_kwargs
 
@@ -73,40 +74,118 @@ def decodificar_coordenadas(base64_str):
         return None
 
 
-async def esperar_cloudflare(page, timeout=30):
-    """Espera a que Cloudflare resuelva el challenge."""
-    print("   Esperando resolucion de Cloudflare...")
+# Títulos de páginas de bloqueo/challenge que Urbania (Cloudflare u otros)
+# puede presentar. El antiguo chequeo literal "Just a moment" ya no bastaba.
+_TITULOS_BLOQUEO = (
+    'just a moment',
+    'attention required',
+    'access denied',
+    'checking your browser',
+    'please verify you are a human',
+    'verify you are human',
+    'unusual traffic',
+    'captcha',
+    'forbidden',
+    'demasiadas solicitudes',
+    'unable to connect',
+)
+
+
+def _titulo_bloqueado(titulo):
+    t = (titulo or '').strip().lower()
+    if not t:
+        return False
+    return any(m in t for m in _TITULOS_BLOQUEO)
+
+
+def _id_ficha_en_url(url):
+    """Extrae el posting id numérico (token durable) de una URL de Urbania."""
+    path = urlsplit(url).path.rstrip('/')
+    nums = re.findall(r'\d{6,}', path)
+    return nums[-1] if nums else None
+
+
+def _misma_ficha_urbania(requested, current):
+    """True si la URL actual sigue apuntando a la misma ficha solicitada.
+
+    Tolera redirects canónicos (cambio de slug o prefijo www) porque el
+    posting id numérico se conserva en la ruta final.
+    """
+    rp = urlsplit(requested).path.rstrip('/')
+    cp = urlsplit(current).path.rstrip('/')
+    if rp == cp:
+        return True
+    rid = _id_ficha_en_url(requested)
+    return bool(rid and rid in cp)
+
+
+async def _esperar_carga_real(page, timeout=30):
+    """Espera un documento con título real (sin challenge ni página vacía).
+
+    Returns: (listo, titulo). Un título vacío o de challenge se considera
+    'todavía no listo'; solo un título real (contenido servido) cuenta.
+    """
     inicio = asyncio.get_event_loop().time()
     while asyncio.get_event_loop().time() - inicio < timeout:
         try:
-            titulo = await page.title()
-            if "Just a moment" not in titulo and titulo.strip():
-                print(f"   Cloudflare resuelto! Titulo: {titulo}")
-                return True
+            titulo = (await page.title() or '').strip()
         except Exception:
-            pass
-        await asyncio.sleep(2)
-    await page.wait_for_timeout(5000)
-    try:
-        titulo = await page.title()
-        if "Just a moment" not in titulo and titulo.strip():
-            print(f"   Cloudflare resuelto! Titulo: {titulo}")
+            titulo = ''
+        if titulo and not _titulo_bloqueado(titulo):
+            return True, titulo
+        await asyncio.sleep(1.5)
+    return False, ''
+
+
+async def esperar_cloudflare(page, timeout=30):
+    """Espera a que Cloudflare resuelva el challenge (listado o ficha).
+
+    Si el documento no tiene un título real (challenge o carga lenta) se
+    recarga la página hasta 2 veces: muchos challenges se despejan en cuanto
+    la cookie emitida ya está disponible, algo que la espera pasiva no logra.
+    """
+    print("   Esperando resolucion de Cloudflare...")
+    ok, titulo = await _esperar_carga_real(page, timeout)
+    if ok:
+        print(f"   Cloudflare resuelto! Titulo: {titulo}")
+        return True
+    for intento in (1, 2):
+        print(f"   [WARN] Sin documento real (intento {intento}/2); recargando...")
+        try:
+            await page.reload(wait_until='domcontentloaded', timeout=60000)
+        except Exception as exc:
+            print(f"   [WARN] Error en reload: {exc}")
+        ok, titulo = await _esperar_carga_real(page, 15)
+        if ok:
+            print(f"   Cloudflare resuelto tras reload! Titulo: {titulo}")
             return True
-    except Exception:
-        pass
     print("   [WARN] Timeout esperando Cloudflare")
     return False
 
 
 async def navegar_con_cloudflare(page, url, timeout=30):
-    """Navega a una URL esperando que Cloudflare se resuelva."""
+    """Navega a una URL esperando que Cloudflare se resuelva.
+
+    A diferencia de la versión anterior no traga los errores de navegación:
+    si el goto falla o la URL final ya no es la ficha solicitada, se levanta
+    una excepción para que paged_engine.prepare_detail reintente limpio.
+    """
     try:
         await page.goto(url, wait_until='domcontentloaded', timeout=60000)
-    except Exception as e:
-        print(f"   [WARN] Error en navegacion: {e}")
+    except Exception as exc:
+        print(f"   [WARN] Error en navegacion: {exc}")
+        raise RuntimeError(f'navigation.failed: {exc}') from exc
     if not await esperar_cloudflare(page, timeout):
         raise RuntimeError('navigation.blocked: Urbania no confirmó acceso al contenido')
-    await page.wait_for_timeout(2000)
+    # Verificar que seguimos en Urbania y en la misma ficha solicitada.
+    try:
+        from scrapi.source_config import validate_url
+        validate_url('urbania', page.url)
+    except ValueError as exc:
+        raise RuntimeError(f'navigation.redirected: {exc}') from exc
+    if not _misma_ficha_urbania(url, page.url):
+        raise RuntimeError('navigation.redirected: Urbania redirigió fuera de la ficha solicitada')
+    await page.wait_for_timeout(1500)
     return await page.title()
 
 
@@ -212,10 +291,13 @@ async def extraer_detalle(page, prop):
     if not url:
         return
 
-    try:
-        await navegar_con_cloudflare(page, url, timeout=30)
-        await page.wait_for_timeout(2000)
+    # Navegación con detección de bloqueo y redirects. Los errores
+    # navigation.* se propagan tal cual (sin re-empaquetarlos) para que
+    # paged_engine.prepare_detail reintente con la pestaña ya navegada.
+    await navegar_con_cloudflare(page, url, timeout=30)
+    await page.wait_for_timeout(2000)
 
+    try:
         # Extraer coordenadas via evaluate - buscar las variables JS
         coords_data = await page.evaluate("""
             () => {

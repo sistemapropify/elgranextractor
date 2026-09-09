@@ -112,7 +112,19 @@ async def enrich(portal, source, page, raw):
     if status is None or status >= 400:
         raise RuntimeError(f'detail.http_error: HTTP {status}')
     if urlsplit(page.url).path.rstrip('/') != urlsplit(url).path.rstrip('/'):
-        raise RuntimeError('detail.unexpected_redirect: no se cargó la ficha solicitada')
+        # Urbania hace redirects canónicos (cambio de slug o prefijo www) que
+        # conservan el posting id numérico en la URL final. Solo es un redirect
+        # real cuando la ficha solicitada ya no aparece (home, buscador, error).
+        rid = stable_id(raw)
+        same_ficha = bool(
+            portal == 'urbania'
+            and rid
+            and rid.isdigit()
+            and len(rid) >= 6
+            and rid in page.url
+        )
+        if not same_ficha:
+            raise RuntimeError('detail.unexpected_redirect: no se cargó la ficha solicitada')
     title = (await page.title()).lower()
     if not title.strip():
         raise RuntimeError('detail.not_ready: la ficha no terminó de cargar')
@@ -327,6 +339,17 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
             await guarded_navigation(page, portal)
             await guarded_navigation(detail_page, portal)
             await page.set_viewport_size({'width': 1440, 'height': 1000})
+            # Warm-up: la pestaña de detalle comparte cookies con el listado,
+            # pero un deep-link "frío" (sin historial en el dominio) se detecta
+            # como tráfico sospechoso. Una visita inicial al home del portal
+            # reduce los falsos bloqueos al abrir cada ficha.
+            try:
+                _warm = urlsplit(validate_url(portal, source_url))
+                await detail_page.goto(f'{_warm.scheme}://{_warm.netloc}/',
+                                       wait_until='domcontentloaded', timeout=45000)
+                await detail_page.wait_for_timeout(2000)
+            except Exception:
+                pass
             # One permanently unavailable detail must not starve the remaining queue.
             failed = set()
             recovered = []
