@@ -8,10 +8,12 @@ from scrapi.normalization import urbania_row as _estandarizar_urbania
 
 
 def _ejecutar_scraping(max_paginas=0, start_page=1, source_url=None, url=None,
-                       progress_callback=None, batch_callback=None, resume_state=None):
+                       progress_callback=None, batch_callback=None, resume_state=None,
+                       listing_only=False):
     return run_paged('urbania', max_paginas=max_paginas, start_page=start_page,
         source_url=requested_url('urbania', {'source_url': source_url or url}),
-        progress_callback=progress_callback, batch_callback=batch_callback, resume_state=resume_state)
+        progress_callback=progress_callback, batch_callback=batch_callback,
+        resume_state=resume_state, listing_only=listing_only)
 
 
 class ScraperUrbaniaSkill(BaseSkill):
@@ -33,5 +35,12 @@ class ScraperUrbaniaSkill(BaseSkill):
             return False
 
     def execute(self, params, context=None):
+        params = dict(params or {})
+        # Urbania está bloqueando las fichas de detalle (anti-bot) para esta IP
+        # de producción: abrirlas se congela o falla. En modo "solo listado" se
+        # capturan los 30 avisos por página (precio, m², dormitorios, baños,
+        # ubicación, título e imagen) sin navegar a la ficha. Para volver a
+        # intentar obtener coordenadas se puede pasar {'solo_listado': False}.
+        params.setdefault('solo_listado', True)
         return execute_paged_skill(self, 'urbania', _ejecutar_scraping,
                                   guardar_propiedades, params, context)

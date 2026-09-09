@@ -1,4 +1,5 @@
 """Shared persistence/result contract for the four paginated adapters."""
+import inspect
 import logging
 import traceback
 from intelligence.skills.base import SkillResult
@@ -22,10 +23,20 @@ def execute_paged_skill(skill, portal, runner, saver, params, context=None):
         return counters.copy()
 
     try:
-        rows = runner(int(params.get('max_paginas') or 0),
-            source_url=requested_url(portal, params), start_page=int(params.get('start_page') or 1),
-            progress_callback=progress, batch_callback=save,
-            resume_state=params.get('resume_state'))
+        runner_kwargs = dict(
+            source_url=requested_url(portal, params),
+            start_page=int(params.get('start_page') or 1),
+            progress_callback=progress,
+            batch_callback=save,
+            resume_state=params.get('resume_state'),
+        )
+        # El modo "solo listado" solo se propaga a runners que lo soporten;
+        # el resto de portales conserva su comportamiento actual.
+        if 'listing_only' in inspect.signature(runner).parameters:
+            runner_kwargs['listing_only'] = bool(
+                params.get('solo_listado') or params.get('listing_only')
+            )
+        rows = runner(int(params.get('max_paginas') or 0), **runner_kwargs)
         discovery = outcome(rows)
         if run_id:
             from ingestas.scraping_store import run_counters

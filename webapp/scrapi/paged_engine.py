@@ -339,17 +339,17 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
             await guarded_navigation(page, portal)
             await guarded_navigation(detail_page, portal)
             await page.set_viewport_size({'width': 1440, 'height': 1000})
-            # Warm-up: la pestaña de detalle comparte cookies con el listado,
-            # pero un deep-link "frío" (sin historial en el dominio) se detecta
-            # como tráfico sospechoso. Una visita inicial al home del portal
-            # reduce los falsos bloqueos al abrir cada ficha.
-            try:
-                _warm = urlsplit(validate_url(portal, source_url))
-                await detail_page.goto(f'{_warm.scheme}://{_warm.netloc}/',
-                                       wait_until='domcontentloaded', timeout=45000)
-                await detail_page.wait_for_timeout(2000)
-            except Exception:
-                pass
+            # Warm-up solo si vamos a abrir fichas de detalle: comparte cookies
+            # con el listado, pero un deep-link "frío" se detecta como tráfico
+            # sospechoso. En modo "solo listado" la pestaña de detalle no se usa.
+            if not listing_only:
+                try:
+                    _warm = urlsplit(validate_url(portal, source_url))
+                    await detail_page.goto(f'{_warm.scheme}://{_warm.netloc}/',
+                                           wait_until='domcontentloaded', timeout=45000)
+                    await detail_page.wait_for_timeout(2000)
+                except Exception:
+                    pass
             # One permanently unavailable detail must not starve the remaining queue.
             failed = set()
             recovered = []
@@ -358,8 +358,14 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
                 await emit(event='detail.resuming', property_id=candidate['id'],
                            message=f'{portal}: reanudando ficha {candidate["id"]}')
                 try:
-                    row = await prepare_detail(portal, source, detail_page, raw, emit,
-                                               store_images=bool(batch_callback))
+                    if listing_only:
+                        # En modo listado NO se abre la ficha (Urbania bloquea el
+                        # detalle y colgaba el proceso); la propiedad se conserva
+                        # con los datos del listado en lugar de perderse.
+                        row = normalize(portal, source, raw)
+                    else:
+                        row = await prepare_detail(portal, source, detail_page, raw, emit,
+                                                   store_images=bool(batch_callback))
                 except ScrapingInterrupted:
                     raise
                 except Exception as exc:
