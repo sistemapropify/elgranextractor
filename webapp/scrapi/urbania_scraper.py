@@ -5,6 +5,7 @@ import openpyxl
 import signal
 import sys
 import json
+import urllib.request
 from datetime import datetime
 from urllib.parse import urlsplit
 from camoufox.async_api import AsyncCamoufox
@@ -349,7 +350,66 @@ async def extraer_listado(page):
         if con_geo:
             print(f"   [OK] {con_geo}/{len(props)} avisos con coordenadas desde el listado")
 
+    # Enriquecido opcional por HTTP: para los avisos sin geolocalización en el
+    # estado del listado se intenta leer mapLatOf/mapLngOf de su ficha con una
+    # petición HTTP simple (sin navegador). Si la IP de producción está
+    # bloqueada por Cloudflare se desactiva tras el primer intento para no
+    # perder tiempo. Es best-effort: nunca hace fallar el scraping.
+    global _http_detalle_bloqueado
+    faltantes = [p for p in props if not p.get('Coordenadas') and p.get('URL Propiedad')]
+    if faltantes and not _http_detalle_bloqueado:
+        lat0, lng0 = await _coord_ficha_http(faltantes[0]['URL Propiedad'])
+        if lat0 is None:
+            _http_detalle_bloqueado = True
+            print("   [INFO] Ficha por HTTP no disponible (bloqueo); se omite el enriquecido de coordenadas")
+        else:
+            _aplicar_coords(faltantes[0], lat0, lng0)
+            resto = faltantes[1:]
+            if resto:
+                sem = asyncio.Semaphore(4)
+
+                async def _enriquecer(p):
+                    async with sem:
+                        lat, lng = await _coord_ficha_http(p['URL Propiedad'])
+                        if lat is not None:
+                            _aplicar_coords(p, lat, lng)
+
+                await asyncio.gather(*(_enriquecer(p) for p in resto))
+            extra = sum(1 for p in faltantes if p.get('Coordenadas'))
+            print(f"   [OK] {extra} coords adicionales vía ficha HTTP")
+
     return props
+
+
+_HTTP_HEADERS = {
+    'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                   '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'),
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'es-PE,es;q=0.9,en;q=0.8',
+}
+_http_detalle_bloqueado = False
+
+
+def _fetch_html_sync(url):
+    req = urllib.request.Request(url, headers=_HTTP_HEADERS)
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        return resp.read().decode('utf-8', errors='replace')
+
+
+async def _coord_ficha_http(url):
+    """Lee mapLatOf/mapLngOf de la ficha con HTTP simple (sin navegador)."""
+    try:
+        html = await asyncio.wait_for(asyncio.to_thread(_fetch_html_sync, url), timeout=10)
+    except Exception:
+        return None, None
+    return _coordenadas_desde_html(html)
+
+
+def _aplicar_coords(prop, lat, lng):
+    prop['Latitud']          = lat
+    prop['Longitud']         = lng
+    prop['Coordenadas']      = f"{lat},{lng}"
+    prop['Google Maps Link'] = f"https://www.google.com/maps?q={lat},{lng}"
 
 
 def _coordenadas_desde_html(html):
