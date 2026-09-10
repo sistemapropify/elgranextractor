@@ -36,10 +36,13 @@ class ScraperUrbaniaSkill(BaseSkill):
 
     def execute(self, params, context=None):
         params = dict(params or {})
-        # Las coordenadas (mapLatOf/mapLngOf en base64) solo existen en la ficha
-        # de detalle, así que por defecto se abre la ficha de cada aviso. Si una
-        # ficha queda bloqueada por anti-bot, el motor la guarda con los datos
-        # del listado y la deja pendiente. Para solo listar (sin abrir fichas)
-        # se puede pasar {'solo_listado': True}.
+        # Las coordenadas se capturan desde el propio listado
+        # (window.__PRELOADED_STATE__ -> postingGeolocation), por lo que NO hace
+        # falta abrir cada ficha. Además, desde la IP de producción Urbania
+        # responde 403/Cloudflare a las fichas de detalle y eso solo genera
+        # errores y tiempo perdido. Por eso el modo por defecto es "solo listado".
+        # Para intentar abrir fichas (p. ej. datos extra cuando no estén
+        # bloqueadas) se puede pasar {'solo_listado': False}.
+        params.setdefault('solo_listado', True)
         return execute_paged_skill(self, 'urbania', _ejecutar_scraping,
                                   guardar_propiedades, params, context)
