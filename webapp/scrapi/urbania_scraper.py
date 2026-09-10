@@ -5,6 +5,7 @@ import openpyxl
 import signal
 import sys
 import json
+import random
 import urllib.request
 from datetime import datetime
 from urllib.parse import urlsplit
@@ -340,6 +341,12 @@ async def extraer_listado(page):
     if isinstance(geo_por_id, dict):
         for p in props:
             par = geo_por_id.get(str(p['ID']))
+            if not par:
+                # El data-id de la tarjeta no siempre coincide con el postingId
+                # del estado; el id numérico al final de la URL de la ficha sí.
+                m_id = re.search(r'(\d{6,})/?$', str(p.get('URL Propiedad') or ''))
+                if m_id:
+                    par = geo_por_id.get(m_id.group(1))
             if par:
                 lat, lng = par[0], par[1]
                 p['Latitud']          = lat
@@ -350,33 +357,39 @@ async def extraer_listado(page):
         if con_geo:
             print(f"   [OK] {con_geo}/{len(props)} avisos con coordenadas desde el listado")
 
-    # Enriquecido opcional por HTTP: para los avisos sin geolocalización en el
-    # estado del listado se intenta leer mapLatOf/mapLngOf de su ficha con una
-    # petición HTTP simple (sin navegador). Si la IP de producción está
-    # bloqueada por Cloudflare se desactiva tras el primer intento para no
-    # perder tiempo. Es best-effort: nunca hace fallar el scraping.
-    global _http_detalle_bloqueado
+    # Enriquecido por HTTP de la ficha (PAUSADO): Urbania publica la geolocalización
+    # en el listado solo para una parte de los avisos; el resto la tiene en su
+    # ficha (mapLatOf/mapLngOf). Se consultan de a UNA, con pausa aleatoria de
+    # ~2-4s y usando las cookies del navegador (cf_clearance) + Referer, para no
+    # gatillar el bloqueo de Cloudflare por ráfaga. Si fallan varias seguidas se
+    # detiene. Nunca hace fallar el scraping.
+    global _http_fallos_seguidos
     faltantes = [p for p in props if not p.get('Coordenadas') and p.get('URL Propiedad')]
-    if faltantes and not _http_detalle_bloqueado:
-        lat0, lng0 = await _coord_ficha_http(faltantes[0]['URL Propiedad'])
-        if lat0 is None:
-            _http_detalle_bloqueado = True
-            print("   [INFO] Ficha por HTTP no disponible (bloqueo); se omite el enriquecido de coordenadas")
-        else:
-            _aplicar_coords(faltantes[0], lat0, lng0)
-            resto = faltantes[1:]
-            if resto:
-                sem = asyncio.Semaphore(4)
-
-                async def _enriquecer(p):
-                    async with sem:
-                        lat, lng = await _coord_ficha_http(p['URL Propiedad'])
-                        if lat is not None:
-                            _aplicar_coords(p, lat, lng)
-
-                await asyncio.gather(*(_enriquecer(p) for p in resto))
-            extra = sum(1 for p in faltantes if p.get('Coordenadas'))
-            print(f"   [OK] {extra} coords adicionales vía ficha HTTP")
+    if faltantes and _http_fallos_seguidos < 5:
+        cookie_hdr = ''
+        try:
+            cookies = await page.context.cookies()
+            cookie_hdr = '; '.join(f"{c['name']}={c['value']}" for c in cookies)
+        except Exception:
+            cookie_hdr = ''
+        try:
+            referer = page.url
+        except Exception:
+            referer = ''
+        for p in faltantes:
+            if _http_fallos_seguidos >= 5:
+                print("   [INFO] Varias fichas por HTTP fallaron; se detiene el enriquecido")
+                break
+            lat, lng = await _coord_ficha_http(p['URL Propiedad'], cookie_hdr, referer)
+            if lat is not None:
+                _aplicar_coords(p, lat, lng)
+                _http_fallos_seguidos = 0
+            else:
+                _http_fallos_seguidos += 1
+            await asyncio.sleep(random.uniform(2.0, 4.0))
+        extra = sum(1 for p in faltantes if p.get('Coordenadas'))
+        if extra:
+            print(f"   [OK] {extra} coords adicionales vía ficha (pausado)")
 
     return props
 
@@ -388,18 +401,25 @@ _HTTP_HEADERS = {
     'Accept-Language': 'es-PE,es;q=0.9,en;q=0.8',
 }
 _http_detalle_bloqueado = False
+_http_fallos_seguidos = 0
 
 
-def _fetch_html_sync(url):
-    req = urllib.request.Request(url, headers=_HTTP_HEADERS)
-    with urllib.request.urlopen(req, timeout=8) as resp:
+def _fetch_html_sync(url, cookie_hdr='', referer=''):
+    headers = dict(_HTTP_HEADERS)
+    if cookie_hdr:
+        headers['Cookie'] = cookie_hdr
+    if referer:
+        headers['Referer'] = referer
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=10) as resp:
         return resp.read().decode('utf-8', errors='replace')
 
 
-async def _coord_ficha_http(url):
+async def _coord_ficha_http(url, cookie_hdr='', referer=''):
     """Lee mapLatOf/mapLngOf de la ficha con HTTP simple (sin navegador)."""
     try:
-        html = await asyncio.wait_for(asyncio.to_thread(_fetch_html_sync, url), timeout=10)
+        html = await asyncio.wait_for(
+            asyncio.to_thread(_fetch_html_sync, url, cookie_hdr, referer), timeout=14)
     except Exception:
         return None, None
     return _coordenadas_desde_html(html)
