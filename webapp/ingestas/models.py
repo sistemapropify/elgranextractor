@@ -268,6 +268,12 @@ class PropiedadesCompetencia(models.Model):
         ('retirada', 'Retirada'),
     ]
 
+    PRECISION_UBICACION_CHOICES = [
+        ('exacta', 'Exacta'),
+        ('aproximada', 'Aproximada'),
+        ('desconocida', 'Desconocida'),
+    ]
+
     # ── Identificación ──
     fuente = models.CharField(
         max_length=50,
@@ -348,6 +354,14 @@ class PropiedadesCompetencia(models.Model):
     longitud = models.DecimalField(
         max_digits=10, decimal_places=7,
         null=True, blank=True
+    )
+    precision_ubicacion = models.CharField(
+        max_length=12,
+        choices=PRECISION_UBICACION_CHOICES,
+        default='desconocida',
+        db_index=True,
+        verbose_name='Precisión de ubicación',
+        help_text='exacta, aproximada o desconocida (si el anunciante ocultó la dirección)'
     )
 
     # ── Descripción ──

@@ -1,6 +1,6 @@
 {% if page_obj %}
 <tr>
-    <td colspan="29" style="padding:7px 10px;color:var(--terminal-info);background:rgba(56,139,253,.06);">
+    <td colspan="30" style="padding:7px 10px;color:var(--terminal-info);background:rgba(56,139,253,.06);">
         Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }}
         de {{ page_obj.paginator.count }} propiedades, ordenadas por extracción reciente.
     </td>
@@ -31,6 +31,15 @@
     <td>{{ p.distrito|default:'—' }}</td>
     <td style="font-size:10px;">{{ p.latitud|default:'—' }}</td>
     <td style="font-size:10px;">{{ p.longitud|default:'—' }}</td>
+    <td style="font-size:10px;white-space:nowrap;">
+        {% if p.precision_ubicacion == 'exacta' %}
+        <span style="color:#3fb950;">● Exacta</span>
+        {% elif p.precision_ubicacion == 'aproximada' %}
+        <span style="color:#d29922;">● Aproximada</span>
+        {% else %}
+        <span style="color:#8b949e;">—</span>
+        {% endif %}
+    </td>
     <td>{{ p.antiguedad_anios|default:'—' }}</td>
     <td>{{ p.departamento|default:'—' }}</td>
     <td>{{ p.provincia|default:'—' }}</td>
@@ -61,7 +70,7 @@
 </tr>
 {% empty %}
 <tr>
-    <td colspan="29" style="text-align:center;color:var(--terminal-info);padding:20px;">
+    <td colspan="30" style="text-align:center;color:var(--terminal-info);padding:20px;">
         <i class="bi bi-inbox" style="font-size:20px;display:block;margin-bottom:4px;"></i>
         No hay propiedades scrapeadas aún
     </td>

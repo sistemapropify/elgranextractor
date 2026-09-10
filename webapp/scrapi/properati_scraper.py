@@ -269,6 +269,7 @@ def estandarizar(prop, fecha_extraccion, fuente="Properati"):
         "imagen_url": prop.get("Imagen URL") or None,
         "antiguedad_anios": parsear_antiguedad(prop.get("Antiguedad")),
         "agencia_agente": construir_agencia_agente(prop),
+        "precision_ubicacion": _normalizar_precision(prop.get("Precision Ubicacion")),
     }
 
 
@@ -277,7 +278,7 @@ CAMPOS_ESTANDAR = [
     "tipo_operacion", "precio_soles", "precio_usd", "area_m2", "dormitorios",
     "banos", "estacionamientos", "distrito", "provincia", "direccion_texto",
     "descripcion", "amenities", "latitud", "longitud", "url", "imagen_url",
-    "antiguedad_anios", "agencia_agente",
+    "antiguedad_anios", "agencia_agente", "precision_ubicacion",
 ]
 
 
@@ -411,6 +412,7 @@ def mapear_a_formato_remax(prop):
         "Latitud": lat,
         "Longitud": lng,
         "Coordenadas": f"{lat},{lng}" if lat and lng else "",
+        "Precision Ubicacion": prop.get("Precision Ubicacion") or "",
         "URL Propiedad": prop.get("URL Propiedad") or "",
         "Imagen URL": prop.get("Imagen URL") or "",
         "Oficina": "",
@@ -581,6 +583,52 @@ def extraer_coordenadas_desde_html(html_content):
             pass
 
     return None, None
+
+
+def _normalizar_precision(valor):
+    """Normaliza a uno de los valores válidos de precision_ubicacion."""
+    v = (valor or '').strip().lower()
+    return v if v in ('exacta', 'aproximada', 'desconocida') else 'desconocida'
+
+
+def _precision_ubicacion_desde_html(html):
+    """Detecta si la ubicación es exacta o aproximada en una ficha de Properati.
+
+    Properati expone mapData.visibility = "accurate" | "approximate" y, cuando
+    el anunciante oculta la dirección, muestra el mensaje
+    'El anunciante prefiere no mostrar la dirección exacta'.
+    """
+    if not html:
+        return 'desconocida'
+    m = re.search(r'visibility\s*:\s*"([^"]+)"', html)
+    vis = (m.group(1).strip().lower() if m else '')
+    if vis in ('approximate', 'approx', 'approximated'):
+        return 'aproximada'
+    if vis in ('accurate', 'exact', 'exacta'):
+        return 'exacta'
+    if re.search(r'prefiere no mostrar la direcci[oó]n exacta', html, re.IGNORECASE):
+        return 'aproximada'
+    return 'desconocida'
+
+
+async def _html_servidor(page, url):
+    """HTML servidor de la ficha (con las cookies del navegador).
+
+    Evita depender del DOM hidratado, que puede no conservar el script con
+    pageData/mapData. Si la petición falla, cae al contenido del DOM.
+    """
+    try:
+        resp = await page.request.get(url)
+        if resp.ok:
+            texto = await resp.text()
+            if texto and 'coordinates' in texto:
+                return texto
+    except Exception:
+        pass
+    try:
+        return await page.content()
+    except Exception:
+        return ''
 
 
 def extraer_imagen_desde_html(html_content):
@@ -855,7 +903,10 @@ async def extraer_detalle(page, prop):
         await navegar_con_cloudflare(page, url, timeout=30)
         await page.wait_for_timeout(2000)
 
-        html_content = await page.content()
+        # El DOM hidratado puede no conservar el script con 'pageData/mapData';
+        # se prefiere el HTML servidor (con cookies del navegador) para leer
+        # mapData.coordinates y mapData.visibility de forma confiable.
+        html_content = await _html_servidor(page, url)
         # Priorizar la imagen obtenida en el listado y usar el detalle como respaldo.
         imagen_url = prop.get('Imagen URL') or extraer_imagen_desde_html(html_content)
         if imagen_url:
@@ -872,6 +923,10 @@ async def extraer_detalle(page, prop):
             print(f"   [OK] Coordenadas: {lat}, {lng}")
         else:
             print(f"   [WARN] Sin coordenadas en HTML de detalle")
+
+        # Precisión de ubicación (exacta/aproximada) desde mapData.visibility o
+        # el mensaje del anunciante.
+        prop['Precision Ubicacion'] = _precision_ubicacion_desde_html(html_content)
 
         # Extraer descripcion completa y otras caracteristicas
         detalles = await page.evaluate("""
