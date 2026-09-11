@@ -7,6 +7,31 @@ from scrapi.normalization import validate_row
 
 logger = logging.getLogger(__name__)
 
+_COLUMNA_PRECISION_CACHE = {}
+
+
+def _precision_disponible_en_bd():
+    """True si la columna precision_ubicacion ya existe en la tabla.
+
+    Evita que el scraping se rompa si el código llega antes que la migración
+    (el deploy y el migrate no son atómicos). Se cachea por proceso.
+    """
+    cached = _COLUMNA_PRECISION_CACHE.get('valor')
+    if cached is not None:
+        return cached
+    disponible = True
+    try:
+        from django.db import connection
+        from ingestas.models import PropiedadesCompetencia
+        tabla = PropiedadesCompetencia._meta.db_table
+        with connection.cursor() as cursor:
+            columnas = {c.name for c in connection.introspection.get_table_description(cursor, tabla)}
+        disponible = 'precision_ubicacion' in columnas
+    except Exception:
+        disponible = True  # ante la duda, se conserva el comportamiento previo
+    _COLUMNA_PRECISION_CACHE['valor'] = disponible
+    return disponible
+
 
 def guardar_propiedades(propiedades, fuente, lifecycle_run_id=None, execution_token=None):
     from ingestas.models import PropiedadesCompetencia, ScrapingCandidate, PublicacionFuente
@@ -20,6 +45,8 @@ def guardar_propiedades(propiedades, fuente, lifecycle_run_id=None, execution_to
         seen.add(key)
         try:
             row = validate_row(prop)
+            if not _precision_disponible_en_bd():
+                row.pop('precision_ubicacion', None)
             with transaction.atomic():
                 run = lock_run(lifecycle_run_id, execution_token) if lifecycle_run_id else None
                 if run and run.portal != fuente:
