@@ -161,6 +161,15 @@ else
     echo "  WARNING: critical prospects migrations failed or timed out; see $MIGRATE_LOG."
 fi
 
+# El worker de scraping arranca antes que el migrate en background; si su
+# esquema (ingestas) no está aplicado, las escrituras fallan con "Invalid
+# column name". Por eso ingestas se migra de forma sincrónica aquí.
+if timeout 90 python manage.py migrate ingestas --noinput >> "$MIGRATE_LOG" 2>&1; then
+    echo "  Critical ingestas migrations applied."
+else
+    echo "  WARNING: critical ingestas migrations failed or timed out; see $MIGRATE_LOG."
+fi
+
 # ── Run remaining migrations (non-blocking) ──
 # No bloquear el arranque web: si SQL tarda o el driver ODBC aun se instala
 # en segundo plano, migrar en background evita el ContainerTimeout (230s).
