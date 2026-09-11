@@ -934,9 +934,22 @@ async def extraer_detalle(page, prop):
         else:
             print(f"   [WARN] Sin coordenadas en HTML de detalle")
 
-        # Precisión de ubicación (exacta/aproximada) desde mapData.visibility o
-        # el mensaje del anunciante.
-        prop['Precision Ubicacion'] = _precision_ubicacion_desde_html(html_content)
+        # Precisión de ubicación. Regla real de Properati: cuando la ubicación es
+        # APROXIMADA aparece el aviso 'El anunciante prefiere no mostrar la
+        # dirección exacta' (o visibility: approximate). Si ese aviso NO está y
+        # hay coordenada, la ubicación es EXACTA.
+        precision = _precision_ubicacion_desde_html(html_content)
+        if precision == 'desconocida':
+            try:
+                dom_html = await page.content()
+            except Exception:
+                dom_html = ''
+            if re.search(r'prefiere no mostrar la direcci[oó]n exacta',
+                         dom_html or '', re.IGNORECASE):
+                precision = 'aproximada'
+        if precision == 'desconocida' and lat is not None and lng is not None:
+            precision = 'exacta'
+        prop['Precision Ubicacion'] = precision
 
         # Extraer descripcion completa y otras caracteristicas
         detalles = await page.evaluate("""
