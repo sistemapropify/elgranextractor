@@ -497,7 +497,15 @@ async def esperar_cloudflare(page, timeout=30):
 async def navegar_con_cloudflare(page, url, timeout=30):
     """Navega a una URL esperando que Cloudflare se resuelva."""
     try:
-        await page.goto(url, wait_until='domcontentloaded', timeout=60000)
+        response = await page.goto(url, wait_until='domcontentloaded', timeout=60000)
+        # Guardar el HTML servido en ESTA navegación: es el SSR que contiene
+        # pageData/mapData (coordenadas y visibility). Es más fiable que el DOM
+        # hidratado o que una petición aparte.
+        try:
+            if response is not None:
+                page._scraping_initial_html = await response.text()
+        except Exception:
+            pass
     except Exception as e:
         print(f"   [WARN] Error en navegacion: {e}")
     if not await esperar_cloudflare(page, timeout):
@@ -621,11 +629,16 @@ def _precision_ubicacion_desde_html(html):
 
 
 async def _html_servidor(page, url):
-    """HTML servidor de la ficha (con las cookies del navegador).
+    """HTML de la ficha con coordenadas/precisión, por orden de fiabilidad.
 
-    Evita depender del DOM hidratado, que puede no conservar el script con
-    pageData/mapData. Si la petición falla, cae al contenido del DOM.
+    1) HTML de la propia navegación del navegador (SSR con pageData/mapData):
+       es la fuente consistente; el DOM hidratado a veces no conserva el script.
+    2) Petición del propio navegador (mismas cookies/fingerprint).
+    3) DOM hidratado como último recurso.
     """
+    inicial = getattr(page, '_scraping_initial_html', None)
+    if inicial and 'coordinates' in inicial:
+        return inicial
     try:
         resp = await page.request.get(url)
         if resp.ok:
@@ -634,6 +647,8 @@ async def _html_servidor(page, url):
                 return texto
     except Exception:
         pass
+    if inicial:
+        return inicial
     try:
         return await page.content()
     except Exception:
