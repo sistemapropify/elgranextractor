@@ -594,13 +594,23 @@ def _normalizar_precision(valor):
 def _precision_ubicacion_desde_html(html):
     """Detecta si la ubicación es exacta o aproximada en una ficha de Properati.
 
-    Properati expone mapData.visibility = "accurate" | "approximate" y, cuando
-    el anunciante oculta la dirección, muestra el mensaje
+    Properati expone la precisión dentro del bloque del mapa:
+        mapData: { adLocationData: { ..., visibility: "accurate"|"approximate" } }
+    y, cuando el anunciante oculta la dirección, muestra el mensaje
     'El anunciante prefiere no mostrar la dirección exacta'.
     """
     if not html:
         return 'desconocida'
-    m = re.search(r'visibility\s*:\s*"([^"]+)"', html)
+    # Acotar al bloque del mapa: en el HTML hay varias claves 'visibility'
+    # (CSS/UI) y solo la de adLocationData/mapData indica exactitud. Se toma una
+    # ventana tras la clave (los objetos tienen llaves anidadas).
+    segmento = html
+    idx = html.find('adLocationData')
+    if idx == -1:
+        idx = html.find('mapData')
+    if idx != -1:
+        segmento = html[idx:idx + 3000]
+    m = re.search(r'visibility\s*:\s*"([^"]+)"', segmento)
     vis = (m.group(1).strip().lower() if m else '')
     if vis in ('approximate', 'approx', 'approximated'):
         return 'aproximada'
