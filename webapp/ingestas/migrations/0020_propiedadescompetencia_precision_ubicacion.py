@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ingestas', '0017_scraping_integrity'),
+        ('ingestas', '0019_scraping_history_repair'),
     ]
 
     operations = [
