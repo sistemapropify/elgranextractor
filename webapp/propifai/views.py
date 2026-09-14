@@ -516,6 +516,26 @@ def dashboard_calidad_cartera(request):
                 status_ids = [row[0] for row in cursor.fetchall()]
             propiedades = propiedades.filter(property_status_id__in=status_ids)
 
+    # Cartera: propio (is_propify_portfolio=True) vs agente externo (False).
+    origen_filtro = request.GET.get('origen', '').strip()
+    with connections['propifai'].cursor() as cursor:
+        cursor.execute("SELECT id, is_propify_portfolio FROM property")
+        cartera_map = {}
+        for prop_id, es_propify in cursor.fetchall():
+            cartera_map[prop_id] = None if es_propify is None else bool(es_propify)
+
+    ids_filtrados = list(propiedades.values_list('id', flat=True))
+    conteo_propify = sum(1 for pid in ids_filtrados if cartera_map.get(pid) is True)
+    conteo_externo = sum(1 for pid in ids_filtrados if cartera_map.get(pid) is False)
+    conteo_sin_clasificar = len(ids_filtrados) - conteo_propify - conteo_externo
+
+    if origen_filtro == 'propio':
+        propiedades = propiedades.filter(id__in=[pid for pid in ids_filtrados if cartera_map.get(pid) is True])
+    elif origen_filtro == 'externo':
+        propiedades = propiedades.filter(id__in=[pid for pid in ids_filtrados if cartera_map.get(pid) is False])
+    elif origen_filtro == 'sinclasificar':
+        propiedades = propiedades.filter(id__in=[pid for pid in ids_filtrados if cartera_map.get(pid) is None])
+
     # Ingresos al sistema por día del mes elegido (respeta los filtros actuales).
     ingresos_mensuales = _serie_ingresos_mensual(propiedades, request.GET.get('mes', '').strip())
 
@@ -649,6 +669,19 @@ def dashboard_calidad_cartera(request):
                 agent_name = user_map[resp_id]
         prop.agent = agent_name
         prop.user = user_name
+
+        # Cartera: propio (Propify) vs agente externo.
+        es_propify = cartera_map.get(prop.id)
+        prop.es_propify = es_propify
+        if es_propify is True:
+            prop.cartera = 'Propify'
+            prop.cartera_clase = 'propio'
+        elif es_propify is False:
+            prop.cartera = 'Externo'
+            prop.cartera_clase = 'externo'
+        else:
+            prop.cartera = 'Sin clasificar'
+            prop.cartera_clase = 'sinclasificar'
         
         # Determinar nombre del distrito
         district_id = prop.district
@@ -1051,6 +1084,11 @@ def dashboard_calidad_cartera(request):
         'query_sin_estado': query_sin_estado,
         # Serie de ingresos mensuales (selector de mes + gráfico día a día)
         'ingresos_mensuales': ingresos_mensuales,
+        # Filtro y conteos de cartera (propio vs agente externo)
+        'origen_filtro': origen_filtro,
+        'conteo_propify': conteo_propify,
+        'conteo_externo': conteo_externo,
+        'conteo_sin_clasificar': conteo_sin_clasificar,
     }
     return render(request, 'propifai/dashboard_calidad_cartera.html', context)
 
