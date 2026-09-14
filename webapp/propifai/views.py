@@ -6,8 +6,14 @@ from django.db.models.functions import Coalesce
 from django.db.models import FloatField, ExpressionWrapper
 from django.http import JsonResponse, HttpResponse
 from django.core.paginator import Paginator
+import calendar
 import json
-from datetime import date, datetime
+from collections import Counter
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
+
+from django.utils import timezone
+
 from .models import Event, PropifaiProperty
 from .mapeo_ubicaciones import (
     obtener_nombre_departamento,
@@ -327,6 +333,102 @@ def api_propiedades_json(request):
     return JsonResponse({'propiedades': propiedades_list})
 
 
+MESES_ES = ('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+            'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre')
+ZONA_LIMA = ZoneInfo('America/Lima')
+
+
+def _mes_anterior(anio, mes):
+    """Devuelve (año, mes) del mes calendario previo."""
+    return (anio - 1, 12) if mes == 1 else (anio, mes - 1)
+
+
+def _serie_ingresos_mensual(propiedades, mes_param):
+    """Ingresos de propiedades al sistema, día por día de un mes calendario.
+
+    ``property.created_at`` se guarda en UTC, por lo que los límites del mes se
+    calculan en America/Lima y el conteo se agrupa por día local: una propiedad
+    registrada a las 20:00 de Lima pertenece a ese día, no al siguiente en UTC.
+
+    La lista de meses ofrecidos se toma de la cartera completa (sin filtros) para
+    que el selector no cambie de opciones al filtrar por tipo, distrito o agente.
+    """
+    hoy_local = timezone.now().astimezone(ZONA_LIMA).date()
+    primer_ingreso = PropifaiProperty.objects.aggregate(primero=Min('created_at'))['primero']
+    primer_mes = (primer_ingreso.astimezone(ZONA_LIMA).date().replace(day=1)
+                  if primer_ingreso else hoy_local.replace(day=1))
+
+    meses_disponibles = []
+    anio, mes = hoy_local.year, hoy_local.month
+    while (anio, mes) >= (primer_mes.year, primer_mes.month):
+        meses_disponibles.append({
+            'valor': f'{anio:04d}-{mes:02d}',
+            'etiqueta': f'{MESES_ES[mes - 1].capitalize()} {anio}',
+        })
+        anio, mes = _mes_anterior(anio, mes)
+
+    valores_validos = {m['valor'] for m in meses_disponibles}
+    seleccionado = mes_param if mes_param in valores_validos else meses_disponibles[0]['valor']
+    anio_sel, mes_sel = int(seleccionado[:4]), int(seleccionado[5:7])
+    ultimo_dia = calendar.monthrange(anio_sel, mes_sel)[1]
+
+    anio_prev, mes_prev = _mes_anterior(anio_sel, mes_sel)
+    prev_ultimo_dia = calendar.monthrange(anio_prev, mes_prev)[1]
+    # Una sola consulta cubre el mes anterior y el seleccionado (son contiguos).
+    inicio = datetime(anio_prev, mes_prev, 1, tzinfo=ZONA_LIMA)
+    fin = datetime(anio_sel, mes_sel, ultimo_dia, tzinfo=ZONA_LIMA) + timedelta(days=1)
+
+    por_dia = Counter()
+    total_previo = 0
+    for marca in propiedades.filter(created_at__gte=inicio, created_at__lt=fin).values_list('created_at', flat=True):
+        local = marca.astimezone(ZONA_LIMA)
+        if (local.year, local.month) == (anio_prev, mes_prev):
+            total_previo += 1
+        elif (local.year, local.month) == (anio_sel, mes_sel):
+            por_dia[local.day] += 1
+
+    serie = []
+    acumulado = 0
+    maximo = 0
+    mejor_dia = 0
+    for dia in range(1, ultimo_dia + 1):
+        total = por_dia.get(dia, 0)
+        acumulado += total
+        if total > maximo:
+            maximo, mejor_dia = total, dia
+        fecha = date(anio_sel, mes_sel, dia)
+        serie.append({
+            'dia': dia,
+            'total': total,
+            'acumulado': acumulado,
+            'es_fin_semana': fecha.weekday() >= 5,
+            'es_hoy': fecha == hoy_local,
+            'mostrar_etiqueta': dia == 1 or dia % 5 == 0 or dia == ultimo_dia,
+        })
+
+    total_mes = sum(por_dia.values())
+    return {
+        'serie': serie,
+        'meses': meses_disponibles,
+        'mes_seleccionado': seleccionado,
+        'mes_etiqueta': f'{MESES_ES[mes_sel - 1].capitalize()} {anio_sel}',
+        'mes_anterior_etiqueta': f'{MESES_ES[mes_prev - 1].capitalize()} {anio_prev}',
+        'total_mes': total_mes,
+        'total_mes_anterior': total_previo,
+        'variacion_mes': (round((total_mes - total_previo) * 100 / total_previo, 1)
+                          if total_previo else None),
+        'dias_del_mes': ultimo_dia,
+        'dias_con_ingreso': sum(1 for total in por_dia.values() if total),
+        'promedio_diario': round(total_mes / ultimo_dia, 1),
+        'mejor_dia': mejor_dia,
+        'mejor_dia_total': maximo,
+        # La escala nunca es 0 para que widthratio no divida entre cero.
+        'escala': max(1, maximo),
+        'ultimo_dia': ultimo_dia,
+        'es_mes_en_curso': (anio_sel, mes_sel) == (hoy_local.year, hoy_local.month),
+    }
+
+
 def dashboard_calidad_cartera(request):
     """
     Dashboard de calidad de cartera de propiedades Propifai.
@@ -413,6 +515,9 @@ def dashboard_calidad_cartera(request):
                 )
                 status_ids = [row[0] for row in cursor.fetchall()]
             propiedades = propiedades.filter(property_status_id__in=status_ids)
+
+    # Ingresos al sistema por día del mes elegido (respeta los filtros actuales).
+    ingresos_mensuales = _serie_ingresos_mensual(propiedades, request.GET.get('mes', '').strip())
 
     total_db = propiedades.count()
     print(f"[DEBUG] Total propiedades en DB después de filtros: {total_db}")
@@ -944,6 +1049,8 @@ def dashboard_calidad_cartera(request):
         'filtro_agente_actual': agente_filtro,
         # Query string sin estado para filtros rápidos
         'query_sin_estado': query_sin_estado,
+        # Serie de ingresos mensuales (selector de mes + gráfico día a día)
+        'ingresos_mensuales': ingresos_mensuales,
     }
     return render(request, 'propifai/dashboard_calidad_cartera.html', context)
 
