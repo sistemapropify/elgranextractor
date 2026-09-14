@@ -10,7 +10,7 @@ from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.utils.http import url_has_allowed_host_and_scheme
 from rest_framework.authentication import BaseAuthentication, get_authorization_header
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import APIException, AuthenticationFailed
 
 from .models import MobileProspectUser
 
@@ -188,6 +188,10 @@ def authenticate_propify_credentials(username, password):
 
 
 class PropifyBearerAuthentication(BaseAuthentication):
+    def authenticate_header(self, request):
+        # Without a challenge DRF changes an expired Bearer session into 403.
+        return 'Bearer realm="Propify"'
+
     def authenticate(self, request):
         parts = get_authorization_header(request).split()
         if not parts:
@@ -197,9 +201,32 @@ class PropifyBearerAuthentication(BaseAuthentication):
         try:
             token = parts[1].decode('utf-8')
             principal = principal_from_token(token)
-        except (UnicodeDecodeError, PropifyAuthError) as exc:
+        except UnicodeDecodeError as exc:
             raise AuthenticationFailed(str(exc)) from exc
+        except PropifyAuthError as exc:
+            if exc.status_code == 401:
+                raise AuthenticationFailed(str(exc), code='session_expired') from exc
+            failure = APIException(str(exc), code='propify_unavailable')
+            failure.status_code = exc.status_code
+            raise failure from exc
         return principal, token
+
+
+def refresh_propify_session(refresh):
+    """Renew with Propify itself; never infer identity or grant CRM permissions."""
+    url = getattr(settings, 'PROPIFY_AUTH_REFRESH_URL', 'https://api.propify.pe/api/auth/token/refresh/')
+    try:
+        response = requests.post(url, json={'refresh': refresh}, headers={'Accept': 'application/json'}, timeout=15, allow_redirects=False)
+    except requests.RequestException as exc:
+        raise PropifyAuthError('No se pudo renovar la sesión. Reintenta con conexión.', 503) from exc
+    if response.status_code in (400, 401, 403):
+        raise PropifyAuthError('Tu sesión de Propify venció. Vuelve a iniciar sesión.', 401)
+    if response.status_code != 200:
+        raise PropifyAuthError('Propify no pudo renovar la sesión. Reintenta en unos momentos.', 502)
+    payload = _json_object(response)
+    if not isinstance(payload.get('access'), str) or not payload['access'].strip():
+        raise PropifyAuthError('Propify no devolvió un token de acceso válido.', 502)
+    return {'access': payload['access'], 'refresh': payload.get('refresh') or refresh}
 
 
 def clear_web_propify_session(request):

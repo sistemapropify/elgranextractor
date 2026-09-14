@@ -14,6 +14,7 @@ from .propify_auth import (
     PropifyAuthError,
     PropifyBearerAuthentication,
     authenticate_propify_credentials,
+    refresh_propify_session,
 )
 
 
@@ -90,6 +91,22 @@ def mobile_login(request):
             ),
         },
     })
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def mobile_refresh(request):
+    refresh = request.data.get('refresh')
+    if not isinstance(refresh, str) or not 1 <= len(refresh.strip()) <= 16384:
+        return Response({'ok': False, 'error': 'Token de renovación inválido.'}, status=400)
+    try:
+        payload = refresh_propify_session(refresh.strip())
+    except PropifyAuthError as exc:
+        return Response({'ok': False, 'error': str(exc)}, status=exc.status_code)
+    response = Response({'ok': True, **payload})
+    response['Cache-Control'] = 'no-store'
+    return response
 
 
 def _serialize_prospect(prospect):

@@ -1,5 +1,5 @@
 """Propitools-compatible views over the same operational obligations as the web."""
-from django.db.models import Q
+from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -13,7 +13,7 @@ from .models import MobileNotificationDevice
 from lead_intelligence.models import LeadControlMember, LeadObligation, LeadControlNotice
 from lead_intelligence.control_access import ControlAccess
 from lead_intelligence.control_engine import intervene, policy, KINDS, active_since
-from lead_intelligence.services import get_management_dashboard
+from lead_intelligence.services import get_management_dashboard, normalized_period
 
 
 def access_for_mobile(principal):
@@ -32,10 +32,16 @@ def funnel(request):
     """The exact PROMETEO IA funnel used by the web dashboard."""
     if not request.user.mobile_user.can_view_crm_alerts:
         return Response({'ok': False, 'error': 'Sin acceso al embudo de leads.'}, status=403)
-    today = timezone.localdate()
-    data = get_management_dashboard(today, today, None)['selected_cohort']
+    today = timezone.localdate(timezone=ZoneInfo('America/Lima'))
+    start, end = (normalized_period(request.query_params.get('from'), request.query_params.get('to'))
+                  if request.query_params.get('from') or request.query_params.get('to') else (today, today))
+    dashboard = get_management_dashboard(start, end, None)
+    data = dashboard['selected_cohort']
     keys = ('entered', 'contacted', 'bidirectional', 'qualified', 'visit_intent', 'visit_registered')
-    return Response({'ok': True, 'date': today.isoformat(), 'funnel': {key: int(data.get(key) or 0) for key in keys}})
+    return Response({'ok': True, 'date': today.isoformat(), 'from': start.isoformat(), 'to': end.isoformat(),
+                     'timezone': 'America/Lima', 'funnel': {key: int(data.get(key) or 0) for key in keys},
+                     'segments': {segment: {key: int((dashboard.get(f'{segment}_cohort') or {}).get(key) or 0) for key in keys}
+                                  for segment in ('captaciones', 'compradores', 'otros')}})
 
 
 def serialize(item, owners=None, stale_before=None):
@@ -97,7 +103,7 @@ def alerts(request):
         items = items.filter(fresh, action__status='pending', manager_at__lte=timezone.now())
     owners = dict(LeadControlMember.objects.filter(active=True, source_user_id__isnull=False).values_list('source_user_id', 'name'))
     total = items.count()
-    return Response({'ok': True, 'total': total, 'next_offset': offset+limit if offset+limit < total else None, 'can_manage': access.manages, 'results': [serialize(item, owners, stale_before) for item in items.order_by('action__due_at', 'pk')[offset:offset+limit]]})
+    return Response({'ok': True, 'total': total, 'next_offset': offset+limit if offset+limit < total else None, 'can_manage': access.manages, 'results': [serialize(item, owners, stale_before) for item in items.order_by(F('lead__entered_at').desc(nulls_last=True), '-lead__source_lead_id', 'started_at', 'pk')[offset:offset+limit]]})
 
 
 @api_view(['GET', 'POST'])

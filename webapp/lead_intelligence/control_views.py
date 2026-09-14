@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.core.management import call_command
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q, Case, When, Value, IntegerField
+from django.db.models import Q
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -18,13 +18,13 @@ from .models import LeadControlState, LeadObligation, LeadControlMember, LeadCon
 from .control_access import control_required
 from .control_engine import observe, policy, intervene, create_obligation, change_owner, resolve, KINDS, active_since
 from .control_forms import PolicyForm, MemberForm
-from .control_metrics import metrics
 from .control_notifications import enabled
 from .control_digest import scope_key
 from .control_source import source_snapshot
 from .remarketing_engine import LIMA
 from .remarketing_gateway import config
 from .control_runtime import runtime_status
+from .control_presentation import describe, notice_description, page_context
 
 
 def local_datetime(value):
@@ -71,7 +71,7 @@ def board(request):
     settings = policy()
     stale_before = now-timedelta(minutes=settings.stale_minutes)
     fresh = Q(lead__quality='valid', lead__observed_at__gte=stale_before)
-    all_items = LeadObligation.objects.filter(lead__in=states).select_related('lead', 'action')
+    all_items = LeadObligation.objects.filter(lead__in=states).select_related('lead', 'action', 'action__diagnosis')
     cutoff = active_since()
     if cutoff:
         # The cutover applies to the CRM lead entry time.  Using the obligation
@@ -82,17 +82,12 @@ def board(request):
     category = request.GET.get('category', '')
     if category in KINDS:
         items = items.filter(kind=category)
-    if request.GET.get('overdue') == '1':
-        items = items.filter(fresh, action__due_at__lt=now)
-    if request.GET.get('escalated') == '1':
-        items = items.filter(fresh, manager_at__lte=now)
-    items = items.annotate(control_rank=Case(When(fresh & Q(manager_at__lte=now), then=Value(0)), When(kind__in=['visit', 'commitment'], action__due_at__lte=now+timedelta(minutes=30), then=Value(1)), When(kind__in=['first_response', 'reply'], then=Value(2)), When(action__due_at__lt=now, then=Value(3)), default=Value(4), output_field=IntegerField()))
-    page = Paginator(items.order_by('control_rank', 'action__due_at'), 50).get_page(request.GET.get('page'))
+    context = page_context(request.GET, items, now, stale_before)
+    page = context['page']
     stale = states.filter(Q(observed_at__lt=stale_before) | Q(observed_at__isnull=True) | ~Q(quality='valid')).count()
     scope_notices = LeadControlNotice.objects.filter(obligation__lead__in=states)
     if not access.manages:
         scope_notices = scope_notices.filter(recipient=access.member)
-    stats = metrics(all_items.filter(Q(started_at__gte=now-timedelta(days=30)) | Q(action__status='pending')), now, settings.stale_minutes)
     active_states = states.filter(active=True)
     with_action = active_states.filter(obligations__action__status='pending').distinct().count()
     digest = None
@@ -104,10 +99,24 @@ def board(request):
         if item.lead.crm_agent_id == item.action.source_assigned_user_id and item.lead.snapshot.get('agente'):
             owner_names.setdefault(item.action.source_assigned_user_id, item.lead.snapshot['agente'])
         item.owner_name = owner_names.get(item.action.source_assigned_user_id, item.action.source_assigned_user_id or 'Sin asignar')
-        item.source_fresh = item.lead.quality == 'valid' and item.lead.observed_at and item.lead.observed_at >= stale_before
-    for agent in stats['agents']:
-        agent['name'] = owner_names.get(agent['agent_id'], agent['agent_id'] or 'Sin asignar')
-    return render(request, 'lead_intelligence/control_board.html', {'page': page, 'states': Paginator(states.order_by('-updated_at'), 50).get_page(request.GET.get('leads_page')), 'stats': stats, 'stale': stale, 'with_action': with_action, 'active_count': active_states.count(), 'access': access, 'kinds': KINDS, 'category': category, 'now': now, 'notices': scope_notices.select_related('obligation__lead', 'recipient').order_by('-created_at')[:100], 'transport': {'email': enabled('LEAD_CONTROL_EMAIL_ENABLED'), 'push': enabled('LEAD_CONTROL_PUSH_ENABLED')}, 'digest': digest, 'runtime': runtime_status(), 'policy_ready': bool(settings.active_statuses and settings.closed_statuses)})
+        describe(item, now, stale_before)
+    transport = {'email': enabled('LEAD_CONTROL_EMAIL_ENABLED'), 'push': enabled('LEAD_CONTROL_PUSH_ENABLED')}
+    # Query only notices visible to this identity; do not leak another recipient's delivery.
+    page_notices = scope_notices.filter(obligation_id__in=[item.pk for item in page]).select_related('recipient').order_by('-created_at', '-pk')
+    by_item = {}
+    for notice in page_notices:
+        by_item.setdefault(notice.obligation_id, []).append(notice_description(notice, transport))
+    for item in page:
+        item.delivery_notices = by_item.get(item.pk, [])
+    context.update({'stale': stale, 'with_action': with_action, 'active_count': active_states.count(), 'access': access,
+                    'kinds': KINDS, 'category': category, 'now': now,
+                    'notices': [notice_description(n, transport) for n in scope_notices.select_related('obligation__lead', 'recipient').order_by('-created_at', '-pk')[:100]],
+                    'transport': transport, 'digest': digest, 'runtime': runtime_status(),
+                    'scheduler_enabled': enabled('LEAD_CONTROL_SCHEDULER_ENABLED'),
+                    'notify_enabled': enabled('LEAD_CONTROL_NOTIFY_ENABLED'),
+                    'directory_ready': LeadControlMember.objects.filter(active=True).exists(),
+                    'policy_ready': bool(settings.active_statuses and settings.closed_statuses)})
+    return render(request, 'lead_intelligence/control_board.html', context)
 
 
 @control_required

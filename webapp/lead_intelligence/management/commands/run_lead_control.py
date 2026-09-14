@@ -59,7 +59,7 @@ def plan_refresh(rows, completed, busy, closed_statuses, changed_ids=()):
 
 
 class Command(BaseCommand):
-    help = 'Revisa automáticamente toda la cartera y sus plazos. No envía mensajes ni notificaciones externas.'
+    help = 'Revisa cartera y plazos. Con --notify despacha únicamente los canales habilitados.'
     requires_system_checks = []
 
     def add_arguments(self, parser):
@@ -90,7 +90,7 @@ class Command(BaseCommand):
         clock_future = None
         pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix='lead-control')
         clock_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='lead-deadlines')
-        self.stdout.write('Control automático iniciado; transporte externo deshabilitado.')
+        self.stdout.write('Control automático iniciado; ' + ('envío por canales habilitados activo.' if options['notify'] else 'transporte externo deshabilitado (falta --notify).'))
         try:
             while True:
                 now = time.monotonic()
@@ -146,7 +146,7 @@ class Command(BaseCommand):
                     clock_future = clock_pool.submit(run_clock, options['notify'])
                     next_clock = now+interval
                 if now >= next_status:
-                    write_status({'total': total, 'incorporated': len(completed), 'queued': len(pending), 'processing': len(busy), 'updated': updated, 'failures': failures, 'last_poll': last_poll, 'error': error, 'interval': interval})
+                    write_status({'total': total, 'incorporated': len(completed), 'queued': len(pending), 'processing': len(busy), 'updated': updated, 'failures': failures, 'last_poll': last_poll, 'error': error, 'interval': interval, 'notify_enabled': options['notify']})
                     next_status = now+5
                 time.sleep(1)
         except KeyboardInterrupt:

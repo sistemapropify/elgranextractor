@@ -13,5 +13,6 @@ Set-Location -LiteralPath $webRoot
 # Django writes startup diagnostics to stderr; preserve them without treating
 # native stderr as a PowerShell terminating exception.
 $ErrorActionPreference = 'Continue'
-& $pythonPath -u manage.py run_lead_control --interval 60 --workers 6 >> $logPath 2>&1
+# --notify dispatches only the channels explicitly enabled in server settings.
+& $pythonPath -u manage.py run_lead_control --interval 60 --workers 6 --notify >> $logPath 2>&1
 exit $LASTEXITCODE
