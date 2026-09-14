@@ -377,6 +377,8 @@ def _serie_ingresos_mensual(propiedades, mes_param):
     # Una sola consulta cubre el mes anterior y el seleccionado (son contiguos).
     inicio = datetime(anio_prev, mes_prev, 1, tzinfo=ZONA_LIMA)
     fin = datetime(anio_sel, mes_sel, ultimo_dia, tzinfo=ZONA_LIMA) + timedelta(days=1)
+    inicio_mes = datetime(anio_sel, mes_sel, 1, tzinfo=ZONA_LIMA)
+    fin_mes = datetime(anio_sel, mes_sel, ultimo_dia, tzinfo=ZONA_LIMA) + timedelta(days=1)
 
     por_dia = Counter()
     total_previo = 0
@@ -411,6 +413,8 @@ def _serie_ingresos_mensual(propiedades, mes_param):
         'serie': serie,
         'meses': meses_disponibles,
         'mes_seleccionado': seleccionado,
+        'inicio_mes': inicio_mes,
+        'fin_mes': fin_mes,
         'mes_etiqueta': f'{MESES_ES[mes_sel - 1].capitalize()} {anio_sel}',
         'mes_anterior_etiqueta': f'{MESES_ES[mes_prev - 1].capitalize()} {anio_prev}',
         'total_mes': total_mes,
@@ -493,18 +497,18 @@ def dashboard_calidad_cartera(request):
 
     # Filtro por estado usando únicamente columnas reales de dbo.property.
     if estado_filtro and estado_filtro != 'all':
-        if estado_filtro == 'borrador':
-            propiedades = propiedades.filter(is_visible=False)
-        elif estado_filtro == 'sinestado':
+        if estado_filtro == 'sinestado':
             propiedades = propiedades.filter(property_status_id__isnull=True)
         else:
             aliases = {
-                'disponible': ('disponible', 'available'),
-                'vendido': ('vendido', 'sold'),
-                'reservado': ('reservado', 'reserved'),
-                'catchment': ('captacion', 'captación', 'catchment'),
-                'pausado': ('pausado', 'paused'),
-                'nodisponible': ('no disponible', 'unavailable'),
+                'disponible': ('disponible',),
+                'borrador': ('draft',),
+                'en captación': ('en proceso de captacion', 'en captación'),
+                'en revisión': ('en revisión',),
+                'no disponible': ('no disponible',),
+                'pausada': ('pausada',),
+                'reservada': ('reservada',),
+                'vendida': ('vendida',),
             }
             names = aliases.get(estado_filtro, (estado_filtro,))
             with connections['propifai'].cursor() as cursor:
@@ -515,6 +519,17 @@ def dashboard_calidad_cartera(request):
                 )
                 status_ids = [row[0] for row in cursor.fetchall()]
             propiedades = propiedades.filter(property_status_id__in=status_ids)
+
+    # Serie mensual: calcula el selector y el gráfico con el queryset sin filtro
+    # de mes (necesario para comparar contra el mes anterior).
+    mes_param = request.GET.get('mes', '').strip()
+    ingresos_mensuales = _serie_ingresos_mensual(propiedades, mes_param)
+
+    # El mes seleccionado es un filtro global: afecta KPIs, tabla, chips y cartera.
+    propiedades = propiedades.filter(
+        created_at__gte=ingresos_mensuales['inicio_mes'],
+        created_at__lt=ingresos_mensuales['fin_mes'],
+    )
 
     # Cartera: propio (is_propify_portfolio=True) vs agente externo (False).
     origen_filtro = request.GET.get('origen', '').strip()
@@ -535,9 +550,6 @@ def dashboard_calidad_cartera(request):
         propiedades = propiedades.filter(id__in=[pid for pid in ids_filtrados if cartera_map.get(pid) is False])
     elif origen_filtro == 'sinclasificar':
         propiedades = propiedades.filter(id__in=[pid for pid in ids_filtrados if cartera_map.get(pid) is None])
-
-    # Ingresos al sistema por día del mes elegido (respeta los filtros actuales).
-    ingresos_mensuales = _serie_ingresos_mensual(propiedades, request.GET.get('mes', '').strip())
 
     total_db = propiedades.count()
     print(f"[DEBUG] Total propiedades en DB después de filtros: {total_db}")
@@ -611,11 +623,23 @@ def dashboard_calidad_cartera(request):
     ]
     
     propiedades_con_score = []
+    estado_label_map = {
+        'available': 'Disponible', 'disponible': 'Disponible',
+        'draft': 'Borrador', 'borrador': 'Borrador',
+        'en proceso de captacion': 'En captación', 'en captación': 'En captación',
+        'en revisión': 'En revisión',
+        'unavailable': 'No disponible', 'no disponible': 'No disponible',
+        'paused': 'Pausada', 'pausada': 'Pausada',
+        'reserved': 'Reservada', 'reservada': 'Reservada',
+        'sold': 'Vendida', 'vendida': 'Vendida',
+        'catchment': 'En captación',
+    }
     print(f"[DEBUG] Total propiedades a procesar: {propiedades.count()}")
     for i, prop in enumerate(propiedades):
         prop._specs_cache = specs_map.get(prop.id)
         status_name = property_status_map.get(prop.property_status_id)
         prop.availability_status = (status_name or '').strip().lower() or None
+        prop.estado_label = estado_label_map.get(prop.availability_status) or (prop.availability_status or 'Sin estado').title()
         prop.is_draft = not bool(prop.is_visible)
         prop.is_active = bool(prop.is_visible)
         completos = 0
@@ -733,11 +757,20 @@ def dashboard_calidad_cartera(request):
     # Mapear conteos a español para los botones de filtro
     estado_a_espanol = {
         'available': 'disponible',
-        'sold': 'vendido',
-        'reserved': 'reservado',
-        'catchment': 'catchment',
-        'paused': 'pausado',
-        'unavailable': 'nodisponible',
+        'Disponible': 'disponible',
+        'sold': 'vendida',
+        'Vendida': 'vendida',
+        'reserved': 'reservada',
+        'Reservada': 'reservada',
+        'catchment': 'en captación',
+        'paused': 'pausada',
+        'Pausada': 'pausada',
+        'unavailable': 'no disponible',
+        'No disponible': 'no disponible',
+        'draft': 'borrador',
+        'Draft': 'borrador',
+        'En proceso de captacion': 'en captación',
+        'En revisión': 'en revisión',
     }
     # Estadísticas generales
     total_real = total_db  # 73
@@ -753,8 +786,6 @@ def dashboard_calidad_cartera(request):
     for eng, count in status_counts.items():
         esp = estado_a_espanol.get(eng, eng)
         conteo_estados[esp] = count
-    # Agregar borradores (is_draft=True)
-    conteo_estados['borrador'] = props_borradores
     completitud_promedio = sum(p.completitud_score for p in propiedades_con_score) / total_real if total_real else 0
     print(f"[DEBUG] total_real: {total_real}")
     print(f"[DEBUG] props_disponibles: {props_disponibles}")
