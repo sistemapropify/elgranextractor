@@ -1078,6 +1078,8 @@
                 // Actualizar tabla de resultados
                 window.todosLosResultados = data.resultados;
                 window.matchingData = data;
+                window.matchingEstado = (data.parametros && data.parametros.estado) || 'matches';
+                window.matchingEtapas = (data.parametros && data.parametros.etapas) || {};
                 filtrarResultados();
 
                 // Actualizar propiedades descartadas
@@ -1256,11 +1258,20 @@
         container.empty();
 
         if (!resultados || resultados.length === 0) {
+            const estado = window.matchingEstado || 'matches';
+            const etapas = window.matchingEtapas || {};
+            const mensajes = {
+                sin_embedding: 'Este requerimiento no tiene documento vectorizado (no se ejecutó FAISS).',
+                faiss_no_disponible: 'El índice FAISS de propiedades no está disponible.',
+                sin_matches: 'El pipeline corrió completo y ningún match superó el umbral.',
+                matches: 'No se encontraron propiedades compatibles con este requerimiento.'
+            };
             container.html(`
                 <div class="empty-state" style="grid-column: 1 / -1; padding: 32px;">
-                    <div class="icon">📭</div>
-                    <h3>Sin resultados</h3>
-                    <p>No se encontraron propiedades compatibles con este requerimiento.</p>
+                    <div class="icon">${estado === 'matches' ? '📭' : '⚠️'}</div>
+                    <h3>${estado === 'matches' ? 'Sin resultados' : 'Sin matching: ' + estado}</h3>
+                    <p>${mensajes[estado] || mensajes.matches}</p>
+                    <p class="text-muted small">Etapas: FAISS ${etapas.faiss_top || 0} → filtros duros ${etapas.post_filtros || 0} → umbral ${etapas.post_umbral || 0}</p>
                 </div>
             `);
             return;
