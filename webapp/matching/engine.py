@@ -188,6 +188,7 @@ def ejecutar_matching_requerimiento(requerimiento_id: int, propiedades=None) -> 
     if not result.success or not result.data:
         logger.warning(f"HybridMatchingSkill falló para req {requerimiento_id}: {result.message}")
         return [], {
+            'estado': 'error',
             'total_evaluadas': 0,
             'total_descartadas': 0,
             'total_compatibles': 0,
@@ -211,7 +212,11 @@ def ejecutar_matching_requerimiento(requerimiento_id: int, propiedades=None) -> 
             'ranking': m.get('ranking'),
         })
 
+    estado = result.data.get('estado', 'matches')
+    etapas = result.data.get('etapas', {})
     estadisticas = {
+        'estado': estado,
+        'etapas': etapas,
         'total_evaluadas': len(matches),
         'total_descartadas': 0,
         'total_compatibles': len(matches),

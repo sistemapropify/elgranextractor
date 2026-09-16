@@ -645,6 +645,13 @@ class SemanticSkillRouter:
                 'alquiler', 'venta', 'busco', 'quiero', 'necesito',
                 'construir', 'inmueble', 'depa',
             ],
+            'matching_hibrido': [
+                'matching', 'match', 'cruzar', 'cruza', 'compatibles',
+                'calzar', 'calza', 'calcen', 'coincidencias',
+            ],
+            'matching_oferta_demanda': [
+                'matching oferta', 'oferta y demanda',
+            ],
             'analizar_mercado': [
                 'mercado', 'tendencia', 'precio promedio', 'plusvalía',
                 'comparativa', 'análisis', 'inversión',

@@ -134,6 +134,8 @@ class MatchingViewSet(viewsets.ViewSet):
                 'limite_propiedades': limite,
                 'score_minimo': score_minimo,
                 'total_resultados': len(resultados),
+                'estado': estadisticas.get('estado', 'matches'),
+                'etapas': estadisticas.get('etapas', {}),
             }
         })
     

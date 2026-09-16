@@ -99,16 +99,13 @@ class HybridMatchingSkill(BaseSkill):
         """
         Ejecuta matching híbrido v4 completo.
 
-        Args:
-            params: {
-                'requerimiento_id': int,
-                'top_n': int (opcional, default scoring.TOP_K_MATCHES),
-                'umbral_minimo': float (opcional, default scoring.UMBRAL_MINIMO_SCORE),
-            }
-            context: Contexto opcional
+        Devuelve en SkillResult.data un estado explícito:
+        - sin_embedding: el requerimiento no tiene IntelligenceDocument.
+        - faiss_no_disponible: FAISS no cargó o la colección está vacía/inaccesible.
+        - sin_matches: el pipeline corrió completo y no hay resultados sobre el umbral.
+        - matches: hay resultados rankeados.
 
-        Returns:
-            SkillResult con matches rankeados
+        Además incluye el conteo por etapa: faiss_top -> post_filtros -> post_umbral.
         """
         try:
             if not self.validate_params(params):
@@ -124,30 +121,79 @@ class HybridMatchingSkill(BaseSkill):
             # ── Paso 1: Obtener requerimiento embeddeado ────────────────
             req_doc, req_data = self._get_requerimiento_doc(requerimiento_id)
             if req_doc is None:
-                return SkillResult.error(
-                    message=f"Requerimiento {requerimiento_id} no encontrado en colección requerimientos_enbedados",
+                return SkillResult.ok(
+                    data={
+                        'estado': 'sin_embedding',
+                        'matches': [],
+                        'total': 0,
+                        'requerimiento_id': requerimiento_id,
+                        'etapas': {'faiss_top': 0, 'post_filtros': 0, 'post_umbral': 0},
+                    },
+                    message=(
+                        f"Requerimiento {requerimiento_id} sin embedding: "
+                        f"no tiene documento en la colección requerimientos_enbedados"
+                    ),
+                    metadata={
+                        'requerimiento_id': requerimiento_id,
+                        'estado': 'sin_embedding',
+                        'faiss_top': 0,
+                        'post_filtros': 0,
+                        'post_umbral': 0,
+                    },
                     skill_name=self.name,
                 )
 
             # ── Paso 2-5: Búsqueda híbrida ─────────────────────────────
-            matches = self._hybrid_search(
+            faiss_total, post_filtros, matches, faiss_disponible = self._hybrid_search(
                 req_embedding=req_doc.embedding,
                 req_data=req_data,
             )
 
+            if not faiss_disponible:
+                return SkillResult.ok(
+                    data={
+                        'estado': 'faiss_no_disponible',
+                        'matches': [],
+                        'total': 0,
+                        'requerimiento_id': requerimiento_id,
+                        'etapas': {'faiss_top': 0, 'post_filtros': 0, 'post_umbral': 0},
+                    },
+                    message=(
+                        f"FAISS no disponible para la colección propiedadespropify "
+                        f"(requerimiento {requerimiento_id})"
+                    ),
+                    metadata={
+                        'requerimiento_id': requerimiento_id,
+                        'estado': 'faiss_no_disponible',
+                        'faiss_top': 0,
+                        'post_filtros': 0,
+                        'post_umbral': 0,
+                    },
+                    skill_name=self.name,
+                )
+
             if not matches:
                 return SkillResult.ok(
-                    data={'matches': [], 'total': 0},
+                    data={
+                        'estado': 'sin_matches',
+                        'matches': [],
+                        'total': 0,
+                        'requerimiento_id': requerimiento_id,
+                        'etapas': {'faiss_top': faiss_total, 'post_filtros': 0, 'post_umbral': 0},
+                    },
                     message=f"No se encontraron propiedades compatibles para requerimiento {requerimiento_id}",
                     metadata={
                         'requerimiento_id': requerimiento_id,
+                        'estado': 'sin_matches',
                         'modo': 'hybrid_v4',
+                        'faiss_top': faiss_total,
+                        'post_filtros': post_filtros,
+                        'post_umbral': 0,
                     },
                     skill_name=self.name,
                 )
 
             # ── Paso 6-8: Filtrado final ──────────────────────────────
-            # Preparar para filtrado final
             resultados_para_filtrar = []
             for m in matches:
                 score_total = m['score_structural'] + m['score_semantico']
@@ -160,14 +206,37 @@ class HybridMatchingSkill(BaseSkill):
                     'porcentaje_compatibilidad': score_total,
                 })
 
-            # Aplicar filtrado final (umbral + top-K + ranking)
             final = scoring.filtrar_resultados_finales(
                 resultados_para_filtrar,
                 umbral_minimo=int(umbral_minimo),
                 top_k=top_n,
             )
+            post_umbral = len(final)
 
-            # Reconstruir matches con ranking
+            if post_umbral == 0:
+                return SkillResult.ok(
+                    data={
+                        'estado': 'sin_matches',
+                        'matches': [],
+                        'total': 0,
+                        'requerimiento_id': requerimiento_id,
+                        'etapas': {'faiss_top': faiss_total, 'post_filtros': post_filtros, 'post_umbral': 0},
+                    },
+                    message=(
+                        f"El pipeline corrió completo pero ningún match superó el umbral "
+                        f"de {umbral_minimo}% (requerimiento {requerimiento_id})"
+                    ),
+                    metadata={
+                        'requerimiento_id': requerimiento_id,
+                        'estado': 'sin_matches',
+                        'modo': 'hybrid_v4',
+                        'faiss_top': faiss_total,
+                        'post_filtros': post_filtros,
+                        'post_umbral': 0,
+                    },
+                    skill_name=self.name,
+                )
+
             top_matches = []
             for item in final:
                 m = item['propiedad_dict']
@@ -177,19 +246,24 @@ class HybridMatchingSkill(BaseSkill):
 
             return SkillResult.ok(
                 data={
+                    'estado': 'matches',
                     'matches': top_matches,
                     'total': len(top_matches),
                     'requerimiento_id': requerimiento_id,
+                    'etapas': {'faiss_top': faiss_total, 'post_filtros': post_filtros, 'post_umbral': post_umbral},
                 },
                 message=(
-                    f"Matching híbrido v4 completado: {len(matches)} propiedades pasaron filtros, "
+                    f"Matching híbrido v4 completado: {post_filtros} propiedades pasaron filtros, "
                     f"mostrando las {len(top_matches)} mejores (umbral {umbral_minimo}%)."
                 ),
                 metadata={
                     'requerimiento_id': requerimiento_id,
+                    'estado': 'matches',
                     'modo': 'hybrid_v4',
                     'faiss_k': self.FAISS_TOP_K,
-                    'total_after_filters': len(matches),
+                    'faiss_top': faiss_total,
+                    'post_filtros': post_filtros,
+                    'post_umbral': post_umbral,
                     'top_n': top_n,
                     'umbral_minimo': umbral_minimo,
                 },
@@ -203,7 +277,7 @@ class HybridMatchingSkill(BaseSkill):
                 skill_name=self.name,
             )
 
-    # ── Paso 1: Obtener requerimiento ─────────────────────────────────────
+    # ── Paso 1: Obtener requerimiento ─────────────────────────────────────    # ── Paso 1: Obtener requerimiento ─────────────────────────────────────
 
     def _get_requerimiento_doc(
         self, requerimiento_id: int
@@ -245,16 +319,12 @@ class HybridMatchingSkill(BaseSkill):
         self,
         req_embedding: bytes,
         req_data: Dict[str, Any],
-    ) -> List[Dict]:
+    ) -> Tuple[int, int, List[Dict], bool]:
         """
         Búsqueda FAISS + post-filtrado + scoring estructural + scoring semántico.
 
-        Args:
-            req_embedding: Embedding precomputado del requerimiento (bytes)
-            req_data: Datos del requerimiento (de scoring.preparar_req_data)
-
         Returns:
-            Lista de matches con score estructural y semántico
+            (faiss_total, post_filtros, matches, faiss_disponible)
         """
         from ..services.faiss_index import FAISSIndexManager
 
@@ -264,14 +334,15 @@ class HybridMatchingSkill(BaseSkill):
         )
         if not faiss_idx.is_loaded:
             logger.warning("[HybridMatchingSkill] FAISS no cargado para propiedadespropify")
-            return []
+            return (0, 0, [], False)
 
         query_vector = np.frombuffer(req_embedding, dtype=np.float32)
         faiss_results = faiss_idx.search(query_vector, top_k=self.FAISS_TOP_K)
+        faiss_total = len(faiss_results)
 
         if not faiss_results:
             logger.info("[HybridMatchingSkill] Sin resultados FAISS")
-            return []
+            return (0, 0, [], True)
 
         # ── Batch load: todos los documentos FAISS de una sola vez ─────
         from ..models import IntelligenceDocument
@@ -298,10 +369,6 @@ class HybridMatchingSkill(BaseSkill):
                 score_sem = 0.0
 
             # ── Paso 3: Filtros duros sobre field_values ────────────────
-            # field_values tiene la misma estructura que los dicts de engine.py
-            # Campos esperados: price, currency_id, bedrooms, bathrooms, built_area,
-            # has_elevator, garage_spaces, antiquity_years, district_id, district_name,
-            # operation_type_id, operation_type_name, property_type_id, property_type_name
             fase_eliminada = scoring.aplicar_filtros_duros(fv, req_data)
             if fase_eliminada:
                 continue
@@ -330,9 +397,9 @@ class HybridMatchingSkill(BaseSkill):
                 'ranking': None,
             })
 
-        return matches
+        return (faiss_total, len(matches), matches, True)
 
-    # ── Helpers ───────────────────────────────────────────────────────────
+    # ── Helpers ───────────────────────────────────────────────────────────    # ── Helpers ───────────────────────────────────────────────────────────
 
     @staticmethod
     def _safe_int(val: Any) -> int:

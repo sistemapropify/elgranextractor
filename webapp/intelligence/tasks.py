@@ -306,6 +306,36 @@ def sincronizar_todas_colecciones_rag(self, force_full_sync: bool = False,
     return summary
 
 
+@shared_task(bind=True, queue='analisis', name='intelligence.tasks.sincronizar_requerimientos_enbedados')
+def sincronizar_requerimientos_enbedados(self, force_full_sync: bool = False):
+    """Sincroniza la colección requerimientos_enbedados (matching híbrido).
+
+    Corre con frecuencia para que los requerimientos nuevos no queden sin
+    embedding y, por tanto, invisibles para matching_hibrido.
+    """
+    from .models import IntelligenceCollection
+    from .services.rag import RAGService
+    from .services.faiss_index import FAISSIndexManager
+
+    collection = IntelligenceCollection.objects.filter(name='requerimientos_enbedados').first()
+    if not collection:
+        return {'success': False, 'message': 'Colección requerimientos_enbedados no existe'}
+
+    success, message, stats = RAGService.sync_collection_dynamic(
+        collection_name='requerimientos_enbedados',
+        force_full_sync=force_full_sync,
+    )
+    if success:
+        try:
+            FAISSIndexManager.rebuild_for_collection(
+                'requerimientos_enbedados', RAGService.EMBEDDING_DIMENSIONS
+            )
+        except Exception as exc:
+            logger.warning(f'Rebuild FAISS requerimientos_enbedados falló: {exc}')
+
+    return {'success': success, 'message': message, 'stats': stats}
+
+
 @shared_task(bind=True, queue='analisis', name='intelligence.tasks.generar_embeddings_pendientes')
 def generar_embeddings_pendientes(self, batch_size: int = 100):
     """
