@@ -14,7 +14,9 @@ router.register(r'resultados', views.MatchResultViewSet, basename='matchresult')
 # URLs para la API de matching
 urlpatterns = [
     # API REST
+    # Escritura: ejecuta matching y persiste en MatchResult.
     path('api/matching/<int:pk>/ejecutar/', views.MatchingViewSet.as_view({'get': 'ejecutar'}), name='matching-ejecutar'),
+    # Solo lectura: consulta resultados ya guardados (sin ejecutar ni persistir).
     path('api/matching/<int:pk>/resumen/', views.MatchingViewSet.as_view({'get': 'resumen'}), name='matching-resumen'),
     path('api/matching/<int:pk>/guardados/', views.MatchingViewSet.as_view({'get': 'guardados'}), name='matching-guardados'),
     path('api/matching/<int:pk>/guardar/', views.MatchingViewSet.as_view({'post': 'guardar'}), name='matching-guardar'),

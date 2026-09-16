@@ -27,21 +27,23 @@ from .serializers import (
     PropuestaWhatsAppStatusSerializer,
 )
 
-# Cache en memoria para todos los matches (evita refetch en cada pipeline click)
-_all_matches_cache = None
-_all_matches_cache_client_id = None
+# Cache de matches de Propify API usando el framework de caché de Django (Fase 4).
+# Reemplaza la variable global de módulo (no segura bajo múltiples workers/procesos).
+from django.core.cache import cache as _django_cache
+
+ALL_MATCHES_CACHE_KEY = 'matching:propify:all_matches'
+ALL_MATCHES_CACHE_TTL = 300  # segundos
 
 
 def _get_cached_all_matches(client):
     """
-    Obtiene todos los matches de Propify API, con caché en memoria.
+    Obtiene todos los matches de Propify API, con caché de Django (TTL).
     La API no soporta filtrar por property_id, así que obtenemos todo
-    y filtramos en Python. El caché se invalida si cambia el cliente.
+    y filtramos en Python.
     """
-    global _all_matches_cache, _all_matches_cache_client_id
-    client_id = id(client)
-    if _all_matches_cache is not None and _all_matches_cache_client_id == client_id:
-        return _all_matches_cache
+    cached = _django_cache.get(ALL_MATCHES_CACHE_KEY)
+    if cached is not None:
+        return cached
 
     all_matches = []
     page_num = 1
@@ -55,8 +57,7 @@ def _get_cached_all_matches(client):
             break
         page_num += 1
 
-    _all_matches_cache = all_matches
-    _all_matches_cache_client_id = client_id
+    _django_cache.set(ALL_MATCHES_CACHE_KEY, all_matches, ALL_MATCHES_CACHE_TTL)
     return all_matches
 
 
@@ -855,6 +856,9 @@ class MatchingDashboardView(TemplateView):
                 pass
         
         # Estadísticas generales
+        from django.conf import settings
+        context['tipo_cambio_usd_pen'] = getattr(settings, 'TIPO_CAMBIO_USD_PEN', 3.75)
+        context['tipo_cambio_actualizado_en'] = getattr(settings, 'TIPO_CAMBIO_USD_PEN_ACTUALIZADO_EN', '')
         context['total_matchings'] = MatchResult.objects.count()
         context['total_requerimientos'] = Requerimiento.objects.count()
         context['total_propiedades'] = PropifaiProperty.objects.count()

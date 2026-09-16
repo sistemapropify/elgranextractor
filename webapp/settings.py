@@ -305,6 +305,11 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # Celery Configuration
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'memory://')
 CELERY_RESULT_BACKEND = 'django-db'
+
+# Tipo de cambio configurable para matching (Fase 3). Se actualiza vía
+# variables de entorno (App Service Settings) sin tocar código ni redeploy.
+TIPO_CAMBIO_USD_PEN = float(os.environ.get('TIPO_CAMBIO_USD_PEN', '3.75'))
+TIPO_CAMBIO_USD_PEN_ACTUALIZADO_EN = os.environ.get('TIPO_CAMBIO_USD_PEN_ACTUALIZADO_EN', '')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

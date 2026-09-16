@@ -16,6 +16,7 @@ import logging
 import math
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -107,9 +108,9 @@ def _convertir_moneda(monto: float, moneda_origen: str, moneda_destino: str) -> 
     if moneda_origen == moneda_destino:
         return monto
     if moneda_origen == 'USD' and moneda_destino == 'PEN':
-        return monto * TIPO_CAMBIO_USD_PEN
+        return monto * float(getattr(settings, 'TIPO_CAMBIO_USD_PEN', TIPO_CAMBIO_USD_PEN))
     elif moneda_origen == 'PEN' and moneda_destino == 'USD':
-        return monto / TIPO_CAMBIO_USD_PEN
+        return monto / float(getattr(settings, 'TIPO_CAMBIO_USD_PEN', TIPO_CAMBIO_USD_PEN))
     return monto
 
 

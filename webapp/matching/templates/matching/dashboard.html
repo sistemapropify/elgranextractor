@@ -710,6 +710,7 @@
                 Dashboard de Matching
             </h1>
             <p>Sistema inteligente de compatibilidad entre requerimientos de clientes y propiedades disponibles.</p>
+            <small style="color: var(--text-secondary, #8b949e);">Tipo de cambio USD/PEN: {{ tipo_cambio_usd_pen|floatformat:2 }}{% if tipo_cambio_actualizado_en %} (actualizado: {{ tipo_cambio_actualizado_en }}){% endif %}</small>
         </div>
         <div class="header-actions">
             <a href="{% url 'matching:masivo' %}" class="btn btn-outline">

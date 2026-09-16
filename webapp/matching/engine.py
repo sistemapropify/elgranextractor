@@ -16,6 +16,7 @@ import logging
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple, Any
 from django.db import connections
+from django.conf import settings
 
 from requerimientos.models import Requerimiento
 from propifai.mapeo_ubicaciones import DISTRITOS
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 _DISTRICT_CACHE = {}
 
 # Tipo de cambio (mantener aquí para compatibilidad con funciones existentes)
-TIPO_CAMBIO_USD_PEN = Decimal('3.75')
+TIPO_CAMBIO_USD_PEN = Decimal(str(getattr(settings, 'TIPO_CAMBIO_USD_PEN', '3.75')))
 
 
 def _get_distrito_id(nombre_distrito: str) -> Optional[str]:
@@ -246,6 +247,9 @@ def guardar_resultados_matching(requerimiento_id: int, resultados: List[Dict]) -
     """
     requerimiento = Requerimiento.objects.get(id=requerimiento_id)
     from .models import MatchResult
+    # Idempotencia (Fase 2): una única versión de resultados por requerimiento.
+    # Evita duplicados si "ejecutar" se invoca varias veces para el mismo requerimiento.
+    MatchResult.objects.filter(requerimiento=requerimiento).delete()
     objetos_creados = []
 
     for resultado in resultados:
