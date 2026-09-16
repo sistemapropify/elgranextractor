@@ -648,8 +648,6 @@ class SemanticSkillRouter:
             'matching_hibrido': [
                 'matching', 'match', 'cruzar', 'cruza', 'compatibles',
                 'calzar', 'calza', 'calcen', 'coincidencias',
-            ],
-            'matching_oferta_demanda': [
                 'matching oferta', 'oferta y demanda',
             ],
             'analizar_mercado': [

@@ -83,7 +83,6 @@ class IntelligenceConfig(AppConfig):
             from .skills.propiedades.skill import BusquedaPropiedadesSkill
             from .skills.acm_analisis import ACMAnalisisSkill
             from .skills.reporte_precios import ReportePreciosZonaSkill
-            from .skills.matching import MatchingOfertaDemandaSkill
             from .skills.matching_hybrid import HybridMatchingSkill
             from .skills.busqueda_exacta import BusquedaExactaSkill
             from .skills.formatear_propiedades import FormatearPropiedadesSkill
@@ -133,7 +132,6 @@ class IntelligenceConfig(AppConfig):
             registry.register(BusquedaPropiedadesSkill)
             registry.register(ACMAnalisisSkill)
             registry.register(ReportePreciosZonaSkill)
-            registry.register(MatchingOfertaDemandaSkill)
             registry.register(HybridMatchingSkill)
             registry.register(BusquedaExactaSkill)
             registry.register(FormatearPropiedadesSkill)
