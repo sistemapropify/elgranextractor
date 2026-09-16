@@ -42,6 +42,12 @@ from whatsapp_extractor.models import (
 logger = logging.getLogger(__name__)
 
 
+# Registro de hilos de procesamiento activos, por extractor_log_id.
+# Al reiniciar el servidor este dict queda vacio, lo que permite detectar
+# que el hilo anterior ya no existe y relanzarlo al reanudar.
+_HILOS_PROCESAMIENTO = {}
+
+
 # ─────────────────────────────────────────────
 #  DASHBOARD PRINCIPAL
 # ─────────────────────────────────────────────
@@ -910,6 +916,7 @@ class ProcesarArchivoConProgresoView(View):
                 logger.error(f'Error en hilo de procesamiento: {e}', exc_info=True)
 
         hilo = threading.Thread(target=_ejecutar_procesamiento, daemon=True)
+        _HILOS_PROCESAMIENTO[extractor_log.id] = hilo
         hilo.start()
 
         # Redirigir a la página de progreso con el extractor_log_id
@@ -988,6 +995,39 @@ class ReanudarProcesamientoView(View):
             mensaje='▶️ Procesamiento reanudado por el usuario',
             detalles={'accion': 'reanudar'},
         )
+
+        # Determinar desde que mensaje continuar. El hilo anterior pudo haber
+        # muerto (p. ej. al reiniciar el servidor), asi que relanzamos un hilo
+        # nuevo en lugar de solo cambiar el flag en BD.
+        start_idx = 0
+        for entrada in LogEntry.objects.filter(extractor_log=log_pausado).order_by('-id')[:100]:
+            detalles = entrada.detalles or {}
+            if detalles.get('accion') == 'pausado' and detalles.get('mensaje_idx'):
+                start_idx = int(detalles['mensaje_idx'])
+                break
+
+        import threading
+        from whatsapp_extractor.tasks import procesar_archivo_extraccion
+
+        def _continuar_procesamiento():
+            try:
+                procesar_archivo_extraccion(
+                    archivo.id,
+                    extractor_log_id=log_pausado.id,
+                    start_idx=start_idx,
+                )
+            except Exception as exc:
+                logger.error(f'Error al reanudar procesamiento: {exc}', exc_info=True)
+
+        hilo_anterior = _HILOS_PROCESAMIENTO.get(log_pausado.id)
+        if hilo_anterior and hilo_anterior.is_alive():
+            # El hilo original sigue vivo y su bucle interno detectara el flag
+            # running; no relanzamos para evitar doble procesamiento.
+            pass
+        else:
+            hilo = threading.Thread(target=_continuar_procesamiento, daemon=True)
+            _HILOS_PROCESAMIENTO[log_pausado.id] = hilo
+            hilo.start()
 
         messages.success(request, 'Procesamiento reanudado.')
         return HttpResponseRedirect(

@@ -257,7 +257,7 @@ def _crear_requerimiento_en_bd(
 
 
 @shared_task
-def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int] = None) -> Dict:
+def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int] = None, start_idx: int = 0) -> Dict:
     '''Procesa un archivo de extracción WhatsApp.
 
     Args:
@@ -407,7 +407,18 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
         # Contador de errores de inserción (IntegrityError) para el resumen final
         errores_insercion = 0
 
+        if start_idx and start_idx > 1:
+            LogEntry.objects.create(
+                extractor_log=extractor_log,
+                nivel='INFO',
+                mensaje=f'↩️ Reanudando desde el mensaje #{start_idx}...',
+                detalles={'mensaje_idx': start_idx, 'accion': 'reanudado_continuacion'},
+            )
+
         for idx, msg in enumerate(mensajes, start=1):
+            # Saltar mensajes ya procesados en una ejecucion previa (reanudacion).
+            if start_idx and idx < start_idx:
+                continue
             # 4. Verificar estado de pausa/detención antes de procesar cada mensaje
             # Recargar el log desde BD para obtener el estado actual
             log_refreshed = ExtractorLog.objects.get(pk=extractor_log.pk)
