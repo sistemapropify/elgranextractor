@@ -1347,12 +1347,9 @@
                                 <div class="field-view" id="modalFuente" style="color: #c9d1d9; font-size: 13px;">—</div>
                                 <div class="field-edit" style="display: none;">
                                     <select id="editFuente" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;">
-                                        <option value="exito_inmobiliario">Whatsapp Éxito Inmobiliario</option>
-                                        <option value="inmobiliarias_unidas">Whatsapp Inmobiliarias Unidas</option>
-                                        <option value="red_inmobiliaria">WhatsApp Red Inmobiliaria Arequipa</option>
-                                        <option value="grupo_whatsapp_1">Grupo WhatsApp Inmobiliario 1</option>
-                                        <option value="grupo_whatsapp_2">Grupo WhatsApp Inmobiliario 2</option>
-                                        <option value="grupo_whatsapp_3">Grupo WhatsApp Inmobiliario 3</option>
+                                        {% for value, label in fuentes %}
+                                            <option value="{{ value }}">{{ label }}</option>
+                                        {% endfor %}
                                         <option value="otro">Otro</option>
                                     </select>
                                 </div>

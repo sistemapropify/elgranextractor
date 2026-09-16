@@ -1618,8 +1618,19 @@ class EjecutarMatchingMasivoView(TemplateView):
             limite_por_requerimiento = int(request.POST.get('limite_por_requerimiento', 10))
             alpha = float(request.POST.get('alpha', 0.6))
             
-            # Obtener solo requerimientos verificados
-            requerimientos = list(Requerimiento.objects.filter(verificado=True)[:500])
+            # Solo requerimientos verificados de los últimos 30 días.
+            # Regla de negocio definida con el usuario: no gastar cómputo
+            # en requerimientos viejos (FAISS + embeddings por requerimiento).
+            from datetime import date, timedelta
+            from django.db.models.functions import Coalesce, TruncDate
+            cutoff = date.today() - timedelta(days=30)
+            requerimientos = list(
+                Requerimiento.objects.filter(verificado=True)
+                .annotate(fecha_efectiva=Coalesce('fecha', TruncDate('creado_en')))
+                .filter(fecha_efectiva__gte=cutoff)
+                .order_by('-fecha_efectiva')
+                [:500]
+            )
             
             if not requerimientos:
                 return JsonResponse({
@@ -1667,8 +1678,8 @@ class EjecutarMatchingMasivoView(TemplateView):
                     
                     # Construir respuesta en el mismo formato que el engine legacy
                     mejor_match = matches[0]
-                    mejor_score = mejor_match['score_total']
-                    scores = [m['score_total'] for m in matches]
+                    mejor_score = mejor_match.get('score_ajustado', mejor_match.get('score_total'))
+                    scores = [m.get('score_ajustado', m.get('score_total')) for m in matches]
                     score_promedio = sum(scores) / len(scores) if scores else 0.0
                     
                     fv = mejor_match.get('field_values', {})
@@ -1777,7 +1788,7 @@ class EjecutarMatchingMasivoView(TemplateView):
                     except (ValueError, TypeError):
                         score_detalle_clean[k] = str(v)
             
-            score_total = Decimal(str(match.get('score_total', 0)))
+            score_total = Decimal(str(match.get('score_ajustado', match.get('score_total', 0))))
             
             # --- UPSERT: buscar existente para este par (req + prop) ---
             existente = MatchResult.objects.filter(
