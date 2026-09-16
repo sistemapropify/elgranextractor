@@ -41,6 +41,16 @@ PENALIZACION_AREA = 0.50            # 50% por exceso de área
 # Tipo de cambio (debe moverse a BD o API externa en el futuro)
 TIPO_CAMBIO_USD_PEN = 3.75
 
+# Disponibilidad de propiedades (matching solo contra cartera activa)
+# Estados observados en dbo.property: Disponible(3), No disponible(6),
+# Vendida(7), Draft(1), En proceso de captacion(8), Pausada(5), Reservada(4).
+ESTADOS_DISPONIBLES = {'disponible'}
+PROPERTY_STATUS_ID_DISPONIBLE = 3
+
+# Frescura del requerimiento (variable tiempo)
+FRESCURA_VIDA_MEDIA_DIAS = 7     # vida media del decaimiento exponencial
+FRESCURA_FACTOR_MINIMO = 0.15    # piso: un requerimiento nunca llega a 0
+
 # Umbrales semánticos (función escalonada)
 SEMANTICO_UMBRALES = {
     'excelente': 0.85,
@@ -129,6 +139,84 @@ def _extraer_moneda(field_values: Dict) -> str:
     if currency_id == 2:
         return 'PEN'
     return 'PEN'
+
+
+def propiedad_disponible(fv: Dict) -> bool:
+    """
+    Determina si una propiedad esta disponible para matching.
+
+    Solo participa si:
+      1. is_visible es verdadero (visible/activa en el portal), y
+      2. property_status_name es 'Disponible' (o property_status_id == 3).
+
+    Cualquier otro estado (Vendida, Reservada, No disponible, Draft,
+    Pausada, En proceso de captacion) queda excluido del matching.
+    """
+    visible = fv.get('is_visible')
+    if visible is None:
+        return False
+    if isinstance(visible, bool):
+        if not visible:
+            return False
+    else:
+        if _normalize_str(visible) in ('false', '0', 'no', 'off', 'none', 'n'):
+            return False
+
+    status = _normalize_str(fv.get('property_status_name', ''))
+    if status == 'disponible':
+        return True
+    if _to_int(fv.get('property_status_id')) == PROPERTY_STATUS_ID_DISPONIBLE:
+        return True
+    return False
+
+
+def calcular_factor_frescura(fecha, creado_en=None) -> Tuple[float, int, str]:
+    """
+    Calcula el factor de frescura de un requerimiento (variable tiempo).
+
+    Decaimiento exponencial con vida media FRESCURA_VIDA_MEDIA_DIAS:
+        factor = max(FRESCURA_FACTOR_MINIMO, 0.5 ** (edad_dias / vida_media))
+
+    Si fecha es None se usa creado_en. Si ambos son None se asume nuevo (1.0)
+    para no penalizar datos faltantes.
+
+    Returns:
+        Tuple[factor (0-1), edad_dias, etiqueta]
+    """
+    import datetime as _dt
+
+    referencia = fecha
+    if referencia is None and creado_en is not None:
+        referencia = creado_en
+    if isinstance(referencia, _dt.datetime):
+        referencia = referencia.date()
+
+    if referencia is None:
+        return (1.0, 0, 'Nuevo')
+
+    hoy = _dt.date.today()
+    try:
+        edad_dias = max(0, (hoy - referencia).days)
+    except TypeError:
+        return (1.0, 0, 'Nuevo')
+
+    factor = max(
+        FRESCURA_FACTOR_MINIMO,
+        0.5 ** (edad_dias / float(FRESCURA_VIDA_MEDIA_DIAS)),
+    )
+
+    if edad_dias <= 3:
+        estado = 'Nuevo'
+    elif edad_dias <= 7:
+        estado = 'Reciente'
+    elif edad_dias <= 14:
+        estado = 'Enfriándose'
+    elif edad_dias <= 30:
+        estado = 'Frío'
+    else:
+        estado = 'Antiguo'
+
+    return (round(factor, 4), edad_dias, estado)
 
 
 # ============================================================
@@ -745,6 +833,7 @@ def filtrar_resultados_finales(
     resultados: List[Dict],
     umbral_minimo: int = UMBRAL_MINIMO_SCORE,
     top_k: int = TOP_K_MATCHES,
+    score_key: str = 'score_total',
 ) -> List[Dict]:
     """
     Aplica el filtrado final a los resultados de matching.
@@ -763,10 +852,10 @@ def filtrar_resultados_finales(
         Lista filtrada y ordenada con ranking asignado
     """
     # Filtrar por umbral
-    filtrados = [r for r in resultados if r.get('score_total', 0) >= umbral_minimo]
+    filtrados = [r for r in resultados if r.get(score_key, 0) >= umbral_minimo]
 
     # Ordenar por score descendente
-    filtrados.sort(key=lambda x: x.get('score_total', 0), reverse=True)
+    filtrados.sort(key=lambda x: x.get(score_key, 0), reverse=True)
 
     # Limitar a top-K
     top = filtrados[:top_k]
@@ -805,4 +894,6 @@ def preparar_req_data(requerimiento) -> Dict:
         'ascensor': (requerimiento.ascensor or '').lower(),
         'cochera': (requerimiento.cochera or '').lower(),
         'caracteristicas_extra': requerimiento.caracteristicas_extra or '',
+        'fecha': requerimiento.fecha,
+        'creado_en': getattr(requerimiento, 'creado_en', None),
     }

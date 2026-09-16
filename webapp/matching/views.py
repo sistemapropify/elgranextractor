@@ -15,6 +15,7 @@ from requerimientos.models import Requerimiento
 from propifai.models import PropifaiProperty
 from .models import MatchResult
 from .scoring import UMBRAL_MINIMO_SCORE
+from . import scoring
 from .serializers import (
     MatchResultSerializer,
     MatchingResultSerializer,
@@ -891,14 +892,23 @@ class MatchingMasivoView(TemplateView):
         agente_filter = self.request.GET.get('agente', '').strip()
         match_filter = self.request.GET.get('match_filter', '').strip()
         sort_option = self.request.GET.get('sort', '-fecha').strip()
+        rango_tiempo = self.request.GET.get('rango', 'all').strip()
         
         context['search_filter'] = search_filter
         context['agente_filter'] = agente_filter
         context['match_filter'] = match_filter
         context['sort_option'] = sort_option
+        context['rango_tiempo'] = rango_tiempo
         
         # Query base: solo verificados
         requerimientos_qs = Requerimiento.objects.filter(verificado=True)
+
+        # Fecha efectiva: fecha del mensaje o, si falta, la fecha de creacion.
+        # Evita que requerimientos sin fecha desordenen la grilla.
+        from django.db.models.functions import Coalesce, TruncDate
+        requerimientos_qs = requerimientos_qs.annotate(
+            fecha_efectiva=Coalesce('fecha', TruncDate('creado_en'))
+        )
         
         # Aplicar filtro por búsqueda de texto (nombre, agente, distritos)
         if search_filter:
@@ -914,18 +924,18 @@ class MatchingMasivoView(TemplateView):
         if agente_filter:
             requerimientos_qs = requerimientos_qs.filter(agente__icontains=agente_filter)
         
-        # Aplicar ordenamiento
-        sort_map = {
-            '-fecha': '-fecha', '-fecha': '-fecha, -hora',
-            'fecha': 'fecha',
-            '-match': '-match',  # se ordena en Python después
-            'match': 'match',
-        }
-        if sort_option in ('-fecha', 'fecha'):
-            if sort_option == '-fecha':
-                requerimientos_qs = requerimientos_qs.order_by('-fecha', '-hora')
-            else:
-                requerimientos_qs = requerimientos_qs.order_by('fecha', 'hora')
+        # Aplicar filtro temporal (variable tiempo): últimos 7 o 30 días
+        if rango_tiempo in ('7d', '30d'):
+            from datetime import date, timedelta
+            dias = 7 if rango_tiempo == '7d' else 30
+            cutoff = date.today() - timedelta(days=dias)
+            requerimientos_qs = requerimientos_qs.filter(fecha_efectiva__gte=cutoff)
+
+        # Aplicar ordenamiento (la frescura == fecha efectiva descendente)
+        if sort_option in ('-fecha', '-frescura'):
+            requerimientos_qs = requerimientos_qs.order_by('-fecha_efectiva', '-hora', '-id')
+        elif sort_option == 'fecha':
+            requerimientos_qs = requerimientos_qs.order_by('fecha_efectiva', 'hora', 'id')
         
         # Paginación
         paginator = Paginator(requerimientos_qs, 50)
@@ -992,6 +1002,15 @@ class MatchingMasivoView(TemplateView):
                 progress_class = "match-low"
                 estado_text = "Match Bajo"
             
+            # ── Variable tiempo: frescura, fecha efectiva y estado de match ──
+            factor_frescura, edad_dias, frescura_estado = scoring.calcular_factor_frescura(
+                req.fecha, req.creado_en
+            )
+            fecha_efectiva = getattr(req, 'fecha_efectiva', None) or req.fecha
+            if fecha_efectiva is None and req.creado_en:
+                fecha_efectiva = req.creado_en.date()
+            match_status = 'matcheado' if info_resumen else 'sin_match'
+
             requerimientos_con_porcentajes.append({
                 'requerimiento': req,
                 'porcentaje': porcentaje,
@@ -1009,6 +1028,11 @@ class MatchingMasivoView(TemplateView):
                 'mejor_propiedad_precio': mejor_propiedad_precio,
                 'total_compatibles': total_compatibles,
                 'tiene_propiedad_match': mejor_propiedad_id is not None,
+                'fecha_efectiva': fecha_efectiva,
+                'edad_dias': edad_dias,
+                'frescura_estado': frescura_estado,
+                'frescura_factor': factor_frescura,
+                'match_status': match_status,
             })
         
         # ── Aplicar filtro por match % ──

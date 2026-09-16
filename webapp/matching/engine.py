@@ -203,13 +203,14 @@ def ejecutar_matching_requerimiento(requerimiento_id: int, propiedades=None) -> 
     # Convertir al formato esperado por los callers
     resultados = []
     for m in matches:
+        score_ajustado = m.get('score_ajustado', m.get('score_total', 0))
         resultados.append({
             'propiedad_dict': m.get('field_values', {}),
             'propiedad_id': m['property_id'],
-            'score_total': m['score_total'],
+            'score_total': score_ajustado,
             'score_detalle': m.get('score_detalle', {}),
             'fase_eliminada': None,
-            'porcentaje_compatibilidad': m['score_total'],
+            'porcentaje_compatibilidad': score_ajustado,
             'ranking': m.get('ranking'),
         })
 
@@ -222,10 +223,10 @@ def ejecutar_matching_requerimiento(requerimiento_id: int, propiedades=None) -> 
         'total_descartadas': 0,
         'total_compatibles': len(matches),
         'descartadas_por_campo': {},
-        'score_promedio': round(sum(m['score_total'] for m in matches) / len(matches), 2) if matches else 0.0,
+        'score_promedio': round(sum(m.get('score_ajustado', m.get('score_total', 0)) for m in matches) / len(matches), 2) if matches else 0.0,
         'propiedad_top': {
             'propiedad_id': matches[0]['property_id'],
-            'score_total': matches[0]['score_total'],
+            'score_total': matches[0].get('score_ajustado', matches[0].get('score_total', 0)),
         } if matches else None,
     }
 
@@ -300,6 +301,7 @@ def obtener_resumen_matching_masivo(limite=500):
     try:
         reqs_con_match = (
             MatchResult.objects
+            .filter(fase_eliminada__isnull=True)
             .values('requerimiento_id')
             .annotate(max_score=Max('score_total'))
             .order_by('-max_score')
@@ -312,7 +314,7 @@ def obtener_resumen_matching_masivo(limite=500):
         reqs_map = {r.id: r for r in Requerimiento.objects.filter(id__in=req_ids, verificado=True)}
 
         mejores = {}
-        for mr in MatchResult.objects.filter(requerimiento_id__in=req_ids).order_by('requerimiento_id', '-score_total'):
+        for mr in MatchResult.objects.filter(requerimiento_id__in=req_ids, fase_eliminada__isnull=True).order_by('requerimiento_id', '-score_total'):
             if mr.requerimiento_id not in mejores:
                 mejores[mr.requerimiento_id] = mr
 

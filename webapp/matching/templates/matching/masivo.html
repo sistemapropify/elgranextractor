@@ -224,7 +224,7 @@
 
     .table-header {
         display: grid;
-        grid-template-columns: 1.5fr 1.2fr 0.8fr 0.8fr 0.7fr 0.7fr 0.8fr 1.2fr 0.8fr 0.6fr 0.8fr;
+        grid-template-columns: 1.5fr 0.6fr 0.7fr 1.2fr 0.8fr 0.8fr 0.7fr 0.7fr 0.8fr 1.2fr 0.8fr 0.6fr 0.8fr;
         padding: 10px 12px;
         background-color: #21262d;
         border-bottom: 1px solid #30363d;
@@ -238,7 +238,7 @@
 
     .table-row {
         display: grid;
-        grid-template-columns: 1.5fr 1.2fr 0.8fr 0.8fr 0.7fr 0.7fr 0.8fr 1.2fr 0.8fr 0.6fr 0.8fr;
+        grid-template-columns: 1.5fr 0.6fr 0.7fr 1.2fr 0.8fr 0.8fr 0.7fr 0.7fr 0.8fr 1.2fr 0.8fr 0.6fr 0.8fr;
         padding: 10px 12px;
         border-bottom: 1px solid #30363d;
         align-items: center;
@@ -732,9 +732,18 @@
                 {% endif %}
             </div>
             <div class="form-group">
+                <label for="rango">📅 Antigüedad</label>
+                <select id="rango" name="rango" class="form-control">
+                    <option value="all" {% if rango_tiempo == 'all' or not rango_tiempo %}selected{% endif %}>Todos</option>
+                    <option value="7d" {% if rango_tiempo == '7d' %}selected{% endif %}>Últimos 7 días</option>
+                    <option value="30d" {% if rango_tiempo == '30d' %}selected{% endif %}>Últimos 30 días</option>
+                </select>
+            </div>
+            <div class="form-group">
                 <label for="sort">Ordenar por</label>
                 <select id="sort" name="sort" class="form-control">
                     <option value="-fecha" {% if request.GET.sort == '-fecha' %}selected{% endif %}>Más recientes</option>
+                    <option value="-frescura" {% if request.GET.sort == '-frescura' %}selected{% endif %}>Más frescos</option>
                     <option value="fecha" {% if request.GET.sort == 'fecha' %}selected{% endif %}>Más antiguos</option>
                     <option value="-match" {% if request.GET.sort == '-match' %}selected{% endif %}>Mejor match</option>
                     <option value="match" {% if request.GET.sort == 'match' %}selected{% endif %}>Peor match</option>
@@ -751,6 +760,8 @@
     <div class="matching-table">
         <div class="table-header">
             <div>Requerimiento</div>
+            <div>Fecha</div>
+            <div>Frescura</div>
             <div>Distritos / Tipo</div>
             <div>Presupuesto</div>
             <div>% Match</div>
@@ -775,6 +786,25 @@
                             {{ req.tipo_propiedad|default:"Sin tipo"|capfirst }}
                             · {{ req.habitaciones|default:"?" }} hab · {{ req.banos|default:"?" }} baños
                         </div>
+                    </div>
+
+                    <div>
+                        <div style="font-size:13px;color:#c9d1d9;">
+                            {{ item.fecha_efectiva|date:"d/m/Y"|default:"—" }}
+                        </div>
+                        <div class="req-detail">{{ item.edad_dias }} días</div>
+                    </div>
+
+                    <div>
+                        {% if item.frescura_estado == 'Nuevo' %}
+                        <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:rgba(63,185,80,0.15);color:#3fb950;border:1px solid rgba(63,185,80,0.3);">🔥 {{ item.frescura_estado }}</span>
+                        {% elif item.frescura_estado == 'Reciente' %}
+                        <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:rgba(210,153,34,0.15);color:#d29922;border:1px solid rgba(210,153,34,0.3);">🟡 {{ item.frescura_estado }}</span>
+                        {% elif item.frescura_estado == 'Enfriándose' %}
+                        <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:rgba(219,109,40,0.15);color:#db6d28;border:1px solid rgba(219,109,40,0.3);">🟠 {{ item.frescura_estado }}</span>
+                        {% else %}
+                        <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:rgba(139,148,158,0.15);color:#8b949e;border:1px solid rgba(139,148,158,0.3);">🧊 {{ item.frescura_estado }}</span>
+                        {% endif %}
                     </div>
 
                     <div>
@@ -804,6 +834,11 @@
                                 {{ item.porcentaje|floatformat:0 }}%
                             </span>
                         </div>
+                        {% if item.match_status == 'matcheado' %}
+                        <div style="font-size:10px;color:#3fb950;margin-top:4px;">✅ Matcheado</div>
+                        {% else %}
+                        <div style="font-size:10px;color:#8b949e;margin-top:4px;">⚪ Sin match</div>
+                        {% endif %}
                     </td>
 
                     <!-- Score semántico (FAISS) -->
@@ -915,13 +950,13 @@
         <div class="pagination-container">
             <nav>
                 <ul class="pagination">
-                    {% with agente_param=request.GET.agente|default:'' search_param=request.GET.search|default:'' match_filter_param=request.GET.match_filter|default:'' sort_param=request.GET.sort|default:'' %}
+                    {% with agente_param=request.GET.agente|default:'' search_param=request.GET.search|default:'' match_filter_param=request.GET.match_filter|default:'' sort_param=request.GET.sort|default:'' rango_param=request.GET.rango|default:'' %}
                     {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page=1{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}">««</a>
+                            <a class="page-link" href="?page=1{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}{% if rango_param %}&rango={{ rango_param }}{% endif %}">««</a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}">«</a>
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}{% if rango_param %}&rango={{ rango_param }}{% endif %}">«</a>
                         </li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">«</span></li>
@@ -932,17 +967,17 @@
                             <li class="page-item active"><span class="page-link">{{ num }}</span></li>
                         {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}">{{ num }}</a>
+                                <a class="page-link" href="?page={{ num }}{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}{% if rango_param %}&rango={{ rango_param }}{% endif %}">{{ num }}</a>
                             </li>
                         {% endif %}
                     {% endfor %}
 
                     {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}">»</a>
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}{% if rango_param %}&rango={{ rango_param }}{% endif %}">»</a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}">»»</a>
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}{% if rango_param %}&rango={{ rango_param }}{% endif %}">»»</a>
                         </li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">»</span></li>

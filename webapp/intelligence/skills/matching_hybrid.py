@@ -159,6 +159,24 @@ class HybridMatchingSkill(BaseSkill):
                 req_data=req_data,
             )
 
+            # ── Variable tiempo: frescura del requerimiento ────────────
+            # Un requerimiento nuevo pesa más que uno de hace 1 semana o 1 mes.
+            # El factor degrada el score de los requerimientos viejos.
+            factor_frescura, edad_dias, frescura_estado = scoring.calcular_factor_frescura(
+                req_data.get('fecha'), req_data.get('creado_en')
+            )
+            for m in matches:
+                base = m['score_total']
+                m['score_ajustado'] = round(base * factor_frescura, 2)
+                m['score_detalle']['frescura'] = {
+                    'score': round(factor_frescura, 4),
+                    'peso_maximo': 1.0,
+                    'detalle': (
+                        f"Factor frescura {factor_frescura:.2f} "
+                        f"(edad {edad_dias} días, {frescura_estado})"
+                    ),
+                }
+
             if not faiss_disponible:
                 return SkillResult.ok(
                     data={
@@ -210,16 +228,20 @@ class HybridMatchingSkill(BaseSkill):
                 score_total = max(0.0, min(100.0, score_total))
                 resultados_para_filtrar.append({
                     'score_total': score_total,
+                    'score_ajustado': m.get('score_ajustado', score_total),
                     'propiedad_dict': m,
                     'propiedad_id': m['property_id'],
                     'fase_eliminada': None,
-                    'porcentaje_compatibilidad': score_total,
+                    'porcentaje_compatibilidad': m.get('score_ajustado', score_total),
                 })
 
+            # Umbral y ranking sobre el score ajustado por frescura:
+            # los requerimientos viejos dejan de acaparar los primeros puestos.
             final = scoring.filtrar_resultados_finales(
                 resultados_para_filtrar,
                 umbral_minimo=int(umbral_minimo),
                 top_k=top_n,
+                score_key='score_ajustado',
             )
             post_umbral = len(final)
 
@@ -251,7 +273,10 @@ class HybridMatchingSkill(BaseSkill):
             for item in final:
                 m = item['propiedad_dict']
                 m['ranking'] = item['ranking']
+                # score_total conserva el score base (estructural + semántico).
+                # El score ajustado por frescura es el que definió umbral y ranking.
                 m['score_total'] = item['score_total']
+                m['score_ajustado'] = item['score_ajustado']
                 top_matches.append(m)
 
             return SkillResult.ok(
@@ -371,6 +396,11 @@ class HybridMatchingSkill(BaseSkill):
                 continue
 
             fv = doc.field_values or {}
+
+            # ── Filtro de disponibilidad: solo cartera activa ───────────
+            # Excluye propiedades vendidas, reservadas, pausadas, drafts, etc.
+            if not scoring.propiedad_disponible(fv):
+                continue
 
             # FAISS retorna distancia L2. Para vectores normalizados: cos_sim = 1 - l2²/2
             l2_dist = fr['similarity']
