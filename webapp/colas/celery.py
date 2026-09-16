@@ -105,12 +105,6 @@ app.conf.update(
             'options': {'queue': 'default'},
         },
         # Tareas RAG (SPEC-003)
-        'sync-requerimientos-embeddings-cada-30-min': {
-            'task': 'intelligence.tasks.sincronizar_requerimientos_enbedados',
-            'schedule': 1800.0,  # Cada 30 minutos
-            'options': {'queue': 'analisis'},
-            'kwargs': {'force_full_sync': False}
-        },
         'sincronizar-colecciones-rag-cada-6-horas': {
             'task': 'intelligence.tasks.sincronizar_todas_colecciones_rag',
             'schedule': 21600.0,  # Cada 6 horas

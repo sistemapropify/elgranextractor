@@ -121,6 +121,16 @@ class HybridMatchingSkill(BaseSkill):
             # ── Paso 1: Obtener requerimiento embeddeado ────────────────
             req_doc, req_data = self._get_requerimiento_doc(requerimiento_id)
             if req_doc is None:
+                # Self-heal (Fase 1): si el requerimiento aún no tiene embedding,
+                # lo embebe en este momento y reintenta. No depende de Celery beat
+                # (que no corre en producción), así el sync deja de ser un cuello de botella.
+                try:
+                    from ..services.rag import RAGService
+                    RAGService.sync_collection_dynamic('requerimientos_enbedados', force_full_sync=False)
+                    req_doc, req_data = self._get_requerimiento_doc(requerimiento_id)
+                except Exception as exc:
+                    logger.warning(f'Self-heal embedding requerimiento {requerimiento_id} falló: {exc}')
+            if req_doc is None:
                 return SkillResult.ok(
                     data={
                         'estado': 'sin_embedding',
