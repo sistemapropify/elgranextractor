@@ -223,10 +223,11 @@ def calcular_factor_frescura(fecha, creado_en=None) -> Tuple[float, int, str]:
 # FASE 1: FILTROS DUROS
 # ============================================================
 
-# Mapeo de operación a operation_type_id: 1=Venta, 2=Permuta, 3=Alquiler
+# Mapeo de condición del requerimiento → operation_type_id de la propiedad.
+# Valores reales en dbo.property: 2=Venta, 3=Alquiler (no hay id 1 en uso).
 _OPERATION_TIPO_MAP = {
-    'compra': (1, 2),
-    'venta': (1, 2),
+    'compra': (2,),
+    'venta': (2,),
     'alquiler': (3,),
     'anticresis': (3,),
 }
@@ -271,21 +272,28 @@ def aplicar_filtros_duros(prop_dict: Dict, req_data: Dict) -> Optional[str]:
         return None
 
     # ── 1. CONDICIÓN (compra/alquiler) ──────────────────────────────
+    # Un requerimiento de ALQUILER solo matchea propiedades ALQUILER (op_id 3);
+    # uno de COMPRA solo matchea propiedades VENTA (op_id 2).
     condicion_req = _normalize_str(req_data.get('condicion', ''))
     if condicion_req and condicion_req not in ('no_especificado', ''):
-        op_id = _get_operation_type_id(prop_dict)
-        if op_id is not None:
-            op_ids_validos = _OPERATION_TIPO_MAP.get(condicion_req)
-            if op_ids_validos and op_id not in op_ids_validos:
-                return 'condicion'
-        else:
+        op_ids_validos = _OPERATION_TIPO_MAP.get(condicion_req)
+        if op_ids_validos:
+            op_id = _get_operation_type_id(prop_dict)
             op_name = _normalize_str(prop_dict.get('operation_type_name', ''))
-            if condicion_req in ('compra', 'venta'):
-                if op_name and op_name not in ('venta', 'compra', 'permuta'):
+            if op_id is not None:
+                if op_id not in op_ids_validos:
                     return 'condicion'
-            elif condicion_req in ('alquiler', 'anticresis'):
-                if op_name and op_name != 'alquiler':
-                    return 'condicion'
+            elif op_name:
+                if condicion_req in ('compra', 'venta'):
+                    if op_name not in ('venta', 'compra', 'permuta'):
+                        return 'condicion'
+                elif condicion_req in ('alquiler', 'anticresis'):
+                    if op_name != 'alquiler':
+                        return 'condicion'
+            else:
+                # Propiedad sin información de operación: no arriesgar
+                # un cruce compra↔alquiler incorrecto.
+                return 'condicion'
 
     # ── 2. TIPO DE PROPIEDAD ─────────────────────────────────────
     tipo_req = _normalize_str(req_data.get('tipo_propiedad', ''))
