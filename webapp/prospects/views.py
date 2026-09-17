@@ -583,7 +583,7 @@ def _serializar_comentario(comentario):
         'author_username': comentario.author_username,
         'color': color_para_usuario(comentario.author_username),
         'text': comentario.text,
-        'created_at': comentario.created_at.strftime('%d/%m/%Y %H:%M') if comentario.created_at else '',
+        'created_at': timezone.localtime(comentario.created_at).strftime('%d/%m/%Y %H:%M') if comentario.created_at else '',
     }
 
 
@@ -679,9 +679,9 @@ def prospect_dashboard(request):
             'operacion': prospect.get_operation_type_display() or '',
             'contrato': prospect.get_contract_type_display() or '',
             'origen': prospect.get_origin_display() or prospect.origin or '',
-            'creado': prospect.created_at.strftime('%d/%m/%Y %H:%M') if prospect.created_at else '',
+            'creado': timezone.localtime(prospect.created_at).strftime('%d/%m/%Y %H:%M') if prospect.created_at else '',
             'tomada_por_username': prospect.tomada_por_username or '',
-            'tomada_en': prospect.tomada_en.strftime('%d/%m/%Y %H:%M') if prospect.tomada_en else '',
+            'tomada_en': timezone.localtime(prospect.tomada_en).strftime('%d/%m/%Y %H:%M') if prospect.tomada_en else '',
             'captado': bool(prospect.captado),
             'comentarios': [_serializar_comentario(c) for c in prospect.comments.all()],
         })
