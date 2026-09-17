@@ -461,7 +461,73 @@
     .ppc-drawer-fields {
         display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px;
     }
-    .ppc-drawer-fields .ppc-edit-btn { margin-top: 6px; }
+    .ppc-confirm-cancel { background: #21262d; color: var(--text-primary, #e6edf3); }
+    .ppc-confirm-ok { background: #f85149; color: #fff; border-color: #f85149; }
+
+    /* ── Tarjeta colapsada en dos mitades + mini-chat ── */
+    .ppc-card-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        align-items: start;
+    }
+    .ppc-comments {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        border-left: 1px solid var(--border-color, #30363d);
+        padding-left: 12px;
+    }
+    .ppc-comments__head {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        color: var(--text-secondary, #8b949e);
+        margin-bottom: 6px;
+    }
+    .ppc-comments__list {
+        max-height: 132px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding-right: 2px;
+    }
+    .ppc-comment { font-size: 12px; line-height: 1.35; }
+    .ppc-comment__meta { font-size: 10px; color: var(--text-subtle, #484f58); }
+    .ppc-comment__author { font-weight: 700; }
+    .ppc-comment__text {
+        color: var(--text-primary, #e6edf3);
+        word-break: break-word;
+        white-space: pre-wrap;
+    }
+    .ppc-comments__empty { color: var(--text-subtle, #484f58); font-size: 11px; font-style: italic; }
+    .ppc-comments__form { display: flex; gap: 6px; margin-top: 8px; }
+    .ppc-comments__input {
+        flex: 1; min-width: 0;
+        background: var(--bg-primary, #0d1117);
+        border: 1px solid var(--border-color, #30363d);
+        border-radius: 8px;
+        color: var(--text-primary, #e6edf3);
+        padding: 7px 9px;
+        font-size: 12px;
+        font-family: inherit;
+    }
+    .ppc-comments__input:focus { outline: none; border-color: var(--accent-blue, #58a6ff); }
+    .ppc-comments__send {
+        border: 1px solid var(--accent-blue, #58a6ff);
+        background: var(--accent-blue, #58a6ff);
+        color: #0d1117;
+        border-radius: 8px;
+        padding: 7px 12px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .ppc-comments__send:hover { filter: brightness(1.12); }
+    .ppc-comments__send:disabled { opacity: .55; cursor: wait; }
 </style>
 {% endblock %}
 
@@ -673,6 +739,7 @@
                 // Los clics en botones o en el detalle ya abierto no alteran el estado.
                 if (e.target.closest('.ppc-tomar')) return;
                 if (e.target.closest('.ppc-caduco')) return;
+                if (e.target.closest('.ppc-comments')) return;
                 if (e.target.closest('.prospect-detail-inline')) return;
                 var detalle = card.querySelector('.prospect-detail-inline');
                 if (!detalle) return;
@@ -788,6 +855,118 @@
         return '<button type="button" class="ppc-caduco" data-prospect="' + pid + '" ' +
             'title="Ocultar porque ya no está disponible">Prospección caducó</button>';
     }
+
+    // ── Mini-chat de comentarios por prospección ──
+    function colorUsuario(username) {
+        var nombre = (username || '').trim() || 'anonimo';
+        var total = 0;
+        for (var i = 0; i < nombre.length; i++) {
+            total = (total * 31 + nombre.charCodeAt(i)) >>> 0;
+        }
+        var paleta = ['#58a6ff', '#3fb950', '#d29922', '#f85149', '#a371f7',
+            '#39c5cf', '#e8b84a', '#ff7b72', '#79c0ff', '#56d364', '#f0883e', '#db61a2'];
+        return paleta[total % paleta.length];
+    }
+
+    function comentariosHtml(p) {
+        var comentarios = (p && p.comentarios) ? p.comentarios : [];
+        var filas = comentarios.map(function (c) {
+            var color = c.color || colorUsuario(c.author_username);
+            var fecha = c.created_at || '';
+            return '<div class="ppc-comment">' +
+                '<div class="ppc-comment__meta">' +
+                    '<span class="ppc-comment__author" style="color:' + color + '">' + escaparHtml(c.author_username) + '</span>' +
+                    (fecha ? ' · ' + escaparHtml(fecha) : '') +
+                '</div>' +
+                '<div class="ppc-comment__text">' + escaparHtml(c.text) + '</div>' +
+            '</div>';
+        }).join('');
+        return '<div class="ppc-comments" data-prospect="' + (p && p.id != null ? p.id : '') + '">' +
+            '<div class="ppc-comments__head">Comentarios (' + comentarios.length + ')</div>' +
+            '<div class="ppc-comments__list">' +
+                (filas || '<div class="ppc-comments__empty">Sin comentarios todavía</div>') +
+            '</div>' +
+            '<div class="ppc-comments__form">' +
+                '<input class="ppc-comments__input" type="text" placeholder="Escribe un comentario…" maxlength="1000" autocomplete="off">' +
+                '<button type="button" class="ppc-comments__send">Enviar</button>' +
+            '</div>' +
+        '</div>';
+    }
+
+    function pintarComentarios(pid) {
+        var card = document.querySelector('.prospect-panel-card[data-prospect-id="' + pid + '"]');
+        if (!card) return;
+        var modulo = card.querySelector('.ppc-comments');
+        if (!modulo) return;
+        var p = buscarProspectoPorId(pid);
+        if (!p) return;
+        var wrapper = document.createElement('div');
+        wrapper.innerHTML = comentariosHtml(p);
+        modulo.parentNode.replaceChild(wrapper.firstChild, modulo);
+    }
+
+    function initComentariosProspeccion() {
+        var container = document.getElementById('selected-property');
+        if (!container || container.getAttribute('data-comments-init')) return;
+        container.setAttribute('data-comments-init', '1');
+
+        function enviarComentario(modulo) {
+            if (!modulo) return;
+            var pid = modulo.getAttribute('data-prospect');
+            var input = modulo.querySelector('.ppc-comments__input');
+            var boton = modulo.querySelector('.ppc-comments__send');
+            var texto = (input && input.value ? input.value : '').trim();
+            if (!pid || !texto) return;
+            boton.disabled = true;
+            fetch('/prospects/' + encodeURIComponent(pid) + '/comments/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json',
+                },
+                body: 'text=' + encodeURIComponent(texto),
+            }).then(function (r) {
+                return r.json().catch(function () {
+                    return { ok: false, error: 'El servidor respondió con un formato inesperado.' };
+                });
+            }).then(function (data) {
+                if (data && data.ok && data.comment) {
+                    for (var i = 0; i < todasPropiedadesJSON.length; i++) {
+                        if (String(todasPropiedadesJSON[i].id) === String(pid)) {
+                            if (!todasPropiedadesJSON[i].comentarios) todasPropiedadesJSON[i].comentarios = [];
+                            todasPropiedadesJSON[i].comentarios.push(data.comment);
+                        }
+                    }
+                    if (input) input.value = '';
+                    pintarComentarios(pid);
+                } else {
+                    if (window.alert) window.alert((data && data.error) ? data.error : 'No se pudo enviar el comentario.');
+                }
+                if (boton) boton.disabled = false;
+            }).catch(function () {
+                if (window.alert) window.alert('Error de red. Inténtalo de nuevo.');
+                if (boton) boton.disabled = false;
+            });
+        }
+
+        container.addEventListener('click', function (e) {
+            var boton = e.target && e.target.closest ? e.target.closest('.ppc-comments__send') : null;
+            if (!boton) return;
+            e.preventDefault();
+            e.stopPropagation();
+            enviarComentario(boton.closest('.ppc-comments'));
+        });
+
+        container.addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter') return;
+            var input = e.target && e.target.closest ? e.target.closest('.ppc-comments__input') : null;
+            if (!input) return;
+            e.preventDefault();
+            e.stopPropagation();
+            enviarComentario(input.closest('.ppc-comments'));
+        });
+    }
+    initComentariosProspeccion();
 
     function buscarProspectoPorId(pid) {
         var todas = (typeof todasPropiedadesJSON !== 'undefined') ? todasPropiedadesJSON : [];
@@ -909,26 +1088,25 @@
         var precio = (p.precio && String(p.precio).trim())
             ? ((p.moneda === 'PEN' ? 'S/ ' : '$ ') + p.precio) : '';
         return (
-            // Botones "tomar" y "caducó" arriba a la derecha.
-            '<div class="ppc-tomar-row">' + controlTomarHtml(p) + '</div>' +
-            '<div class="ppc-caduco-row">' + controlCaducoHtml(p) + '</div>' +
-            // Resumen con UNA foto a la izquierda.
-            '<div class="ppc-summary">' +
-                (img
-                    ? '<img class="ppc-thumb" src="' + escaparHtml(img) + '" alt="" loading="lazy" decoding="async" onerror="this.style.display=\'none\'">'
-                    : '<div class="ppc-thumb ppc-thumb-empty">Sin foto</div>') +
-                '<div class="ppc-info">' +
-                    '<div class="ppc-title">' + escaparHtml(tit) + '</div>' +
-                    '<div class="ppc-sub">' + escaparHtml(tipo) +
-                        (dist ? ' · ' + escaparHtml(dist) : '') + '</div>' +
-                    (precio ? '<div class="ppc-price">' + escaparHtml(precio) + '</div>' : '') +
-                    ((p.telefono && String(p.telefono).trim())
-                        ? '<div class="ppc-sub">Tel: ' + escaparHtml(p.telefono) + '</div>' : '') +
-                    (p.status ? '<div class="ppc-status">' + escaparHtml(p.status) + '</div>' : '') +
-                    '<div class="ppc-captado ' + (p.captado ? 'captado-si' : 'captado-no') + '">' +
-                        (p.captado ? '✓ CAPTADO' : 'NO CAPTADO') + '</div>' +
-                    '<div class="ppc-hint">▶ Clic para ver todos los datos</div>' +
+            '<div class="ppc-card-grid">' +
+                '<div class="ppc-summary">' +
+                    (img
+                        ? '<img class="ppc-thumb" src="' + escaparHtml(img) + '" alt="" loading="lazy" decoding="async" onerror="this.style.display=\'none\'">'
+                        : '<div class="ppc-thumb ppc-thumb-empty">Sin foto</div>') +
+                    '<div class="ppc-info">' +
+                        '<div class="ppc-title">' + escaparHtml(tit) + '</div>' +
+                        '<div class="ppc-sub">' + escaparHtml(tipo) +
+                            (dist ? ' · ' + escaparHtml(dist) : '') + '</div>' +
+                        (precio ? '<div class="ppc-price">' + escaparHtml(precio) + '</div>' : '') +
+                        ((p.telefono && String(p.telefono).trim())
+                            ? '<div class="ppc-sub">Tel: ' + escaparHtml(p.telefono) + '</div>' : '') +
+                        (p.status ? '<div class="ppc-status">' + escaparHtml(p.status) + '</div>' : '') +
+                        '<div class="ppc-captado ' + (p.captado ? 'captado-si' : 'captado-no') + '">' +
+                            (p.captado ? '✓ CAPTADO' : 'NO CAPTADO') + '</div>' +
+                        '<div class="ppc-hint">▶ Clic para ver todos los datos</div>' +
+                    '</div>' +
                 '</div>' +
+                comentariosHtml(p) +
             '</div>'
         );
     }
@@ -973,7 +1151,9 @@
         fila('Registrado', p.creado);
         fila('Notas', p.notas);
         if (p.lat && p.lng) fila('Coordenadas', p.lat + ', ' + p.lng);
-        var resultado = filas.join('');
+        var acciones = '<div class="ppc-tomar-row">' + controlTomarHtml(p) + '</div>' +
+            '<div class="ppc-caduco-row">' + controlCaducoHtml(p) + '</div>';
+        var resultado = acciones + filas.join('');
         if (p.id) {
             resultado += '<a class="ppc-edit-btn" href="/prospects/' + p.id +
                 '/detail/" target="_blank" rel="noopener">✏️ Editar captación</a>';

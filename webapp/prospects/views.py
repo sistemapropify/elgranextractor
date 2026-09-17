@@ -16,7 +16,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.conf import settings
 
-from .models import PropertyProspect
+from .models import PropertyProspect, ProspectComment
 from .forms import ProspectCaptureForm, ProspectEditForm
 from .propify_auth import (
     PropifyAuthError,
@@ -30,6 +30,21 @@ from .propify_auth import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+_COMMENT_COLORS = [
+    '#58a6ff', '#3fb950', '#d29922', '#f85149', '#a371f7',
+    '#39c5cf', '#e8b84a', '#ff7b72', '#79c0ff', '#56d364',
+    '#f0883e', '#db61a2',
+]
+
+
+def color_para_usuario(username):
+    nombre = (username or '').strip() or 'anonimo'
+    total = 0
+    for ch in nombre:
+        total = (total * 31 + ord(ch)) & 0xFFFFFFFF
+    return _COMMENT_COLORS[total % len(_COMMENT_COLORS)]
 
 
 def _form_errors_response(form, status=400):
@@ -562,10 +577,45 @@ def caducar_prospeccion(request, pk):
     return JsonResponse({'ok': True, 'status': 'caducado'})
 
 
+def _serializar_comentario(comentario):
+    return {
+        'id': comentario.pk,
+        'author_username': comentario.author_username,
+        'color': color_para_usuario(comentario.author_username),
+        'text': comentario.text,
+        'created_at': comentario.created_at.strftime('%d/%m/%Y %H:%M') if comentario.created_at else '',
+    }
+
+
+@csrf_exempt
+@propify_web_required
+def prospect_comments(request, pk):
+    """Lista y crea comentarios de una captación (mini-chat por prospección)."""
+    prospect = get_object_or_404(PropertyProspect, pk=pk)
+    principal = getattr(request, 'propify_user', None)
+    username = str(getattr(principal, 'username', '') or '').strip()
+    if not username:
+        return JsonResponse({'ok': False, 'error': 'Sesión de usuario inválida.'}, status=401)
+
+    if request.method == 'POST':
+        texto = (request.POST.get('text') or '').strip()
+        if not texto:
+            return JsonResponse({'ok': False, 'error': 'El comentario no puede estar vacío.'}, status=400)
+        if len(texto) > 1000:
+            return JsonResponse({'ok': False, 'error': 'El comentario es demasiado largo.'}, status=400)
+        comentario = ProspectComment.objects.create(
+            prospect=prospect, author_username=username, text=texto,
+        )
+        return JsonResponse({'ok': True, 'comment': _serializar_comentario(comentario)})
+
+    comentarios = list(prospect.comments.all())
+    return JsonResponse({'ok': True, 'results': [_serializar_comentario(c) for c in comentarios]})
+
+
 @propify_web_required
 def prospect_dashboard(request):
     """Dashboard cartográfico con las captaciones activas de todos los agentes."""
-    prospects = list(PropertyProspect.objects.exclude(status='caducado').order_by('-created_at'))
+    prospects = list(PropertyProspect.objects.exclude(status='caducado').prefetch_related('comments').order_by('-created_at'))
     mobile_actors = _mobile_capture_actors()
 
     agent_ids = {prospect.agent_id for prospect in prospects if prospect.agent_id}
@@ -633,6 +683,7 @@ def prospect_dashboard(request):
             'tomada_por_username': prospect.tomada_por_username or '',
             'tomada_en': prospect.tomada_en.strftime('%d/%m/%Y %H:%M') if prospect.tomada_en else '',
             'captado': bool(prospect.captado),
+            'comentarios': [_serializar_comentario(c) for c in prospect.comments.all()],
         })
 
     districts = sorted({p.district for p in prospects if p.district})

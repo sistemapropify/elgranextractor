@@ -300,3 +300,23 @@ class PropertyProspect(models.Model):
         if self.has_gps:
             return f"{self.latitude}, {self.longitude}"
         return "Sin coordenadas"
+
+
+class ProspectComment(models.Model):
+    prospect = models.ForeignKey(
+        PropertyProspect,
+        on_delete=models.CASCADE,
+        related_name='comments',
+        verbose_name='Prospección',
+    )
+    author_username = models.CharField(max_length=150, verbose_name='Autor (username Propify)')
+    text = models.TextField(verbose_name='Comentario')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Fecha y hora')
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Comentario de prospección'
+        verbose_name_plural = 'Comentarios de prospección'
+
+    def __str__(self):
+        return f'{self.author_username} · {self.created_at:%d/%m/%Y %H:%M}'
