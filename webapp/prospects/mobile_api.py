@@ -109,9 +109,20 @@ def mobile_refresh(request):
     return response
 
 
+def _agente_captacion(prospect):
+    """Mismo criterio que el portal web: agente asignado y, si no hay, quien capturó."""
+    agent = prospect.agent
+    if agent is not None:
+        nombre = ' '.join(part for part in (agent.first_name, agent.last_name) if part).strip()
+        return nombre or agent.username or f'Usuario {agent.pk}'
+    actor = prospect.mobile_user
+    return prospect.captured_by_username or (actor.username if actor is not None else '') or 'Usuario APK'
+
+
 def _serialize_prospect(prospect):
     return {
         'id': prospect.pk,
+        'captured_by': _agente_captacion(prospect),
         'created_at': prospect.created_at.astimezone().strftime('%d/%m/%Y %H:%M'),
         'origin': prospect.origin,
         'origin_other': prospect.origin_other,
@@ -189,7 +200,7 @@ def mobile_capture(request):
     if request.method == 'GET':
         # Catálogo compartido: todos los usuarios Propify autenticados pueden
         # consultar y editar las captaciones de todo el equipo.
-        prospects = PropertyProspect.objects.all().order_by('-created_at')
+        prospects = PropertyProspect.objects.select_related('agent', 'mobile_user').order_by('-created_at')
         return Response({'ok': True, 'results': [_serialize_prospect(item) for item in prospects]})
 
     try:
