@@ -222,7 +222,6 @@ def importar_excel(ruta_excel, limite=0):
                 fecha=fecha,
                 hora=hora,
                 agente=agente_val[:120],  # Limitar longitud
-                tipo_original=tipo_original_val[:80],
                 condicion=condicion,
                 tipo_propiedad=tipo_propiedad,
                 distritos=distritos_val[:300],

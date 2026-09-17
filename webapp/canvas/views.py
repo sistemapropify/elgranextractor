@@ -892,7 +892,6 @@ def api_reqs_match(request, prop_id):
                 'fecha': str(req.fecha) if hasattr(req, 'fecha') and req.fecha else '',
                 'hora': hora_str,
                 # Tipo de requerimiento
-                'tipo_original': getattr(req, 'tipo_original', '') or '',
                 'condicion': getattr(req, 'condicion', '') or '',
                 # Requerimiento original (texto completo)
                 'requerimiento': getattr(req, 'requerimiento', '') or '',

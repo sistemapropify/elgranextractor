@@ -20,8 +20,8 @@ class CondicionChoices(models.TextChoices):
     COMPRA          = 'compra',          'Compra'
     ALQUILER        = 'alquiler',        'Alquiler'
     ANTICRESIS      = 'anticresis',      'Anticresis'
-    AMBOS           = 'ambos',           'Compra y Alquiler'
     COMPARTIDO      = 'compartido',      'Compartido'
+    BASURA          = 'basura',          'Basura / Irrelevante'
     NO_ESPECIFICADO = 'no_especificado', 'No Especificado'
 
 
@@ -35,16 +35,6 @@ class TipoPropiedadChoices(models.TextChoices):
     NO_ESPECIFICADO = 'no_especificado', 'No Especificado'
 
 
-class TipoOriginalChoices(models.TextChoices):
-    REQUERIMIENTO        = 'REQUERIMIENTO',                          'Requerimiento'
-    REQ_COMPRA           = 'REQUERIMIENTO COMPRA',                   'Requerimiento Compra'
-    REQ_ALQUILER         = 'REQUERIMIENTO ALQUILER',                 'Requerimiento Alquiler'
-    REQ_COMPRA_ALQUILER  = 'REQUERIMIENTO COMPRA, REQUERIMIENTO ALQUILER', 'Req. Compra + Alquiler'
-    REQ_ALQUILER_COMPRA  = 'REQUERIMIENTO ALQUILER, REQUERIMIENTO COMPRA', 'Req. Alquiler + Compra'
-    PROPIEDAD_VENTA      = 'PROPIEDAD VENTA',                        'Propiedad en Venta'
-    MIXTO                = 'MIXTO',                                  'Mixto'
-    BASURA               = 'BASURA',                                 'Basura / Irrelevante'
-    OTRO                 = 'OTRO',                                   'Otro'
 
 
 class MonedaChoices(models.TextChoices):
@@ -104,13 +94,6 @@ class Requerimiento(models.Model):
         db_index=True,
     )
 
-    # ── Clasificación original del Excel ──────
-    tipo_original = models.CharField(
-        max_length=80,
-        blank=True,
-        verbose_name='Tipo original',
-        help_text='Valor tal como venía en la columna "tipo" del Excel exportado',
-    )
 
     # ── Campos extraídos / estructurados ──────
     condicion = models.CharField(

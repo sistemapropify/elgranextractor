@@ -1622,13 +1622,13 @@ class EjecutarMatchingMasivoView(TemplateView):
             # Regla de negocio definida con el usuario: no gastar cómputo
             # en requerimientos viejos (FAISS + embeddings por requerimiento).
             from datetime import date, timedelta
-            from django.db.models import Q
             from django.db.models.functions import Coalesce, TruncDate
             cutoff = date.today() - timedelta(days=30)
             requerimientos = list(
-                Requerimiento.objects.filter(verificado=True)
-                # No matchear basura ni ofertas de venta etiquetadas como requerimiento
-                .exclude(Q(tipo_original__icontains='basura') | Q(tipo_original__icontains='propiedad venta'))
+                Requerimiento.objects.filter(
+                    verificado=True,
+                    condicion__in=['compra', 'alquiler', 'anticresis'],
+                )
                 .annotate(fecha_efectiva=Coalesce('fecha', TruncDate('creado_en')))
                 .filter(fecha_efectiva__gte=cutoff)
                 .order_by('-fecha_efectiva')

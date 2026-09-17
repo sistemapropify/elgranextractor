@@ -118,15 +118,19 @@ class Command(BaseCommand):
                     except:
                         pass
 
-                # Mapear condición basada en Tipo Original
+                # Mapear condición desde 'Condicion' (fallback: 'Tipo Original')
                 condicion = CondicionChoices.NO_ESPECIFICADO
-                tipo_original_str = str(tipo_original_val).lower()
-                if 'compra' in tipo_original_str:
+                fuente_condicion = str(condicion_val).lower() or str(tipo_original_val).lower()
+                if 'compra' in fuente_condicion:
                     condicion = CondicionChoices.COMPRA
-                elif 'alquiler' in tipo_original_str:
+                elif 'alquiler' in fuente_condicion:
                     condicion = CondicionChoices.ALQUILER
-                elif 'anticresis' in tipo_original_str:
-                    condicion = CondicionChoices.COMPRA
+                elif 'anticresis' in fuente_condicion:
+                    condicion = CondicionChoices.ANTICRESIS
+                elif 'compartido' in fuente_condicion:
+                    condicion = CondicionChoices.COMPARTIDO
+                elif 'basura' in fuente_condicion:
+                    condicion = CondicionChoices.BASURA
 
                 # Mapear tipo de propiedad
                 tipo_propiedad = TipoPropiedadChoices.NO_ESPECIFICADO
@@ -210,7 +214,6 @@ class Command(BaseCommand):
                     fecha=fecha,
                     hora=hora,
                     agente=str(agente_val)[:120],
-                    tipo_original=str(tipo_original_val)[:80],
                     condicion=condicion,
                     tipo_propiedad=tipo_propiedad,
                     distritos=str(distritos_val)[:300],

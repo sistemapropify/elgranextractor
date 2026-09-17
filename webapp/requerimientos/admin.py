@@ -42,7 +42,7 @@ class RequerimientoAdmin(admin.ModelAdmin):
     list_editable = ('verificado',)
     fieldsets = (
         ('Origen', {
-            'fields': ('fuente', 'fecha', 'hora', 'agente', 'agente_telefono', 'tipo_original')
+            'fields': ('fuente', 'fecha', 'hora', 'agente', 'agente_telefono')
         }),
         ('Requerimiento', {
             'fields': ('condicion', 'tipo_propiedad', 'distritos', 'requerimiento')
@@ -102,7 +102,6 @@ class RequerimientoAdmin(admin.ModelAdmin):
                         'hora': 'Hora',
                         'agente': 'Agente',
                         'agente_telefono': 'Tel Agente',
-                        'tipo_original': 'Tipo Original',
                         'condicion': 'Condicion',
                         'tipo_propiedad': 'Tipo Propiedad',
                         'distritos': 'Distritos',

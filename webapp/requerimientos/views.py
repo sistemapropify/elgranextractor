@@ -22,7 +22,6 @@ from .models import (
     MonedaChoices,
     FormaPagoChoices,
     TernarioChoices,
-    TipoOriginalChoices,
     ConfiguracionCalidad,
 )
 from .analytics import (
@@ -75,7 +74,6 @@ class ListaRequerimientosView(ListView):
         cochera = filtros.get('cochera', '')
         ascensor = filtros.get('ascensor', '')
         amueblado = filtros.get('amueblado', '')
-        tipo_original = filtros.get('tipo_original', '')
         verificado = filtros.get('verificado', '')
         quality_nivel = filtros.get('quality_nivel', '')
         presupuesto_min = filtros.get('presupuesto_min', '')
@@ -115,8 +113,6 @@ class ListaRequerimientosView(ListView):
             queryset = queryset.filter(ascensor=ascensor)
         if amueblado:
             queryset = queryset.filter(amueblado=amueblado)
-        if tipo_original:
-            queryset = queryset.filter(tipo_original=tipo_original)
         if verificado == 'si':
             queryset = queryset.filter(verificado=True)
         elif verificado == 'no':
@@ -181,7 +177,6 @@ class ListaRequerimientosView(ListView):
         context['monedas'] = MonedaChoices.choices
         context['formas_pago'] = FormaPagoChoices.choices
         context['ternario_opts'] = TernarioChoices.choices
-        context['tipos_originales'] = TipoOriginalChoices.choices
         # Excluir "No Especificado" de todos los conteos
         base_qs = Requerimiento.objects.exclude(condicion='no_especificado')
         context['verificados_count'] = base_qs.filter(verificado=True).count()
@@ -262,7 +257,7 @@ class EditarRequerimientoView(View):
         'presupuesto_monto', 'presupuesto_moneda', 'presupuesto_forma_pago',
         'habitaciones', 'banos', 'cochera', 'ascensor', 'amueblado',
         'area_m2', 'piso_preferencia', 'caracteristicas_extra',
-        'tipo_original', 'requerimiento',
+        'requerimiento',
     ]
 
     def post(self, request, *args, **kwargs):
@@ -1541,7 +1536,7 @@ class ClonarRequerimientoView(View):
         'presupuesto_monto', 'presupuesto_moneda', 'presupuesto_forma_pago',
         'habitaciones', 'banos', 'cochera', 'ascensor', 'amueblado',
         'area_m2', 'piso_preferencia', 'caracteristicas_extra',
-        'tipo_original', 'requerimiento',
+        'requerimiento',
         'fecha', 'hora',
     ]
 

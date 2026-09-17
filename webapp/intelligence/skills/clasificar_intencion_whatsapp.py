@@ -30,7 +30,6 @@ from requerimientos.models import (
     FormaPagoChoices,
     TernarioChoices,
     FuenteChoices,
-    TipoOriginalChoices,
 )
 
 logger = logging.getLogger(__name__)
@@ -240,7 +239,7 @@ class ClasificarIntencionWhatsAppSkill(BaseSkill):
                 metadata={
                     "es_valido": es_valido,
                     "intencion": extracted.get("intencion", "no_determinado"),
-                    "tipo_original": requerimiento_data.get("tipo_original", "OTRO"),
+                    "condicion": requerimiento_data.get("condicion", ""),
                 },
                 skill_name=self.name,
             )
@@ -275,18 +274,9 @@ class ClasificarIntencionWhatsAppSkill(BaseSkill):
             fecha: Fecha del mensaje en formato YYYY-MM-DD (opcional).
             hora: Hora del mensaje en formato HH:MM:SS (opcional).
         """
-        # ── Determinar tipo_original desde la intención ──
+        # ── Determinar condicion desde la intención ──
         intencion = extracted.get("intencion", "").strip().lower()
-        tipo_original = self._determinar_tipo_original(intencion, extracted)
-
-        # ── Mapear condicion ──
-        # Si es oferta_venta, la condicion es irrelevante (no es cliente comprando)
-        # pero mapeamos igual para mantener compatibilidad
-        condicion = self._mapear_choice(
-            extracted.get("condicion", ""),
-            CondicionChoices,
-            CondicionChoices.NO_ESPECIFICADO,
-        )
+        condicion = self._determinar_condicion(intencion)
 
         # ── Mapear tipo_propiedad ──
         tipo_propiedad = self._mapear_choice(
@@ -363,7 +353,6 @@ class ClasificarIntencionWhatsAppSkill(BaseSkill):
             "fecha": fecha_final,
             "hora": hora_final,
             "agente": nombre_agente,
-            "tipo_original": tipo_original,
             "condicion": condicion,
             "tipo_propiedad": tipo_propiedad,
             "distritos": extracted.get("distritos", ""),
@@ -394,38 +383,24 @@ class ClasificarIntencionWhatsAppSkill(BaseSkill):
 
         return data
 
-    def _determinar_tipo_original(self, intencion: str, extracted: Dict) -> str:
+    def _determinar_condicion(self, intencion: str) -> str:
         """
-        Determina el valor de tipo_original basado en la intención clasificada.
+        Determina el valor de condicion basado en la intención clasificada.
 
         Mapeo:
-            oferta_venta     → PROPIEDAD VENTA
-            oferta_alquiler  → PROPIEDAD VENTA (se alquila pero es oferta)
-            demanda_compra   → REQUERIMIENTO COMPRA
-            demanda_alquiler → REQUERIMIENTO ALQUILER
-            basura           → BASURA
-            otro/default     → OTRO
+            demanda_compra   → compra
+            demanda_alquiler → alquiler
+            oferta_venta / oferta_alquiler / basura / no_determinado → basura
         """
         mapping = {
-            "oferta_venta": TipoOriginalChoices.PROPIEDAD_VENTA,
-            "oferta_alquiler": TipoOriginalChoices.PROPIEDAD_VENTA,
-            "demanda_compra": TipoOriginalChoices.REQ_COMPRA,
-            "demanda_alquiler": TipoOriginalChoices.REQ_ALQUILER,
-            "basura": TipoOriginalChoices.BASURA,
+            "demanda_compra": CondicionChoices.COMPRA,
+            "demanda_alquiler": CondicionChoices.ALQUILER,
+            "oferta_venta": CondicionChoices.BASURA,
+            "oferta_alquiler": CondicionChoices.BASURA,
+            "basura": CondicionChoices.BASURA,
+            "no_determinado": CondicionChoices.BASURA,
         }
-
-        tipo = mapping.get(intencion)
-        if tipo:
-            return tipo
-
-        # Fallback: usar tipo_original del extracted si existe
-        tipo_extraido = extracted.get("tipo_original", "").strip().upper()
-        if tipo_extraido:
-            for choice in TipoOriginalChoices.values:
-                if choice == tipo_extraido:
-                    return choice
-
-        return TipoOriginalChoices.OTRO
+        return mapping.get(intencion, CondicionChoices.BASURA)
 
     @staticmethod
     def _es_telefono(texto: str) -> bool:
@@ -551,7 +526,6 @@ class ClasificarIntencionWhatsAppSkill(BaseSkill):
             "fecha": fecha_final,
             "hora": hora_final,
             "agente": autor,
-            "tipo_original": TipoOriginalChoices.OTRO,
             "condicion": CondicionChoices.NO_ESPECIFICADO,
             "tipo_propiedad": TipoPropiedadChoices.NO_ESPECIFICADO,
             "distritos": "",

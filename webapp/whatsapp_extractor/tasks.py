@@ -183,7 +183,7 @@ def _reportar_progreso(extractor_log, mensajes_procesados: int, total: int,
 
 def _crear_requerimiento_en_bd(
     texto_original, texto_hash, nombre_grupo, nombre_agente,
-    fecha_msg, hora_msg, extractor_log, tipo_original,
+    fecha_msg, hora_msg, extractor_log,
     datos_extraidos, telefono_final,
 ):
     """Crea o actualiza un Requerimiento en BD con todos los campos extraídos.
@@ -207,7 +207,6 @@ def _crear_requerimiento_en_bd(
                 fecha=fecha_msg,
                 hora=hora_msg,
                 extractor_log=extractor_log,
-                tipo_original=tipo_original,
                 condicion=_truncar_local(datos_extraidos.get('condicion'), 20) or 'no_especificado',
                 tipo_propiedad=_truncar_local(datos_extraidos.get('tipo_propiedad'), 20) or 'no_especificado',
                 distritos=_truncar_local(datos_extraidos.get('distritos'), 300),
@@ -236,7 +235,6 @@ def _crear_requerimiento_en_bd(
             requerimiento=texto_original,
             agente=_truncar_local(nombre_agente, 120),
             extractor_log=extractor_log,
-            tipo_original=tipo_original,
             condicion=_truncar_local(datos_extraidos.get('condicion'), 20) or 'no_especificado',
             tipo_propiedad=_truncar_local(datos_extraidos.get('tipo_propiedad'), 20) or 'no_especificado',
             distritos=_truncar_local(datos_extraidos.get('distritos'), 300),
@@ -649,7 +647,6 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                 )
 
                 # 8. Guardar como Requerimiento con todos los campos extraídos
-                tipo_original = _truncar(datos_extraidos.get('tipo_original'), 80) or 'EXTRACCION_WHATSAPP'
                 # Extraer fecha y hora del mensaje original (fecha_hora viene del parser en ISO format)
                 fecha_msg = None
                 hora_msg = None
@@ -752,7 +749,7 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                         _crear_requerimiento_en_bd,
                         20,  # 20s timeout para el INSERT
                         texto_original, texto_hash, nombre_grupo, nombre_agente,
-                        fecha_msg, hora_msg, extractor_log, tipo_original,
+                        fecha_msg, hora_msg, extractor_log,
                         datos_extraidos, telefono_final,
                     )
                     extractor_log.mensajes_validos += 1
