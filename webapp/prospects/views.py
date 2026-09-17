@@ -545,10 +545,27 @@ def tomar_prospeccion(request, pk):
         return JsonResponse({'ok': True, 'tomada_por_username': ''})
 
 
+@csrf_exempt
+@propify_web_required
+def caducar_prospeccion(request, pk):
+    """Marca una captación como caducada y la oculta del panel y del mapa."""
+    prospect = get_object_or_404(PropertyProspect, pk=pk)
+    principal = getattr(request, 'propify_user', None)
+    username = str(getattr(principal, 'username', '') or '').strip()
+    if not username:
+        return JsonResponse({'ok': False, 'error': 'Sesión de usuario inválida.'}, status=401)
+
+    with transaction.atomic():
+        locked = PropertyProspect.objects.select_for_update().get(pk=pk)
+        locked.status = 'caducado'
+        locked.save(update_fields=['status', 'updated_at'])
+    return JsonResponse({'ok': True, 'status': 'caducado'})
+
+
 @propify_web_required
 def prospect_dashboard(request):
-    """Dashboard cartográfico con las captaciones de todos los agentes."""
-    prospects = list(PropertyProspect.objects.all().order_by('-created_at'))
+    """Dashboard cartográfico con las captaciones activas de todos los agentes."""
+    prospects = list(PropertyProspect.objects.exclude(status='caducado').order_by('-created_at'))
     mobile_actors = _mobile_capture_actors()
 
     agent_ids = {prospect.agent_id for prospect in prospects if prospect.agent_id}

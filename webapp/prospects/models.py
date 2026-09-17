@@ -126,6 +126,7 @@ class PropertyProspect(models.Model):
         ('negociando', 'Negociando'),
         ('captado', 'Captado'),          # propiedad dentro de cartera
         ('descartado', 'Descartado'),
+        ('caducado', 'Caducó'),          # ya no está disponible; se oculta del panel
     ]
 
     CURRENCY_CHOICES = [

@@ -375,6 +375,70 @@
         box-shadow: 0 4px 14px rgba(0, 0, 0, .5);
     }
     .ppc-photo-modal__close:hover { background: #f85149; color: #fff; }
+
+    /* ── Botón "Prospección caducó" ── */
+    .ppc-caduco-row {
+        display: flex;
+        justify-content: flex-end;
+        margin: -4px -2px 8px 0;
+    }
+    .ppc-caduco {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 11px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.4;
+        border: 1px solid #f8514966;
+        background: #f8514918;
+        color: #f85149;
+        cursor: pointer;
+    }
+    .ppc-caduco:hover { background: #f8514930; border-color: #f85149; }
+    .ppc-caduco:disabled { opacity: .55; cursor: wait; }
+
+    /* ── Panel lateral derecho con el detalle completo ── */
+    .ppc-overlay {
+        position: fixed; inset: 0; background: rgba(2, 6, 15, .6);
+        opacity: 0; pointer-events: none; transition: .2s; z-index: 9990;
+    }
+    .ppc-overlay.open { opacity: 1; pointer-events: auto; }
+    .ppc-drawer {
+        position: fixed; top: 0; right: 0; height: 100vh; width: 480px; max-width: 92vw;
+        background: var(--bg-card, #161b22);
+        border-left: 1px solid var(--border-color, #30363d);
+        transform: translateX(100%);
+        transition: .25s cubic-bezier(.4, 0, .2, 1);
+        z-index: 9991; overflow-y: auto;
+    }
+    .ppc-drawer.open { transform: translateX(0); }
+    .ppc-drawer-head {
+        padding: 16px 52px 16px 18px;
+        border-bottom: 1px solid var(--border-color, #30363d);
+        position: sticky; top: 0; background: var(--bg-card, #161b22); z-index: 2;
+    }
+    .ppc-drawer-close {
+        position: absolute; top: 14px; right: 14px;
+        width: 30px; height: 30px; border-radius: 50%;
+        border: 1px solid var(--border-color, #30363d);
+        background: #21262d; color: #e6edf3; font-size: 18px; line-height: 1;
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .ppc-drawer-close:hover { background: #f85149; color: #fff; }
+    .ppc-drawer-title { font-weight: 700; color: var(--text-primary, #e6edf3); font-size: 16px; }
+    .ppc-drawer-sub { color: var(--text-secondary, #8b949e); font-size: 12px; margin-top: 2px; }
+    .ppc-drawer-body { padding: 16px 18px; }
+    .ppc-drawer-photo {
+        width: 100%; max-height: 220px; object-fit: cover;
+        border-radius: 10px; background: var(--bg-primary, #0d1117);
+        display: block; margin-bottom: 14px;
+    }
+    .ppc-drawer-fields {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px;
+    }
+    .ppc-drawer-fields .ppc-edit-btn { margin-top: 6px; }
 </style>
 {% endblock %}
 
@@ -466,6 +530,7 @@
     function marcadorCoincide(m) {
         if (!m || !m._propertyData) return false;
         var p = m._propertyData;
+        if (p._caducado) return false;
         var distrito = (document.getElementById('prospect-filter-distrito') || {}).value || '';
         var tipo = (document.getElementById('prospect-filter-tipo') || {}).value || '';
         var origenFiltro = ((document.getElementById('prospect-filter-origen') || {}).value || '').toLowerCase();
@@ -527,7 +592,7 @@
     // (tengan o no coordenadas). Cada tarjeta se expande al hacer clic.
     function sincronizarPanel() {
         var todas = (typeof todasPropiedadesJSON !== 'undefined') ? todasPropiedadesJSON : [];
-        var items = todas.filter(function (p) { return marcadorCoincide({ _propertyData: p }); });
+        var items = todas.filter(function (p) { return !p._caducado && marcadorCoincide({ _propertyData: p }); });
         pintarListaPanel(items);
     }
 
@@ -558,48 +623,18 @@
             var card = document.createElement('div');
             card.className = 'prospect-panel-card';
             card.setAttribute('data-prospect-id', p.id != null ? p.id : '');
-            card.innerHTML = resumenTarjetaHtml(p) +
-                '<div class="prospect-detail-inline">' + filasDetalleHtml(p) + '</div>';
+            card.innerHTML = resumenTarjetaHtml(p);
             container.appendChild(card);
         });
 
-        // Reaplicar el estado expandido en las tarjetas que siguen visibles
-        // (p. ej. tras cambiar un filtro se repinta el panel).
-        container.querySelectorAll('.prospect-panel-card').forEach(function (card) {
-            var pid = String(card.getAttribute('data-prospect-id') || '');
-            if (pid && idsExpandidos.has(pid)) {
-                var d = card.querySelector('.prospect-detail-inline');
-                if (d) d.classList.add('open');
-            }
-        });
-
-        // Mantener el conjunto consistente con las tarjetas realmente visibles/abiertas.
-        var nuevoSet = new Set();
-        container.querySelectorAll('.prospect-panel-card').forEach(function (card) {
-            var pid = String(card.getAttribute('data-prospect-id') || '');
-            if (pid && card.querySelector('.prospect-detail-inline.open')) nuevoSet.add(pid);
-        });
-        idsExpandidos = nuevoSet;
-
         container.querySelectorAll('.prospect-panel-card').forEach(function (card) {
             card.addEventListener('click', function (e) {
-                // El clic en el botón "tomar" no expande/contrae la tarjeta.
+                // El clic en los botones de la tarjeta no abre el detalle.
                 if (e.target.closest('.ppc-tomar')) return;
-                // El clic dentro del detalle (ya expandido) no contrae la tarjeta.
-                if (e.target.closest('.prospect-detail-inline')) return;
-                var detalle = card.querySelector('.prospect-detail-inline');
-                if (!detalle) return;
+                if (e.target.closest('.ppc-caduco')) return;
+                if (e.target.closest('.ppc-thumb')) return;
                 var pid = String(card.getAttribute('data-prospect-id') || '');
-                if (detalle.classList.contains('open')) {
-                    // Contraer → su marcador deja de mostrarse
-                    detalle.classList.remove('open');
-                    if (pid) idsExpandidos.delete(pid);
-                } else {
-                    // Expandir → en el mapa su marcador (junto a otras expandidas)
-                    detalle.classList.add('open');
-                    if (pid) idsExpandidos.add(pid);
-                }
-                actualizarMarcadoresMapa();
+                abrirDrawerDetalle(buscarProspectoPorId(pid));
             });
         });
         // Clic en la foto → abrir modal
@@ -696,6 +731,64 @@
     }
     initTomarProspeccion();
 
+    // ── "Prospección caducó": ocultar captación que ya no está disponible ──
+    function controlCaducoHtml(p) {
+        if (!p) return '';
+        var pid = p.id != null ? p.id : '';
+        return '<button type="button" class="ppc-caduco" data-prospect="' + pid + '" ' +
+            'title="Ocultar porque ya no está disponible">Prospección caducó</button>';
+    }
+
+    function buscarProspectoPorId(pid) {
+        var todas = (typeof todasPropiedadesJSON !== 'undefined') ? todasPropiedadesJSON : [];
+        for (var i = 0; i < todas.length; i++) {
+            if (String(todas[i].id) === String(pid)) return todas[i];
+        }
+        return null;
+    }
+
+    function initCaducoProspeccion() {
+        var container = document.getElementById('selected-property');
+        if (!container || container.getAttribute('data-caduco-init')) return;
+        container.setAttribute('data-caduco-init', '1');
+        container.addEventListener('click', function (e) {
+            var el = e.target && e.target.closest ? e.target.closest('.ppc-caduco') : null;
+            if (!el) return;
+            e.preventDefault();
+            e.stopPropagation();
+            var pid = el.getAttribute('data-prospect');
+            if (!pid) return;
+            if (!window.confirm('¿Marcar esta prospección como caducada? Se ocultará del panel y del mapa.')) return;
+            el.disabled = true;
+            fetch('/prospects/' + encodeURIComponent(pid) + '/caducar/', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' },
+            }).then(function (r) {
+                return r.json().catch(function () {
+                    return { ok: false, error: 'El servidor respondió con un formato inesperado.' };
+                });
+            }).then(function (data) {
+                if (data && data.ok) {
+                    for (var i = 0; i < todasPropiedadesJSON.length; i++) {
+                        if (String(todasPropiedadesJSON[i].id) === String(pid)) {
+                            todasPropiedadesJSON[i]._caducado = true;
+                        }
+                    }
+                    if (prospectoSeleccionadoId === String(pid)) cerrarDrawerDetalle();
+                    sincronizarPanel();
+                    actualizarMarcadoresMapa();
+                } else {
+                    if (window.alert) window.alert((data && data.error) ? data.error : 'No se pudo completar la acción.');
+                    el.disabled = false;
+                }
+            }).catch(function () {
+                if (window.alert) window.alert('Error de red. Inténtalo de nuevo.');
+                el.disabled = false;
+            });
+        });
+    }
+    initCaducoProspeccion();
+
     // ── Modal de foto (clic en la miniatura de la tarjeta) ──────
     function _cerrarModalFoto() {
         var ov = document.querySelector('.ppc-photo-modal');
@@ -735,9 +828,10 @@
         var precio = (p.precio && String(p.precio).trim())
             ? ((p.moneda === 'PEN' ? 'S/ ' : '$ ') + p.precio) : '';
         return (
-            // Botón "tomar prospección" arriba a la derecha.
+            // Botones "tomar" y "caducó" arriba a la derecha.
             '<div class="ppc-tomar-row">' + controlTomarHtml(p) + '</div>' +
-            // Resumen con UNA foto a la izquierda; el detalle va debajo a todo el ancho.
+            '<div class="ppc-caduco-row">' + controlCaducoHtml(p) + '</div>' +
+            // Resumen con UNA foto a la izquierda.
             '<div class="ppc-summary">' +
                 (img
                     ? '<img class="ppc-thumb" src="' + escaparHtml(img) + '" alt="" loading="lazy" decoding="async" onerror="this.style.display=\'none\'">'
@@ -806,8 +900,66 @@
         return resultado;
     }
 
+    // ── Panel lateral derecho (detalle completo) ──────────────────
+    function asegurarDrawer() {
+        var drawer = document.querySelector('.ppc-drawer');
+        var overlay = document.querySelector('.ppc-overlay');
+        if (!drawer) {
+            overlay = document.createElement('div');
+            overlay.className = 'ppc-overlay';
+            overlay.addEventListener('click', cerrarDrawerDetalle);
+            document.body.appendChild(overlay);
+            drawer = document.createElement('aside');
+            drawer.className = 'ppc-drawer';
+            document.body.appendChild(drawer);
+        }
+        return { drawer: drawer, overlay: overlay };
+    }
+
+    function pintarDrawerDetalle(p) {
+        var els = asegurarDrawer();
+        var titulo = (p.owner_name || p.titulo || ('Prospección #' + p.id));
+        var tipo = (p.tipo_propiedad || 'Prospección');
+        var dist = (p.distrito_nombre || p.distrito || '');
+        var img = (p.primera_imagen || '').replace(/"/g, '%22');
+        els.drawer.innerHTML =
+            '<div class="ppc-drawer-head">' +
+                '<button type="button" class="ppc-drawer-close" title="Cerrar">&times;</button>' +
+                '<div class="ppc-drawer-title">' + escaparHtml(titulo) + '</div>' +
+                '<div class="ppc-drawer-sub">' + escaparHtml(tipo) +
+                    (dist ? ' · ' + escaparHtml(dist) : '') + '</div>' +
+            '</div>' +
+            '<div class="ppc-drawer-body">' +
+                (img
+                    ? '<img class="ppc-drawer-photo" src="' + escaparHtml(img) + '" alt="" onerror="this.style.display=\'none\'">'
+                    : '') +
+                '<div class="ppc-drawer-fields">' + filasDetalleHtml(p) + '</div>' +
+            '</div>';
+        els.drawer.querySelector('.ppc-drawer-close').addEventListener('click', cerrarDrawerDetalle);
+        els.drawer.classList.add('open');
+        els.overlay.classList.add('open');
+    }
+
+    function abrirDrawerDetalle(p) {
+        if (!p) return;
+        prospectoSeleccionadoId = String(p.id != null ? p.id : '');
+        pintarDrawerDetalle(p);
+        actualizarMarcadoresMapa();
+    }
+
+    function cerrarDrawerDetalle() {
+        prospectoSeleccionadoId = null;
+        var drawer = document.querySelector('.ppc-drawer');
+        var overlay = document.querySelector('.ppc-overlay');
+        if (drawer) drawer.classList.remove('open');
+        if (overlay) overlay.classList.remove('open');
+        sincronizarPanel();
+        actualizarMarcadoresMapa();
+    }
+
     // ¿El marcador debe mostrarse en el mapa?
     function marcadorVisibleEnMapa(m) {
+        if (m && m._propertyData && m._propertyData._caducado) return false;
         if (prospectoSeleccionadoId !== null) {
             var seleccionadoId = m && m._propertyData ? m._propertyData.id : null;
             return seleccionadoId != null && String(seleccionadoId) === prospectoSeleccionadoId;
@@ -966,6 +1118,9 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') cerrarDrawerDetalle();
+        });
         // El template padre consulta este hook antes de ejecutar su selección
         // acumulativa. `true` indica que prospección ya manejó el clic.
         window.onPropertyMarkerClick = function (marker) {
