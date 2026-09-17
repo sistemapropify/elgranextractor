@@ -26,6 +26,7 @@ def mobile_version(request):
     if release is not None:
         return Response({
             'latest_version_code': release.version_code,
+            'latest_version_name': release.version_name,
             'min_supported_version_code': release.min_supported_version_code,
             'download_url': release.download_url,
             'sha256': release.sha256,
@@ -34,6 +35,7 @@ def mobile_version(request):
         })
     return Response({
         'latest_version_code': int(getattr(settings, 'MOBILE_APP_LATEST_VERSION_CODE', 1)),
+        'latest_version_name': getattr(settings, 'MOBILE_APP_VERSION_NAME', ''),
         'min_supported_version_code': int(getattr(settings, 'MOBILE_APP_MIN_SUPPORTED_VERSION_CODE', 1)),
         'download_url': getattr(settings, 'MOBILE_APP_DOWNLOAD_URL', ''),
         'sha256': getattr(settings, 'MOBILE_APP_SHA256', ''),
