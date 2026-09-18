@@ -641,6 +641,33 @@ def _parsear_cronologia_legacy(notas):
     return cabecera, eventos
 
 
+# Campos que deben estar completos para resaltar la prospección como
+# "datos completos" (borde verde fosforescente) y contarla en su tarjeta.
+CAMPOS_DATOS_COMPLETOS = (
+    'district',
+    'owner_name',
+    'phone',
+    'operation_type',
+    'contract_type',
+    'property_type',
+    'price',
+    'currency',
+    'bedrooms',
+    'area_m2',
+)
+
+
+def _datos_completos(prospect) -> bool:
+    """True cuando la prospección tiene completos todos los campos clave."""
+    for campo in CAMPOS_DATOS_COMPLETOS:
+        valor = getattr(prospect, campo, None)
+        if valor is None:
+            return False
+        if isinstance(valor, str) and not valor.strip():
+            return False
+    return True
+
+
 def _json_seguro(valor):
     """Devuelve una lista desde un JSON almacenado en texto (nunca lanza)."""
     if not valor:
@@ -893,6 +920,7 @@ def prospect_dashboard(request):
             'tomada_por_username': prospect.tomada_por_username or '',
             'tomada_en': timezone.localtime(prospect.tomada_en).strftime('%d/%m/%Y %H:%M') if prospect.tomada_en else '',
             'captado': bool(prospect.captado),
+            'completo': _datos_completos(prospect),
             'comentarios': [_serializar_comentario(c) for c in prospect.comments.all()],
             'cronologia': _json_seguro(prospect.crm_cronologia),
         })
@@ -902,6 +930,7 @@ def prospect_dashboard(request):
     user_count = len(user_identities)
     with_phone = sum(1 for p in prospects if (p.phone or '').strip())
     without_phone = len(prospects) - with_phone
+    completos = sum(1 for p in prospects if _datos_completos(p))
     tipos_presentes = sorted({
         (p.get_property_type_display() or 'Prospección') for p in prospects
     })
@@ -931,6 +960,7 @@ def prospect_dashboard(request):
             'users': user_count,
             'with_phone': with_phone,
             'without_phone': without_phone,
+            'completos': completos,
         },
     })
 

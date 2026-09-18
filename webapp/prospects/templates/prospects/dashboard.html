@@ -610,6 +610,27 @@
     .ppc-origen--calle { background: #f0883e; }
     .ppc-origen--marketplace { background: #6ec6e8; }
     .ppc-origen--crm { background: #3fb950; }
+
+    /* ── Propiedades con datos completos: borde verde fosforescente ── */
+    @keyframes ppc-neon-blink {
+        0%   { border-color: #39ff14; box-shadow: 0 0 6px #39ff14, inset 0 0 2px #39ff14; }
+        50%  { border-color: #c8ffc0; box-shadow: 0 0 20px #39ff14, inset 0 0 6px #39ff14; }
+        100% { border-color: #39ff14; box-shadow: 0 0 6px #39ff14, inset 0 0 2px #39ff14; }
+    }
+    #selected-property .prospect-panel-card.ppc-completo {
+        border: 3px solid #39ff14;
+        animation: ppc-neon-blink 1s ease-in-out infinite;
+    }
+    #selected-property .prospect-panel-card.ppc-completo:hover { border-color: #39ff14; }
+    .capture-stat.capture-stat--completos {
+        border: 3px solid #39ff14;
+        animation: ppc-neon-blink 1s ease-in-out infinite;
+    }
+    .capture-stat.capture-stat--completos .capture-stat__label { color: #39ff14; }
+    @media (prefers-reduced-motion: reduce) {
+        #selected-property .prospect-panel-card.ppc-completo,
+        .capture-stat.capture-stat--completos { animation: none; }
+    }
 </style>
 {% endblock %}
 
@@ -627,6 +648,12 @@
                 title="Mostrar solo prospecciones con teléfono (clic de nuevo para quitar el filtro)">
             <span class="capture-stat__value">{{ dashboard_stats.with_phone }}</span>
             <span class="capture-stat__label">Prospecciones con teléfono</span>
+        </button>
+        <button type="button" class="capture-stat capture-stat--btn capture-stat--completos"
+                id="stat-datos-completos" onclick="toggleFiltroCompletos()"
+                title="Prospecciones con todos los datos clave completos (clic de nuevo para quitar el filtro)">
+            <span class="capture-stat__value">{{ dashboard_stats.completos }}</span>
+            <span class="capture-stat__label">Propiedades con Datos Completos</span>
         </button>
     </div>
     <a href="{% url 'prospects:capture' %}" class="btn btn-primary btn-new-capture">
@@ -687,6 +714,8 @@
 
     // Filtro por teléfono: '' = todas, 'con' = con teléfono, 'sin' = sin teléfono
     var filtroTelefono = '';
+    // Filtro por datos completos: true = solo prospecciones con todos los campos.
+    var filtroCompletos = false;
 
     // IDs de captaciones con la tarjeta EXPANDIDA: mientras haya alguna,
     // en el mapa solo se muestran los marcadores de esas captaciones.
@@ -722,7 +751,8 @@
         var okTelefono = !filtroTelefono
             || (filtroTelefono === 'con' && conTelefono)
             || (filtroTelefono === 'sin' && !conTelefono);
-        return okDistrito && okTipo && okOrigen && okAgente && okTelefono;
+        var okCompletos = !filtroCompletos || Boolean(p.completo);
+        return okDistrito && okTipo && okOrigen && okAgente && okTelefono && okCompletos;
     }
 
     // Llena el selector de agentes con los agentes que realmente tienen captaciones.
@@ -751,6 +781,19 @@
         if (sinCard) sinCard.classList.toggle('is-active', filtroTelefono === 'sin');
         if (conCard) conCard.classList.toggle('is-active', filtroTelefono === 'con');
     }
+
+    function actualizarEstadoTarjetaCompletos() {
+        var card = document.getElementById('stat-datos-completos');
+        if (card) card.classList.toggle('is-active', filtroCompletos);
+    }
+
+    window.toggleFiltroCompletos = function () {
+        filtroCompletos = !filtroCompletos;
+        actualizarEstadoTarjetaCompletos();
+        prospectoSeleccionadoId = null;
+        idsExpandidos.clear();
+        aplicarFiltrosProspeccion();
+    };
 
     window.toggleFiltroTelefono = function (tipo) {
         filtroTelefono = (filtroTelefono === tipo) ? '' : tipo;
@@ -795,6 +838,7 @@
             var card = document.createElement('div');
             card.className = 'prospect-panel-card';
             card.setAttribute('data-prospect-id', p.id != null ? p.id : '');
+            if (p.completo) card.classList.add('ppc-completo');
             card.innerHTML = resumenTarjetaHtml(p) +
                 '<div class="prospect-detail-inline">' + filasDetalleHtml(p) + '</div>';
             container.appendChild(card);
@@ -1331,6 +1375,8 @@
         if (origenSel) origenSel.value = '';
         if (agenteSel) agenteSel.value = '';
         filtroTelefono = '';
+        filtroCompletos = false;
+        actualizarEstadoTarjetaCompletos();
         prospectoSeleccionadoId = null;
         idsExpandidos.clear();
         actualizarEstadoTarjetasTelefono();
