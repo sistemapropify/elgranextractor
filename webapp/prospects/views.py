@@ -578,6 +578,63 @@ def caducar_prospeccion(request, pk):
     return JsonResponse({'ok': True, 'status': 'caducado'})
 
 
+def _parsear_cronologia_legacy(notas):
+    """Convierte notas del formato antiguo (conversación en texto plano) a
+    encabezado + eventos JSON.
+
+    Formato antiguo:
+        Lead CRM #<id> migrado a prospecciones.
+        Nombre: ...
+        Teléfono: ...
+        Responsable actual: ...
+        Fecha de ingreso: ...
+
+        Cronología del lead:
+        [dd/mm/YYYY HH:MM] Lead: texto
+        [dd/mm/YYYY HH:MM] Cambio de estado (A → B) · n8n Bot: detalle
+    """
+    if not notas or 'Cronología del lead:' not in notas:
+        return '', []
+    cabeza, _, cuerpo = notas.partition('Cronología del lead:')
+    cabecera = ' · '.join(
+        linea.strip() for linea in cabeza.splitlines() if linea.strip()
+    )
+    patron_evento = re.compile(r'^\[(\d{2}/\d{2}/\d{4} \d{2}:\d{2})\]\s*(.*)$')
+    patron_actividad = re.compile(
+        r'^(?P<etiqueta>.+?)(?:\s*\((?P<cambio>[^()]*)\))?'
+        r'(?:\s*·\s*(?P<actor>[^:]+?))?:\s*(?P<detalle>.*)$'
+    )
+    eventos = []
+    for linea in cuerpo.splitlines():
+        linea = linea.strip()
+        if not linea:
+            continue
+        coincidencia = patron_evento.match(linea)
+        if not coincidencia:
+            continue
+        fecha, resto = coincidencia.group(1), coincidencia.group(2).strip()
+        if resto.startswith('Lead: '):
+            eventos.append({'tipo': 'lead', 'quien': 'Lead', 'actor': '',
+                            'texto': resto[6:].strip(), 'fecha': fecha})
+        elif resto.startswith('Agente: '):
+            eventos.append({'tipo': 'agente', 'quien': 'Agente', 'actor': '',
+                            'texto': resto[8:].strip(), 'fecha': fecha})
+        else:
+            detalle_match = patron_actividad.match(resto)
+            if detalle_match:
+                etiqueta = (detalle_match.group('etiqueta') or 'Actividad CRM').strip()
+                cambio = (detalle_match.group('cambio') or '').strip()
+                actor = (detalle_match.group('actor') or '').strip()
+                detalle = (detalle_match.group('detalle') or '').strip()
+                texto = ' · '.join(parte for parte in (cambio, detalle) if parte)
+                eventos.append({'tipo': 'actividad', 'quien': etiqueta, 'actor': actor,
+                                'texto': texto or etiqueta, 'fecha': fecha})
+            else:
+                eventos.append({'tipo': 'actividad', 'quien': 'Actividad CRM', 'actor': '',
+                                'texto': resto, 'fecha': fecha})
+    return cabecera, eventos
+
+
 def _json_seguro(valor):
     """Devuelve una lista desde un JSON almacenado en texto (nunca lanza)."""
     if not valor:
@@ -675,7 +732,7 @@ def migrar_lead_a_prospeccion(request, lead_id):
     ]
 
     usuario = str(getattr(getattr(request, 'user', None), 'username', '') or '').strip()
-    notas = '\n'.join(encabezado).strip()
+    notas = ' · '.join(encabezado).strip()
     cronologia = json.dumps(eventos, ensure_ascii=False)
 
     if existente is not None:
@@ -766,6 +823,15 @@ def prospect_dashboard(request):
     data = []
     user_identities = set()
     for prospect in prospects:
+        # Auto-reparación: las prospecciones CRM migradas con el formato
+        # antiguo (conversación en texto plano) pasan a la cronología JSON,
+        # que el panel pinta como mini-chat.
+        if not (prospect.crm_cronologia or '').strip():
+            cabecera, eventos_legacy = _parsear_cronologia_legacy(prospect.notes)
+            if eventos_legacy:
+                prospect.notes = cabecera
+                prospect.crm_cronologia = json.dumps(eventos_legacy, ensure_ascii=False)
+                prospect.save(update_fields=['notes', 'crm_cronologia', 'updated_at'])
         actor = mobile_actors.get(prospect.pk, {})
         agent = agents_by_id.get(prospect.agent_id)
         if agent is not None:

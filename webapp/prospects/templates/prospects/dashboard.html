@@ -1238,7 +1238,7 @@
         fila('Estado', p.status);
         fila('Agente', p.agente);
         fila('Registrado', p.creado);
-        if (!(p.cronologia && p.cronologia.length)) fila('Notas', p.notas);
+        fila('Notas', p.notas);
         if (p.lat && p.lng) fila('Coordenadas', p.lat + ', ' + p.lng);
         var acciones = '<div class="ppc-tomar-row">' + controlTomarHtml(p) + '</div>' +
             '<div class="ppc-caduco-row">' + controlCaducoHtml(p) + '</div>';
