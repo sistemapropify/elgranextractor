@@ -638,10 +638,22 @@
         font-weight: 700;
         animation: ppc-neon-text-blink 1s ease-in-out infinite;
     }
+    /* Campo requisito sin dato: título y la palabra FALTA en rojo fosforescente */
+    @keyframes ppc-neon-red-blink {
+        0%   { color: #ff2d2d; text-shadow: 0 0 4px #ff2d2d; }
+        50%  { color: #ffc2c2; text-shadow: 0 0 12px #ff2d2d, 0 0 3px #ff2d2d; }
+        100% { color: #ff2d2d; text-shadow: 0 0 4px #ff2d2d; }
+    }
+    #selected-property .prospect-panel-card .ppc-falta {
+        color: #ff2d2d;
+        font-weight: 700;
+        animation: ppc-neon-red-blink 1s ease-in-out infinite;
+    }
     @media (prefers-reduced-motion: reduce) {
         #selected-property .prospect-panel-card.ppc-completo,
         .capture-stat.capture-stat--completos,
-        #selected-property .prospect-panel-card.ppc-completo .ppc-k--completo { animation: none; }
+        #selected-property .prospect-panel-card.ppc-completo .ppc-k--completo,
+        #selected-property .prospect-panel-card .ppc-falta { animation: none; }
     }
 </style>
 {% endblock %}
@@ -1297,18 +1309,31 @@
     // Todos los campos de la captación (se muestran al expandir la tarjeta)
     function filasDetalleHtml(p) {
         var filas = [];
-        // Títulos de los campos que cuentan como "datos completos".
+        // Campos requisito: si tienen dato, el título brilla en verde (cuando la
+        // tarjeta está completa); si faltan, el título y FALTA parpadean en rojo.
         var ETIQUETAS_COMPLETAS = [
             'Propietario', 'Teléfono', 'Tipo', 'Operación', 'Contrato',
             'Precio', 'Moneda', 'Dormitorios', 'Área'
         ];
         function fila(k, v) {
+            var esRequisito = ETIQUETAS_COMPLETAS.indexOf(k) !== -1;
             var s = (v === null || v === undefined) ? '' : String(v).trim();
-            if (!s) return;
-            var clave = ETIQUETAS_COMPLETAS.indexOf(k) !== -1 ? ' ppc-k--completo' : '';
+            if (!s && !esRequisito) return;
+            var claseFila = '';
+            var claseK = '';
+            var claseV = '';
+            if (esRequisito) {
+                if (s) {
+                    claseK = ' ppc-k--completo';
+                } else {
+                    claseFila = ' ppc-campo-falta';
+                    claseK = ' ppc-falta';
+                    claseV = ' ppc-falta';
+                }
+            }
             filas.push(
-                '<div class="ppc-field"><span class="ppc-k' + clave + '">' + escaparHtml(k) + '</span>' +
-                '<span class="ppc-v">' + escaparHtml(s) + '</span></div>'
+                '<div class="ppc-field' + claseFila + '"><span class="ppc-k' + claseK + '">' + escaparHtml(k) + '</span>' +
+                '<span class="ppc-v' + claseV + '">' + escaparHtml(s || 'FALTA') + '</span></div>'
             );
         }
         var titulo = (p.titulo || '');
@@ -1321,9 +1346,12 @@
         fila('Contrato', p.contrato);
         if (p.precio && String(p.precio).trim()) {
             fila('Precio', (p.moneda === 'PEN' ? 'S/ ' : '$ ') + p.precio);
-            fila('Moneda', p.moneda);
+        } else {
+            fila('Precio', '');
         }
-        if (p.area_construida && String(p.area_construida).trim()) fila('Área', p.area_construida + ' m²');
+        fila('Moneda', p.moneda);
+        fila('Área', (p.area_construida && String(p.area_construida).trim())
+            ? (p.area_construida + ' m²') : '');
         fila('Dormitorios', p.habitaciones);
         fila('Zona', p.zona);
         fila('Dirección', p.direccion);
