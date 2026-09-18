@@ -286,6 +286,13 @@ class PropertyProspect(models.Model):
         blank=True,
         verbose_name='Notas del agente',
     )
+    # Cronología del lead CRM migrado (JSON) para pintarla como mini-chat.
+    # Cada evento: {'tipo': lead|agente|actividad, 'quien', 'actor', 'texto', 'fecha'}.
+    crm_cronologia = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='Cronología del lead (JSON)',
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -528,6 +528,69 @@
     }
     .ppc-comments__send:hover { filter: brightness(1.12); }
     .ppc-comments__send:disabled { opacity: .55; cursor: wait; }
+
+    /* ── Cronología del lead CRM como mini-chat ── */
+    .ppc-cron {
+        grid-column: 1 / -1;
+        border: 1px solid var(--border-color, #30363d);
+        border-radius: 10px;
+        background: var(--bg-primary, #0d1117);
+        padding: 10px 12px;
+        margin-bottom: 10px;
+    }
+    .ppc-cron__head {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        color: var(--text-secondary, #8b949e);
+        margin-bottom: 8px;
+    }
+    .ppc-cron__stream {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        max-height: 320px;
+        overflow-y: auto;
+    }
+    .ppc-cron__row { display: flex; flex-direction: column; gap: 2px; max-width: 78%; }
+    .ppc-cron__row--lead { align-self: flex-start; }
+    .ppc-cron__row--agente { align-self: flex-end; text-align: right; }
+    .ppc-cron__row--actividad { align-self: center; max-width: 92%; text-align: center; }
+    .ppc-cron__meta { display: flex; gap: 6px; font-size: 10px; color: #8b949e; align-items: baseline; }
+    .ppc-cron__row--agente .ppc-cron__meta { justify-content: flex-end; }
+    .ppc-cron__row--actividad .ppc-cron__meta { justify-content: center; }
+    .ppc-cron__who { font-weight: 700; }
+    .ppc-cron__row--lead .ppc-cron__who { color: #f85149; }
+    .ppc-cron__row--agente .ppc-cron__who { color: #58a6ff; }
+    .ppc-cron__row--actividad .ppc-cron__who { color: #8b949e; }
+    .ppc-cron__actor { color: #6e7681; }
+    .ppc-cron__time { color: #8b949e; }
+    .ppc-cron__bubble {
+        font-size: 12px;
+        line-height: 1.4;
+        padding: 6px 10px;
+        border-radius: 9px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: var(--text-primary, #e6edf3);
+    }
+    .ppc-cron__row--lead .ppc-cron__bubble {
+        background: #f8514918;
+        border: 1px solid #f8514955;
+        border-top-left-radius: 2px;
+    }
+    .ppc-cron__row--agente .ppc-cron__bubble {
+        background: #58a6ff18;
+        border: 1px solid #58a6ff55;
+        border-top-right-radius: 2px;
+    }
+    .ppc-cron__row--actividad .ppc-cron__bubble {
+        background: #8b949e14;
+        border: 1px dashed #8b949e55;
+        color: var(--text-secondary, #8b949e);
+        font-style: italic;
+    }
 </style>
 {% endblock %}
 
@@ -1080,6 +1143,31 @@
         document.body.style.overflow = 'hidden';
     }
 
+    // Cronología del lead CRM migrado, pintada como mini-chat.
+    // Lead en rojo, agente en azul, actividades CRM en gris; fecha y hora en plomo.
+    function cronologiaHtml(p) {
+        var eventos = (p && p.cronologia) ? p.cronologia : [];
+        if (!eventos.length) return '';
+        var filas = eventos.map(function (ev) {
+            var tipo = (ev.tipo === 'lead' || ev.tipo === 'agente') ? ev.tipo : 'actividad';
+            var quien = ev.quien || (tipo === 'lead' ? 'Lead' : (tipo === 'agente' ? 'Agente' : 'Actividad'));
+            var actor = (ev.actor || '').trim();
+            var texto = (ev.texto || '').trim();
+            return '<div class="ppc-cron__row ppc-cron__row--' + tipo + '">' +
+                '<div class="ppc-cron__meta">' +
+                    '<span class="ppc-cron__who">' + escaparHtml(quien) + '</span>' +
+                    (actor ? '<span class="ppc-cron__actor">' + escaparHtml(actor) + '</span>' : '') +
+                    (ev.fecha ? '<span class="ppc-cron__time">' + escaparHtml(ev.fecha) + '</span>' : '') +
+                '</div>' +
+                (texto ? '<div class="ppc-cron__bubble">' + escaparHtml(texto) + '</div>' : '') +
+            '</div>';
+        }).join('');
+        return '<div class="ppc-cron">' +
+            '<div class="ppc-cron__head">Cronología del lead (origen CRM) · ' + eventos.length + ' eventos</div>' +
+            '<div class="ppc-cron__stream">' + filas + '</div>' +
+        '</div>';
+    }
+
     function resumenTarjetaHtml(p) {
         if (!p) return '';
         var img = (p.primera_imagen || '').replace(/"/g, '%22');
@@ -1138,7 +1226,7 @@
         if (p.area_construida && String(p.area_construida).trim()) fila('Área', p.area_construida + ' m²');
         fila('Dormitorios', p.habitaciones);
         fila('Zona', p.zona);
-        fila('Dirección', p.direccion || p.descripcion);
+        fila('Dirección', p.direccion);
         fila('Distrito', p.distrito_nombre || p.distrito);
         if (p.marketplace_url && String(p.marketplace_url).trim()) {
             filas.push(
@@ -1150,11 +1238,11 @@
         fila('Estado', p.status);
         fila('Agente', p.agente);
         fila('Registrado', p.creado);
-        fila('Notas', p.notas);
+        if (!(p.cronologia && p.cronologia.length)) fila('Notas', p.notas);
         if (p.lat && p.lng) fila('Coordenadas', p.lat + ', ' + p.lng);
         var acciones = '<div class="ppc-tomar-row">' + controlTomarHtml(p) + '</div>' +
             '<div class="ppc-caduco-row">' + controlCaducoHtml(p) + '</div>';
-        var resultado = acciones + filas.join('');
+        var resultado = acciones + cronologiaHtml(p) + filas.join('');
         if (p.id) {
             resultado += '<a class="ppc-edit-btn" href="/prospects/' + p.id +
                 '/detail/" target="_blank" rel="noopener">✏️ Editar captación</a>';
@@ -1264,7 +1352,7 @@
             fila('Área', p.area_construida + ' m²');
         }
         fila('Dormitorios', p.habitaciones);
-        fila('Dirección', p.direccion || p.descripcion);
+        fila('Dirección', p.direccion);
         fila('Distrito', p.distrito_nombre || p.distrito);
         fila('Estado', p.status);
         fila('Agente', p.agente);

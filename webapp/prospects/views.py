@@ -578,6 +578,17 @@ def caducar_prospeccion(request, pk):
     return JsonResponse({'ok': True, 'status': 'caducado'})
 
 
+def _json_seguro(valor):
+    """Devuelve una lista desde un JSON almacenado en texto (nunca lanza)."""
+    if not valor:
+        return []
+    try:
+        data = json.loads(valor)
+    except (TypeError, ValueError):
+        return []
+    return data if isinstance(data, list) else []
+
+
 def _gerencia_required(view_func):
     """Aplica la misma regla de acceso de analisis-crm (gerencia/supervisión)."""
 
@@ -598,7 +609,9 @@ def migrar_lead_a_prospeccion(request, lead_id):
         return JsonResponse({'ok': False, 'error': 'Método no permitido.'}, status=405)
 
     existente = PropertyProspect.objects.filter(crm_lead_id=lead_id).first()
-    if existente is not None:
+    # Si ya tiene cronología migrada no se toca; si le falta (migraciones
+    # anteriores a la cronología en JSON), el botón la refresca sin duplicar.
+    if existente is not None and (existente.crm_cronologia or '').strip():
         return JsonResponse({
             'ok': False,
             'error': 'Este lead ya fue migrado a prospecciones.',
@@ -621,25 +634,37 @@ def migrar_lead_a_prospeccion(request, lead_id):
         except (ValueError, TypeError):
             return str(valor)
 
-    lineas = []
+    # Cronología estructurada: se pinta como mini-chat (lead / agente / actividad).
+    eventos = []
     for event in lead.get('timeline_events') or []:
-        marca = _fecha(event.get('timestamp'))
+        fecha = _fecha(event.get('timestamp'))
         if event.get('event_type') == 'activity':
-            etiqueta = event.get('activity_label') or 'Actividad CRM'
+            etiqueta = (event.get('activity_label') or 'Actividad CRM').strip()
             actor = (event.get('actor_name') or '').strip()
             detalle = (event.get('description') or event.get('detail') or '').strip()
             cambio = ''
             if event.get('change_from') or event.get('change_to'):
                 cambio = (
-                    f" ({event.get('change_from') or 'Sin dato'} → "
-                    f"{event.get('change_to') or 'Sin dato'})"
+                    f"{event.get('change_from') or 'Sin dato'} → "
+                    f"{event.get('change_to') or 'Sin dato'}"
                 )
-            sufijo = f' · {actor}' if actor else ''
-            lineas.append(f'[{marca}] {etiqueta}{cambio}{sufijo}: {detalle}'.strip())
+            texto = ' · '.join(parte for parte in (cambio, detalle) if parte)
+            eventos.append({
+                'tipo': 'actividad',
+                'quien': etiqueta,
+                'actor': actor,
+                'texto': texto or etiqueta,
+                'fecha': fecha,
+            })
         else:
-            remitente = 'Lead' if event.get('sender') == 'lead' else 'Agente'
-            texto = (event.get('text') or '').strip()
-            lineas.append(f'[{marca}] {remitente}: {texto}'.strip())
+            es_lead = event.get('sender') == 'lead'
+            eventos.append({
+                'tipo': 'lead' if es_lead else 'agente',
+                'quien': 'Lead' if es_lead else 'Agente',
+                'actor': '',
+                'texto': (event.get('text') or '').strip(),
+                'fecha': fecha,
+            })
 
     encabezado = [
         f'Lead CRM #{lead_id} migrado a prospecciones.',
@@ -647,24 +672,43 @@ def migrar_lead_a_prospeccion(request, lead_id):
         f"Teléfono: {lead.get('phone') or ''}",
         f"Responsable actual: {lead.get('agent_name') or ''}",
         f"Fecha de ingreso: {_fecha(lead.get('entered_at'))}",
-        '',
-        'Cronología del lead:',
     ]
-    notas = '\n'.join(encabezado + lineas).strip()
 
     usuario = str(getattr(getattr(request, 'user', None), 'username', '') or '').strip()
-    prospect = PropertyProspect.objects.create(
-        origin='crm',
-        origin_other=f'Lead CRM #{lead_id}',
-        crm_lead_id=lead_id,
-        owner_name=(lead.get('display_name') or '')[:200],
-        phone=(lead.get('phone') or '')[:30],
-        notes=notas,
-        status='pendiente',
-        captured_by_username=usuario,
-    )
+    notas = '\n'.join(encabezado).strip()
+    cronologia = json.dumps(eventos, ensure_ascii=False)
+
+    if existente is not None:
+        # Refresca los datos del lead sin duplicar la prospección.
+        existente.origin = 'crm'
+        existente.origin_other = f'Lead CRM #{lead_id}'
+        existente.owner_name = (lead.get('display_name') or '')[:200] or existente.owner_name
+        existente.phone = (lead.get('phone') or '')[:30] or existente.phone
+        existente.notes = notas
+        existente.crm_cronologia = cronologia
+        existente.save(update_fields=[
+            'origin', 'origin_other', 'owner_name', 'phone',
+            'notes', 'crm_cronologia', 'updated_at',
+        ])
+        prospect = existente
+        actualizado = True
+    else:
+        prospect = PropertyProspect.objects.create(
+            origin='crm',
+            origin_other=f'Lead CRM #{lead_id}',
+            crm_lead_id=lead_id,
+            owner_name=(lead.get('display_name') or '')[:200],
+            phone=(lead.get('phone') or '')[:30],
+            notes=notas,
+            crm_cronologia=cronologia,
+            status='pendiente',
+            captured_by_username=usuario,
+        )
+        actualizado = False
+
     return JsonResponse({
         'ok': True,
+        'actualizado': actualizado,
         'prospect_id': prospect.pk,
         'url': f'/prospects/{prospect.pk}/detail/',
     })
@@ -777,6 +821,7 @@ def prospect_dashboard(request):
             'tomada_en': timezone.localtime(prospect.tomada_en).strftime('%d/%m/%Y %H:%M') if prospect.tomada_en else '',
             'captado': bool(prospect.captado),
             'comentarios': [_serializar_comentario(c) for c in prospect.comments.all()],
+            'cronologia': _json_seguro(prospect.crm_cronologia),
         })
 
     districts = sorted({p.district for p in prospects if p.district})
