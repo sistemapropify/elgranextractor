@@ -35,8 +35,10 @@
   .act-acciones { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .act-toggle { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--sub); }
   .act-toggle input { width:15px; height:15px; }
+  .act-nota { font-size:12px; color:var(--sub); padding-bottom:8px; margin-bottom:8px; border-bottom:1px solid var(--border); }
+  .act-aviso { font-size:13px; padding:12px 14px; border-radius:8px; border:1px solid #f85149; background:rgba(248,81,73,.12); color:#ff9d95; }
   .act-band { border-top:1px solid var(--border); padding:8px 0; }
-  .act-band:first-child { border-top:0; }
+  .act-band:first-of-type { border-top:0; }
   .act-band__head { display:flex; align-items:center; gap:10px; font-size:12px; }
   .act-band__hora { font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
   .act-band__count { color:var(--sub); }
@@ -135,13 +137,14 @@
           {% for t in tipos_actividad %}<option value="{{ t.valor }}">{{ t.label }}</option>{% endfor %}
         </select>
       </label>
-      <label>Desde <input type="date" id="act-desde"></label>
-      <label>Hasta <input type="date" id="act-hasta"></label>
+      <label>Día
+        <input type="date" id="act-dia" value="{{ actividad_dia }}">
+      </label>
       <button type="button" id="act-aplicar">Aplicar filtros</button>
-      <button type="button" class="ghost" id="act-limpiar">Limpiar</button>
+      <button type="button" class="ghost" id="act-limpiar">Ver día de hoy</button>
     </div>
 
-    <div id="act-feed"><div class="empty">Cargando actividad…</div></div>
+    <div id="act-feed" data-cargado="0"><div class="empty">Cargando actividad…</div></div>
   </div>
 </div>
 
@@ -149,20 +152,36 @@
 (function () {
   var API = '{% url "prospects:api_actividad" %}';
   var VER_TODOS = {{ actividad_ver_todos|yesno:"true,false" }};
+  var DIA_SERVIDOR = '{{ actividad_dia|default:"" }}';
   var INTERVALO_MS = 20000;
+  var ESPERA_MAXIMA_MS = 15000;
+
+  // Entidades HTML construidas por código para que ninguna herramienta de
+  // edición pueda volver a decodificarlas (rompía la sintaxis del script).
+  var AMP = String.fromCharCode(38);
+  var ENTIDADES = {
+    '&': AMP + 'amp;',
+    '<': AMP + 'lt;',
+    '>': AMP + 'gt;',
+    '"': AMP + 'quot;',
+    "'": AMP + '#39;'
+  };
+
   var timer = null;
+  var pidiendo = false;
 
   function el(id) { return document.getElementById(id); }
 
   function escapar(valor) {
     if (valor === null || valor === undefined) return '';
-    return String(valor).replace(/[&<>"']/g, function (c) {
-      if (c === '&') return '&';
-      if (c === '<') return '<';
-      if (c === '>') return '>';
-      if (c === '"') return '"';
-      return ''';
-    });
+    return String(valor).replace(/[&<>"']/g, function (c) { return ENTIDADES[c] || c; });
+  }
+
+  function mostrarAviso(texto) {
+    var contenedor = el('act-feed');
+    if (!contenedor) return;
+    contenedor.setAttribute('data-cargado', '1');
+    contenedor.innerHTML = '<div class="act-aviso">' + escapar(texto) + '</div>';
   }
 
   function registrar(tipo, descripcion) {
@@ -175,9 +194,17 @@
         method: 'POST',
         headers: { 'Accept': 'application/json' },
         body: datos.toString(),
+        credentials: 'same-origin',
         keepalive: true,
       });
     } catch (e) { /* el registro nunca debe romper la vista */ }
+  }
+
+  function hoyISO() {
+    var d = new Date();
+    var mes = ('0' + (d.getMonth() + 1)).slice(-2);
+    var dia = ('0' + d.getDate()).slice(-2);
+    return d.getFullYear() + '-' + mes + '-' + dia;
   }
 
   function descripcionFiltros() {
@@ -186,17 +213,19 @@
     if (usuario && usuario.value) partes.push('usuario=' + usuario.value);
     var tipo = el('act-tipo');
     if (tipo && tipo.value) partes.push('tipo=' + tipo.value);
-    var desde = el('act-desde');
-    if (desde && desde.value) partes.push('desde=' + desde.value);
-    var hasta = el('act-hasta');
-    if (hasta && hasta.value) partes.push('hasta=' + hasta.value);
-    return partes.length ? partes.join(', ') : 'sin filtros';
+    var dia = el('act-dia');
+    if (dia && dia.value) partes.push('día=' + dia.value);
+    return partes.length ? partes.join(', ') : 'día de hoy sin filtros';
   }
 
-  function pintarBandas(bandas) {
+  function pintarBandas(bandas, total, diaEtiqueta) {
     var contenedor = el('act-feed');
     if (!contenedor) return;
-    var html = '';
+    var html = '<div class="act-nota">Actividad del ' + escapar(diaEtiqueta || '') + ' · ' +
+      (total
+        ? (total + (total === 1 ? ' evento en total' : ' eventos en total'))
+        : 'sin eventos registrados') +
+      '</div>';
     (bandas || []).forEach(function (banda) {
       var vacia = !banda.total;
       html += '<div class="act-band' + (vacia ? ' act-band--vacia' : '') + '">' +
@@ -225,6 +254,7 @@
       }
       html += '</div>';
     });
+    contenedor.setAttribute('data-cargado', '1');
     contenedor.innerHTML = html;
   }
 
@@ -244,27 +274,54 @@
   }
 
   function cargar() {
+    if (pidiendo) return;
+    pidiendo = true;
     var params = new URLSearchParams();
     var usuario = el('act-usuario');
     if (usuario && usuario.value) params.set('usuario', usuario.value);
     var tipo = el('act-tipo');
     if (tipo && tipo.value) params.set('tipo', tipo.value);
-    var desde = el('act-desde');
-    if (desde && desde.value) params.set('desde', desde.value);
-    var hasta = el('act-hasta');
-    if (hasta && hasta.value) params.set('hasta', hasta.value);
-    fetch(API + '?' + params.toString(), { headers: { 'Accept': 'application/json' } })
-      .then(function (r) { return r.json(); })
-      .then(function (datos) {
-        if (!datos || !datos.ok) return;
-        llenarUsuarios(datos.usuarios);
-        pintarBandas(datos.bandas);
-        var total = el('act-total');
-        if (total) total.textContent = datos.total;
-        var actualizado = el('act-actualizado');
-        if (actualizado) actualizado.textContent = datos.generado_en;
+    var dia = el('act-dia');
+    params.set('dia', (dia && dia.value) ? dia.value : hoyISO());
+
+    fetch(API + '?' + params.toString(), {
+      headers: { 'Accept': 'application/json' },
+      credentials: 'same-origin',
+    })
+      .then(function (respuesta) {
+        return respuesta.text().then(function (texto) {
+          var datos = null;
+          try { datos = JSON.parse(texto); } catch (e) { datos = null; }
+          return { estado: respuesta.status, ok: respuesta.ok, datos: datos };
+        });
       })
-      .catch(function () { /* silencioso: es solo monitoreo */ });
+      .then(function (res) {
+        if (!res.datos || res.datos.ok !== true) {
+          var detalle;
+          if (res.datos && res.datos.error) {
+            detalle = res.datos.error;
+          } else if (res.estado === 401 || res.estado === 403) {
+            detalle = 'Tu sesión no tiene permiso para consultar esta actividad.';
+          } else if (res.ok) {
+            detalle = 'El servidor no devolvió datos válidos (probablemente la sesión expiró). Recarga la página.';
+          } else {
+            detalle = 'No se pudo consultar la actividad (HTTP ' + res.estado + ').';
+          }
+          mostrarAviso('⚠️ ' + detalle);
+          return;
+        }
+        llenarUsuarios(res.datos.usuarios);
+        pintarBandas(res.datos.bandas, res.datos.total, res.datos.dia_label);
+        var total = el('act-total');
+        if (total) total.textContent = res.datos.total;
+        var actualizado = el('act-actualizado');
+        if (actualizado) actualizado.textContent = res.datos.generado_en;
+      })
+      .catch(function (error) {
+        mostrarAviso('⚠️ Error de red al cargar la actividad: ' +
+          ((error && error.message) ? error.message : 'desconocido'));
+      })
+      .then(function () { pidiendo = false; });
   }
 
   var aplicar = el('act-aplicar');
@@ -275,14 +332,22 @@
     });
   }
 
+  var diaInput = el('act-dia');
+  if (diaInput) {
+    if (!diaInput.value) diaInput.value = DIA_SERVIDOR || hoyISO();
+    diaInput.addEventListener('change', function () { cargar(); });
+  }
+
   var limpiar = el('act-limpiar');
   if (limpiar) {
     limpiar.addEventListener('click', function () {
-      ['act-usuario', 'act-tipo', 'act-desde', 'act-hasta'].forEach(function (id) {
+      ['act-usuario', 'act-tipo'].forEach(function (id) {
         var campo = el(id);
         if (campo) campo.value = '';
       });
-      registrar('filtro', 'Limpió los filtros de Actividades.');
+      var campoDia = el('act-dia');
+      if (campoDia) campoDia.value = DIA_SERVIDOR || hoyISO();
+      registrar('filtro', 'Restableció Actividades al día de hoy.');
       cargar();
     });
   }
@@ -320,6 +385,14 @@
         (gran ? gran.value : '-') + ', agente=' + (agente ? agente.value : '-') + '.');
     });
   }
+
+  // Perro guardián: la tarjeta nunca debe quedarse en "Cargando actividad…".
+  setTimeout(function () {
+    var contenedor = el('act-feed');
+    if (contenedor && contenedor.getAttribute('data-cargado') !== '1') {
+      mostrarAviso('⚠️ La actividad tardó demasiado en cargar. Pulsa "Actualizar" o recarga la página.');
+    }
+  }, ESPERA_MAXIMA_MS);
 
   cargar();
 })();

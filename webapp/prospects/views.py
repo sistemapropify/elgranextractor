@@ -1069,8 +1069,22 @@ def agrupar_actividad_por_hora(eventos):
     return bandas
 
 
-def _rango_actividad(desde, hasta):
-    """Convierte fechas ISO 'YYYY-MM-DD' en un rango aware (inicio, fin)."""
+def _rango_actividad(desde, hasta, dia=None):
+    """Convierte fechas ISO 'YYYY-MM-DD' en un rango aware (inicio, fin).
+
+    Si se recibe ``dia`` el rango se reduce a ese único día (00:00 a 23:59:59
+    hora de Perú) y se ignoran ``desde``/``hasta``: así la consulta siempre está
+    acotada y nunca se queda cargando por un rango amplio.
+    """
+    if dia:
+        try:
+            fecha_dia = datetime.strptime(str(dia), '%Y-%m-%d').date()
+        except (TypeError, ValueError):
+            fecha_dia = None
+        if fecha_dia is not None:
+            inicio_dia = timezone.make_aware(datetime.combine(fecha_dia, datetime.min.time()))
+            return inicio_dia, inicio_dia + timedelta(days=1)
+
     inicio = fin = None
     for valor, es_fin in ((desde, False), (hasta, True)):
         if not valor:
@@ -1085,6 +1099,23 @@ def _rango_actividad(desde, hasta):
         else:
             inicio = momento
     return inicio, fin
+
+
+_ACTIVIDAD_USUARIOS_CACHE = {'momento': None, 'valores': []}
+
+
+def _actividad_usuarios():
+    """Lista de usuarios con actividad, con caché corta para no repetir el DISTINCT."""
+    ahora = timezone.now()
+    momento = _ACTIVIDAD_USUARIOS_CACHE.get('momento')
+    if momento is None or (ahora - momento).total_seconds() > 120:
+        valores = sorted({
+            valor for valor in ActivityLog.objects.values_list('user_username', flat=True)
+            if valor
+        })
+        _ACTIVIDAD_USUARIOS_CACHE['momento'] = ahora
+        _ACTIVIDAD_USUARIOS_CACHE['valores'] = valores
+    return list(_ACTIVIDAD_USUARIOS_CACHE.get('valores') or [])
 
 
 def _serializar_actividad(evento):
@@ -1132,7 +1163,10 @@ def api_actividad(request):
         usuario = usuario_actual
 
     tipo = (request.GET.get('tipo') or '').strip().lower()
-    inicio, fin = _rango_actividad(request.GET.get('desde'), request.GET.get('hasta'))
+    dia = (request.GET.get('dia') or '').strip()
+    inicio, fin = _rango_actividad(
+        request.GET.get('desde'), request.GET.get('hasta'), dia=dia,
+    )
 
     consulta = ActivityLog.objects.select_related('prospect')
     if usuario:
@@ -1144,20 +1178,33 @@ def api_actividad(request):
     if fin is not None:
         consulta = consulta.filter(created_at__lt=fin)
 
-    eventos = [
-        _serializar_actividad(evento)
-        for evento in consulta.order_by('-created_at')[:ACTIVIDAD_LIMITE]
-    ]
-    usuarios = sorted(set(ActivityLog.objects.values_list('user_username', flat=True).distinct()))
+    # Se limita al bloque más reciente y luego se ordena de más antiguo a más
+    # reciente para que el feed y las franjas horarias queden cronológicos.
+    recientes = list(consulta.order_by('-created_at')[:ACTIVIDAD_LIMITE])
+    eventos = [_serializar_actividad(evento) for evento in reversed(recientes)]
+
+    if inicio is not None:
+        dia_label = timezone.localtime(inicio).strftime('%d/%m/%Y')
+    else:
+        dia_label = timezone.localdate().strftime('%d/%m/%Y')
+
     return JsonResponse({
         'ok': True,
         'ver_todos': ver_todos,
         'usuario_actual': usuario_actual,
         'usuario_filtro': usuario,
+        'dia': dia,
+        'dia_label': dia_label,
         'total': len(eventos),
         'bandas': agrupar_actividad_por_hora(eventos),
         'eventos': eventos,
-        'usuarios': usuarios,
+        # La lista de usuarios solo se expone a quien puede ver la actividad de
+        # todos; un usuario normal solo ve su propio nombre.
+        'usuarios': (
+            _actividad_usuarios()
+            if ver_todos
+            else ([usuario_actual] if usuario_actual else [])
+        ),
         'tipos': [{'valor': valor, 'label': etiqueta} for valor, etiqueta in ActivityLog.EVENT_TYPES],
         'generado_en': timezone.localtime().strftime('%d/%m/%Y %H:%M:%S'),
     })
@@ -1315,6 +1362,7 @@ def prospect_metricas(request):
         'solo_actividad': not ver_todos,
         'actividad_ver_todos': ver_todos,
         'actividad_usuario': usuario_actual,
+        'actividad_dia': timezone.localdate().isoformat(),
         'tipos_actividad': [
             {'valor': valor, 'label': etiqueta}
             for valor, etiqueta in ActivityLog.EVENT_TYPES
