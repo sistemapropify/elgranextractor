@@ -638,55 +638,6 @@
         color: #39ff14;
     }
 
-    /* ── Franja de últimos cambios (comentario o datos) ── */
-    .ppc-recientes {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        width: 100%;
-        margin-top: 12px;
-        background: var(--bg-card, #161b22);
-        border: 1px solid var(--border, #30363d);
-        border-radius: 10px;
-        padding: 8px 12px;
-        overflow: hidden;
-    }
-    .ppc-recientes__titulo {
-        font-size: 12px;
-        font-weight: 700;
-        color: var(--text-secondary, #8b949e);
-        white-space: nowrap;
-    }
-    .ppc-recientes__lista {
-        display: flex;
-        gap: 8px;
-        overflow-x: auto;
-        padding-bottom: 2px;
-        scrollbar-width: thin;
-    }
-    .ppc-recientes__lista::-webkit-scrollbar { height: 6px; }
-    .ppc-recientes__lista::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
-    .ppc-recientes__vacio { font-size: 12px; color: var(--text-secondary, #8b949e); }
-    .ppc-reciente {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        white-space: nowrap;
-        cursor: pointer;
-        background: var(--bg, #0d1117);
-        border: 1px solid var(--border, #30363d);
-        border-radius: 999px;
-        padding: 5px 11px;
-        font-size: 12px;
-        color: var(--text-primary, #e6edf3);
-    }
-    .ppc-reciente:hover { border-color: #39ff14; }
-    .ppc-reciente--comentario { border-left: 3px solid #58a6ff; }
-    .ppc-reciente--datos { border-left: 3px solid #39ff14; }
-    .ppc-reciente__id { font-weight: 700; }
-    .ppc-reciente__tiempo { color: var(--text-secondary, #8b949e); font-size: 11px; }
-    .ppc-reciente-destacada { box-shadow: 0 0 0 2px #39ff14; }
-
 
     /* ── Propiedades con datos completos: borde verde fosforescente ── */
     @keyframes ppc-neon-blink {
@@ -811,10 +762,6 @@
     </button>
 </div>
 
-<div class="ppc-recientes" id="ppc-recientes" aria-label="Últimas prospecciones modificadas">
-    <span class="ppc-recientes__titulo">🕘 Últimos cambios</span>
-    <div class="ppc-recientes__lista" id="ppc-recientes-lista"></div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -972,6 +919,12 @@
         if (emptyState) emptyState.style.display = 'none';
         container.style.display = 'block';
         if (countEl) countEl.textContent = items.length + (items.length === 1 ? ' captación' : ' captaciones');
+
+        // Último cambio primero: comentario escrito o datos actualizados.
+        // Las prospecciones sin cambios recientes se quedan al final.
+        items = items.slice().sort(function (a, b) {
+            return tsUltimoCambio(b) - tsUltimoCambio(a);
+        });
 
         items.forEach(function (p) {
             var card = document.createElement('div');
@@ -1173,6 +1126,35 @@
         modulo.parentNode.replaceChild(wrapper.firstChild, modulo);
     }
 
+    // ── Orden del panel: último cambio arriba ───────────────────────
+    // Las tarjetas se colocan según su último cambio (comentario escrito o
+    // datos actualizados); las que no se han editado ni comentado quedan abajo.
+    function tsUltimoCambio(p) {
+        return Number((p && p.ultimo_cambio_ts) || 0);
+    }
+
+    function tarjetasDelPanel() {
+        var container = document.getElementById('selected-property');
+        if (!container) return [];
+        return Array.prototype.slice.call(
+            container.querySelectorAll('.prospect-panel-card')
+        );
+    }
+
+    // Mueve las tarjetas ya pintadas sin volver a crear el DOM (no se pierde
+    // nada de lo que el usuario tenga abierto o escrito).
+    function ordenarTarjetasPanel() {
+        var container = document.getElementById('selected-property');
+        if (!container) return;
+        var tarjetas = tarjetasDelPanel();
+        if (tarjetas.length < 2) return;
+        tarjetas.sort(function (a, b) {
+            return tsUltimoCambio(buscarProspectoPorId(b.getAttribute('data-prospect-id'))) -
+                tsUltimoCambio(buscarProspectoPorId(a.getAttribute('data-prospect-id')));
+        });
+        tarjetas.forEach(function (tarjeta) { container.appendChild(tarjeta); });
+    }
+
     function initComentariosProspeccion() {
         var container = document.getElementById('selected-property');
         if (!container || container.getAttribute('data-comments-init')) return;
@@ -1203,10 +1185,15 @@
                         if (String(todasPropiedadesJSON[i].id) === String(pid)) {
                             if (!todasPropiedadesJSON[i].comentarios) todasPropiedadesJSON[i].comentarios = [];
                             todasPropiedadesJSON[i].comentarios.push(data.comment);
+                            // El comentario es el último cambio: la tarjeta sube.
+                            todasPropiedadesJSON[i].ultimo_cambio_ts = Date.now() / 1000;
+                            todasPropiedadesJSON[i].ultimo_cambio_tipo = 'comentario';
+                            todasPropiedadesJSON[i].ultimo_cambio_usuario = data.comment.author_username || '';
                         }
                     }
                     if (input) input.value = '';
                     pintarComentarios(pid);
+                    ordenarTarjetasPanel();
                 } else {
                     if (window.alert) window.alert((data && data.error) ? data.error : 'No se pudo enviar el comentario.');
                 }
@@ -1521,70 +1508,12 @@
         }
     }
 
-    // ── Franja de últimos cambios (comentario o actualización de datos) ──
-    var RECIENTES_VISIBLES = 8;
-
-    function pintarRecientes() {
-        var contenedor = document.getElementById('ppc-recientes-lista');
-        if (!contenedor) return;
-        var todas = (typeof todasPropiedadesJSON !== 'undefined') ? todasPropiedadesJSON : [];
-        var items = todas
-            .filter(function (p) { return !p._caducado && marcadorCoincide({ _propertyData: p }); })
-            .filter(function (p) { return Number(p.ultimo_cambio_ts || 0) > 0; })
-            .sort(function (a, b) {
-                return Number(b.ultimo_cambio_ts || 0) - Number(a.ultimo_cambio_ts || 0);
-            })
-            .slice(0, RECIENTES_VISIBLES);
-        if (!items.length) {
-            contenedor.innerHTML = '<span class="ppc-recientes__vacio">Sin cambios recientes con los filtros actuales.</span>';
-            return;
-        }
-        var html = '';
-        items.forEach(function (p) {
-            var esComentario = p.ultimo_cambio_tipo === 'comentario';
-            var detalle = (p.ultimo_cambio_resumen || '') +
-                (p.ultimo_cambio_usuario ? ' · ' + p.ultimo_cambio_usuario : '');
-            var id = (p.id != null) ? p.id : '';
-            html += '<button type="button" class="ppc-reciente ppc-reciente--' +
-                (esComentario ? 'comentario' : 'datos') + '"' +
-                ' data-prospect-id="' + escaparHtml(id) + '"' +
-                ' title="' + escaparHtml(detalle) + '">' +
-                '<span class="ppc-reciente__icono">' + (esComentario ? '💬' : '✏️') + '</span>' +
-                '<span class="ppc-reciente__id">#' + escaparHtml(id) + '</span>' +
-                '<span>' + escaparHtml(p.distrito_nombre || p.distrito || 'Sin distrito') + '</span>' +
-                '<span class="ppc-reciente__tiempo">' + escaparHtml(p.ultimo_cambio || '') + '</span>' +
-            '</button>';
-        });
-        contenedor.innerHTML = html;
-        contenedor.querySelectorAll('.ppc-reciente').forEach(function (boton) {
-            boton.addEventListener('click', function () {
-                irAProspectoReciente(boton.getAttribute('data-prospect-id'));
-            });
-        });
-    }
-
-    function irAProspectoReciente(prospectId) {
-        if (!prospectId) return;
-        // Se abre la tarjeta en el panel y se lleva la vista hasta ella.
-        idsExpandidos.add(String(prospectId));
-        aplicarFiltrosProspeccion();
-        var tarjeta = document.querySelector(
-            '#selected-property .prospect-panel-card[data-prospect-id="' + prospectId + '"]'
-        );
-        if (!tarjeta) return;
-        tarjeta.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        tarjeta.classList.add('ppc-reciente-destacada');
-        setTimeout(function () { tarjeta.classList.remove('ppc-reciente-destacada'); }, 2500);
-        registrarActividad('navegacion',
-            'Abrió la prospección #' + prospectId + ' desde la franja de últimos cambios.');
-    }
 
     function aplicarFiltrosProspeccion() {
         // Primero se repinta el panel (recalcula idsExpandidos según tarjetas
         // visibles/abiertas) y después se actualizan los marcadores del mapa.
         sincronizarPanel();
         actualizarMarcadoresMapa();
-        pintarRecientes();
     }
 
     window.limpiarFiltrosProspeccion = function () {
@@ -1884,7 +1813,6 @@
         iniciarSincronizacionEntrePestanas();
         // Llenar el panel inicialmente (aunque el mapa aún no cargue).
         sincronizarPanel();
-        pintarRecientes();
 
         var distritoSel = document.getElementById('prospect-filter-distrito');
         var tipoSel = document.getElementById('prospect-filter-tipo');
