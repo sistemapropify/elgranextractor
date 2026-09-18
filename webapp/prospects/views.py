@@ -737,6 +737,19 @@ def _json_seguro(valor):
     return data if isinstance(data, list) else []
 
 
+def _etiqueta_cambio(momento):
+    """Etiqueta corta del último cambio: 'hoy 14:32', 'ayer 09:05', '12/09 18:40'."""
+    if momento is None:
+        return ''
+    local = timezone.localtime(momento)
+    hoy = timezone.localdate()
+    if local.date() == hoy:
+        return 'hoy %s' % local.strftime('%H:%M')
+    if local.date() == hoy - timedelta(days=1):
+        return 'ayer %s' % local.strftime('%H:%M')
+    return local.strftime('%d/%m %H:%M')
+
+
 def _gerencia_required(view_func):
     """Aplica la misma regla de acceso de analisis-crm (gerencia/supervisión)."""
 
@@ -923,6 +936,24 @@ def prospect_dashboard(request):
         agent.pk: agent for agent in agent_model.objects.filter(pk__in=agent_ids)
     }
 
+    # Último cambio de cada prospección (comentario escrito o datos
+    # actualizados). Se resuelve con UNA sola consulta acotada a la actividad
+    # más reciente, en vez de preguntar por cada prospección.
+    ids_prospectos = [prospect.pk for prospect in prospects]
+    ultimos_cambios = {}
+    if ids_prospectos:
+        eventos_recientes = (
+            ActivityLog.objects
+            .filter(
+                prospect_id__in=ids_prospectos,
+                event_type__in=('comentario', 'prospecto_editado', 'estado_cambiado'),
+            )
+            .order_by('-created_at')
+            .values('prospect_id', 'event_type', 'user_username', 'created_at')[:800]
+        )
+        for evento in eventos_recientes:
+            ultimos_cambios.setdefault(evento['prospect_id'], evento)
+
     # El template del portal consume este contrato de datos para pintar
     # marcadores y tarjetas. Se mantiene el layout y comportamiento original.
     data = []
@@ -952,6 +983,23 @@ def prospect_dashboard(request):
             )
             mobile_identity = actor.get('mobile_user_id') or agent_name
             user_identities.add(f'mobile:{mobile_identity}')
+        # Último cambio: comentario escrito o datos actualizados.
+        cambio = ultimos_cambios.get(prospect.pk)
+        if cambio:
+            momento_cambio = cambio['created_at']
+            tipo_cambio = 'comentario' if cambio['event_type'] == 'comentario' else 'datos'
+            usuario_cambio = cambio['user_username'] or ''
+        else:
+            momento_cambio = prospect.updated_at or prospect.created_at
+            tipo_cambio = 'datos'
+            usuario_cambio = ''
+        resumen_cambio = 'Datos actualizados'
+        if tipo_cambio == 'comentario':
+            comentarios_del_prospecto = list(prospect.comments.all())
+            if comentarios_del_prospecto:
+                resumen_cambio = ' '.join(
+                    (comentarios_del_prospecto[-1].text or '').split()
+                )[:90]
         # Contenedor de fotos privado: firmar URL con SAS (24h) para las tarjetas/mapa
         photo_url = signed_prospect_photo(prospect)
 
@@ -997,6 +1045,12 @@ def prospect_dashboard(request):
             'completo': _datos_completos(prospect),
             'comentarios': [_serializar_comentario(c) for c in prospect.comments.all()],
             'cronologia': _json_seguro(prospect.crm_cronologia),
+            # Último cambio (franja «Últimos cambios» del panel).
+            'ultimo_cambio_ts': momento_cambio.timestamp() if momento_cambio else 0,
+            'ultimo_cambio': _etiqueta_cambio(momento_cambio),
+            'ultimo_cambio_tipo': tipo_cambio,
+            'ultimo_cambio_usuario': usuario_cambio,
+            'ultimo_cambio_resumen': resumen_cambio,
         })
 
     districts = sorted({p.district for p in prospects if p.district})
