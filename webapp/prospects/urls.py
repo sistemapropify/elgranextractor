@@ -40,6 +40,9 @@ urlpatterns = [
     path('<int:pk>/caducar/', views.caducar_prospeccion, name='caducar'),
     path('<int:pk>/comments/', views.prospect_comments, name='comments'),
 
+    # Migrar un lead del CRM a prospecciones (origen = CRM)
+    path('migrar-crm/<int:lead_id>/', views.migrar_lead_a_prospeccion, name='migrar_crm'),
+
     # Procesar con Qwen3-VL (POST → JSON)
     path('<int:pk>/process/', views.ProcessImageView.as_view(), name='process'),
 ]

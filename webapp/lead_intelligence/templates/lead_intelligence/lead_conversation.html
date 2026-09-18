@@ -23,6 +23,10 @@
         {% if lead.budget %}<div><small>Presupuesto</small><span>{{ lead.budget }}</span></div>{% endif %}
         {% if lead.financing %}<div><small>Financiamiento</small><span>{{ lead.financing }}</span></div>{% endif %}
       </div>
+      <button type="button" id="btnMigrarProspeccion"
+              data-migrar-url="{% url 'prospects:migrar_crm' lead.id %}"
+              style="width:100%;margin-top:14px;padding:11px 16px;border-radius:9px;border:1px solid #3b82f6;background:#3b82f6;color:#fff;font-weight:700;font-size:13px;cursor:pointer">Migrar a prospecciones</button>
+      <div id="migrarProspeccionEstado" style="display:none;margin-top:10px;font-size:12.5px;line-height:1.5"></div>
       <div class="pli-badges" style="margin-top:16px">
         {% if lead.contacted %}<span class="pli-badge">Contactado</span>{% endif %}
         {% if lead.bidirectional %}<span class="pli-badge">Bidireccional</span>{% endif %}
@@ -120,4 +124,54 @@
     </article>
   </section>
 </main>
+<script>
+(function () {
+  var boton = document.getElementById('btnMigrarProspeccion');
+  if (!boton) return;
+  var estado = document.getElementById('migrarProspeccionEstado');
+  function mostrar(texto, esError) {
+    if (!estado) return;
+    estado.style.display = 'block';
+    estado.textContent = texto;
+    estado.style.color = esError ? '#ef4444' : '#22c55e';
+  }
+  boton.addEventListener('click', function () {
+    var original = boton.textContent;
+    boton.disabled = true;
+    boton.textContent = 'Migrando…';
+    mostrar('Migrando el lead al módulo de prospecciones…', false);
+    fetch(boton.getAttribute('data-migrar-url'), {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(function (r) {
+      return r.json().catch(function () {
+        return { ok: false, error: 'El servidor respondió con un formato inesperado.' };
+      });
+    }).then(function (data) {
+      if (data && data.ok) {
+        mostrar('Listo: el lead ya está en prospecciones.', false);
+        if (estado && data.url) {
+          var enlace = document.createElement('a');
+          enlace.href = data.url;
+          enlace.target = '_blank';
+          enlace.rel = 'noopener';
+          enlace.textContent = 'Abrir prospección';
+          enlace.style.color = '#3b82f6';
+          enlace.style.marginLeft = '6px';
+          estado.appendChild(enlace);
+        }
+        boton.textContent = 'Migrado ✓';
+      } else {
+        mostrar((data && data.error) ? data.error : 'No se pudo migrar el lead.', true);
+        boton.disabled = false;
+        boton.textContent = original;
+      }
+    }).catch(function () {
+      mostrar('Error de red. Inténtalo de nuevo.', true);
+      boton.disabled = false;
+      boton.textContent = original;
+    });
+  });
+})();
+</script>
 {% endblock %}

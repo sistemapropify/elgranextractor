@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+from functools import wraps
 from uuid import uuid4
 
 import requests
@@ -575,6 +576,98 @@ def caducar_prospeccion(request, pk):
         locked.status = 'caducado'
         locked.save(update_fields=['status', 'updated_at'])
     return JsonResponse({'ok': True, 'status': 'caducado'})
+
+
+def _gerencia_required(view_func):
+    """Aplica la misma regla de acceso de analisis-crm (gerencia/supervisión)."""
+
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        from lead_intelligence.views import management_access_required
+
+        return management_access_required(view_func)(request, *args, **kwargs)
+
+    return wrapped
+
+
+@csrf_exempt
+@_gerencia_required
+def migrar_lead_a_prospeccion(request, lead_id):
+    """Crea una prospección con origen CRM a partir del detalle de un lead."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Método no permitido.'}, status=405)
+
+    existente = PropertyProspect.objects.filter(crm_lead_id=lead_id).first()
+    if existente is not None:
+        return JsonResponse({
+            'ok': False,
+            'error': 'Este lead ya fue migrado a prospecciones.',
+            'prospect_id': existente.pk,
+            'url': f'/prospects/{existente.pk}/detail/',
+        }, status=409)
+
+    # Lectura del lead: vive en la base del CRM, no en la de prospecciones.
+    from lead_intelligence.services import get_lead_conversation
+
+    lead = get_lead_conversation(lead_id)
+    if lead is None:
+        return JsonResponse({'ok': False, 'error': 'No se encontró el lead en el CRM.'}, status=404)
+
+    def _fecha(valor):
+        if not valor:
+            return ''
+        try:
+            return timezone.localtime(valor).strftime('%d/%m/%Y %H:%M')
+        except (ValueError, TypeError):
+            return str(valor)
+
+    lineas = []
+    for event in lead.get('timeline_events') or []:
+        marca = _fecha(event.get('timestamp'))
+        if event.get('event_type') == 'activity':
+            etiqueta = event.get('activity_label') or 'Actividad CRM'
+            actor = (event.get('actor_name') or '').strip()
+            detalle = (event.get('description') or event.get('detail') or '').strip()
+            cambio = ''
+            if event.get('change_from') or event.get('change_to'):
+                cambio = (
+                    f" ({event.get('change_from') or 'Sin dato'} → "
+                    f"{event.get('change_to') or 'Sin dato'})"
+                )
+            sufijo = f' · {actor}' if actor else ''
+            lineas.append(f'[{marca}] {etiqueta}{cambio}{sufijo}: {detalle}'.strip())
+        else:
+            remitente = 'Lead' if event.get('sender') == 'lead' else 'Agente'
+            texto = (event.get('text') or '').strip()
+            lineas.append(f'[{marca}] {remitente}: {texto}'.strip())
+
+    encabezado = [
+        f'Lead CRM #{lead_id} migrado a prospecciones.',
+        f"Nombre: {lead.get('display_name') or ''}",
+        f"Teléfono: {lead.get('phone') or ''}",
+        f"Responsable actual: {lead.get('agent_name') or ''}",
+        f"Fecha de ingreso: {_fecha(lead.get('entered_at'))}",
+        '',
+        'Cronología del lead:',
+    ]
+    notas = '\n'.join(encabezado + lineas).strip()
+
+    usuario = str(getattr(getattr(request, 'user', None), 'username', '') or '').strip()
+    prospect = PropertyProspect.objects.create(
+        origin='crm',
+        origin_other=f'Lead CRM #{lead_id}',
+        crm_lead_id=lead_id,
+        owner_name=(lead.get('display_name') or '')[:200],
+        phone=(lead.get('phone') or '')[:30],
+        notes=notas,
+        status='pendiente',
+        captured_by_username=usuario,
+    )
+    return JsonResponse({
+        'ok': True,
+        'prospect_id': prospect.pk,
+        'url': f'/prospects/{prospect.pk}/detail/',
+    })
 
 
 def _serializar_comentario(comentario):

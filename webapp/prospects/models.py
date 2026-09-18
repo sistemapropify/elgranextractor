@@ -102,7 +102,12 @@ class MobileNotificationDevice(models.Model):
 
 
 class PropertyProspect(models.Model):
-    ORIGIN_CHOICES = [('marketplace', 'Marketplace'), ('calle', 'Calle'), ('otros', 'Otros')]
+    ORIGIN_CHOICES = [
+        ('marketplace', 'Marketplace'),
+        ('calle', 'Calle'),
+        ('otros', 'Otros'),
+        ('crm', 'CRM'),          # migrado manualmente desde el detalle de un lead
+    ]
     CONTRACT_CHOICES = [('trato_directo', 'Trato directo'), ('inmobiliaria', 'Inmobiliaria')]
 
     OPERATION_CHOICES = [
@@ -168,6 +173,12 @@ class PropertyProspect(models.Model):
     )
     origin = models.CharField(max_length=20, choices=ORIGIN_CHOICES, blank=True, verbose_name='Origen')
     origin_other = models.CharField(max_length=120, blank=True, verbose_name='Otro origen')
+    # Lead del CRM del que proviene esta captación (solo para origen = 'crm').
+    # Permite rastrear el origen y evitar migrar dos veces el mismo lead.
+    crm_lead_id = models.BigIntegerField(
+        null=True, blank=True, db_index=True,
+        verbose_name='Lead CRM origen',
+    )
     marketplace_url = models.URLField(max_length=500, blank=True, verbose_name='Enlace Marketplace')
 
     # ── Asignación ("tomar prospección") ─────────────────────────
