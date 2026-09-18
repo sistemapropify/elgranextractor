@@ -703,8 +703,20 @@ CAMPOS_DATOS_COMPLETOS = (
 )
 
 
+# Solo el contrato de trato directo se marca en verde: las prospecciones de
+# inmobiliaria nunca parpadean, aunque tengan todos los datos.
+CONTRATO_DATOS_COMPLETOS = 'trato_directo'
+
+
 def _datos_completos(prospect) -> bool:
-    """True cuando la prospección tiene completos todos los campos clave."""
+    """True cuando la prospección tiene completos todos los campos clave.
+
+    Además el contrato debe ser trato directo; las de inmobiliaria quedan fuera
+    (y de hecho se ocultan del panel salvo que se pidan con la casilla).
+    """
+    contrato = str(getattr(prospect, 'contract_type', '') or '').strip().lower()
+    if contrato != CONTRATO_DATOS_COMPLETOS:
+        return False
     for campo in CAMPOS_DATOS_COMPLETOS:
         valor = getattr(prospect, campo, None)
         if valor is None:
@@ -974,6 +986,9 @@ def prospect_dashboard(request):
             'zona': prospect.zone or '',
             'operacion': prospect.get_operation_type_display() or '',
             'contrato': prospect.get_contract_type_display() or '',
+            # Valor crudo del contrato: el panel oculta las de inmobiliaria
+            # salvo que se marque la casilla correspondiente.
+            'contrato_raw': (prospect.contract_type or '').strip().lower(),
             'origen': prospect.get_origin_display() or prospect.origin or '',
             'creado': timezone.localtime(prospect.created_at).strftime('%d/%m/%Y %H:%M') if prospect.created_at else '',
             'tomada_por_username': prospect.tomada_por_username or '',
@@ -990,6 +1005,11 @@ def prospect_dashboard(request):
     with_phone = sum(1 for p in prospects if (p.phone or '').strip())
     without_phone = len(prospects) - with_phone
     completos = sum(1 for p in prospects if _datos_completos(p))
+    # Las de contrato de inmobiliaria se ocultan del panel por defecto.
+    inmobiliarias = sum(
+        1 for p in prospects
+        if (p.contract_type or '').strip().lower() == 'inmobiliaria'
+    )
     tipos_presentes = sorted({
         (p.get_property_type_display() or 'Prospección') for p in prospects
     })
@@ -1020,6 +1040,7 @@ def prospect_dashboard(request):
             'with_phone': with_phone,
             'without_phone': without_phone,
             'completos': completos,
+            'inmobiliarias': inmobiliarias,
         },
     })
 

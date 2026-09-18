@@ -611,6 +611,33 @@
     .ppc-origen--marketplace { background: #6ec6e8; }
     .ppc-origen--crm { background: #3fb950; }
 
+    /* ── Filtro de contrato (inmobiliaria oculta por defecto) ── */
+    .capture-filters__check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--text-secondary, #8b949e);
+        background: var(--bg-card, #161b22);
+        border: 1px solid var(--border, #30363d);
+        border-radius: 8px;
+        padding: 8px 12px;
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+    }
+    .capture-filters__check input {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        cursor: pointer;
+        accent-color: #39ff14;
+    }
+    .capture-filters__check.is-active {
+        border-color: #39ff14;
+        color: #39ff14;
+    }
+
     /* ── Propiedades con datos completos: borde verde fosforescente ── */
     @keyframes ppc-neon-blink {
         0%   { border-color: #39ff14; box-shadow: 0 0 6px #39ff14, inset 0 0 2px #39ff14; }
@@ -723,6 +750,12 @@
             <option value="">Todos</option>
         </select>
     </div>
+    <label class="capture-filters__check" id="filtro-inmobiliaria-label"
+           for="prospect-filter-inmobiliaria"
+           title="Las prospecciones con contrato de inmobiliaria se ocultan por defecto. Marca esta casilla para verlas.">
+        <input type="checkbox" id="prospect-filter-inmobiliaria">
+        Mostrar inmobiliaria ({{ dashboard_stats.inmobiliarias }})
+    </label>
     <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-clear-filters" onclick="limpiarFiltrosProspeccion()">
         <i class="fas fa-times"></i> Limpiar filtros
     </button>
@@ -740,6 +773,8 @@
     var filtroTelefono = '';
     // Filtro por datos completos: true = solo prospecciones con todos los campos.
     var filtroCompletos = false;
+    // Filtro de contrato: false = oculta las de inmobiliaria (por defecto).
+    var filtroInmobiliaria = false;
 
     // IDs de captaciones con la tarjeta EXPANDIDA: mientras haya alguna,
     // en el mapa solo se muestran los marcadores de esas captaciones.
@@ -776,7 +811,10 @@
             || (filtroTelefono === 'con' && conTelefono)
             || (filtroTelefono === 'sin' && !conTelefono);
         var okCompletos = !filtroCompletos || Boolean(p.completo);
-        return okDistrito && okTipo && okOrigen && okAgente && okTelefono && okCompletos;
+        // Contrato de inmobiliaria: oculto salvo que la casilla esté marcada.
+        var contrato = (p.contrato_raw || '').toString().trim().toLowerCase();
+        var okInmobiliaria = filtroInmobiliaria || contrato !== 'inmobiliaria';
+        return okDistrito && okTipo && okOrigen && okAgente && okTelefono && okCompletos && okInmobiliaria;
     }
 
     // Llena el selector de agentes con los agentes que realmente tienen captaciones.
@@ -827,6 +865,26 @@
         idsExpandidos.clear();
         aplicarFiltrosProspeccion();
         registrarFiltrosProspeccion();
+    };
+
+    // El contrato de inmobiliaria nunca se marca en verde y, además, sus
+    // prospecciones quedan OCULTAS mientras la casilla esté desmarcada.
+    function actualizarEstadoFiltroInmobiliaria() {
+        var check = document.getElementById('prospect-filter-inmobiliaria');
+        if (check) check.checked = filtroInmobiliaria;
+        var etiqueta = document.getElementById('filtro-inmobiliaria-label');
+        if (etiqueta) etiqueta.classList.toggle('is-active', filtroInmobiliaria);
+    }
+
+    window.toggleFiltroInmobiliaria = function (marcado) {
+        filtroInmobiliaria = Boolean(marcado);
+        actualizarEstadoFiltroInmobiliaria();
+        prospectoSeleccionadoId = null;
+        idsExpandidos.clear();
+        aplicarFiltrosProspeccion();
+        registrarActividad('filtro', filtroInmobiliaria
+            ? 'Mostró las prospecciones con contrato de inmobiliaria.'
+            : 'Ocultó las prospecciones con contrato de inmobiliaria.');
     };
 
     // Panel derecho = TODAS las captaciones que cumplen los filtros
@@ -1426,6 +1484,8 @@
         if (agenteSel) agenteSel.value = '';
         filtroTelefono = '';
         filtroCompletos = false;
+        filtroInmobiliaria = false;
+        actualizarEstadoFiltroInmobiliaria();
         actualizarEstadoTarjetaCompletos();
         prospectoSeleccionadoId = null;
         idsExpandidos.clear();
@@ -1725,6 +1785,18 @@
         if (tipoSel) tipoSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
         if (origenSel) origenSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
         if (agenteSel) agenteSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
+
+        // Contrato: al abrir el dashboard la casilla siempre está desmarcada,
+        // de modo que las de inmobiliaria quedan ocultas.
+        var inmobiliariaCheck = document.getElementById('prospect-filter-inmobiliaria');
+        if (inmobiliariaCheck) {
+            inmobiliariaCheck.checked = false;
+            filtroInmobiliaria = false;
+            actualizarEstadoFiltroInmobiliaria();
+            inmobiliariaCheck.addEventListener('change', function (evento) {
+                toggleFiltroInmobiliaria(evento.target.checked);
+            });
+        }
 
         // Una vez que el mapa cargue sus marcadores, poblar el panel derecho
         // con todas las captaciones visibles y mantenerlos sincronizados.
