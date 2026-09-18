@@ -627,9 +627,21 @@
         animation: ppc-neon-blink 1s ease-in-out infinite;
     }
     .capture-stat.capture-stat--completos .capture-stat__label { color: #39ff14; }
+    /* Títulos de los campos que están completos: verde fosforescente y parpadeo */
+    @keyframes ppc-neon-text-blink {
+        0%   { color: #39ff14; text-shadow: 0 0 4px #39ff14; }
+        50%  { color: #ccffc4; text-shadow: 0 0 12px #39ff14, 0 0 3px #39ff14; }
+        100% { color: #39ff14; text-shadow: 0 0 4px #39ff14; }
+    }
+    #selected-property .prospect-panel-card.ppc-completo .ppc-k--completo {
+        color: #39ff14;
+        font-weight: 700;
+        animation: ppc-neon-text-blink 1s ease-in-out infinite;
+    }
     @media (prefers-reduced-motion: reduce) {
         #selected-property .prospect-panel-card.ppc-completo,
-        .capture-stat.capture-stat--completos { animation: none; }
+        .capture-stat.capture-stat--completos,
+        #selected-property .prospect-panel-card.ppc-completo .ppc-k--completo { animation: none; }
     }
 </style>
 {% endblock %}
@@ -1285,11 +1297,17 @@
     // Todos los campos de la captación (se muestran al expandir la tarjeta)
     function filasDetalleHtml(p) {
         var filas = [];
+        // Títulos de los campos que cuentan como "datos completos".
+        var ETIQUETAS_COMPLETAS = [
+            'Propietario', 'Teléfono', 'Tipo', 'Operación', 'Contrato',
+            'Precio', 'Moneda', 'Dormitorios', 'Área'
+        ];
         function fila(k, v) {
             var s = (v === null || v === undefined) ? '' : String(v).trim();
             if (!s) return;
+            var clave = ETIQUETAS_COMPLETAS.indexOf(k) !== -1 ? ' ppc-k--completo' : '';
             filas.push(
-                '<div class="ppc-field"><span class="ppc-k">' + escaparHtml(k) + '</span>' +
+                '<div class="ppc-field"><span class="ppc-k' + clave + '">' + escaparHtml(k) + '</span>' +
                 '<span class="ppc-v">' + escaparHtml(s) + '</span></div>'
             );
         }
