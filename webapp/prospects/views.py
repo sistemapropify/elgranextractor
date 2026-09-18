@@ -706,6 +706,9 @@ CAMPOS_DATOS_COMPLETOS = (
 # Solo el contrato de trato directo se marca en verde: las prospecciones de
 # inmobiliaria nunca parpadean, aunque tengan todos los datos.
 CONTRATO_DATOS_COMPLETOS = 'trato_directo'
+# Los terrenos no tienen dormitorios: ese campo deja de ser requisito y en la
+# tarjeta se muestra «NO APLICA».
+TIPO_SIN_DORMITORIOS = 'terreno'
 
 
 def _datos_completos(prospect) -> bool:
@@ -717,7 +720,11 @@ def _datos_completos(prospect) -> bool:
     contrato = str(getattr(prospect, 'contract_type', '') or '').strip().lower()
     if contrato != CONTRATO_DATOS_COMPLETOS:
         return False
+    tipo = str(getattr(prospect, 'property_type', '') or '').strip().lower()
     for campo in CAMPOS_DATOS_COMPLETOS:
+        # Un terreno no tiene dormitorios: ese campo no se exige.
+        if campo == 'bedrooms' and tipo == TIPO_SIN_DORMITORIOS:
+            continue
         valor = getattr(prospect, campo, None)
         if valor is None:
             return False
@@ -1010,6 +1017,8 @@ def prospect_dashboard(request):
             'distrito': prospect.district or 'Sin distrito',
             'distrito_nombre': prospect.district or 'Sin distrito',
             'tipo_propiedad': prospect.get_property_type_display() or 'Prospección',
+            # Valor crudo del tipo: en los terrenos los dormitorios no aplican.
+            'tipo_raw': (prospect.property_type or '').strip().lower(),
             'titulo': prospect.owner_name or f'Prospección #{prospect.pk}',
             'descripcion': prospect.address or prospect.notes or 'Sin dirección registrada',
             'precio_publicacion': str(prospect.price) if prospect.price is not None else '',

@@ -672,6 +672,11 @@
         50%  { color: #ffc2c2; text-shadow: 0 0 12px #ff2d2d, 0 0 3px #ff2d2d; }
         100% { color: #ff2d2d; text-shadow: 0 0 4px #ff2d2d; }
     }
+    /* Dormitorios en un terreno: no aplica (no parpadea ni cuenta como falta) */
+    #selected-property .prospect-panel-card .ppc-v--no-aplica {
+        color: #8b949e;
+        font-style: italic;
+    }
     #selected-property .prospect-panel-card .ppc-falta {
         color: #ff2d2d;
         font-weight: 700;
@@ -1126,6 +1131,12 @@
         modulo.parentNode.replaceChild(wrapper.firstChild, modulo);
     }
 
+    // ¿La prospección es un terreno? Los terrenos no tienen dormitorios.
+    function esTerrenoProspecto(p) {
+        return ((p && (p.tipo_raw || p.tipo_propiedad)) || '')
+            .toString().trim().toLowerCase() === 'terreno';
+    }
+
     // ── Orden del panel: último cambio arriba ───────────────────────
     // Las tarjetas se colocan según su último cambio (comentario escrito o
     // datos actualizados); las que no se han editado ni comentado quedan abajo.
@@ -1419,9 +1430,19 @@
             'Propietario', 'Teléfono', 'Tipo', 'Operación', 'Contrato',
             'Precio', 'Moneda', 'Dormitorios', 'Área'
         ];
+        var esTerreno = esTerrenoProspecto(p);
         function fila(k, v) {
             var esRequisito = ETIQUETAS_COMPLETAS.indexOf(k) !== -1;
             var s = (v === null || v === undefined) ? '' : String(v).trim();
+            // Un terreno no tiene dormitorios: el campo no se exige para que la
+            // tarjeta se marque en verde y en su lugar se escribe NO APLICA.
+            if (esTerreno && k === 'Dormitorios') {
+                filas.push(
+                    '<div class="ppc-field"><span class="ppc-k">' + escaparHtml(k) + '</span>' +
+                    '<span class="ppc-v ppc-v--no-aplica">NO APLICA</span></div>'
+                );
+                return;
+            }
             if (!s && !esRequisito) return;
             var claseFila = '';
             var claseK = '';
@@ -1622,7 +1643,7 @@
         if (p.area_construida && String(p.area_construida).trim()) {
             fila('Área', p.area_construida + ' m²');
         }
-        fila('Dormitorios', p.habitaciones);
+        fila('Dormitorios', esTerrenoProspecto(p) ? 'NO APLICA' : p.habitaciones);
         fila('Dirección', p.direccion);
         fila('Distrito', p.distrito_nombre || p.distrito);
         fila('Estado', p.status);
