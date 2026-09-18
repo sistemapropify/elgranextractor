@@ -787,6 +787,11 @@
               <option value="marketplace" {% if form.origin.value == 'marketplace' %}selected{% endif %}>Marketplace</option>
               <option value="calle" {% if form.origin.value == 'calle' %}selected{% endif %}>Calle</option>
               <option value="otros" {% if form.origin.value == 'otros' %}selected{% endif %}>Otros</option>
+              {% if form.origin.value == 'crm' %}
+              {# CRM solo nace migrando un lead: se muestra para conservarlo al
+                 editar y no se puede elegir a mano en una captación nueva. #}
+              <option value="crm" selected>CRM</option>
+              {% endif %}
             </select>
           </div>
           <div class="field-group full origin-extra" id="origin-other-group" style="display:none;margin-top:10px;">
@@ -1051,6 +1056,9 @@
 {% block extra_js %}
 <script>
   const PROSPECT_ID  = {% if mode == 'detail' %}{{ prospect.pk }}{% else %}null{% endif %};
+  // Origen ya guardado: si el desplegable no lo ofrece (p. ej. CRM) no se
+  // debe perder al guardar la edición.
+  const PROSPECT_ORIGIN = {% if mode == 'detail' %}"{{ prospect.origin|default:''|escapejs }}"{% else %}""{% endif %};
   const PROCESS_URL  = {% if mode == 'detail' %}"{% url 'prospects:process' prospect.pk %}"{% else %}null{% endif %};
   const CAPTURE_URL  = "{% url 'prospects:capture' %}";
   const CSRF_TOKEN   = "{{ csrf_token }}";
@@ -1386,6 +1394,23 @@
     if (btn) btn.disabled = saveInProgress;
   }
 
+  // ── Aviso a las demás pestañas ──────────────────────────────────
+  // El dashboard se abre en otra pestaña; al guardar aquí se publica una
+  // marca para que se refresque solo y los bordes verdes / contadores / datos
+  // se vean al instante, sin tener que refrescar la pantalla a mano.
+  function publicarCambioProspeccion(prospectId) {
+    try {
+      localStorage.setItem('prospects_cambios_v1', String(Date.now()));
+    } catch (e) { /* sin almacenamiento disponible */ }
+    try {
+      if (typeof BroadcastChannel === 'function') {
+        var canal = new BroadcastChannel('prospects_cambios');
+        canal.postMessage({ tipo: 'prospecto_guardado', id: prospectId || null });
+        canal.close();
+      }
+    } catch (e) { /* sin BroadcastChannel */ }
+  }
+
   // ── Guardar la captura completa en prospects_propertyprospect ──
   async function captureAndSave() {
     const fileInput = document.getElementById('photo-input');
@@ -1396,7 +1421,27 @@
     const errorBox = document.getElementById('capture-save-error');
     errorBox.hidden = true;
     errorBox.textContent = '';
-    const origin = document.getElementById('id_origin')?.value;
+    const originSelect = document.getElementById('id_origin');
+    let origin = originSelect?.value;
+    if (!origin && PROSPECT_ORIGIN) {
+      // Al editar se conserva el origen guardado (por ejemplo, CRM).
+      if (originSelect) originSelect.value = PROSPECT_ORIGIN;
+      origin = originSelect?.value || PROSPECT_ORIGIN;
+      if (originSelect && !originSelect.value) {
+        // El desplegable no tiene esa opción: el origen se envía en un campo
+        // oculto y el select se desactiva para no enviar dos valores.
+        let oculto = document.getElementById('origen-conservado');
+        if (!oculto) {
+          oculto = document.createElement('input');
+          oculto.type = 'hidden';
+          oculto.id = 'origen-conservado';
+          oculto.name = 'origin';
+          form.appendChild(oculto);
+        }
+        oculto.value = PROSPECT_ORIGIN;
+        originSelect.disabled = true;
+      }
+    }
     if (!origin) {
       mostrarAvisoCentrado('Debes seleccionar el origen de la prospección para poder guardar.');
       return;
@@ -1439,6 +1484,8 @@
               ? 'La sesión del formulario venció. Vuelve a ingresar con Propify y reintenta.'
               : 'El servidor no pudo completar el guardado. Tu foto y tus datos siguen aquí; inténtalo nuevamente.'};
       if (res.ok && data.ok) {
+        // Refresca al instante el dashboard abierto en otra pestaña.
+        publicarCambioProspeccion(PROSPECT_ID);
         showToast(PROSPECT_ID ? 'Prospecto actualizado' : 'Prospecto guardado', 'success');
         setTimeout(() => { window.location.href = data.redirect_url; }, 800);
       } else {
@@ -1453,6 +1500,10 @@
         throw new Error(fieldErrors.join('\n') || data.error || 'No se pudo guardar la captación. Revisa los datos e inténtalo nuevamente.');
       }
     } catch(e) {
+      const selectOrigen = document.getElementById('id_origin');
+      if (selectOrigen) selectOrigen.disabled = false;
+      const origenOculto = document.getElementById('origen-conservado');
+      if (origenOculto) origenOculto.remove();
       errorBox.textContent = e instanceof TypeError
         ? 'No se pudo conectar con el servidor. Tu foto y tus datos siguen aquí; inténtalo nuevamente.'
         : e.message;

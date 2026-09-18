@@ -1569,6 +1569,125 @@
         });
     }
 
+    // ── Sincronización entre pestañas ──────────────────────────────
+    // «Editar captación» se abre en OTRA pestaña y guarda por AJAX, así que
+    // este panel conservaba los datos viejos (borde verde, contadores,
+    // filtros) hasta pulsar F5. Con esta marca compartida el panel se
+    // refresca solo cuando la edición ya se guardó, manteniendo la posición
+    // de la pantalla y las tarjetas que estaban abiertas.
+    var CLAVE_CAMBIOS = 'prospects_cambios_v1';
+    var CLAVE_SCROLL = 'prospects_dashboard_scroll';
+    var CLAVE_EXPANDIDOS = 'prospects_dashboard_expandidos';
+    var marcaCambios = leerMarcaCambios();
+    var refrescandoPanel = false;
+    var canalCambios = null;
+
+    function leerMarcaCambios() {
+        try { return String(localStorage.getItem(CLAVE_CAMBIOS) || ''); } catch (e) { return ''; }
+    }
+
+    function hayComentarioSinEnviar() {
+        var campos = document.querySelectorAll(
+            '#selected-property .ppc-comments input, #selected-property .ppc-comments textarea'
+        );
+        for (var i = 0; i < campos.length; i++) {
+            if (String(campos[i].value || '').trim()) return true;
+        }
+        return false;
+    }
+
+    function mostrarAvisoActualizacion() {
+        if (document.getElementById('aviso-actualizacion-prospeccion')) return;
+        var aviso = document.createElement('div');
+        aviso.id = 'aviso-actualizacion-prospeccion';
+        aviso.setAttribute('style',
+            'position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:9999;' +
+            'background:#1f6feb;color:#fff;font:600 13px/1.3 "Segoe UI",system-ui,Arial,sans-serif;' +
+            'padding:10px 14px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.45);' +
+            'display:flex;gap:10px;align-items:center;');
+        aviso.innerHTML = '<span>Hay cambios guardados en otra pestaña.</span>' +
+            '<button type="button" style="background:#fff;color:#1f6feb;border:0;border-radius:6px;' +
+            'padding:5px 10px;font-weight:700;cursor:pointer;">Actualizar</button>';
+        aviso.querySelector('button').addEventListener('click', function () {
+            refrescarPanel('botón Actualizar');
+        });
+        document.body.appendChild(aviso);
+    }
+
+    function guardarEstadoAntesDeRefrescar() {
+        try {
+            sessionStorage.setItem(CLAVE_SCROLL, String(window.scrollY || 0));
+            sessionStorage.setItem(CLAVE_EXPANDIDOS, JSON.stringify(Array.from(idsExpandidos)));
+        } catch (e) { /* sin almacenamiento disponible */ }
+    }
+
+    function refrescarPanel(origen) {
+        if (refrescandoPanel) return;
+        refrescandoPanel = true;
+        registrarActividad('otro', 'El panel de prospección se actualizó automáticamente (' + origen + ').');
+        guardarEstadoAntesDeRefrescar();
+        window.location.reload();
+    }
+
+    function revisarCambiosExternos(origen) {
+        var actual = leerMarcaCambios();
+        if (!actual || actual === marcaCambios) return;
+        marcaCambios = actual;
+        if (hayComentarioSinEnviar()) {
+            // Nunca se pierde el comentario que el usuario está escribiendo.
+            mostrarAvisoActualizacion();
+            return;
+        }
+        refrescarPanel(origen);
+    }
+
+    function restaurarEstadoPanel() {
+        try {
+            var expandidos = sessionStorage.getItem(CLAVE_EXPANDIDOS);
+            if (expandidos) {
+                sessionStorage.removeItem(CLAVE_EXPANDIDOS);
+                JSON.parse(expandidos).forEach(function (id) {
+                    if (id !== null && id !== undefined && String(id) !== '') {
+                        idsExpandidos.add(String(id));
+                    }
+                });
+            }
+            var scroll = sessionStorage.getItem(CLAVE_SCROLL);
+            if (scroll !== null) {
+                sessionStorage.removeItem(CLAVE_SCROLL);
+                var y = parseInt(scroll, 10) || 0;
+                setTimeout(function () { window.scrollTo(0, y); }, 400);
+            }
+        } catch (e) { /* sin almacenamiento disponible */ }
+    }
+
+    function iniciarSincronizacionEntrePestanas() {
+        // Otra pestaña escribió la marca: se recibe como evento 'storage'.
+        window.addEventListener('storage', function (evento) {
+            if (evento && evento.key === CLAVE_CAMBIOS) revisarCambiosExternos('otra pestaña');
+        });
+        // Aviso directo (más inmediato) si el navegador soporta BroadcastChannel.
+        try {
+            if (typeof BroadcastChannel === 'function') {
+                canalCambios = new BroadcastChannel('prospects_cambios');
+                canalCambios.onmessage = function (evento) {
+                    if (!evento || !evento.data || evento.data.tipo !== 'prospecto_guardado') return;
+                    revisarCambiosExternos('aviso de edición');
+                };
+            }
+        } catch (e) { canalCambios = null; }
+        // Al volver a esta pestaña también se revisa (red de seguridad).
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') revisarCambiosExternos('pestaña activa');
+        });
+        window.addEventListener('focus', function () { revisarCambiosExternos('ventana activa'); });
+        // Volver con «Atrás»: el navegador puede restaurar la página desde su
+        // caché (bfcache) con los datos anteriores a la edición.
+        window.addEventListener('pageshow', function (evento) {
+            if (evento && evento.persisted) refrescarPanel('retorno con caché del navegador');
+        });
+    }
+
     // Quitar las etiquetas de texto de los marcadores (ej. "Sin distrito");
     // solo debe verse el marcador.
     function limpiarEtiquetasMarcadores() {
@@ -1585,6 +1704,10 @@
             seleccionarMarcadorUnico(marker);
             return true;
         };
+        // Restaurar posición/tarjetas abiertas y escuchar cambios de
+        // otras pestañas (edición de una captación).
+        restaurarEstadoPanel();
+        iniciarSincronizacionEntrePestanas();
         // Llenar el panel inicialmente (aunque el mapa aún no cargue).
         sincronizarPanel();
 

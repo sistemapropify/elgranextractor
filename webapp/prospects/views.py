@@ -319,6 +319,11 @@ class ProspectDetailView(View):
         # (nunca se cambia CAPTADO por omisión).
         if 'captado' not in post_data:
             post_data['captado'] = '1' if prospect.captado else '0'
+        # El origen CRM solo nace migrando un lead desde el CRM, por lo que el
+        # desplegable de captación no siempre lo ofrece. Si la edición no trae
+        # origen se conserva el guardado: nunca se pierde ese dato.
+        if not (post_data.get('origin') or '').strip():
+            post_data['origin'] = prospect.origin or ''
         if not any((post_data.get(key) or '').strip() for key in ('latitude', 'longitude')):
             post_data['latitude'] = str(prospect.latitude) if prospect.latitude is not None else ''
             post_data['longitude'] = str(prospect.longitude) if prospect.longitude is not None else ''
