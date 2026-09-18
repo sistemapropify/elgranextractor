@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+from datetime import datetime, timedelta
 from functools import wraps
 from uuid import uuid4
 
@@ -17,7 +18,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.conf import settings
 
-from .models import PropertyProspect, ProspectComment
+from .models import ActivityLog, PropertyProspect, ProspectComment
 from .forms import ProspectCaptureForm, ProspectEditForm
 from .propify_auth import (
     PropifyAuthError,
@@ -251,6 +252,13 @@ class CaptureView(View):
                 'error': 'El servidor no pudo guardar la captura. Revisa los datos e inténtalo nuevamente.',
             }, status=500)
 
+        registrar_actividad(
+            request, 'captura_creada',
+            'Creó la prospección #%s (%s).' % (
+                prospect.pk, prospect.get_origin_display() or 'sin origen',
+            ),
+            prospect=prospect,
+        )
         # Tras guardar, volver automáticamente al dashboard de prospección
         # (/marketing/prospeccion/) en vez de abrir la página de detalle.
         logger.info(
@@ -316,6 +324,8 @@ class ProspectDetailView(View):
             post_data['longitude'] = str(prospect.longitude) if prospect.longitude is not None else ''
 
         form = ProspectEditForm(post_data, request.FILES, instance=prospect)
+        estado_previo = prospect.status
+        captado_previo = bool(prospect.captado)
         response_status = 400
         if form.is_valid():
             saved = form.save(commit=False)
@@ -338,6 +348,22 @@ class ProspectDetailView(View):
                     form.add_error(None, 'El servidor no pudo guardar los cambios. Inténtalo nuevamente.')
                     response_status = 500
                 else:
+                    registrar_actividad(
+                        request, 'prospecto_editado',
+                        'Editó la prospección #%s.' % saved.pk,
+                        prospect=saved,
+                    )
+                    if saved.status != estado_previo or bool(saved.captado) != captado_previo:
+                        registrar_actividad(
+                            request, 'estado_cambiado',
+                            'Prospección #%s: estado %s -> %s; %s.' % (
+                                saved.pk,
+                                estado_previo or '-',
+                                saved.status or '-',
+                                'CAPTADO' if saved.captado else 'NO CAPTADO',
+                            ),
+                            prospect=saved,
+                        )
                     if wants_json:
                         return JsonResponse({
                             'ok': True, 'prospect_id': saved.pk,
@@ -550,6 +576,11 @@ def tomar_prospeccion(request, pk):
             locked.tomada_por_username = username
             locked.tomada_en = timezone.now()
             locked.save(update_fields=['tomada_por_username', 'tomada_en'])
+            registrar_actividad(
+                request, 'asignacion',
+                'Tomó la prospección #%s.' % locked.pk,
+                prospect=locked,
+            )
             return JsonResponse({'ok': True, 'tomada_por_username': username})
 
         # accion == 'soltar'
@@ -564,6 +595,11 @@ def tomar_prospeccion(request, pk):
         locked.tomada_por_username = ''
         locked.tomada_en = None
         locked.save(update_fields=['tomada_por_username', 'tomada_en'])
+        registrar_actividad(
+            request, 'asignacion',
+            'Soltó la prospección #%s.' % locked.pk,
+            prospect=locked,
+        )
         return JsonResponse({'ok': True, 'tomada_por_username': ''})
 
 
@@ -581,6 +617,11 @@ def caducar_prospeccion(request, pk):
         locked = PropertyProspect.objects.select_for_update().get(pk=pk)
         locked.status = 'caducado'
         locked.save(update_fields=['status', 'updated_at'])
+    registrar_actividad(
+        request, 'estado_cambiado',
+        'Marcó como caducada la prospección #%s.' % locked.pk,
+        prospect=locked,
+    )
     return JsonResponse({'ok': True, 'status': 'caducado'})
 
 
@@ -797,6 +838,13 @@ def migrar_lead_a_prospeccion(request, lead_id):
         )
         actualizado = False
 
+    registrar_actividad(
+        request, 'captura_creada',
+        '%s el lead CRM #%s como prospección #%s.' % (
+            'Actualizó' if actualizado else 'Migró', lead_id, prospect.pk,
+        ),
+        prospect=prospect,
+    )
     return JsonResponse({
         'ok': True,
         'actualizado': actualizado,
@@ -834,6 +882,11 @@ def prospect_comments(request, pk):
         comentario = ProspectComment.objects.create(
             prospect=prospect, author_username=username, text=texto,
         )
+        registrar_actividad(
+            request, 'comentario',
+            'Comentó en la prospección #%s: %s' % (prospect.pk, texto[:120]),
+            prospect=prospect,
+        )
         return JsonResponse({'ok': True, 'comment': _serializar_comentario(comentario)})
 
     comentarios = list(prospect.comments.all())
@@ -843,6 +896,7 @@ def prospect_comments(request, pk):
 @propify_web_required
 def prospect_dashboard(request):
     """Dashboard cartográfico con las captaciones activas de todos los agentes."""
+    registrar_actividad(request, 'acceso', 'Ingresó al dashboard de prospección.')
     prospects = list(PropertyProspect.objects.exclude(status='caducado').prefetch_related('comments').order_by('-created_at'))
     mobile_actors = _mobile_capture_actors()
 
@@ -962,6 +1016,150 @@ def prospect_dashboard(request):
             'without_phone': without_phone,
             'completos': completos,
         },
+    })
+
+
+# ── Actividad de usuarios (registro y consulta) ─────────────────
+
+ACTIVIDAD_LIMITE = 800
+ACTIVIDAD_UA_MAX = 400
+_TIPOS_ACTIVIDAD = dict(ActivityLog.EVENT_TYPES)
+
+
+def registrar_actividad(request, event_type, description, prospect=None, path=''):
+    """Registra un evento de actividad del módulo de prospección.
+
+    Es best-effort: si algo falla se anota en el log y nunca interrumpe la
+    petición del usuario.
+    """
+    try:
+        principal = getattr(request, 'propify_user', None)
+        usuario = str(getattr(principal, 'username', '') or '').strip()
+        if not usuario:
+            usuario = str(getattr(getattr(request, 'user', None), 'username', '') or '').strip()
+        tipo = str(event_type or 'otro').strip().lower()
+        ActivityLog.objects.create(
+            user_username=usuario or 'anonimo',
+            event_type=tipo if tipo in _TIPOS_ACTIVIDAD else 'otro',
+            description=' '.join(str(description or '').split())[:500],
+            user_agent=(request.META.get('HTTP_USER_AGENT', '') or '')[:ACTIVIDAD_UA_MAX],
+            path=str(path or getattr(request, 'path', '') or '')[:300],
+            prospect=prospect if getattr(prospect, 'pk', None) else None,
+        )
+    except Exception:
+        logger.exception('No se pudo registrar la actividad de prospección.')
+
+
+def agrupar_actividad_por_hora(eventos):
+    """Reparte los eventos en las 24 franjas horarias del día (00:00 a 23:00)."""
+    bandas = [
+        {'hora': hora, 'label': '%02d:00' % hora, 'total': 0, 'eventos': []}
+        for hora in range(24)
+    ]
+    for evento in eventos or []:
+        if not isinstance(evento, dict):
+            continue
+        try:
+            hora = int(evento.get('hora'))
+        except (TypeError, ValueError):
+            continue
+        if 0 <= hora <= 23:
+            bandas[hora]['eventos'].append(evento)
+            bandas[hora]['total'] += 1
+    return bandas
+
+
+def _rango_actividad(desde, hasta):
+    """Convierte fechas ISO 'YYYY-MM-DD' en un rango aware (inicio, fin)."""
+    inicio = fin = None
+    for valor, es_fin in ((desde, False), (hasta, True)):
+        if not valor:
+            continue
+        try:
+            fecha = datetime.strptime(str(valor), '%Y-%m-%d').date()
+        except (TypeError, ValueError):
+            continue
+        momento = timezone.make_aware(datetime.combine(fecha, datetime.min.time()))
+        if es_fin:
+            fin = momento + timedelta(days=1)
+        else:
+            inicio = momento
+    return inicio, fin
+
+
+def _serializar_actividad(evento):
+    local = timezone.localtime(evento.created_at)
+    return {
+        'id': evento.pk,
+        'usuario': evento.user_username,
+        'tipo': evento.event_type,
+        'tipo_label': evento.get_event_type_display(),
+        'descripcion': evento.description,
+        'prospect_id': evento.prospect_id,
+        'prospecto': str(evento.prospect) if evento.prospect_id else '',
+        'path': evento.path,
+        'user_agent': evento.user_agent,
+        'fecha': local.strftime('%d/%m/%Y'),
+        'hora': local.hour,
+        'hora_label': local.strftime('%H:%M:%S'),
+        'timestamp': local.isoformat(),
+    }
+
+
+@csrf_exempt
+@propify_web_required
+def api_actividad(request):
+    """Registra (POST) y consulta (GET) la actividad del módulo de prospección."""
+    if request.method == 'POST':
+        descripcion = (request.POST.get('description') or '').strip()
+        if not descripcion:
+            return JsonResponse({'ok': False, 'error': 'Falta la descripción del evento.'}, status=400)
+        registrar_actividad(
+            request,
+            request.POST.get('event_type') or 'otro',
+            descripcion,
+            path=request.POST.get('path') or '',
+        )
+        return JsonResponse({'ok': True})
+
+    principal = getattr(request, 'propify_user', None)
+    usuario_actual = str(getattr(principal, 'username', '') or '').strip()
+    ver_todos = _propify_puede_metricas(request)
+
+    usuario = (request.GET.get('usuario') or '').strip()
+    if not ver_todos:
+        # Sin rol gerencial, cada usuario solo ve su propia actividad.
+        usuario = usuario_actual
+
+    tipo = (request.GET.get('tipo') or '').strip().lower()
+    inicio, fin = _rango_actividad(request.GET.get('desde'), request.GET.get('hasta'))
+
+    consulta = ActivityLog.objects.select_related('prospect')
+    if usuario:
+        consulta = consulta.filter(user_username=usuario)
+    if tipo in _TIPOS_ACTIVIDAD:
+        consulta = consulta.filter(event_type=tipo)
+    if inicio is not None:
+        consulta = consulta.filter(created_at__gte=inicio)
+    if fin is not None:
+        consulta = consulta.filter(created_at__lt=fin)
+
+    eventos = [
+        _serializar_actividad(evento)
+        for evento in consulta.order_by('-created_at')[:ACTIVIDAD_LIMITE]
+    ]
+    usuarios = sorted(set(ActivityLog.objects.values_list('user_username', flat=True).distinct()))
+    return JsonResponse({
+        'ok': True,
+        'ver_todos': ver_todos,
+        'usuario_actual': usuario_actual,
+        'usuario_filtro': usuario,
+        'total': len(eventos),
+        'bandas': agrupar_actividad_por_hora(eventos),
+        'eventos': eventos,
+        'usuarios': usuarios,
+        'tipos': [{'valor': valor, 'label': etiqueta} for valor, etiqueta in ActivityLog.EVENT_TYPES],
+        'generado_en': timezone.localtime().strftime('%d/%m/%Y %H:%M:%S'),
     })
 
 
@@ -1105,11 +1303,37 @@ def _render_chart_metricas(puntos, gran, agente_filtro):
 
 @propify_web_required
 def prospect_metricas(request):
-    """Dashboard gerencial: evolución de captaciones por agente y granularidad."""
-    if not _propify_puede_metricas(request):
-        if 'application/json' in request.headers.get('Accept', ''):
-            return JsonResponse({'ok': False, 'error': 'No tienes permisos gerenciales.'}, status=403)
-        return HttpResponseForbidden('No tienes permisos para ver métricas gerenciales.')
+    """Dashboard gerencial: evolución de captaciones + actividad de usuarios."""
+    ver_todos = _propify_puede_metricas(request)
+    principal = getattr(request, 'propify_user', None)
+    usuario_actual = str(getattr(principal, 'username', '') or '').strip()
+    registrar_actividad(
+        request, 'acceso', 'Ingresó al dashboard de métricas de prospección.',
+    )
+
+    contexto = {
+        'solo_actividad': not ver_todos,
+        'actividad_ver_todos': ver_todos,
+        'actividad_usuario': usuario_actual,
+        'tipos_actividad': [
+            {'valor': valor, 'label': etiqueta}
+            for valor, etiqueta in ActivityLog.EVENT_TYPES
+        ],
+    }
+
+    if not ver_todos:
+        # Sin rol gerencial: solo su propia actividad, sin gráficos gerenciales.
+        contexto.update({
+            'chart_b64': '',
+            'granularidad': 'dia',
+            'agente_filtro': 'total',
+            'agentes': [],
+            'total': 0,
+            'puntos': [],
+            'granularidades': [],
+        })
+        return render(request, 'prospects/metricas.html', contexto)
+
     gran = (request.GET.get('gran', '') or 'dia').strip().lower()
     if gran not in ('hora', 'dia', 'semana', 'mes', 'anio'):
         gran = 'dia'
@@ -1117,7 +1341,7 @@ def prospect_metricas(request):
     puntos, agentes = _metricas_datos(gran, agente_filtro)
     chart_b64 = _render_chart_metricas(puntos, gran, agente_filtro)
     total = sum(p['count'] for p in puntos)
-    return render(request, 'prospects/metricas.html', {
+    contexto.update({
         'chart_b64': chart_b64,
         'granularidad': gran,
         'agente_filtro': agente_filtro,
@@ -1132,3 +1356,4 @@ def prospect_metricas(request):
             ('anio', 'Año'),
         ],
     })
+    return render(request, 'prospects/metricas.html', contexto)

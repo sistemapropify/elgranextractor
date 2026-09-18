@@ -320,6 +320,54 @@ class PropertyProspect(models.Model):
         return "Sin coordenadas"
 
 
+class ActivityLog(models.Model):
+    """Registro de actividad de los usuarios dentro del módulo de prospección."""
+
+    EVENT_TYPES = [
+        ('acceso', 'Acceso al módulo'),
+        ('navegacion', 'Navegación'),
+        ('filtro', 'Filtro aplicado'),
+        ('busqueda', 'Búsqueda'),
+        ('prospecto_visto', 'Prospecto abierto'),
+        ('prospecto_editado', 'Prospecto editado'),
+        ('estado_cambiado', 'Cambio de estado'),
+        ('captura_creada', 'Captura creada'),
+        ('asignacion', 'Tomar / soltar prospección'),
+        ('comentario', 'Comentario'),
+        ('exportacion', 'Exportación'),
+        ('otro', 'Otra acción'),
+    ]
+
+    user_username = models.CharField(max_length=150, db_index=True, verbose_name='Usuario')
+    event_type = models.CharField(
+        max_length=32, choices=EVENT_TYPES, db_index=True, verbose_name='Tipo de evento',
+    )
+    description = models.CharField(max_length=500, verbose_name='Descripción')
+    user_agent = models.CharField(max_length=400, blank=True, default='', verbose_name='User agent')
+    path = models.CharField(max_length=300, blank=True, default='', verbose_name='Ruta')
+    prospect = models.ForeignKey(
+        PropertyProspect,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='activity_logs',
+        verbose_name='Prospección',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='Fecha y hora')
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Actividad'
+        verbose_name_plural = 'Actividades'
+        indexes = [
+            models.Index(fields=['-created_at', 'event_type'], name='prospect_act_fecha_tipo'),
+            models.Index(fields=['user_username', '-created_at'], name='prospect_act_user_fecha'),
+        ]
+
+    def __str__(self):
+        return f'{self.user_username} · {self.get_event_type_display()} · {self.description[:60]}'
+
+
 class ProspectComment(models.Model):
     prospect = models.ForeignKey(
         PropertyProspect,

@@ -11,14 +11,16 @@
   .wrap { max-width:1200px; margin:0 auto; padding:20px; }
   header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:16px; }
   h1 { font-size:20px; margin:0; }
+  h2 { font-size:16px; margin:0; }
   a.back { color:var(--accent); text-decoration:none; font-size:13px; }
   .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
   .controls { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; }
   .controls label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--sub); }
-  .controls select, .controls button {
+  .controls select, .controls input, .controls button {
     background:#21262d; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:7px 10px; font-size:13px;
   }
   .controls button { background:#238636; border-color:#2ea043; cursor:pointer; font-weight:600; }
+  .controls button.ghost { background:#21262d; border-color:var(--border); }
   .stat-line { font-size:13px; color:var(--sub); }
   .stat-line b { color:var(--text); }
   img.chart { width:100%; height:auto; display:block; border-radius:8px; }
@@ -26,17 +28,41 @@
   th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
   th { color:var(--sub); font-weight:600; }
   .empty { color:var(--sub); padding:30px; text-align:center; }
+
+  /* ── Tarjeta Actividades ── */
+  .act-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .act-meta { font-size:12px; color:var(--sub); margin-top:4px; }
+  .act-acciones { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .act-toggle { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--sub); }
+  .act-toggle input { width:15px; height:15px; }
+  .act-band { border-top:1px solid var(--border); padding:8px 0; }
+  .act-band:first-child { border-top:0; }
+  .act-band__head { display:flex; align-items:center; gap:10px; font-size:12px; }
+  .act-band__hora { font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
+  .act-band__count { color:var(--sub); }
+  .act-band--vacia .act-band__hora,
+  .act-band--vacia .act-band__count { color:#484f58; }
+  .act-events { display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+  .act-event { display:flex; gap:10px; align-items:flex-start; background:#0d1117; border:1px solid var(--border); border-radius:8px; padding:7px 10px; }
+  .act-event__hora { font-size:11px; color:var(--sub); min-width:62px; font-variant-numeric:tabular-nums; }
+  .act-event__body { min-width:0; flex:1; }
+  .act-event__top { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .act-user { font-weight:700; font-size:12.5px; }
+  .act-tag { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; padding:1px 7px; border-radius:999px; border:1px solid var(--border); color:var(--sub); background:#21262d; }
+  .act-desc { font-size:12.5px; color:var(--text); margin-top:2px; word-break:break-word; }
+  .act-agent { font-size:10.5px; color:#6e7681; margin-top:3px; word-break:break-word; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>📈 Métricas · Evolución de captaciones</h1>
-    <a class="back" href="{% url 'prospects:dashboard' %}">← Volver al dashboard de prospección</a>
+    <h1>{% if solo_actividad %}🕒 Mi actividad · Prospección{% else %}📈 Métricas · Evolución de captaciones{% endif %}</h1>
+    <a class="back" href="{% url 'prospects:dashboard' %}" id="link-volver">← Volver al dashboard de prospección</a>
   </header>
 
+  {% if not solo_actividad %}
   <div class="card">
-    <form method="get" action="{% url 'prospects:metricas' %}" class="controls">
+    <form method="get" action="{% url 'prospects:metricas' %}" class="controls" id="form-metricas">
       <label>Granularidad
         <select name="gran">
           {% for val, nombre in granularidades %}
@@ -77,6 +103,226 @@
     </table>
   </div>
   {% endif %}
+  {% endif %}
+
+  <div class="card" id="card-actividades">
+    <div class="act-head">
+      <div>
+        <h2>🕒 Actividades</h2>
+        <div class="act-meta" id="act-meta">
+          {% if actividad_ver_todos %}Todos los usuarios{% else %}Tu actividad ({{ actividad_usuario }}){% endif %}
+          · <span id="act-total">0</span> eventos · actualizado <span id="act-actualizado">—</span>
+        </div>
+      </div>
+      <div class="act-acciones">
+        <span class="act-toggle">
+          <input type="checkbox" id="act-auto">
+          <label for="act-auto">Actualización automática</label>
+        </span>
+        <button type="button" class="ghost" id="act-refresh">Actualizar</button>
+      </div>
+    </div>
+
+    <div class="controls" style="margin-bottom:12px;">
+      {% if actividad_ver_todos %}
+      <label>Usuario
+        <select id="act-usuario"><option value="">Todos</option></select>
+      </label>
+      {% endif %}
+      <label>Tipo de evento
+        <select id="act-tipo">
+          <option value="">Todos</option>
+          {% for t in tipos_actividad %}<option value="{{ t.valor }}">{{ t.label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Desde <input type="date" id="act-desde"></label>
+      <label>Hasta <input type="date" id="act-hasta"></label>
+      <button type="button" id="act-aplicar">Aplicar filtros</button>
+      <button type="button" class="ghost" id="act-limpiar">Limpiar</button>
+    </div>
+
+    <div id="act-feed"><div class="empty">Cargando actividad…</div></div>
+  </div>
 </div>
+
+<script>
+(function () {
+  var API = '{% url "prospects:api_actividad" %}';
+  var VER_TODOS = {{ actividad_ver_todos|yesno:"true,false" }};
+  var INTERVALO_MS = 20000;
+  var timer = null;
+
+  function el(id) { return document.getElementById(id); }
+
+  function escapar(valor) {
+    if (valor === null || valor === undefined) return '';
+    return String(valor).replace(/[&<>"']/g, function (c) {
+      if (c === '&') return '&';
+      if (c === '<') return '<';
+      if (c === '>') return '>';
+      if (c === '"') return '"';
+      return ''';
+    });
+  }
+
+  function registrar(tipo, descripcion) {
+    try {
+      var datos = new URLSearchParams();
+      datos.set('event_type', tipo);
+      datos.set('description', descripcion);
+      datos.set('path', window.location.pathname);
+      fetch(API, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' },
+        body: datos.toString(),
+        keepalive: true,
+      });
+    } catch (e) { /* el registro nunca debe romper la vista */ }
+  }
+
+  function descripcionFiltros() {
+    var partes = [];
+    var usuario = el('act-usuario');
+    if (usuario && usuario.value) partes.push('usuario=' + usuario.value);
+    var tipo = el('act-tipo');
+    if (tipo && tipo.value) partes.push('tipo=' + tipo.value);
+    var desde = el('act-desde');
+    if (desde && desde.value) partes.push('desde=' + desde.value);
+    var hasta = el('act-hasta');
+    if (hasta && hasta.value) partes.push('hasta=' + hasta.value);
+    return partes.length ? partes.join(', ') : 'sin filtros';
+  }
+
+  function pintarBandas(bandas) {
+    var contenedor = el('act-feed');
+    if (!contenedor) return;
+    var html = '';
+    (bandas || []).forEach(function (banda) {
+      var vacia = !banda.total;
+      html += '<div class="act-band' + (vacia ? ' act-band--vacia' : '') + '">' +
+        '<div class="act-band__head">' +
+          '<span class="act-band__hora">' + escapar(banda.label) + '</span>' +
+          '<span class="act-band__count">' +
+            (vacia ? 'sin actividad' : (banda.total + (banda.total === 1 ? ' evento' : ' eventos'))) +
+          '</span>' +
+        '</div>';
+      if (!vacia) {
+        html += '<div class="act-events">';
+        banda.eventos.forEach(function (ev) {
+          html += '<div class="act-event">' +
+            '<span class="act-event__hora">' + escapar(ev.hora_label) + '</span>' +
+            '<div class="act-event__body">' +
+              '<div class="act-event__top">' +
+                '<span class="act-user">' + escapar(ev.usuario) + '</span>' +
+                '<span class="act-tag">' + escapar(ev.tipo_label) + '</span>' +
+              '</div>' +
+              '<div class="act-desc">' + escapar(ev.descripcion) + '</div>' +
+              (ev.user_agent ? '<div class="act-agent">' + escapar(ev.user_agent) + '</div>' : '') +
+            '</div>' +
+          '</div>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+    });
+    contenedor.innerHTML = html;
+  }
+
+  function llenarUsuarios(lista) {
+    var select = el('act-usuario');
+    if (!select) return;
+    var actual = select.value;
+    var opciones = '<option value="">Todos</option>';
+    (lista || []).forEach(function (u) {
+      opciones += '<option value="' + escapar(u) + '">' + escapar(u) + '</option>';
+    });
+    if (select.getAttribute('data-firma') !== opciones) {
+      select.innerHTML = opciones;
+      select.setAttribute('data-firma', opciones);
+      select.value = actual;
+    }
+  }
+
+  function cargar() {
+    var params = new URLSearchParams();
+    var usuario = el('act-usuario');
+    if (usuario && usuario.value) params.set('usuario', usuario.value);
+    var tipo = el('act-tipo');
+    if (tipo && tipo.value) params.set('tipo', tipo.value);
+    var desde = el('act-desde');
+    if (desde && desde.value) params.set('desde', desde.value);
+    var hasta = el('act-hasta');
+    if (hasta && hasta.value) params.set('hasta', hasta.value);
+    fetch(API + '?' + params.toString(), { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (datos) {
+        if (!datos || !datos.ok) return;
+        llenarUsuarios(datos.usuarios);
+        pintarBandas(datos.bandas);
+        var total = el('act-total');
+        if (total) total.textContent = datos.total;
+        var actualizado = el('act-actualizado');
+        if (actualizado) actualizado.textContent = datos.generado_en;
+      })
+      .catch(function () { /* silencioso: es solo monitoreo */ });
+  }
+
+  var aplicar = el('act-aplicar');
+  if (aplicar) {
+    aplicar.addEventListener('click', function () {
+      registrar('filtro', 'Aplicó filtros en Actividades: ' + descripcionFiltros() + '.');
+      cargar();
+    });
+  }
+
+  var limpiar = el('act-limpiar');
+  if (limpiar) {
+    limpiar.addEventListener('click', function () {
+      ['act-usuario', 'act-tipo', 'act-desde', 'act-hasta'].forEach(function (id) {
+        var campo = el(id);
+        if (campo) campo.value = '';
+      });
+      registrar('filtro', 'Limpió los filtros de Actividades.');
+      cargar();
+    });
+  }
+
+  var refrescar = el('act-refresh');
+  if (refrescar) refrescar.addEventListener('click', function () { cargar(); });
+
+  var auto = el('act-auto');
+  if (auto) {
+    auto.addEventListener('change', function (evento) {
+      if (evento.target.checked) {
+        timer = setInterval(cargar, INTERVALO_MS);
+        registrar('otro', 'Activó la actualización automática de Actividades (cada 20 s).');
+      } else {
+        if (timer) clearInterval(timer);
+        timer = null;
+        registrar('otro', 'Desactivó la actualización automática de Actividades.');
+      }
+    });
+  }
+
+  var volver = el('link-volver');
+  if (volver) {
+    volver.addEventListener('click', function () {
+      registrar('navegacion', 'Volvió al dashboard de prospección desde Métricas.');
+    });
+  }
+
+  var formMetricas = el('form-metricas');
+  if (formMetricas) {
+    formMetricas.addEventListener('submit', function () {
+      var gran = formMetricas.querySelector('[name="gran"]');
+      var agente = formMetricas.querySelector('[name="agente"]');
+      registrar('filtro', 'Aplicó filtros de métricas: granularidad=' +
+        (gran ? gran.value : '-') + ', agente=' + (agente ? agente.value : '-') + '.');
+    });
+  }
+
+  cargar();
+})();
+</script>
 </body>
 </html>

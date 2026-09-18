@@ -817,6 +817,7 @@
         prospectoSeleccionadoId = null;
         idsExpandidos.clear();
         aplicarFiltrosProspeccion();
+        registrarFiltrosProspeccion();
     };
 
     window.toggleFiltroTelefono = function (tipo) {
@@ -825,6 +826,7 @@
         prospectoSeleccionadoId = null;
         idsExpandidos.clear();
         aplicarFiltrosProspeccion();
+        registrarFiltrosProspeccion();
     };
 
     // Panel derecho = TODAS las captaciones que cumplen los filtros
@@ -901,6 +903,8 @@
                 } else {
                     detalle.classList.add('open');
                     if (pid) idsExpandidos.add(pid);
+                    registrarActividad('prospecto_visto',
+                        'Abrió el detalle de la prospección #' + pid + '.');
                 }
                 actualizarMarcadoresMapa();
             });
@@ -1456,6 +1460,40 @@
         });
     }
 
+    // ── Actividad del usuario (se envía al endpoint de seguimiento) ──
+    var ACTIVIDAD_URL = '{% url "prospects:api_actividad" %}';
+
+    function registrarActividad(tipo, descripcion) {
+        try {
+            var datos = new URLSearchParams();
+            datos.set('event_type', tipo);
+            datos.set('description', descripcion);
+            datos.set('path', window.location.pathname);
+            fetch(ACTIVIDAD_URL, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' },
+                body: datos.toString(),
+            });
+        } catch (e) { /* el seguimiento nunca debe romper el panel */ }
+    }
+
+    function registrarFiltrosProspeccion() {
+        var partes = [];
+        var d = document.getElementById('prospect-filter-distrito');
+        var tp = document.getElementById('prospect-filter-tipo');
+        var o = document.getElementById('prospect-filter-origen');
+        var a = document.getElementById('prospect-filter-agente');
+        if (d && d.value) partes.push('distrito=' + d.value);
+        if (tp && tp.value) partes.push('tipo=' + tp.value);
+        if (o && o.value) partes.push('origen=' + o.value);
+        if (a && a.value) partes.push('agente=' + a.value);
+        if (filtroTelefono) partes.push('telefono=' + filtroTelefono);
+        if (filtroCompletos) partes.push('datos_completos=si');
+        registrarActividad('filtro', partes.length
+            ? 'Aplicó filtros en prospección: ' + partes.join(', ') + '.'
+            : 'Quitó todos los filtros de prospección.');
+    }
+
     function construirDetalleInline(p) {
         if (!p) {
             return '<div class="prospect-detail-inline__rows"><span style="color:var(--text-muted, #7d8590)">Sin datos adicionales</span></div>';
@@ -1558,6 +1596,7 @@
             prospectoSeleccionadoId = null;
             idsExpandidos.clear();
             aplicarFiltrosProspeccion();
+            registrarFiltrosProspeccion();
         }
         if (distritoSel) distritoSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
         if (tipoSel) tipoSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);

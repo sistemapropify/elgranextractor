@@ -19,6 +19,9 @@ urlpatterns = [
     path('logout/', views.propify_logout, name='logout'),
 
     # API de la APK: el Bearer token es emitido y validado por Propify.
+    # Actividad de usuarios (GET consulta / POST registra)
+    path('api/actividad/', views.api_actividad, name='api_actividad'),
+
     path('api/mobile/version/', mobile_api.mobile_version, name='mobile_version'),
     path('api/mobile/login/', mobile_api.mobile_login, name='mobile_login'),
     path('api/mobile/captures/', mobile_api.mobile_capture, name='mobile_capture'),
