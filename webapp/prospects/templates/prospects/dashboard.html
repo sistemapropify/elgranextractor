@@ -591,6 +591,25 @@
         color: var(--text-secondary, #8b949e);
         font-style: italic;
     }
+
+    /* ── Header de origen de la prospección (misma altura que CAPTADO) ── */
+    .ppc-origen {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 2px 8px;
+        margin-bottom: 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .4px;
+        text-transform: uppercase;
+        color: #0d1117;
+        background: #8b949e;
+    }
+    .ppc-origen--calle { background: #f0883e; }
+    .ppc-origen--marketplace { background: #6ec6e8; }
+    .ppc-origen--crm { background: #3fb950; }
 </style>
 {% endblock %}
 
@@ -1168,6 +1187,24 @@
         '</div>';
     }
 
+    // Header de origen: naranja = Calle, celeste = Marketplace,
+    // verde Propifai = CRM; letra negra.
+    function origenClase(valor) {
+        var o = (valor || '').toString().toLowerCase().trim();
+        if (o.indexOf('calle') === 0) return 'ppc-origen--calle';
+        if (o.indexOf('marketplace') === 0 || o.indexOf('market') === 0) return 'ppc-origen--marketplace';
+        if (o.indexOf('crm') === 0) return 'ppc-origen--crm';
+        return '';
+    }
+
+    function origenHeaderHtml(p) {
+        var etiqueta = (p && (p.origen || p.origen_codigo))
+            ? String(p.origen || p.origen_codigo).trim() : '';
+        if (!etiqueta) etiqueta = 'Sin origen';
+        var clase = origenClase((p && (p.origen_codigo || p.origen)) || '');
+        return '<div class="ppc-origen ' + clase + '">' + escaparHtml(etiqueta) + '</div>';
+    }
+
     function resumenTarjetaHtml(p) {
         if (!p) return '';
         var img = (p.primera_imagen || '').replace(/"/g, '%22');
@@ -1177,6 +1214,7 @@
         var precio = (p.precio && String(p.precio).trim())
             ? ((p.moneda === 'PEN' ? 'S/ ' : '$ ') + p.precio) : '';
         return (
+            origenHeaderHtml(p) +
             '<div class="ppc-card-grid">' +
                 '<div class="ppc-summary">' +
                     (img
