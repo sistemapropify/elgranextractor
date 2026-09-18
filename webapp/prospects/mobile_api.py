@@ -211,6 +211,7 @@ def mobile_capture(request):
             mobile_user=mobile_user,
             captured_by_username=request.user.username,
             status='pendiente',
+            captado=False,
         )
         _apply_mobile_fields(prospect, request)
         prospect.full_clean()

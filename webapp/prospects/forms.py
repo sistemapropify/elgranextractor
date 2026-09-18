@@ -58,6 +58,25 @@ class ProspectCaptureForm(forms.ModelForm):
 
 
 class ProspectEditForm(ProspectCaptureForm):
+    # Selector sí/no con valores de texto ('1'/'0'). Con un BooleanField normal
+    # el formulario re-renderizado tras un error marcaba CAPTADO, porque el
+    # valor enviado ("0") es una cadena no vacía y por tanto verdadera en la
+    # plantilla. Comparando texto el estado queda siempre explícito.
+    captado = forms.ChoiceField(
+        choices=[('1', '✓ CAPTADO'), ('0', 'NO CAPTADO')],
+        required=False,
+        label='Captado',
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.is_bound:
+            # El desplegable debe reflejar el valor guardado (no el primero).
+            self.initial['captado'] = '1' if self.instance.captado else '0'
+
+    def clean_captado(self):
+        return str(self.cleaned_data.get('captado') or '0').strip() == '1'
+
     class Meta(ProspectCaptureForm.Meta):
         fields = [*ProspectCaptureForm.Meta.fields, 'status', 'captado']
         widgets = {

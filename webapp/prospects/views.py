@@ -231,6 +231,8 @@ class CaptureView(View):
         prospect.mobile_user = request.propify_user.mobile_user
         prospect.captured_by_username = request.propify_user.username
         prospect.status = 'pendiente'
+        # Toda prospección nueva nace como NO CAPTADO.
+        prospect.captado = False
         if foto:
             try:
                 prospect.photo = _guardar_foto_azure(foto)
@@ -305,6 +307,10 @@ class ProspectDetailView(View):
         # Sin nueva ubicación se conserva el par guardado. Una ubicación nueva
         # incompleta o inválida debe avisarse, no mezclarse con la anterior.
         post_data = request.POST.copy()
+        # Si el formulario no envía el campo, se conserva el valor guardado
+        # (nunca se cambia CAPTADO por omisión).
+        if 'captado' not in post_data:
+            post_data['captado'] = '1' if prospect.captado else '0'
         if not any((post_data.get(key) or '').strip() for key in ('latitude', 'longitude')):
             post_data['latitude'] = str(prospect.latitude) if prospect.latitude is not None else ''
             post_data['longitude'] = str(prospect.longitude) if prospect.longitude is not None else ''
@@ -759,6 +765,7 @@ def migrar_lead_a_prospeccion(request, lead_id):
             notes=notas,
             crm_cronologia=cronologia,
             status='pendiente',
+            captado=False,
             captured_by_username=usuario,
         )
         actualizado = False
