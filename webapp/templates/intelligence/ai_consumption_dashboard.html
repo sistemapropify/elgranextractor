@@ -445,8 +445,8 @@
                 <h1>
                     <span>📊</span>
                     Consumo de IA
-                    {% if caller_filter %}
-                    <span class="badge-info" style="font-size:14px;padding:4px 12px;">Filtro: {{ caller_filter }}</span>
+                    {% if proceso_filter %}
+                    <span class="badge-info" style="font-size:14px;padding:4px 12px;">Filtro: {{ proceso_filter_modulo|default:proceso_filter }}</span>
                     {% endif %}
                 </h1>
                 <p>Monitoreo granular de tokens, llamadas y costos del modelo DeepSeek por proceso.</p>
@@ -461,18 +461,18 @@
             <label for="fecha">📅 Fecha:</label>
             <input type="date" id="fecha" name="fecha" value="{{ fecha_seleccionada_str }}" max="{{ hoy.isoformat }}">
             
-            <label for="caller">🔍 Proceso:</label>
-            <select id="caller" name="caller">
+            <label for="proceso">🔍 Proceso:</label>
+            <select id="proceso" name="proceso">
                 <option value="">Todos los procesos</option>
-                {% for stat in caller_stats %}
-                <option value="{{ stat.caller_app }}" {% if caller_filter == stat.caller_app %}selected{% endif %}>
-                    {{ stat.caller_app }} ({{ stat.llamadas }} llamadas)
+                {% for stat in proceso_stats %}
+                <option value="{{ stat.clave }}" {% if proceso_filter == stat.clave %}selected{% endif %}>
+                    {{ stat.modulo }} ({{ stat.llamadas }})
                 </option>
                 {% endfor %}
             </select>
             
             <button type="submit" class="btn btn-primary">Filtrar</button>
-            {% if caller_filter %}
+            {% if proceso_filter %}
             <a href="?fecha={{ fecha_seleccionada_str }}" class="btn btn-sm btn-danger">✕ Quitar filtro</a>
             {% endif %}
         </form>
@@ -518,6 +518,60 @@
             </div>
         </div>
 
+        <!-- MAPA: qué proceso usa qué API de IA -->
+        <div class="table-section">
+            <h3>🗺️ Mapa de procesos → API de IA</h3>
+            <div class="section-desc">
+                Todos los procesos del sistema que usan IA, con la API y el modelo que consume cada uno.
+                «Con actividad» indica si ese proceso gastó tokens en la fecha seleccionada.
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Proceso (qué hace)</th>
+                        <th>API · Modelo</th>
+                        <th>Dónde vive</th>
+                        <th>Consumo del día</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in mapa_procesos %}
+                    <tr>
+                        <td>
+                            <strong>{{ p.modulo }}</strong>
+                            <div style="font-size:11px;color:#8b949e;max-width:430px;white-space:normal;">{{ p.que_hace }}</div>
+                        </td>
+                        <td>
+                            <span class="badge-info">{{ p.proveedor }}</span>
+                            <div style="font-size:11px;color:#8b949e;">{{ p.modelo }}{% if p.api %}<br>{{ p.api }}{% endif %}</div>
+                        </td>
+                        <td><code style="font-size:11px;">{{ p.archivo }}</code></td>
+                        <td>
+                            {% if p.sin_costo %}
+                            <span style="color:#8b949e;font-size:12px;">Sin costo de API</span>
+                            {% elif p.con_actividad %}
+                            <strong>{{ p.llamadas }}</strong> llamadas · {{ p.tokens|floatformat:0 }} tokens · ${{ p.costo|floatformat:6 }}
+                            {% if p.ultima %}<div style="font-size:11px;color:#8b949e;">última: {{ p.ultima }}</div>{% endif %}
+                            {% else %}
+                            <span style="color:#8b949e;font-size:12px;">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if p.sin_costo %}
+                            <span class="badge-info">Local</span>
+                            {% elif p.con_actividad %}
+                            <span class="badge-success">Con actividad</span>
+                            {% else %}
+                            <span class="badge-warning">Sin actividad</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
         <!-- Gráficos lado a lado -->
         <div class="charts-grid">
             <!-- Gráfico de consumo por hora -->
@@ -547,15 +601,16 @@
 
         <!-- DESGLOSE GRANULAR: Por caller_app -->
         <div class="table-section">
-            <h3>🔬 Desglose por proceso (caller_app)</h3>
+            <h3>🔬 Desglose por proceso (nombre entendible)</h3>
             <div class="section-desc">
-                Cada fila representa un proceso/subsistema que consume la API de DeepSeek.
-                Los datos incluyen todas las llamadas agrupadas por caller_app.
+                Consumo agrupado por el proceso que lo generó, con la API/modelo que usa y la
+                fecha y hora de su última llamada.
             </div>
             <table>
                 <thead>
                     <tr>
                         <th>Proceso</th>
+                        <th>API · Modelo</th>
                         <th>Llamadas</th>
                         <th>Tokens</th>
                         <th>Prompt</th>
@@ -563,12 +618,21 @@
                         <th>Costo USD</th>
                         <th>Duración prom.</th>
                         <th>Éxito</th>
+                        <th>Última llamada</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for stat in caller_stats %}
+                    {% for stat in proceso_stats %}
                     <tr>
                         <td>
+                            <strong>{{ stat.modulo }}</strong>
+                            <div style="font-size:11px;color:#8b949e;white-space:normal;">{{ stat.detalles }}</div>
+                        </td>
+                        <td>
+                            {{ stat.proveedor }}
+                            <div style="font-size:11px;color:#8b949e;">{{ stat.modelo }}</div>
+                        </td>
+                        <td style="display:none;">
                             <span class="caller-app-badge 
                                 {% if 'chat' in stat.caller_app %}caller-bot
                                 {% elif 'extractor' in stat.caller_app or 'whatsapp' in stat.caller_app %}caller-extractor
@@ -592,7 +656,43 @@
                             </span>
                             <span style="font-size:11px;color:#8b949e;">({{ stat.exitosas }}/{{ stat.llamadas }})</span>
                         </td>
+                        <td style="white-space:nowrap;">{{ stat.ultima|default:"—" }}</td>
                     </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- DETALLE TÉCNICO: caller_app crudo -->
+        <div class="table-section">
+            <h3>🧩 Detalle técnico (caller_app)</h3>
+            <div class="section-desc">
+                Identificador interno que envía cada componente del sistema; sirve para depurar la
+                instrumentación (un «sin clasificar» aquí significa que falta etiquetar esa llamada).
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>caller_app</th>
+                        <th>Proceso</th>
+                        <th>Llamadas</th>
+                        <th>Tokens</th>
+                        <th>Costo USD</th>
+                        <th>Última llamada</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat in caller_stats %}
+                    {% if stat.llamadas %}
+                    <tr>
+                        <td><code>{{ stat.caller_app|default:"(vacío)" }}</code></td>
+                        <td>{{ stat.modulo }}</td>
+                        <td><strong>{{ stat.llamadas }}</strong></td>
+                        <td>{{ stat.tokens|default:"0"|floatformat:0 }}</td>
+                        <td>${{ stat.costo|default:"0"|floatformat:6 }}</td>
+                        <td>{{ stat.ultima|default:"—" }}</td>
+                    </tr>
+                    {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
@@ -663,8 +763,9 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Hora</th>
-                        <th>Proceso</th>
+                        <th>Fecha y hora</th>
+                        <th>Proceso (módulo)</th>
+                        <th>Detalle técnico</th>
                         <th>Función</th>
                         <th>Tokens</th>
                         <th>Duración</th>
@@ -675,7 +776,7 @@
                 <tbody>
                     {% for log in ultimos_registros %}
                     <tr>
-                        <td>{{ log.created_at|date:"H:i:s" }}</td>
+                        <td style="white-space:nowrap;">{{ log.fecha_hora_local }}</td>
                         <td>
                             <span class="caller-app-badge 
                                 {% if 'chat' in log.caller_app %}caller-bot
@@ -684,9 +785,10 @@
                                 {% elif 'views' in log.caller_app %}caller-views
                                 {% elif 'processor' in log.caller_app %}caller-processor
                                 {% else %}caller-memory{% endif %}">
-                                {{ log.caller_app|default:"-"|truncatechars:25 }}
+                                {{ log.modulo|default:"Sin clasificar"|truncatechars:32 }}
                             </span>
                         </td>
+                        <td><code>{{ log.caller_app|default:"(vacío)"|truncatechars:26 }}</code></td>
                         <td><code>{{ log.endpoint|default:"-"|truncatechars:30 }}</code></td>
                         <td>{{ log.total_tokens }}</td>
                         <td>{{ log.duration_ms }} ms</td>
@@ -701,7 +803,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="empty-state">
+                        <td colspan="8" class="empty-state">
                             No hay registros de consumo para esta fecha.
                         </td>
                     </tr>

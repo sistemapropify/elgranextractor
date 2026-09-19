@@ -115,6 +115,32 @@ class LLMService:
         # ── Auto-detección de caller_app y endpoint ──
         if not caller_app or not endpoint:
             try:
+                # Reglas ordenadas de MÁS específica a MÁS genérica: gana la
+                # primera que coincida con la ruta del archivo que llamó.
+                # Antes la regla genérica de 'intelligence/services/' se comía a
+                # chat_processor/memory y no existía ninguna para
+                # lead_intelligence ni response_intelligence, por eso el
+                # dashboard mostraba 'desconocido'.
+                REGLAS_DE_ORIGEN = (
+                    ('intelligence/services/chat_processor.py', 'chat_processor'),
+                    ('intelligence/services/episodic_memory.py', 'intelligence.episodic_memory'),
+                    ('intelligence/services/memory.py', 'intelligence.memory'),
+                    ('intelligence/skills/', 'intelligence.skills'),
+                    ('intelligence/agents/', 'intelligence.agents'),
+                    ('intelligence/reasoning/', 'intelligence.reasoning'),
+                    ('intelligence/learning/', 'intelligence.learning'),
+                    ('intelligence/services/', 'intelligence.services'),
+                    ('intelligence/views.py', 'intelligence.views'),
+                    ('lead_intelligence/', 'lead_intelligence'),
+                    ('response_intelligence/', 'response_intelligence'),
+                    ('whatsapp_extractor/', 'whatsapp_extractor'),
+                    ('requerimientos/', 'requerimientos'),
+                    ('ingestas/', 'ingestas'),
+                    ('prospects/', 'prospects'),
+                    ('analisis_crm/', 'analisis_crm'),
+                    ('matching/', 'matching'),
+                    ('meta_ads/', 'meta_ads'),
+                )
                 stack = inspect.stack()
                 # stack[0] = _call_deepseek_api, stack[1] = método público que llama
                 # stack[2] = quien llamó al método público
@@ -123,38 +149,15 @@ class LLMService:
                     module = inspect.getmodule(frame)
                     if module and module.__file__:
                         fpath = module.__file__.replace('\\', '/')
-                        # Detectar app por la ruta del archivo
-                        if 'intelligence/services/' in fpath:
-                            caller_app = 'intelligence.services'
-                            endpoint = frame_info.function
-                            break
-                        elif 'intelligence/skills/' in fpath:
-                            caller_app = f'intelligence.skills.{frame_info.function}'
-                            endpoint = frame_info.function
-                            break
-                        elif 'intelligence/views.py' in fpath:
-                            caller_app = 'intelligence.views'
-                            endpoint = frame_info.function
-                            break
-                        elif 'whatsapp_extractor/' in fpath:
-                            caller_app = 'whatsapp_extractor'
-                            endpoint = frame_info.function
-                            break
-                        elif 'ingestas/' in fpath:
-                            caller_app = 'ingestas'
-                            endpoint = frame_info.function
-                            break
-                        elif 'chat_processor' in fpath:
-                            caller_app = 'intelligence.chat_processor'
-                            endpoint = frame_info.function
-                            break
-                        elif 'episodic_memory' in fpath:
-                            caller_app = 'intelligence.episodic_memory'
-                            endpoint = frame_info.function
-                            break
-                        elif 'memory' in fpath:
-                            caller_app = 'intelligence.memory'
-                            endpoint = frame_info.function
+                        for fragmento, etiqueta in REGLAS_DE_ORIGEN:
+                            if fragmento in fpath:
+                                if etiqueta == 'intelligence.skills':
+                                    caller_app = f'intelligence.skills.{frame_info.function}'
+                                else:
+                                    caller_app = etiqueta
+                                endpoint = frame_info.function
+                                break
+                        if caller_app and endpoint:
                             break
                     del frame
                 del stack

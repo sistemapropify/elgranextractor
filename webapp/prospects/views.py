@@ -391,6 +391,31 @@ class ProspectDetailView(View):
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. PROCESAR CON IA: llama Qwen3-VL y prellenar campos
 # ─────────────────────────────────────────────────────────────────────────────
+def _registrar_consumo_qwen(payload, data, duracion_ms, exito=True, error=''):
+    """Registra el uso de Qwen-VL (OCR de fotos) en el dashboard de Consumo IA.
+
+    Es best-effort: nunca debe romper el procesamiento de la captación.
+    """
+    try:
+        from intelligence.models import AIConsumptionLog
+
+        uso = ((data or {}).get('usage') or {})
+        entrada = int(uso.get('input_tokens') or 0)
+        salida = int(uso.get('output_tokens') or 0)
+        AIConsumptionLog.registrar_llamada(
+            model_name=(payload or {}).get('model') or 'qwen-vl-max',
+            endpoint='ProcessImageView._call_qwen',
+            caller_app='prospects.qwen_vl',
+            prompt_tokens=entrada,
+            completion_tokens=salida,
+            duration_ms=duracion_ms,
+            success=bool(exito),
+            error_message=(error or '')[:500],
+        )
+    except Exception:
+        logger.exception('No se pudo registrar el consumo de Qwen-VL (OCR de fotos).')
+
+
 @method_decorator(propify_web_required, name='dispatch')
 class ProcessImageView(View):
     """
@@ -446,6 +471,8 @@ class ProcessImageView(View):
 
     def _call_qwen(self, prospect: PropertyProspect) -> dict:
         from django.conf import settings
+        # El uso de Qwen-VL se registra para el dashboard de Consumo de IA
+        # (ver _registrar_consumo_qwen), si no quedaría como punto ciego.
 
         # Leer imagen y convertir a base64
         with prospect.photo.open('rb') as f:
@@ -493,15 +520,26 @@ No incluyas explicaciones, solo el JSON."""
             },
         }
 
+        import time as _time
+
+        inicio = _time.time()
         response = requests.post(
             self.QWEN_API_URL,
             json=payload,
             headers=headers,
             timeout=30.0,
         )
+        duracion_ms = int((_time.time() - inicio) * 1000)
+        if response.status_code >= 400:
+            # El consumo de visión también se ve en /intelligence/consumo-ia/
+            _registrar_consumo_qwen(
+                payload, None, duracion_ms, exito=False,
+                error='HTTP %s: %s' % (response.status_code, response.text[:400]),
+            )
         response.raise_for_status()
 
         data = response.json()
+        _registrar_consumo_qwen(payload, data, duracion_ms, exito=True)
         raw_content = data['output']['choices'][0]['message']['content'][0]['text']
 
         # Limpiar posibles bloques de código markdown

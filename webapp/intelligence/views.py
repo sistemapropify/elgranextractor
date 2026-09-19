@@ -4664,7 +4664,16 @@ def ai_consumption_dashboard(request):
     Incluye desglose granular por caller_app (chatbot, extractor, skills, etc.)
     """
     from .models import AIConsumptionLog
-    from django.db.models import Sum, Count, Avg
+    from django.db.models import Sum, Count, Avg, Max
+    # Mapa «proceso → API de IA»: traduce el caller_app técnico a un nombre de
+    # negocio entendible y dice qué API/modelo usa cada proceso.
+    from .procesos_ia import (
+        PROCESOS_IA,
+        etiqueta_proceso,
+        ficha_proceso,
+        mapa_procesos,
+        normalizar_proceso,
+    )
     from django.db.models.functions import ExtractHour
     from datetime import date, timedelta
     
@@ -4674,15 +4683,19 @@ def ai_consumption_dashboard(request):
         try:
             fecha_seleccionada = datetime.strptime(fecha_str, '%Y-%m-%d').date()
         except ValueError:
-            fecha_seleccionada = timezone.now().date()
+            fecha_seleccionada = timezone.localdate()
     else:
-        fecha_seleccionada = timezone.now().date()
+        # Fecha local de Perú: con timezone.now().date() (UTC) el dashboard
+        # mostraba el día siguiente a partir de las 19:00 hora local.
+        fecha_seleccionada = timezone.localdate()
     
-    # Filtro opcional por caller_app
+    # Filtro opcional por caller_app (detalle técnico)
     caller_filter = request.GET.get('caller', '')
+    # Filtro por proceso de negocio (lo que ve el usuario en el selector)
+    proceso_filter = (request.GET.get('proceso', '') or '').strip()
     
     # Rango de fechas para el selector (últimos 30 días)
-    hoy = timezone.now().date()
+    hoy = timezone.localdate()
     fechas_disponibles = [
         (hoy - timedelta(days=i)).isoformat()
         for i in range(30)
@@ -4693,6 +4706,20 @@ def ai_consumption_dashboard(request):
         created_at__date=fecha_seleccionada
     )
     
+    # Aplicar filtro por proceso de negocio si se especificó
+    if proceso_filter and proceso_filter in PROCESOS_IA:
+        from django.db.models import Q
+        info_proceso = PROCESOS_IA[proceso_filter]
+        condicion = Q(pk__in=[])
+        exactos = [valor for valor in info_proceso.get('caller_apps', ()) if valor]
+        if exactos:
+            condicion |= Q(caller_app__in=exactos)
+        for prefijo in info_proceso.get('prefijos', ()):
+            condicion |= Q(caller_app__startswith=prefijo)
+        if proceso_filter == 'sin_clasificar':
+            condicion |= Q(caller_app='') | Q(caller_app__isnull=True)
+        logs_del_dia = logs_del_dia.filter(condicion)
+
     # Aplicar filtro por caller_app si se especificó
     if caller_filter:
         logs_del_dia = logs_del_dia.filter(caller_app=caller_filter)
@@ -4741,11 +4768,27 @@ def ai_consumption_dashboard(request):
     
     # ── DESGLOSE GRANULAR POR caller_app ──
     caller_stats = []
-    callers_disponibles = logs_del_dia.values('caller_app').distinct()
-    
+    # Se agrupa por caller_app Y endpoint: las llamadas antiguas que no
+    # guardaron caller_app se pueden identificar por la función que las hizo
+    # (p. ej. extract_structured_data = análisis de leads).
+    # `.order_by()` limpia el orden por defecto del modelo: sin esto SQL Server
+    # añade esas columnas al GROUP BY y devuelve una fila por llamada.
+    callers_disponibles = (
+        logs_del_dia.values('caller_app', 'endpoint')
+        .order_by()
+        .annotate(llamadas=Count('id'))
+        .order_by('-llamadas')
+    )
+
     for item in callers_disponibles:
-        app_name = item['caller_app'] or 'desconocido'
-        qs = logs_del_dia.filter(caller_app=app_name)
+        endpoint_ref = item['endpoint'] or ''
+        if endpoint_ref.strip().lower() in ('unknown', '(unknown)', 'none', '-'):
+            endpoint_ref = ''
+        app_name = item['caller_app'] or endpoint_ref or '(sin identificar)'
+        qs = logs_del_dia.filter(
+            caller_app=item['caller_app'] or '',
+            endpoint=item['endpoint'] or '',
+        )
         stats = qs.aggregate(
             llamadas=Count('id'),
             tokens=Sum('total_tokens'),
@@ -4756,9 +4799,17 @@ def ai_consumption_dashboard(request):
         )
         exitosas = qs.filter(success=True).count()
         fallidas = qs.filter(success=False).count()
-        
+        ultima_llamada = qs.aggregate(ultima=Max('created_at'))['ultima']
+
         caller_stats.append({
             'caller_app': app_name,
+            'caller_app_original': item['caller_app'] or '',
+            'endpoint_ref': endpoint_ref,
+            'modulo': etiqueta_proceso(item['caller_app'], endpoint_ref),
+            'ultima': (
+                timezone.localtime(ultima_llamada).strftime('%d/%m/%Y %H:%M:%S')
+                if ultima_llamada else ''
+            ),
             'llamadas': stats['llamadas'] or 0,
             'tokens': stats['tokens'] or 0,
             'prompt': stats['prompt'] or 0,
@@ -4775,27 +4826,97 @@ def ai_consumption_dashboard(request):
     
     # ── DESGLOSE POR ENDPOINT (función específica) ──
     endpoint_stats = []
-    endpoints = logs_del_dia.values('endpoint').distinct()
-    
-    for item in endpoints:
-        ep_name = item['endpoint'] or 'desconocido'
-        qs = logs_del_dia.filter(endpoint=ep_name)
-        stats = qs.aggregate(
+    # `.order_by()` limpia el orden por defecto del modelo: sin esto SQL Server
+    # mete esas columnas en el SELECT del DISTINCT y duplica las filas.
+    endpoints = (
+        logs_del_dia.values('endpoint')
+        .order_by()
+        .annotate(
             llamadas=Count('id'),
             tokens=Sum('total_tokens'),
             costo=Sum('estimated_cost_usd'),
         )
+        .order_by('-llamadas')
+    )
+
+    for item in endpoints:
+        ep_name = (item['endpoint'] or '').strip()
+        if ep_name.lower() in ('unknown', '(unknown)', 'none', '-'):
+            ep_name = '(sin identificar)'
         endpoint_stats.append({
             'endpoint': ep_name,
-            'llamadas': stats['llamadas'] or 0,
-            'tokens': stats['tokens'] or 0,
-            'costo': float(stats['costo'] or 0),
+            'llamadas': item['llamadas'] or 0,
+            'tokens': item['tokens'] or 0,
+            'costo': float(item['costo'] or 0),
         })
     
     endpoint_stats.sort(key=lambda x: x['llamadas'], reverse=True)
-    
-    # Últimos registros (para la tabla)
-    ultimos_registros = logs_del_dia.order_by('-created_at')[:20]
+
+    # ── CONSUMO POR PROCESO DE NEGOCIO (nombre entendible) ──
+    # Se juntan los caller_app técnicos que pertenecen al mismo proceso para que
+    # el dashboard hable de «Análisis de leads» y no de «desconocido».
+    consumo_por_clave = {}
+    for stat in caller_stats:
+        if not stat['llamadas']:
+            continue
+        clave, _info = normalizar_proceso(
+            stat['caller_app_original'], stat['endpoint_ref'],
+        )
+        acumulado = consumo_por_clave.setdefault(clave, {
+            'llamadas': 0, 'tokens': 0, 'prompt': 0, 'completion': 0,
+            'costo': 0.0, 'exitosas': 0, 'fallidas': 0,
+            'duracion_total': 0, 'ultima': '', 'detalles': [],
+        })
+        acumulado['llamadas'] += stat['llamadas']
+        acumulado['tokens'] += stat['tokens']
+        acumulado['prompt'] += stat['prompt']
+        acumulado['completion'] += stat['completion']
+        acumulado['costo'] += stat['costo']
+        acumulado['exitosas'] += stat['exitosas']
+        acumulado['fallidas'] += stat['fallidas']
+        acumulado['duracion_total'] += stat['duracion_promedio'] * stat['llamadas']
+        if stat['ultima'] > acumulado['ultima']:
+            acumulado['ultima'] = stat['ultima']
+        acumulado['detalles'].append(stat['caller_app'])
+
+    proceso_stats = []
+    for clave, datos in consumo_por_clave.items():
+        ficha = ficha_proceso(clave)
+        total_proceso = datos['llamadas']
+        proceso_stats.append({
+            'clave': clave,
+            'modulo': ficha['modulo'],
+            'que_hace': ficha['que_hace'],
+            'proveedor': ficha['proveedor'],
+            'api': ficha['api'],
+            'modelo': ficha['modelo'],
+            'archivo': ficha['archivo'],
+            'llamadas': total_proceso,
+            'tokens': datos['tokens'],
+            'prompt': datos['prompt'],
+            'completion': datos['completion'],
+            'costo': datos['costo'],
+            'duracion_promedio': int(datos['duracion_total'] / total_proceso) if total_proceso else 0,
+            'exitosas': datos['exitosas'],
+            'fallidas': datos['fallidas'],
+            'tasa_exito': round(
+                (datos['exitosas'] / total_proceso * 100) if total_proceso else 0, 1,
+            ),
+            'ultima': datos['ultima'],
+            'detalles': ', '.join(sorted(datos['detalles'])),
+        })
+    proceso_stats.sort(key=lambda x: x['llamadas'], reverse=True)
+
+    # Mapa completo proceso → API (incluye los que no tuvieron actividad)
+    mapa = mapa_procesos(consumo_por_clave)
+
+    # Últimos registros (para la tabla), con el módulo ya traducido
+    ultimos_registros = list(logs_del_dia.order_by('-created_at')[:20])
+    for registro in ultimos_registros:
+        registro.modulo = etiqueta_proceso(registro.caller_app, registro.endpoint)
+        registro.fecha_hora_local = timezone.localtime(
+            registro.created_at
+        ).strftime('%d/%m/%Y %H:%M:%S')
     
     # Datos para el gráfico (JSON)
     chart_labels = [h['hora_label'] for h in horas_data]
@@ -4809,6 +4930,13 @@ def ai_consumption_dashboard(request):
     
     context = {
         'fecha_seleccionada': fecha_seleccionada,
+        'proceso_stats': proceso_stats,
+        'mapa_procesos': mapa,
+        'proceso_filter': proceso_filter,
+        'proceso_filter_modulo': (
+            ficha_proceso(proceso_filter)['modulo']
+            if proceso_filter in PROCESOS_IA else ''
+        ),
         'fecha_seleccionada_str': fecha_seleccionada.isoformat(),
         'fechas_disponibles': fechas_disponibles,
         'total_llamadas': total_llamadas,
