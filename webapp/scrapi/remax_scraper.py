@@ -4,6 +4,9 @@ import unicodedata
 import openpyxl
 import signal
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
 from datetime import datetime
 from camoufox.async_api import AsyncCamoufox
 from scrapi.camoufox_launcher import camoufox_kwargs
@@ -51,7 +54,8 @@ def limpiar_precio(texto):
     """
     if not texto:
         return None
-    solo_numeros = re.sub(r"[^\d.,]", "", str(texto))  # descarta S/, USD, comillas, espacios
+    texto = re.sub(r'^(?:S/\.?|USD|US\$|PEN|\$)\s*', '', str(texto).strip(), flags=re.I)
+    solo_numeros = re.sub(r"[^\d.,]", "", str(texto))
     solo_numeros = solo_numeros.replace(",", "")
     if not solo_numeros:
         return None
@@ -96,7 +100,8 @@ def area_desde_texto(texto):
 
 def calcular_area_m2(prop):
     """Prioridad: Area Construida > Area Terreno > Medidas (frente x fondo) > Descripcion."""
-    for campo in ("Area Construida", "Area Terreno"):
+    campos = ("Area Terreno", "Area Ocupada", "Area Construida") if 'TERRENO' in str(prop.get('Tipo', '')).upper() else ("Area Construida", "Area Ocupada", "Area Terreno")
+    for campo in campos:
         val = area_desde_texto(prop.get(campo))
         if val:
             return val
@@ -184,7 +189,7 @@ def construir_amenities(prop):
     cocheras_txt = (prop.get("Cocheras") or "").strip()
     # 'Cocheras' trae "1 Paralelo Techado": la parte no numerica es info de amenity
     resto_cochera = re.sub(r"^\s*\d+\s*", "", cocheras_txt).strip()
-    if resto_cochera:
+    if resto_cochera and (parse_num_prefix(cocheras_txt) or 0) > 0:
         piezas.append(f"Cochera: {resto_cochera}")
     pisos = prop.get("Pisos")
     if pisos not in (None, "", 0, "0"):
@@ -214,6 +219,12 @@ def estandarizar(prop, fecha_extraccion):
     operacion = clasificar_operacion(tipo_raw)
     distrito = normalizar_ubicacion(prop.get("Distrito"))
     provincia = normalizar_ubicacion(prop.get("Provincia"))
+    try:
+        lat, lng = float(prop.get('Latitud')), float(prop.get('Longitud'))
+        if not (-18.5 < lat < -0.1 and -81.5 < lng < -68.5):
+            lat = lng = None
+    except (ValueError, TypeError):
+        lat = lng = None
 
     return {
         "fuente": "REMAX",
@@ -229,12 +240,14 @@ def estandarizar(prop, fecha_extraccion):
         "banos": normalizar_conteo(prop.get("Banos"), tipo_inmueble),
         "estacionamientos": parse_num_prefix(prop.get("Cocheras")),
         "distrito": distrito,
+        "departamento": normalizar_ubicacion(prop.get('Departamento')),
         "provincia": provincia,
         "direccion_texto": (prop.get("Ubicacion Full") or "").strip() or None,
         "descripcion": (prop.get("Descripcion") or "").strip() or None,
         "amenities": construir_amenities(prop) or None,
-        "latitud": prop.get("Latitud") or None,
-        "longitud": prop.get("Longitud") or None,
+        "latitud": lat,
+        "longitud": lng,
+        "precision_ubicacion": 'exacta' if lat is not None else 'desconocida',
         "url": prop.get("URL Propiedad") or None,
         "imagen_url": prop.get("Imagen URL") or None,
         "antiguedad_anios": parsear_antiguedad(prop.get("Antiguedad")),
@@ -247,7 +260,7 @@ CAMPOS_ESTANDAR = [
     "tipo_operacion", "precio_soles", "precio_usd", "area_m2", "dormitorios",
     "banos", "estacionamientos", "distrito", "provincia", "direccion_texto",
     "descripcion", "amenities", "latitud", "longitud", "url", "imagen_url",
-    "antiguedad_anios", "agencia_agente",
+    "antiguedad_anios", "agencia_agente", "departamento", "precision_ubicacion",
 ]
 
 
@@ -335,7 +348,7 @@ async def navegar_con_cloudflare(page, url, timeout=30):
 async def extraer_listado(page):
     """Extrae propiedades de la pagina de listado actual con los selectores originales."""
     props = []
-    cards = await page.query_selector_all('.__propiedadgen')
+    cards = await page.query_selector_all('.__propiedadgen, .__propiedadgen2')
 
     for card in cards:
         try:
@@ -361,7 +374,13 @@ async def extraer_listado(page):
                     txt = (await p_el.inner_text()).strip()
                     m = re.match(r'(.+?)\s*:\s*(.+)', txt)
                     if m:
-                        feats[m.group(1).strip()] = m.group(2).strip()
+                        feats[_sin_acentos(m.group(1).strip())] = m.group(2).strip()
+
+            def feature(name):
+                return feats.get(_sin_acentos(name), '')
+
+            agency_lines = (await ubic_els[1].inner_text()).strip().splitlines() if len(ubic_els) > 1 else []
+            agency_lines = [line.strip() for line in agency_lines if line.strip()]
 
             wa_href  = await wa_el.get_attribute('href') if wa_el else ''
             tel_m    = re.search(r'wa\.me\/(\d+)', wa_href) if wa_href else None
@@ -381,21 +400,22 @@ async def extraer_listado(page):
             props.append({
                 'ID':               (await id_el.inner_text()).strip() if id_el else '',
                 'Tipo':             (await tipo_el.inner_text()).strip() if tipo_el else '',
-                'Precio S/.':       precios[0] if len(precios) > 0 else '',
-                'Precio USD':       precios[1] if len(precios) > 1 else '',
+                'Precio S/.':       next((v for v in precios if re.match(r'^(S/|PEN)', v, re.I)), ''),
+                'Precio USD':       next((v for v in precios if re.match(r'^(USD|US\$|\$)', v, re.I)), ''),
                 'Departamento':     parts[0] if len(parts) > 0 else '',
                 'Provincia':        parts[1] if len(parts) > 1 else '',
                 'Distrito':         parts[2] if len(parts) > 2 else '',
                 'Ubicacion Full':   ubic,
-                'Oficina':          '',
-                'Agente':           '',
+                'Oficina':          agency_lines[0] if len(agency_lines) > 1 else '',
+                'Agente':           ' '.join(agency_lines[1:]) if len(agency_lines) > 1 else '',
                 'Telefono':         tel_m.group(1) if tel_m else '',
-                'Area Terreno':     feats.get('Area Terreno', ''),
-                'Area Construida':  feats.get('Area Construida', ''),
-                'Pisos':            feats.get('Pisos', ''),
-                'Habitaciones':     feats.get('Habitaciones', ''),
-                'Banos':            feats.get('Banos', ''),
-                'Cocheras':         feats.get('Cocheras', ''),
+                'Area Terreno':     feature('Area Terreno'),
+                'Area Construida':  feature('Area Construida'),
+                'Area Ocupada':     feature('Area Ocupada'),
+                'Pisos':            feature('Pisos'),
+                'Habitaciones':     feature('Habitaciones'),
+                'Banos':            feature('Banos'),
+                'Cocheras':         feature('Cocheras'),
                 'Medidas':          '',
                 'Antiguedad':       '',
                 'Medios Banos':     '',
@@ -419,6 +439,22 @@ async def extraer_listado(page):
     return props
 
 
+def coordenadas_marcador(scripts):
+    """Only accept the marker attached to the property's map, never its viewport."""
+    for script in scripts:
+        maps = re.findall(r'(?:var|let|const)\s+(\w+)\s*=\s*L\.map\(\s*[\'"]map_property[\'"]', script)
+        for map_name in maps:
+            pattern = (r'L\.marker\(\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*'
+                       r'(-?\d+(?:\.\d+)?)\s*\][^;]*?\.addTo\(\s*'
+                       + re.escape(map_name) + r'\s*\)')
+            pairs = {(float(a), float(b)) for a, b in re.findall(pattern, script)}
+            if len(pairs) == 1:
+                lat, lng = pairs.pop()
+                if -18.5 < lat < -0.1 and -81.5 < lng < -68.5:
+                    return {'lat': lat, 'lng': lng}
+    return None
+
+
 async def extraer_detalle(page, prop):
     """Navega a la ficha de detalle y extrae coordenadas + campos extras."""
     url = prop['URL Propiedad']
@@ -430,33 +466,14 @@ async def extraer_detalle(page, prop):
         # Esperar a que Leaflet inicialice el mapa
         await page.wait_for_timeout(2000)
 
-        # Coordenadas: leer el objeto map de Leaflet desde JS
-        coords = await page.evaluate("""
-            () => {
-                // Metodo 1: variable global 'map'
-                if (typeof map !== 'undefined' && map && map.getCenter) {
-                    const c = map.getCenter();
-                    return { lat: c.lat, lng: c.lng };
-                }
-                // Metodo 2: buscar instancia Leaflet en window
-                for (const key of Object.keys(window)) {
-                    try {
-                        const obj = window[key];
-                        if (obj && typeof obj === 'object' && obj.getCenter && obj._container) {
-                            const c = obj.getCenter();
-                            return { lat: c.lat, lng: c.lng };
-                        }
-                    } catch(e) {}
-                }
-                // Metodo 3: buscar setView en scripts
-                const scripts = document.querySelectorAll('script');
-                for (const s of scripts) {
-                    const m = s.textContent.match(/setView\\(\\[([-\\d.]+)\\s*,\\s*([-\\d.]+)\\]/);
-                    if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
-                }
-                return null;
-            }
-        """)
+        prop['Latitud'] = prop['Longitud'] = None
+        prop['Coordenadas'] = ''
+        scripts = await page.evaluate("() => Array.from(document.querySelectorAll('script'), s => s.textContent)")
+        coords = coordenadas_marcador(scripts)
+        if not coords:
+            raise RuntimeError('location.marker_missing: no se pudo verificar el marcador de map_property')
+        prop['_location_evidence'] = {'source': 'map_property.marker', 'precision': 'exacta', 'url': url}
+        logger.info('remax.location.extracted id=%s precision=exacta source=map_property.marker', prop.get('ID'))
 
         if coords and coords.get('lat'):
             lat, lng = coords['lat'], coords['lng']
@@ -493,6 +510,11 @@ async def extraer_detalle(page, prop):
             # (banos no es substring de baños). Se compara sin acentos.
             k_norm = _sin_acentos(k)
             for fk, fv in campos.items():
+                if k_norm == _sin_acentos(fk).strip().rstrip(':'):
+                    return fv
+            for fk, fv in campos.items():
+                if k_norm == 'banos' and ('1/2' in fk or 'medio' in _sin_acentos(fk)):
+                    continue
                 if k_norm in _sin_acentos(fk):
                     return fv
             return ''
@@ -513,13 +535,13 @@ async def extraer_detalle(page, prop):
             prop['Energia Electrica'] = get('Electrica') or get('Energia')
         if get('Drenaje'):         prop['Serv. Drenaje']     = get('Drenaje')
         if get('Gas'):             prop['Serv. Gas']         = get('Gas')
-        if get('Area Libre'):      pass  # campo extra opcional
-        if get('Area Ocupada'):    pass  # campo extra opcional
+        if get('Area Libre'):      prop['Area Libre'] = get('Area Libre')
+        if get('Area Ocupada'):    prop['Area Ocupada'] = get('Area Ocupada')
 
         # Descripcion
         desc_el = await page.query_selector('.__text_match')
         if desc_el:
-            prop['Descripcion'] = (await desc_el.inner_text()).replace('\n', ' ').strip()[:800]
+            prop['Descripcion'] = (await desc_el.inner_text()).replace('\n', ' ').strip()
 
         # Fecha de publicacion
         fecha_el = await page.query_selector('.titulo_02')
@@ -529,8 +551,14 @@ async def extraer_detalle(page, prop):
                 prop['Fecha Publicacion'] = texto_fecha.replace('Publicado el :', '').replace('Publicado el:', '').strip()
 
         # Agente y oficina
+        agent = await page.query_selector('.__datos h2')
+        office = await page.query_selector('.__datos h4')
+        if agent:
+            prop['Agente'] = (await agent.inner_text()).strip()
+        if office:
+            prop['Oficina'] = (await office.inner_text()).strip()
         agente_els = await page.query_selector_all('.__casadat h5')
-        if len(agente_els) > 1:
+        if not prop.get('Agente') and len(agente_els) > 1:
             children = await page.evaluate("""
                 (el) => {
                     const nodes = el.childNodes;

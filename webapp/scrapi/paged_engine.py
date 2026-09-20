@@ -81,8 +81,9 @@ def normalize(portal, source, raw):
     kind = property_type(text)
     row['tipo_inmueble'] = kind
     row['tipo_operacion'] = operation(text + ' ' + str(raw.get('_source_url') or ''))
-    row['precio_soles'] = number(mapped.get('Precio S/.'))
-    row['precio_usd'] = number(mapped.get('Precio USD'))
+    if portal != 'remax':
+        row['precio_soles'] = number(mapped.get('Precio S/.'))
+        row['precio_usd'] = number(mapped.get('Precio USD'))
     if portal == 'adondevivir':
         location = [p.strip() for p in str(raw.get('ubicacion') or '').split(',') if p.strip()]
         row['departamento'] = location[-1] if len(location) >= 3 else None
