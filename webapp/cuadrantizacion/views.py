@@ -1,4 +1,6 @@
 from django.shortcuts import get_object_or_404
+from django.db import transaction
+from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import viewsets, status, generics
 from rest_framework.authentication import BaseAuthentication, SessionAuthentication
 from rest_framework.decorators import action
@@ -35,6 +37,7 @@ class PrometeoSessionAuthentication(BaseAuthentication):
             return None
         if not getattr(user, 'is_active', False):
             raise AuthenticationFailed('Usuario inactivo.')
+        SessionAuthentication().enforce_csrf(request)
         return (user, None)
 
     def authenticate_header(self, request):
@@ -80,6 +83,7 @@ class ZonaValorViewSet(viewsets.ModelViewSet):
         
         return queryset
     
+    @transaction.atomic
     def perform_create(self, serializer):
         """Calcular área automáticamente al crear una zona y calcular precio inicial."""
         zona = serializer.save()
@@ -543,6 +547,7 @@ def api_heatmap_data(request):
     })
 
 
+@ensure_csrf_cookie
 def mapa_zonas_valor(request):
     """
     Vista principal para el mapa de zonas de valor con jerarquía.

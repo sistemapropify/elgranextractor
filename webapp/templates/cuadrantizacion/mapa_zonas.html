@@ -596,6 +596,7 @@ window.onGoogleMapsLoaded = function() {
 {% endblock %}
 
 {% block content %}
+{% csrf_token %}
 <div class="map-layout">
     <!-- Mapa -->
     <div class="map-main">
@@ -952,17 +953,44 @@ function resetDrawButtons() {
 }
 
 // Dibujo manual de polígono (reemplazo del DrawingManager retirado por Google).
-// clic = añade vértice · doble clic o volver a pulsar Polígono = terminar.
+// Cada clic añade un punto visible. Cerrar y deshacer son acciones explícitas.
 function installPolygonTool(mapInstance) {
-    var state = { active: false, path: [], overlay: null };
+    var state = { active: false, path: [], overlay: null, markers: [], zoom: false };
+    var controls = document.createElement('div');
+    controls.hidden = true;
+    controls.innerHTML = '<button type="button" id="finish-polygon">Cerrar polígono</button> ' +
+        '<button type="button" id="undo-polygon">Deshacer punto</button> ' +
+        '<button type="button" id="cancel-polygon">Cancelar</button> ' +
+        '<span id="polygon-points" role="status" aria-live="polite"></span>';
+    document.querySelector('.drawing-controls').after(controls);
+    var finishButton = controls.querySelector('#finish-polygon');
+    var undoButton = controls.querySelector('#undo-polygon');
+    finishButton.onclick = finishPolygon;
+    undoButton.onclick = function() { state.path.pop(); paintPreview(); };
+    controls.querySelector('#cancel-polygon').onclick = quit;
 
     function paintPreview() {
+        state.markers.forEach(function(marker) { marker.setMap(null); });
+        state.markers = state.path.map(function(point, index) {
+            var marker = new google.maps.Marker({
+                map: mapInstance, position: point,
+                title: index === 0 ? 'Primer punto: clic para cerrar' : 'Punto ' + (index + 1),
+                icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6,
+                    fillColor: ZONE_COLORS.new, fillOpacity: 1,
+                    strokeColor: '#ffffff', strokeWeight: 2 },
+                zIndex: 1000
+            });
+            if (index === 0) marker.addListener('click', finishPolygon);
+            return marker;
+        });
+        finishButton.disabled = state.path.length < 3;
+        undoButton.disabled = state.path.length === 0;
+        controls.querySelector('#polygon-points').textContent = state.path.length + ' puntos';
         if (!state.overlay) {
-            state.overlay = new google.maps.Polygon({
+            state.overlay = new google.maps.Polyline({
                 map: mapInstance,
-                paths: state.path,
-                fillColor: ZONE_COLORS.fillNew,
-                fillOpacity: 0.35,
+                path: state.path,
+                clickable: false,
                 strokeColor: ZONE_COLORS.new,
                 strokeWeight: 2,
                 editable: false,
@@ -975,9 +1003,13 @@ function installPolygonTool(mapInstance) {
 
     function quit() {
         state.active = false;
-        mapInstance.setOptions({ draggableCursor: '' });
+        mapInstance.setOptions({ draggableCursor: '', disableDoubleClickZoom: state.zoom });
         if (state.overlay) { state.overlay.setMap(null); state.overlay = null; }
+        state.markers.forEach(function(marker) { marker.setMap(null); });
+        state.markers = [];
         state.path = [];
+        controls.hidden = true;
+        resetDrawButtons();
     }
 
     function finishPolygon() {
@@ -990,19 +1022,13 @@ function installPolygonTool(mapInstance) {
                 state.path.pop();
             }
         }
-        state.active = false;
-        mapInstance.setOptions({ draggableCursor: '' });
-        resetDrawButtons();
-
         if (state.path.length < 3) {
-            quit();
-            showAlert('Un polígono necesita al menos 3 puntos. Inténtalo de nuevo.', 'warning');
-            return;
+            showAlert('Añade al menos 3 puntos para cerrar el polígono.', 'warning');
+            return false;
         }
 
-        var shape = state.overlay || new google.maps.Polygon({ map: mapInstance, paths: state.path });
-        state.overlay = null;
-        state.path = [];
+        var shape = new google.maps.Polygon({ map: mapInstance, paths: state.path.slice() });
+        quit();
         shape.setOptions({
             fillColor: ZONE_COLORS.fillSelected,
             fillOpacity: 0.4,
@@ -1018,30 +1044,34 @@ function installPolygonTool(mapInstance) {
         updateZoneDataFromShape(shape);
         showZoneInfo(shape);
         showAlert('Polígono terminado. Escribe el nombre y pulsa Guardar.', 'success');
+        return true;
     }
 
     function togglePolygon() {
         if (state.active) { finishPolygon(); return; }
+        state.zoom = mapInstance.get('disableDoubleClickZoom') || false;
         quit();
         resetDrawButtons();
         var btn = document.getElementById('draw-polygon');
         if (btn) btn.classList.add('active');
         state.active = true;
         state.path = [];
-        mapInstance.setOptions({ draggableCursor: 'crosshair' });
-        showAlert('Clic en el mapa para añadir vértices. Doble clic (o pulsa Polígono otra vez) para terminar.', 'info');
+        controls.hidden = false;
+        paintPreview();
+        mapInstance.setOptions({ draggableCursor: 'crosshair', disableDoubleClickZoom: true });
+        showAlert('Añade cada punto con un clic. Pulsa Cerrar polígono o el primer punto para terminar. Puedes deshacer el último punto.', 'info');
     }
 
-    google.maps.event.addListener(mapInstance, 'click', function(e) {
+    function addPoint(e) {
         if (!state.active) return;
+        var last = state.path[state.path.length - 1];
+        if (last && last.equals(e.latLng)) return;
         state.path.push(e.latLng);
         paintPreview();
-    });
-    google.maps.event.addListener(mapInstance, 'dblclick', function() {
-        if (state.active) { state.path.pop(); finishPolygon(); }
-    });
-
-    window.__polyTool = { toggle: togglePolygon, cancel: quit };
+    }
+    google.maps.event.addListener(mapInstance, 'click', addPoint);
+    window.__polyTool = { toggle: togglePolygon, cancel: quit,
+        finish: finishPolygon, addPoint: addPoint, isActive: function() { return state.active; } };
 }
 
 // ============================================================
@@ -1178,6 +1208,8 @@ function setupSaveZone() {
             return;
         }
 
+        if (window.__polyTool && window.__polyTool.isActive() && !window.__polyTool.finish()) return;
+        if (selectedShape) updateZoneDataFromShape(selectedShape);
         if (!currentZoneData) {
             showAlert('Primero dibuja una forma en el mapa.', 'warning');
             return;
@@ -1187,20 +1219,29 @@ function setupSaveZone() {
             nombre_zona: name,
             nivel: level,
             parent: parentId || null,
-            coordenadas: JSON.stringify(currentZoneData.coordinates)
+            coordenadas: currentZoneData.coordinates.map(function(point) { return [point.lat, point.lng]; })
         };
 
         showLoading(true);
+        var saveButton = document.getElementById('save-zone');
+        saveButton.disabled = true;
 
         fetch('/cuadrantizacion/zonas/', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
             },
             body: JSON.stringify(data)
         })
         .then(function(response) {
+            if (response.redirected || response.status === 401) {
+                throw new Error('Tu sesión ha caducado. Inicia sesión en otra pestaña y vuelve a guardar aquí; el dibujo se conserva.');
+            }
+            if (response.status === 403) {
+                throw new Error('No se autorizó el guardado. Comprueba tu sesión y permisos. Si volviste a iniciar sesión, abre el mapa antes de dibujar.');
+            }
             if (!response.ok) {
                 return response.json().then(function(err) { throw new Error(JSON.stringify(err)); });
             }
@@ -1209,6 +1250,9 @@ function setupSaveZone() {
         .then(function(result) {
             showAlert('Zona "' + name + '" guardada exitosamente.', 'success');
             document.getElementById('zone-name').value = '';
+            if (selectedShape) selectedShape.setMap(null);
+            selectedShape = null;
+            currentZoneData = null;
             loadZones();
             loadDistricts();
             loadZoneParents();
@@ -1217,6 +1261,7 @@ function setupSaveZone() {
             showAlert('Error: ' + error.message, 'error');
         })
         .finally(function() {
+            saveButton.disabled = false;
             showLoading(false);
         });
     });
@@ -1332,7 +1377,11 @@ function renderExistingZones(zones) {
                 renderedZoneOverlays.push(polygon, labelOverlay);
 
                 // Al hacer click en el polígono, seleccionar
-                google.maps.event.addListener(polygon, 'click', function() {
+                google.maps.event.addListener(polygon, 'click', function(e) {
+                    if (window.__polyTool && window.__polyTool.isActive()) {
+                        window.__polyTool.addPoint(e);
+                        return;
+                    }
                     selectShape(this);
                 });
             } catch(e) {

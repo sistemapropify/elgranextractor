@@ -15,6 +15,7 @@ class ZonaValor(models.Model):
         ('distrito', 'Distrito'),
         ('zona', 'Zona'),
         ('subzona', 'Subzona'),
+        ('cuadrante', 'Cuadrante'),
     ]
     
     # Campos de jerarquía

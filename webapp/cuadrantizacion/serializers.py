@@ -1,4 +1,5 @@
 from rest_framework import serializers
+import math
 from .models import ZonaValor, PropiedadValoracion, EstadisticaZona, HistorialPrecioZona
 from ingestas.models import PropiedadRaw
 
@@ -39,8 +40,13 @@ class ZonaValorSerializer(serializers.ModelSerializer):
             if not isinstance(point, list) or len(point) != 2:
                 raise serializers.ValidationError("Cada punto debe ser una lista [lat, lng].")
             lat, lng = point
+            if any(isinstance(n, bool) or not isinstance(n, (int, float)) or not math.isfinite(n)
+                   for n in (lat, lng)):
+                raise serializers.ValidationError('Las coordenadas deben contener números finitos.')
             if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
                 raise serializers.ValidationError(f"Coordenadas inválidas: lat={lat}, lng={lng}")
+        if len({tuple(point) for point in value}) < 3:
+            raise serializers.ValidationError('Un polígono necesita al menos 3 puntos distintos.')
         return value
 
 

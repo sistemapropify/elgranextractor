@@ -20,7 +20,7 @@ class MapaZonasTemplateTests(SimpleTestCase):
 
     def test_existing_zones_do_not_depend_on_removed_drawing_library(self):
         self.assertNotIn('libraries=drawing', self.source)
-        self.assertIn('google.maps.drawing &&', self.source)
+        self.assertIn('installPolygonTool(map);', self.source)
         self.assertIn('loadZones();', self.source)
 
     def test_map_initialization_is_idempotent(self):
