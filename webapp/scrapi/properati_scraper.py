@@ -1,4 +1,8 @@
 import asyncio
+import logging
+from scrapi.properati_location import decoded, map_object, precision_from_html
+
+logger = logging.getLogger(__name__)
 import re
 import json
 import openpyxl
@@ -496,6 +500,8 @@ async def esperar_cloudflare(page, timeout=30):
 
 async def navegar_con_cloudflare(page, url, timeout=30):
     """Navega a una URL esperando que Cloudflare se resuelva."""
+    page._scraping_initial_html = None
+    page._scraping_initial_url = None
     try:
         response = await page.goto(url, wait_until='domcontentloaded', timeout=60000)
         # Guardar el HTML servido en ESTA navegación: es el SSR que contiene
@@ -503,7 +509,9 @@ async def navegar_con_cloudflare(page, url, timeout=30):
         # hidratado o que una petición aparte.
         try:
             if response is not None:
-                page._scraping_initial_html = await response.text()
+                if response.status < 400 and response.url.rstrip("/") == url.rstrip("/"):
+                    page._scraping_initial_html = await response.text()
+                    page._scraping_initial_url = url
         except Exception:
             pass
     except Exception as e:
@@ -515,6 +523,13 @@ async def navegar_con_cloudflare(page, url, timeout=30):
 
 
 def extraer_coordenadas_desde_html(html_content):
+    text = decoded(html_content)
+    block = map_object(text)
+    # Never fall through to recommendation coordinates when the main map exists.
+    return _extraer_coordenadas_bloque(block or text)
+
+
+def _extraer_coordenadas_bloque(html_content):
     """
     Extrae coordenadas de paginas de detalle de Properati.
     Busca patrones como:
@@ -600,59 +615,27 @@ def _normalizar_precision(valor):
 
 
 def _precision_ubicacion_desde_html(html):
-    """Detecta si la ubicación es exacta o aproximada en una ficha de Properati.
-
-    Regla autoritativa: si aparece el aviso
-    'El anunciante prefiere no mostrar la dirección exacta' -> aproximada.
-    Si NO aparece, se usa mapData.visibility ("accurate" -> exacta,
-    "approximate" -> aproximada). El aviso se evalúa PRIMERO porque es la señal
-    que ve el usuario en la ficha.
-    """
-    if not html:
-        return 'desconocida'
-    if re.search(r'prefiere no mostrar la direcci[oó]n exacta', html, re.IGNORECASE):
-        return 'aproximada'
-    # Acotar al bloque del mapa: hay claves 'visibility' de CSS/UI.
-    segmento = html
-    idx = html.find('adLocationData')
-    if idx == -1:
-        idx = html.find('mapData')
-    if idx != -1:
-        segmento = html[idx:idx + 3000]
-    m = re.search(r'visibility\s*:\s*"([^"]+)"', segmento)
-    vis = (m.group(1).strip().lower() if m else '')
-    if vis in ('approximate', 'approx', 'approximated'):
-        return 'aproximada'
-    if vis in ('accurate', 'exact', 'exacta'):
-        return 'exacta'
-    return 'desconocida'
+    return precision_from_html(html)
 
 
 async def _html_servidor(page, url):
-    """HTML de la ficha con coordenadas/precisión, por orden de fiabilidad.
-
-    1) HTML de la propia navegación del navegador (SSR con pageData/mapData):
-       es la fuente consistente; el DOM hidratado a veces no conserva el script.
-    2) Petición del propio navegador (mismas cookies/fingerprint).
-    3) DOM hidratado como último recurso.
-    """
-    inicial = getattr(page, '_scraping_initial_html', None)
-    if inicial and 'coordinates' in inicial:
-        return inicial
+    """Use only this navigation; Cloudflare HTML must not mask the hydrated map."""
+    initial = (getattr(page, '_scraping_initial_html', None)
+               if getattr(page, '_scraping_initial_url', None) == url else None)
+    if initial and map_object(initial):
+        return initial
+    dom = await page.content()
+    if map_object(dom):
+        return dom
     try:
-        resp = await page.request.get(url)
-        if resp.ok:
-            texto = await resp.text()
-            if texto and 'coordinates' in texto:
-                return texto
+        response = await page.request.get(url, timeout=15000)
+        if response.ok and response.url.rstrip('/') == url.rstrip('/'):
+            text = await response.text()
+            if map_object(text):
+                return text
     except Exception:
-        pass
-    if inicial:
-        return inicial
-    try:
-        return await page.content()
-    except Exception:
-        return ''
+        logger.warning('properati.location.http_fallback_failed url=%s', url)
+    return dom
 
 
 def extraer_imagen_desde_html(html_content):
@@ -948,22 +931,30 @@ async def extraer_detalle(page, prop):
         else:
             print(f"   [WARN] Sin coordenadas en HTML de detalle")
 
-        # Precisión de ubicación. Regla real de Properati: cuando la ubicación es
-        # APROXIMADA aparece el aviso 'El anunciante prefiere no mostrar la
-        # dirección exacta' (o visibility: approximate). Si ese aviso NO está y
-        # hay coordenada, la ubicación es EXACTA.
+        # Read the actual location block; its notice overrides SSR visibility.
         precision = _precision_ubicacion_desde_html(html_content)
-        if precision == 'desconocida':
-            try:
-                dom_html = await page.content()
-            except Exception:
-                dom_html = ''
-            if re.search(r'prefiere no mostrar la direcci[oó]n exacta',
-                         dom_html or '', re.IGNORECASE):
-                precision = 'aproximada'
-        if precision == 'desconocida' and lat is not None and lng is not None:
-            precision = 'exacta'
+        try:
+            location = page.locator('#location-map')
+            await location.wait_for(state='attached', timeout=10000)
+            location_html = await location.evaluate('(el) => el.outerHTML')
+            observed = _precision_ubicacion_desde_html(location_html)
+            if observed == 'aproximada' or precision == 'desconocida':
+                precision = observed
+        except Exception as exc:
+            logger.warning('properati.location.dom_unavailable id=%s error=%s',
+                           prop.get('ID'), type(exc).__name__)
         prop['Precision Ubicacion'] = precision
+        prop['_location_evidence'] = {
+            'url': url, 'coordinates_source': 'mapData' if map_object(html_content) else 'html_fallback',
+            'precision': precision, 'coordinates_found': lat is not None and lng is not None,
+        }
+        if lat is None or lng is None:
+            # Missing coordinates must remain retryable, not silently marked saved.
+            raise RuntimeError('location.coordinates_missing: no se obtuvo el par de coordenadas de la ficha')
+        if precision == 'desconocida':
+            raise RuntimeError('location.precision_unknown: no se pudo verificar el mapa de la ficha')
+        logger.info('properati.location.extracted id=%s precision=%s source=%s',
+                    prop.get('ID'), precision, prop['_location_evidence']['coordinates_source'])
 
         # Extraer descripcion completa y otras caracteristicas
         detalles = await page.evaluate("""

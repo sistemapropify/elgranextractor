@@ -44,7 +44,7 @@ class Command(BaseCommand):
         qs = PropiedadesCompetencia.objects.filter(
             fuente='properati', url__isnull=False).exclude(url='')
         if options['solo_vacios']:
-            qs = qs.filter(Q(precision_ubicacion='desconocida') | Q(latitud__isnull=True))
+            qs = qs.filter(Q(precision_ubicacion='desconocida') | Q(latitud__isnull=True) | Q(longitud__isnull=True))
         qs = qs.order_by('-id')
         if options['limit']:
             qs = qs[:options['limit']]
@@ -54,6 +54,8 @@ class Command(BaseCommand):
             try:
                 req = urllib.request.Request(r.url, headers=HEADERS)
                 with urllib.request.urlopen(req, timeout=40) as resp:
+                    if resp.url.rstrip('/') != r.url.rstrip('/'):
+                        raise ValueError('La respuesta redirigió fuera de la ficha')
                     html = resp.read().decode('utf-8', errors='replace')
             except Exception as exc:
                 err += 1
@@ -61,18 +63,22 @@ class Command(BaseCommand):
                 continue
 
             lat, lng = extraer_coordenadas_desde_html(html)
+            if lat is None or lng is None:
+                err += 1
+                self.stderr.write(f'ERR {r.id_origen}: ficha sin coordenadas verificables; sin cambios')
+                time.sleep(options['sleep'])
+                continue
             updates = {}
-            if lat is not None and lng is not None and r.latitud is None:
+            if lat is not None and lng is not None and (r.latitud is None or r.longitud is None):
                 updates['latitud'] = lat
                 updates['longitud'] = lng
-                updates['coordenadas'] = f'{lat},{lng}'
 
             precision = _precision_ubicacion_desde_html(html)
-            if precision == 'desconocida' and re.search(
-                    r'prefiere no mostrar la direcci[oó]n exacta', html, re.IGNORECASE):
-                precision = 'aproximada'
-            if precision == 'desconocida' and (r.latitud is not None or 'latitud' in updates):
-                precision = 'exacta'
+            if precision == 'desconocida':
+                err += 1
+                self.stderr.write(f'ERR {r.id_origen}: precisión no verificada; sin cambios')
+                time.sleep(options['sleep'])
+                continue
             if precision != r.precision_ubicacion:
                 updates['precision_ubicacion'] = precision
 
