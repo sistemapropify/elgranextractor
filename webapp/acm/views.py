@@ -9,6 +9,7 @@ from django.http import JsonResponse, HttpResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.db.models import Q, F
+from django.db.utils import OperationalError, ProgrammingError
 from django.utils import timezone
 from django.conf import settings
 from ingestas.models import PropiedadRaw
@@ -43,7 +44,14 @@ def _ensure_acm_test_snapshot():
 
 
 def acm_pruebas_view(request):
-    _ensure_acm_test_snapshot()
+    try:
+        _ensure_acm_test_snapshot()
+    except (OperationalError, ProgrammingError):
+        logger.exception('ACM test schema is not ready')
+        return JsonResponse({
+            'status': 'starting',
+            'message': 'El entorno de pruebas ACM está aplicando su migración. Intenta nuevamente en unos segundos.'
+        }, status=503)
     current_user = getattr(request, 'current_user', None)
     return render(request, 'acm/acm_analisis.html', {
         'tipos_propiedad': list(ACMTestProperty.objects.exclude(tipo_propiedad='').values_list(

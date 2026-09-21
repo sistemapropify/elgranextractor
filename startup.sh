@@ -170,6 +170,14 @@ else
     echo "  WARNING: critical ingestas migrations failed or timed out; see $MIGRATE_LOG."
 fi
 
+# ACM de pruebas se consulta desde su primera página; debe existir antes de
+# que Gunicorn acepte tráfico, igual que el esquema crítico de ingestas.
+if timeout 90 python manage.py migrate acm --noinput >> "$MIGRATE_LOG" 2>&1; then
+    echo "  Critical ACM migrations applied."
+else
+    echo "  WARNING: critical ACM migrations failed or timed out; see $MIGRATE_LOG."
+fi
+
 # ── Run remaining migrations (non-blocking) ──
 # No bloquear el arranque web: si SQL tarda o el driver ODBC aun se instala
 # en segundo plano, migrar en background evita el ContainerTimeout (230s).
