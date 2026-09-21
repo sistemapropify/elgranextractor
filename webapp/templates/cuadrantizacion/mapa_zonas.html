@@ -279,6 +279,38 @@
 
 .property-map-filters .operation-filter { grid-column: 1 / -1; }
 
+.portal-checkboxes {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+}
+
+.portal-checkbox {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 6px 4px;
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 6px;
+    background: var(--bg-secondary, #161b22);
+    color: var(--text-primary, #f0f6fc);
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.portal-checkbox input {
+    margin: 0;
+    accent-color: #15b8a6;
+}
+
+.portal-checkbox:has(input:checked) {
+    border-color: #15b8a6;
+    background: rgba(21, 184, 166, .12);
+}
+
 .propify-floating-card {
     position: absolute;
     top: 76px;
@@ -836,9 +868,20 @@ window.onGoogleMapsLoaded = function() {
                     <span class="panel-badge" id="propify-properties-count">…</span>
                 </label>
                 <div class="property-map-filters" id="propify-property-filters">
-                    <select id="propify-source-filter" aria-label="Filtrar por portal">
-                        <option value="">Todos los portales</option>
-                    </select>
+                    <div class="portal-checkboxes" id="propify-source-filters" aria-label="Filtrar por portales">
+                        <label class="portal-checkbox">
+                            <input type="checkbox" name="property-source" value="propify" checked>
+                            <span>Propify</span>
+                        </label>
+                        <label class="portal-checkbox">
+                            <input type="checkbox" name="property-source" value="remax" checked>
+                            <span>Remax</span>
+                        </label>
+                        <label class="portal-checkbox">
+                            <input type="checkbox" name="property-source" value="properati" checked>
+                            <span>Properati</span>
+                        </label>
+                    </div>
                     <select id="propify-precision-filter" aria-label="Filtrar por precisión">
                         <option value="">Todas las precisiones</option>
                     </select>
@@ -1516,7 +1559,7 @@ function setupSaveZone() {
 
 function setupPropifyPropertyLayer() {
     var toggle = document.getElementById('toggle-propify-properties');
-    var sourceFilter = document.getElementById('propify-source-filter');
+    var sourceFilters = Array.from(document.querySelectorAll('input[name="property-source"]'));
     var precisionFilter = document.getElementById('propify-precision-filter');
     var operationFilter = document.getElementById('propify-operation-filter');
     var typeFilter = document.getElementById('propify-type-filter');
@@ -1529,7 +1572,7 @@ function setupPropifyPropertyLayer() {
         if (typeFilter) typeFilter.disabled = !toggle.checked;
         if (districtFilter) districtFilter.disabled = !toggle.checked;
         if (operationFilter) operationFilter.disabled = !toggle.checked;
-        if (sourceFilter) sourceFilter.disabled = !toggle.checked;
+        sourceFilters.forEach(function(filter) { filter.disabled = !toggle.checked; });
         if (precisionFilter) precisionFilter.disabled = !toggle.checked;
         if (toggle.checked && !propifyPropertiesLoaded) {
             loadPropifyProperties();
@@ -1541,7 +1584,7 @@ function setupPropifyPropertyLayer() {
         if (!toggle.checked) closePropifyFloatingCard();
     });
 
-    [sourceFilter, precisionFilter, operationFilter, typeFilter, districtFilter].forEach(function(filter) {
+    sourceFilters.concat([precisionFilter, operationFilter, typeFilter, districtFilter]).forEach(function(filter) {
         if (filter) filter.addEventListener('change', renderPropifyPropertyMarkers);
     });
 
@@ -1608,13 +1651,14 @@ function populatePropifyFilter(select, values, defaultLabel) {
 }
 
 function filteredPropifyProperties() {
-    var source = document.getElementById('propify-source-filter').value;
+    var selectedSources = Array.from(document.querySelectorAll('input[name="property-source"]:checked'))
+        .map(function(filter) { return filter.value; });
     var precision = document.getElementById('propify-precision-filter').value;
     var operation = document.getElementById('propify-operation-filter').value;
     var type = document.getElementById('propify-type-filter').value;
     var district = document.getElementById('propify-district-filter').value;
     return propifyProperties.filter(function(property) {
-        return (!source || property.source === source) &&
+        return selectedSources.indexOf(property.source_key) !== -1 &&
             (!precision || property.location_precision === precision) &&
             (!operation || property.operation_type === operation) &&
             (!type || property.property_type === type) &&
@@ -1798,11 +1842,6 @@ function loadPropifyProperties() {
         .then(parseJsonResponse)
         .then(function(data) {
             propifyProperties = data.properties || [];
-            populatePropifyFilter(
-                document.getElementById('propify-source-filter'),
-                propifyProperties.map(function(property) { return property.source; }),
-                'Todos los portales'
-            );
             populatePropifyFilter(
                 document.getElementById('propify-precision-filter'),
                 propifyProperties.map(function(property) { return property.location_precision; }),
