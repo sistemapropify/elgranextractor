@@ -49,6 +49,35 @@ class ZonaValorSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Un polígono necesita al menos 3 puntos distintos.')
         return value
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if 'nivel' not in attrs and 'parent' not in attrs:
+            return attrs
+
+        level = attrs.get('nivel', getattr(self.instance, 'nivel', None))
+        parent = attrs.get('parent', getattr(self.instance, 'parent', None))
+        levels = [code for code, _label in ZonaValor.NIVELES]
+        level_index = levels.index(level)
+
+        if level_index == 0:
+            if parent is not None:
+                raise serializers.ValidationError({
+                    'parent': 'Una zona de nivel País no puede tener zona padre.'
+                })
+            return attrs
+
+        expected_parent_level = levels[level_index - 1]
+        if parent is None:
+            raise serializers.ValidationError({
+                'parent': 'Selecciona una zona padre para este nivel.'
+            })
+        if parent.nivel != expected_parent_level:
+            expected_label = dict(ZonaValor.NIVELES)[expected_parent_level]
+            raise serializers.ValidationError({
+                'parent': f'La zona padre debe ser de nivel {expected_label}.'
+            })
+        return attrs
+
 
 class PropiedadValoracionSerializer(serializers.ModelSerializer):
     """Serializer para PropiedadValoracion."""

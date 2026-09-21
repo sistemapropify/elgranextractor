@@ -9,6 +9,7 @@ from django.template.loader import get_template
 from django.test import RequestFactory, SimpleTestCase
 
 from . import views
+from .serializers import ZonaValorSerializer
 
 
 class MapaZonasTemplateTests(SimpleTestCase):
@@ -62,6 +63,32 @@ class MapaZonasTemplateTests(SimpleTestCase):
     def test_save_error_parser_accepts_html_server_errors(self):
         self.assertIn('function parseJsonResponse(response)', self.source)
         self.assertIn("El servidor respondió ' + response.status", self.source)
+
+    def test_parent_options_follow_the_selected_hierarchy_level(self):
+        self.assertIn("cuadrante: 'subzona'", self.source)
+        self.assertIn("zona: 'distrito'", self.source)
+        self.assertIn("'?nivel=' + encodeURIComponent(parentLevel)", self.source)
+        self.assertIn("levelSelect.addEventListener('change'", self.source)
+
+
+class ZonaValorHierarchyValidationTests(SimpleTestCase):
+    def test_zone_accepts_a_district_parent(self):
+        serializer = ZonaValorSerializer()
+        attrs = {
+            'nivel': 'zona',
+            'parent': SimpleNamespace(nivel='distrito'),
+        }
+
+        self.assertEqual(serializer.validate(attrs), attrs)
+
+    def test_quadrant_rejects_a_district_parent(self):
+        serializer = ZonaValorSerializer()
+
+        with self.assertRaisesMessage(Exception, 'La zona padre debe ser de nivel Subzona'):
+            serializer.validate({
+                'nivel': 'cuadrante',
+                'parent': SimpleNamespace(nivel='distrito'),
+            })
 
 
 class AvailablePropifyPropertiesApiTests(SimpleTestCase):

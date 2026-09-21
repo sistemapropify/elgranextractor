@@ -1182,7 +1182,7 @@ function initMap() {
     // Cargar zonas existentes
     loadZones();
     loadDistricts();
-    loadZoneParents();
+    setupZoneHierarchySelector();
     setupPropifyPropertyLayer();
 
     // Configurar búsqueda de dirección
@@ -2054,26 +2054,72 @@ function loadDistricts() {
         });
 }
 
-function loadZoneParents() {
-    fetch('/cuadrantizacion/zonas/?raiz=true')
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            // La API devuelve un array plano
-            var parents = Array.isArray(data) ? data : (data.zonas || data.results || []);
-            var select = document.getElementById('zone-parent');
-            if (!select) return;
+const ZONE_PARENT_LEVEL = {
+    pais: null,
+    departamento: 'pais',
+    provincia: 'departamento',
+    distrito: 'provincia',
+    zona: 'distrito',
+    subzona: 'zona',
+    cuadrante: 'subzona'
+};
 
-            select.innerHTML = '<option value="">Ninguna (raiz)</option>';
+const ZONE_LEVEL_LABEL = {
+    pais: 'País',
+    departamento: 'Departamento',
+    provincia: 'Provincia',
+    distrito: 'Distrito',
+    zona: 'Zona',
+    subzona: 'Subzona',
+    cuadrante: 'Cuadrante'
+};
+
+function setupZoneHierarchySelector() {
+    var levelSelect = document.getElementById('zone-level');
+    if (!levelSelect || levelSelect.dataset.parentReady === '1') return;
+    levelSelect.dataset.parentReady = '1';
+    levelSelect.addEventListener('change', function() { loadZoneParents(); });
+    loadZoneParents();
+}
+
+function loadZoneParents(selectedParentId) {
+    var levelSelect = document.getElementById('zone-level');
+    var select = document.getElementById('zone-parent');
+    if (!levelSelect || !select) return;
+
+    var parentLevel = ZONE_PARENT_LEVEL[levelSelect.value];
+    if (!parentLevel) {
+        select.innerHTML = '<option value="">No aplica (nivel raíz)</option>';
+        select.disabled = true;
+        return;
+    }
+
+    select.disabled = true;
+    select.innerHTML = '<option value="">Cargando ' + ZONE_LEVEL_LABEL[parentLevel].toLowerCase() + 's…</option>';
+    fetch('/cuadrantizacion/zonas/?nivel=' + encodeURIComponent(parentLevel))
+        .then(parseJsonResponse)
+        .then(function(data) {
+            var parents = Array.isArray(data) ? data : (data.zonas || data.results || []);
+            select.innerHTML = '<option value="">Selecciona ' + ZONE_LEVEL_LABEL[parentLevel].toLowerCase() + '</option>';
             parents.forEach(function(z) {
                 var opt = document.createElement('option');
                 opt.value = z.id;
-                // El serializer usa 'nombre_zona'
-                opt.textContent = z.nombre_zona || 'Zona #' + z.id;
+                opt.textContent = (z.nombre_zona || 'Zona #' + z.id) +
+                    (z.parent_nombre ? ' · ' + z.parent_nombre : '');
                 select.appendChild(opt);
             });
+            select.disabled = false;
+            if (selectedParentId && parents.some(function(z) { return String(z.id) === String(selectedParentId); })) {
+                select.value = String(selectedParentId);
+            }
+            if (!parents.length) {
+                select.innerHTML = '<option value="">No hay ' + ZONE_LEVEL_LABEL[parentLevel].toLowerCase() + 's disponibles</option>';
+            }
         })
         .catch(function(error) {
             console.error('Error loading parents:', error);
+            select.innerHTML = '<option value="">No se pudieron cargar las zonas padre</option>';
+            showAlert('No se pudieron cargar las zonas padre: ' + error.message, 'warning');
         });
 }
 
