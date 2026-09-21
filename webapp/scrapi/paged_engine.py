@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, urljoin, urlsplit
 from .contracts import Discovery, ScrapeRows, ScrapingInterrupted
 from .normalization import number, operation, property_type, urbania_row, validate_row
 from .source_config import page_url, validate_url
-from .retry_policy import retry_delay, transient_failure, wait_for_retry
+from .retry_policy import portal_blocked, retry_delay, transient_failure, wait_for_retry
 
 PAGINATION_JS = r"""() => {
  const links = [...document.querySelectorAll('a,button')];
@@ -194,6 +194,8 @@ async def prepare_detail(portal, source, page, raw, emit, *, store_images=False)
                        transient=transient_failure(exc), retry_in_seconds=delay,
                        message=f'{type(exc).__name__}: {exc or "se agotó el tiempo de respuesta"}')
             if delay is None:
+                if portal == 'properati' and portal_blocked(exc):
+                    raise RuntimeError('portal.paused: Properati mantiene un bloqueo de acceso; cola conservada') from exc
                 raise
             await wait_for_retry(delay, emit, property_id=key, attempt=attempt)
     if portal in ('adondevivir', 'properati') and store_images and row.get('imagen_url'):
@@ -316,6 +318,11 @@ async def crawl_pages(portal, source_url, source, page, detail_page, *, emit,
                 except ScrapingInterrupted:
                     raise
                 except Exception as exc:
+                    if portal == 'properati' and str(exc).startswith('portal.paused:'):
+                        await emit(event='portal.paused', level='error', page=n, property_id=key,
+                                   message='Properati bloqueó el acceso; se conserva la cola y se detiene el portal',
+                                   error_type=type(exc).__name__)
+                        raise ScrapingInterrupted(str(exc)) from exc
                     failed.add(key)
                     raw['_detail_error'] = str(exc)[:1000]
                     await emit(event='detail.failed', level='error', message=str(exc),
@@ -379,7 +386,13 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
             _progress_callback=lambda message: progress_callback and progress_callback({
                 'event': 'runtime.preflight', 'message': message}))
         async with AsyncCamoufox(**options) as browser:
-            page, detail_page = await browser.new_page(), await browser.new_page()
+            if portal == 'properati':
+                # Browser.new_page() crea un contexto aislado por pestaña.
+                # El listado y las fichas deben conservar la misma sesión.
+                context = await browser.new_context()
+                page, detail_page = await context.new_page(), await context.new_page()
+            else:
+                page, detail_page = await browser.new_page(), await browser.new_page()
             await guarded_navigation(page, portal)
             await guarded_navigation(detail_page, portal)
             await page.set_viewport_size({'width': 1440, 'height': 1000})
@@ -413,6 +426,11 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
                 except ScrapingInterrupted:
                     raise
                 except Exception as exc:
+                    if portal == 'properati' and str(exc).startswith('portal.paused:'):
+                        await emit(event='portal.paused', level='error', property_id=candidate['id'],
+                                   message='Properati bloqueó el acceso durante la reanudación; cola conservada',
+                                   error_type=type(exc).__name__)
+                        raise ScrapingInterrupted(str(exc)) from exc
                     failed.add(candidate['id'])
                     await emit(event='detail.failed', level='error', property_id=candidate['id'],
                                message=str(exc), candidate_error={'id': candidate['id'], 'error': str(exc)})

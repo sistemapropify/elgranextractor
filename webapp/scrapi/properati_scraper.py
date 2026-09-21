@@ -527,7 +527,14 @@ async def navegar_con_cloudflare(page, url, timeout=30):
     if response.status >= 400:
         raise RuntimeError(f'navigation.http_error: HTTP {response.status}')
     if not await esperar_cloudflare(page, timeout):
-        raise RuntimeError('navigation.blocked: Properati no confirmó acceso al contenido')
+        try:
+            title = (await page.title())[:160]
+        except Exception:
+            title = '(no disponible)'
+        evidence = (f'HTTP {response.status}; título={title!r}; '
+                    f'url={page.url}')
+        logger.warning('properati.navigation.blocked %s', evidence)
+        raise RuntimeError('navigation.blocked: Properati no confirmó acceso al contenido; ' + evidence)
     await page.wait_for_timeout(2000)
     return await page.title()
 

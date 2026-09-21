@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from scrapi import paged_engine
-from scrapi.retry_policy import retry_delay, transient_failure, wait_for_retry
+from scrapi.retry_policy import portal_blocked, retry_delay, transient_failure, wait_for_retry
 from scrapi.contracts import ScrapingInterrupted
 
 
@@ -17,6 +17,8 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(retry_delay(RuntimeError('detail.blocked'), 1), 60)
         self.assertEqual(retry_delay(RuntimeError('HTTP 429'), 2), 120)
         self.assertIsNone(retry_delay(RuntimeError('HTTP 403'), 3))
+        self.assertTrue(portal_blocked(RuntimeError('navigation.blocked: challenge')))
+        self.assertFalse(portal_blocked(RuntimeError('location.coordinates_missing')))
 
     def test_wrapped_transport_error_is_preserved(self):
         error = RuntimeError('detail.extraction_failed')
@@ -70,6 +72,24 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
             await navegar_con_cloudflare(page, 'https://www.properati.com.pe/detalle/example')
         self.assertTrue(transient_failure(caught.exception))
         self.assertIsNone(page._scraping_initial_html)
+
+    async def test_security_verification_with_http_200_keeps_diagnostic(self):
+        from scrapi import properati_scraper as source
+        url = 'https://www.properati.com.pe/detalle/example'
+        response = SimpleNamespace(status=200, url=url,
+                                   text=AsyncMock(return_value='<title>Security verification</title>'))
+        page = SimpleNamespace(url=url, goto=AsyncMock(return_value=response),
+                               title=AsyncMock(return_value='Security verification'))
+        with patch.object(source, 'esperar_cloudflare', AsyncMock(return_value=False)):
+            with self.assertRaisesRegex(RuntimeError, 'navigation.blocked:.*HTTP 200.*Security verification'):
+                await source.navegar_con_cloudflare(page, url)
+
+    async def test_persistent_block_stops_before_next_property(self):
+        page = SimpleNamespace(url='detail')
+        with patch.object(paged_engine, 'enrich', AsyncMock(side_effect=RuntimeError('navigation.blocked'))), \
+             patch.object(paged_engine, 'retry_delay', return_value=None):
+            with self.assertRaisesRegex(RuntimeError, 'portal.paused:'):
+                await paged_engine.prepare_detail('properati', None, page, {'ID': 'abc'}, AsyncMock())
 
 
 if __name__ == '__main__':

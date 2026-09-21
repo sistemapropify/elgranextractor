@@ -2,6 +2,14 @@
 import asyncio
 
 
+def portal_blocked(exc):
+    text = str(exc).lower()
+    return any(marker in text for marker in (
+        'detail.blocked', 'navigation.blocked', 'http 403', 'http 429',
+        'security verification', 'verify you are human', 'access denied',
+    ))
+
+
 def transient_failure(exc):
     seen = set()
     while exc is not None and id(exc) not in seen:
