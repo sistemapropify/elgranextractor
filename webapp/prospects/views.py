@@ -1052,8 +1052,10 @@ def prospect_dashboard(request):
             'id': prospect.pk,
             'lat': str(prospect.latitude) if prospect.latitude is not None else '',
             'lng': str(prospect.longitude) if prospect.longitude is not None else '',
-            'distrito': prospect.district or 'Sin distrito',
-            'distrito_nombre': prospect.district or 'Sin distrito',
+            # Conservar vacío cuando falta: el panel necesita distinguir un
+            # dato real del texto visual «Sin distrito» para marcar FALTA.
+            'distrito': prospect.district or '',
+            'distrito_nombre': prospect.district or '',
             'tipo_propiedad': prospect.get_property_type_display() or 'Prospección',
             # Valor crudo del tipo: en los terrenos los dormitorios no aplican.
             'tipo_raw': (prospect.property_type or '').strip().lower(),

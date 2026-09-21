@@ -1393,7 +1393,10 @@
         var img = (p.primera_imagen || '').replace(/"/g, '%22');
         var tit = (p.owner_name || p.titulo || ('Prospección #' + p.id)).toString().trim();
         var tipo = (p.tipo_propiedad || 'Prospección');
-        var dist = (p.distrito_nombre || p.distrito || '');
+        var dist = (p.distrito_nombre || p.distrito || '').toString().trim();
+        var distritoResumen = dist
+            ? ' · ' + escaparHtml(dist)
+            : ' · <span class="ppc-falta">FALTA DISTRITO</span>';
         var precio = (p.precio && String(p.precio).trim())
             ? ((p.moneda === 'PEN' ? 'S/ ' : '$ ') + p.precio) : '';
         return (
@@ -1405,8 +1408,7 @@
                         : '<div class="ppc-thumb ppc-thumb-empty">Sin foto</div>') +
                     '<div class="ppc-info">' +
                         '<div class="ppc-title">' + escaparHtml(tit) + '</div>' +
-                        '<div class="ppc-sub">' + escaparHtml(tipo) +
-                            (dist ? ' · ' + escaparHtml(dist) : '') + '</div>' +
+                        '<div class="ppc-sub">' + escaparHtml(tipo) + distritoResumen + '</div>' +
                         (precio ? '<div class="ppc-price">' + escaparHtml(precio) + '</div>' : '') +
                         ((p.telefono && String(p.telefono).trim())
                             ? '<div class="ppc-sub">Tel: ' + escaparHtml(p.telefono) + '</div>' : '') +
@@ -1428,7 +1430,7 @@
         // tarjeta está completa); si faltan, el título y FALTA parpadean en rojo.
         var ETIQUETAS_COMPLETAS = [
             'Propietario', 'Teléfono', 'Tipo', 'Operación', 'Contrato',
-            'Precio', 'Moneda', 'Dormitorios', 'Área'
+            'Precio', 'Moneda', 'Dormitorios', 'Área', 'Distrito'
         ];
         var esTerreno = esTerrenoProspecto(p);
         function fila(k, v) {
