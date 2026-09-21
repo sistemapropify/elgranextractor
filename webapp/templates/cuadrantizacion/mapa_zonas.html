@@ -347,7 +347,29 @@
 .propify-card-sub { color: var(--text-secondary, #8b949e); font-size: 12px; line-height: 1.25; }
 .propify-card-price { color: var(--accent-green-light, #3fb950); font-size: 13px; font-weight: 700; }
 .propify-card-m2 { color: #5eead4; font-size: 11px; font-weight: 700; }
+.propify-card-m2-usd { color: #f85149; margin-left: 4px; }
 .propify-card-code { color: var(--text-subtle, #6e7681); font-size: 10px; }
+.propify-card-areas {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 9px;
+}
+.propify-card-area {
+    padding: 6px 7px;
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 6px;
+    background: rgba(13, 17, 23, .55);
+}
+.propify-card-area-label {
+    display: block;
+    color: var(--text-secondary, #8b949e);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+}
+.propify-card-area-value { display: block; margin-top: 2px; font-size: 12px; font-weight: 700; }
+.propify-card-area-used { color: #3fb950; margin-left: 3px; }
 .propify-card-address {
     margin-top: 9px;
     padding-top: 8px;
@@ -1540,6 +1562,16 @@ function formatPropifyPricePerM2(value, currencySymbol) {
     }) + '/m²').trim();
 }
 
+function formatPropifyArea(value) {
+    if (value === null || value === undefined || value === '') return '';
+    var amount = Number(value);
+    if (!Number.isFinite(amount) || amount <= 0) return '';
+    return amount.toLocaleString('es-PE', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+    }) + ' m²';
+}
+
 function formatPropifyMarkerPrice(property) {
     if (property.is_rental) {
         return formatPropifyPrice(property.price, property.currency_symbol);
@@ -1596,6 +1628,30 @@ function showPropifyFloatingCard(property) {
     var pricePerM2 = property.is_rental
         ? ''
         : formatPropifyPricePerM2(property.price_per_m2, property.currency_symbol);
+    var pricePerM2Usd = property.price_per_m2_usd
+        ? formatPropifyPricePerM2(property.price_per_m2_usd, '$')
+        : '';
+    var areas = [];
+    if (property.built_area_m2) {
+        areas.push(
+            '<div class="propify-card-area">' +
+                '<span class="propify-card-area-label">Área construida</span>' +
+                '<span class="propify-card-area-value">' + formatPropifyArea(property.built_area_m2) +
+                    (property.area_used === 'built_area' ? '<span class="propify-card-area-used" title="Área usada para calcular el precio por m²">✓</span>' : '') +
+                '</span>' +
+            '</div>'
+        );
+    }
+    if (property.land_area_m2) {
+        areas.push(
+            '<div class="propify-card-area">' +
+                '<span class="propify-card-area-label">Área de terreno</span>' +
+                '<span class="propify-card-area-value">' + formatPropifyArea(property.land_area_m2) +
+                    (property.area_used === 'land_area' ? '<span class="propify-card-area-used" title="Área usada para calcular el precio por m²">✓</span>' : '') +
+                '</span>' +
+            '</div>'
+        );
+    }
 
     body.innerHTML =
         '<div class="propify-card-summary">' +
@@ -1605,10 +1661,13 @@ function showPropifyFloatingCard(property) {
                 '<div class="propify-card-sub">' + escapeMapHtml(property.operation_type) + ' · ' + escapeMapHtml(property.property_type) + '</div>' +
                 '<div class="propify-card-sub">' + escapeMapHtml(property.district) + '</div>' +
                 '<div class="propify-card-price">' + formatPropifyPrice(property.price, property.currency_symbol) + '</div>' +
-                (pricePerM2 ? '<div class="propify-card-m2">' + pricePerM2 + '</div>' : '') +
+                (pricePerM2 ? '<div class="propify-card-m2">' + pricePerM2 +
+                    (pricePerM2Usd ? '<span class="propify-card-m2-usd">(' + pricePerM2Usd + ')</span>' : '') +
+                    '</div>' : '') +
                 code +
             '</div>' +
         '</div>' +
+        (areas.length ? '<div class="propify-card-areas">' + areas.join('') + '</div>' : '') +
         address;
 
     var imageElement = body.querySelector('img');

@@ -29,6 +29,7 @@ from .services import (
 
 logger = logging.getLogger(__name__)
 PROPIFY_MEDIA_BASE_URL = 'https://propifymedia01.blob.core.windows.net/media'
+PEN_TO_USD_EXCHANGE_RATE = Decimal('3.44')
 
 
 class PrometeoSessionAuthentication(BaseAuthentication):
@@ -615,6 +616,25 @@ def _sale_price_per_m2(price, area, is_rental):
         return None
 
 
+def _price_per_m2_in_usd(price_per_m2, currency_id):
+    if price_per_m2 is None or currency_id == 1:
+        return None
+    try:
+        converted = Decimal(str(price_per_m2)) / PEN_TO_USD_EXCHANGE_RATE
+        if converted <= 0:
+            return None
+        return str(converted.quantize(Decimal('0.01')))
+    except (InvalidOperation, TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _positive_area(value):
+    try:
+        return value if value is not None and Decimal(str(value)) > 0 else None
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
 def _available_propify_properties():
     """Return visible Propify listings that are currently available and mapped."""
     from propifai.models import PropifaiProperty
@@ -726,11 +746,16 @@ def _available_propify_properties():
         operation_name = operation_type_map.get(row['operation_type_id'])
         operation_type, is_rental = _normalize_propify_operation(operation_name)
         specs = specs_map.get(row['id'], {})
+        land_area = _positive_area(specs.get('land_area'))
+        built_area = _positive_area(specs.get('built_area'))
         if 'terreno' in property_type.casefold():
-            area = specs.get('land_area') or specs.get('built_area')
+            area = land_area or built_area
+            area_source = 'land_area' if land_area else ('built_area' if built_area else None)
         else:
-            area = specs.get('built_area') or specs.get('land_area')
+            area = built_area or land_area
+            area_source = 'built_area' if built_area else ('land_area' if land_area else None)
         price_per_m2 = _sale_price_per_m2(price, area, is_rental)
+        price_per_m2_usd = _price_per_m2_in_usd(price_per_m2, row['currency_id'])
 
         image_path = image_map.get(row['id'])
         if image_path and str(image_path).startswith(('http://', 'https://')):
@@ -759,7 +784,10 @@ def _available_propify_properties():
             'image_url': image_url,
             'currency_symbol': '$' if row['currency_id'] == 1 else 'S/.',
             'price_per_m2': price_per_m2,
-            'area_m2': str(area) if area is not None else None,
+            'price_per_m2_usd': price_per_m2_usd,
+            'built_area_m2': str(built_area) if built_area is not None else None,
+            'land_area_m2': str(land_area) if land_area is not None else None,
+            'area_used': area_source if price_per_m2 is not None else None,
             'lat': latitude,
             'lng': longitude,
             'status': 'Disponible',

@@ -77,7 +77,10 @@ class AvailablePropifyPropertiesApiTests(SimpleTestCase):
             'image_url': 'https://example.test/casa.jpg',
             'currency_symbol': '$',
             'price_per_m2': '833.33',
-            'area_m2': '180.00',
+            'price_per_m2_usd': None,
+            'built_area_m2': '180.00',
+            'land_area_m2': '200.00',
+            'area_used': 'built_area',
             'lat': -16.35,
             'lng': -71.54,
             'status': 'Disponible',
@@ -120,6 +123,15 @@ class AvailablePropifyPropertiesApiTests(SimpleTestCase):
         self.assertEqual(
             views._sale_price_per_m2('150000.00', '100.00', is_rental=False),
             '1500.00',
+        )
+
+    def test_sol_price_per_square_meter_is_converted_at_fixed_rate(self):
+        self.assertEqual(
+            views._price_per_m2_in_usd('3440.00', currency_id=2),
+            '1000.00',
+        )
+        self.assertIsNone(
+            views._price_per_m2_in_usd('3440.00', currency_id=1)
         )
 
 
