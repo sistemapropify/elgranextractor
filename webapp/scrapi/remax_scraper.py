@@ -257,7 +257,9 @@ def estandarizar(prop, fecha_extraccion):
         "distrito": distrito,
         "departamento": normalizar_ubicacion(prop.get('Departamento')),
         "provincia": provincia,
-        "direccion_texto": (prop.get("Ubicacion Full") or "").strip() or None,
+        # The dashboard's Dirección column should contain the district for
+        # REMAX. Keep the original hierarchy in datos_crudos['Ubicacion Full'].
+        "direccion_texto": distrito,
         "descripcion": (prop.get("Descripcion") or "").strip() or None,
         "amenities": construir_amenities(prop) or None,
         "latitud": lat,

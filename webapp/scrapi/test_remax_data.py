@@ -76,12 +76,14 @@ class RemaxDataTests(unittest.TestCase):
             self.assertEqual(row['distrito'], 'Alto Selva Alegre')
             self.assertEqual(row['departamento'], 'Arequipa')
             self.assertEqual(row['provincia'], 'Arequipa')
-            self.assertEqual(row['direccion_texto'], raw['Ubicacion Full'])
+            self.assertEqual(row['direccion_texto'], 'Alto Selva Alegre')
+            self.assertEqual(row['datos_crudos']['Ubicacion Full'], raw['Ubicacion Full'])
             self.assertEqual(row['datos_crudos']['Distrito'], district)
 
     def test_district_fallback_requires_complete_location(self):
         row = estandarizar({'Ubicacion Full': 'Arequipa, Arequipa, Cayma'}, '2026-09-20')
         self.assertEqual(row['distrito'], 'Cayma')
+        self.assertEqual(row['direccion_texto'], 'Cayma')
         for location in ('Arequipa', 'Arequipa, Arequipa', ''):
             self.assertIsNone(estandarizar({'Ubicacion Full': location}, '2026-09-20')['distrito'])
 
