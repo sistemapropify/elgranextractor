@@ -1,7 +1,7 @@
 import json
 import math
 import uuid
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import logging
 logger = logging.getLogger(__name__)
 from django.shortcuts import render, get_object_or_404
@@ -10,13 +10,73 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.db import transaction
 from django.db.models import Q, F
-from django.db.utils import IntegrityError, OperationalError, ProgrammingError
+from django.db.utils import DataError, IntegrityError, OperationalError, ProgrammingError
 from django.utils import timezone
 from django.conf import settings
 from ingestas.models import PropiedadRaw
 from intelligence.models import User
 from .utils import haversine, calcular_precio_m2
 from .models import ACMLink, ACMTestProperty
+
+
+def _snapshot_decimal(value, *, max_digits, decimal_places, source_id, field_name):
+    """Return a SQL-safe decimal, dropping only the malformed field value."""
+    if value in (None, ''):
+        return None
+    try:
+        number = Decimal(str(value))
+        if not number.is_finite():
+            raise InvalidOperation
+        quantum = Decimal(1).scaleb(-decimal_places)
+        number = number.quantize(quantum, rounding=ROUND_HALF_UP)
+        limit = Decimal(10) ** (max_digits - decimal_places)
+        if abs(number) >= limit:
+            raise InvalidOperation
+        return number
+    except (InvalidOperation, TypeError, ValueError):
+        logger.warning(
+            'ACM test snapshot omitted invalid numeric value: source_id=%s field=%s value=%r',
+            source_id, field_name, value,
+        )
+        return None
+
+
+def _snapshot_integer(value, *, source_id, field_name):
+    if value in (None, ''):
+        return None
+    try:
+        number = int(value)
+        if not -(2 ** 31) <= number < 2 ** 31:
+            raise ValueError
+        return number
+    except (TypeError, ValueError, OverflowError):
+        logger.warning(
+            'ACM test snapshot omitted invalid integer value: source_id=%s field=%s value=%r',
+            source_id, field_name, value,
+        )
+        return None
+
+
+def _persist_snapshot_batch(rows):
+    """Insert a batch and isolate a corrupt legacy row instead of failing the page."""
+    if not rows:
+        return
+    try:
+        with transaction.atomic():
+            ACMTestProperty.objects.bulk_create(rows, batch_size=100)
+        return
+    except DataError:
+        logger.exception(
+            'ACM test snapshot batch rejected; retrying rows separately: first=%s last=%s count=%s',
+            rows[0].source_id, rows[-1].source_id, len(rows),
+        )
+
+    for row in rows:
+        try:
+            with transaction.atomic():
+                row.save(force_insert=True)
+        except DataError:
+            logger.exception('ACM test snapshot skipped corrupt row: source_id=%s', row.source_id)
 
 
 def _ensure_acm_test_snapshot():
@@ -32,23 +92,48 @@ def _ensure_acm_test_snapshot():
                 return
             rows = []
             for prop in PropiedadRaw.objects.iterator():
+                source_id = f'raw-{prop.pk}'
                 rows.append(ACMTestProperty(
-                    source_id=f'raw-{prop.pk}', source=prop.portal or '',
-                    tipo_propiedad=prop.tipo_propiedad or '', precio_usd=prop.precio_usd,
-                    precio_final_venta=prop.precio_final_venta, descripcion=prop.descripcion or '',
+                    source_id=source_id, source=prop.portal or '',
+                    tipo_propiedad=prop.tipo_propiedad or '',
+                    precio_usd=_snapshot_decimal(
+                        prop.precio_usd, max_digits=15, decimal_places=2,
+                        source_id=source_id, field_name='precio_usd',
+                    ),
+                    precio_final_venta=_snapshot_decimal(
+                        prop.precio_final_venta, max_digits=15, decimal_places=2,
+                        source_id=source_id, field_name='precio_final_venta',
+                    ),
+                    descripcion=prop.descripcion or '',
                     portal=prop.portal or '', url_propiedad=prop.url_propiedad or '',
                     coordenadas=prop.coordenadas or '', departamento=prop.departamento or '',
                     provincia=prop.provincia or '', distrito=prop.distrito or '',
-                    area_terreno=prop.area_terreno, area_construida=prop.area_construida,
-                    numero_habitaciones=prop.numero_habitaciones, numero_banos=prop.numero_banos,
-                    numero_cocheras=prop.numero_cocheras, imagenes_propiedad=prop.imagenes_propiedad or '',
+                    area_terreno=_snapshot_decimal(
+                        prop.area_terreno, max_digits=10, decimal_places=2,
+                        source_id=source_id, field_name='area_terreno',
+                    ),
+                    area_construida=_snapshot_decimal(
+                        prop.area_construida, max_digits=10, decimal_places=2,
+                        source_id=source_id, field_name='area_construida',
+                    ),
+                    numero_habitaciones=_snapshot_integer(
+                        prop.numero_habitaciones, source_id=source_id,
+                        field_name='numero_habitaciones',
+                    ),
+                    numero_banos=_snapshot_integer(
+                        prop.numero_banos, source_id=source_id, field_name='numero_banos',
+                    ),
+                    numero_cocheras=_snapshot_integer(
+                        prop.numero_cocheras, source_id=source_id, field_name='numero_cocheras',
+                    ),
+                    imagenes_propiedad=prop.imagenes_propiedad or '',
                     estado_propiedad=prop.estado_propiedad or '', datos_crudos={'source_pk': prop.pk},
                 ))
                 if len(rows) >= 1000:
-                    ACMTestProperty.objects.bulk_create(rows, batch_size=100)
+                    _persist_snapshot_batch(rows)
                     rows = []
             if rows:
-                ACMTestProperty.objects.bulk_create(rows, batch_size=100)
+                _persist_snapshot_batch(rows)
     except IntegrityError:
         # Another request may have committed the same unique source IDs first.
         # Any other integrity failure must remain visible instead of being hidden.
