@@ -858,7 +858,15 @@ def _available_scraped_properties(sources=('remax', 'properati')):
             currency_id = 1
 
         price_per_m2 = _sale_price_per_m2(price, area, is_rental)
-        price_per_m2_usd = _price_per_m2_in_usd(price_per_m2, currency_id)
+        # Use the portal's USD amount when it exists so every map label is
+        # directly comparable. Convert from soles only as a fallback.
+        price_per_m2_usd = _sale_price_per_m2(
+            row['precio_usd'], area, is_rental
+        )
+        if price_per_m2_usd is None:
+            price_per_m2_usd = _price_per_m2_in_usd(
+                price_per_m2, currency_id
+            )
         precision = (row['precision_ubicacion'] or 'desconocida').strip().casefold()
         precision_label = {
             'exacta': 'Exacta',

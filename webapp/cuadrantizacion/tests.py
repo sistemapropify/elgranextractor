@@ -65,6 +65,16 @@ class MapaZonasTemplateTests(SimpleTestCase):
         self.assertIn("className: 'propify-price-label'", self.source)
         self.assertIn("+ '/m²'", self.source)
 
+    def test_sale_marker_labels_always_use_usd_price_per_square_meter(self):
+        marker_formatter = self.source.split(
+            'function formatPropifyMarkerPrice(property) {'
+        )[1].split('\n}', 1)[0]
+
+        self.assertIn('property.price_per_m2_usd ||', marker_formatter)
+        self.assertIn("property.currency_symbol === '$'", marker_formatter)
+        self.assertIn("usdPricePerM2, 'US$'", marker_formatter)
+        self.assertNotIn('property.price_per_m2, property.currency_symbol', marker_formatter)
+
     def test_save_error_parser_accepts_html_server_errors(self):
         self.assertIn('function parseJsonResponse(response)', self.source)
         self.assertIn("El servidor respondió ' + response.status", self.source)
