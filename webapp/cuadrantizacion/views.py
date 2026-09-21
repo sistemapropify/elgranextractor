@@ -784,6 +784,7 @@ def _available_propify_properties():
             'is_rental': is_rental,
             'district': district_map.get(row['district_id']) or 'Sin distrito',
             'image_url': image_url,
+            'url': None,
             'currency_symbol': '$' if row['currency_id'] == 1 else 'S/.',
             'price_per_m2': price_per_m2,
             'price_per_m2_usd': price_per_m2_usd,
@@ -816,6 +817,7 @@ def _available_scraped_properties(sources=('remax', 'properati')):
             'tipo_operacion', 'precio_soles', 'precio_usd', 'area_m2',
             'distrito', 'direccion_texto', 'latitud', 'longitud',
             'precision_ubicacion', 'imagen_url',
+            'url',
         )
         .order_by('fuente', 'id')
     )
@@ -877,6 +879,7 @@ def _available_scraped_properties(sources=('remax', 'properati')):
             'is_rental': is_rental,
             'district': row['distrito'] or 'Sin distrito',
             'image_url': row['imagen_url'] or None,
+            'url': row['url'] if str(row['url'] or '').startswith(('http://', 'https://')) else None,
             'currency_symbol': currency_symbol,
             'price_per_m2': price_per_m2,
             'price_per_m2_usd': price_per_m2_usd,

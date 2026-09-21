@@ -410,6 +410,24 @@
     font-size: 11px;
     line-height: 1.35;
 }
+.propify-card-actions { margin-top: 9px; }
+.propify-card-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 8px;
+    border: 1px solid #15b8a6;
+    border-radius: 6px;
+    background: rgba(21, 184, 166, .12);
+    color: #5eead4;
+    font-size: 10px;
+    font-weight: 700;
+    text-decoration: none;
+}
+.propify-card-open:hover {
+    background: rgba(21, 184, 166, .22);
+    color: #ffffff;
+}
 
 .propify-price-label {
     padding: 2px 5px !important;
@@ -1691,6 +1709,10 @@ function showPropifyFloatingCard(property) {
     var address = property.address
         ? '<div class="propify-card-address">' + escapeMapHtml(property.address) + '</div>'
         : '';
+    var publicationLink = property.url
+        ? '<div class="propify-card-actions"><a class="propify-card-open" href="' +
+            escapeMapHtml(property.url) + '" target="_blank" rel="noopener noreferrer">Abrir publicación ↗</a></div>'
+        : '';
     var pricePerM2 = property.is_rental
         ? ''
         : formatPropifyPricePerM2(property.price_per_m2, property.currency_symbol);
@@ -1735,7 +1757,8 @@ function showPropifyFloatingCard(property) {
             '</div>' +
         '</div>' +
         (areas.length ? '<div class="propify-card-areas">' + areas.join('') + '</div>' : '') +
-        address;
+        address +
+        publicationLink;
 
     var imageElement = body.querySelector('img');
     if (imageElement) {

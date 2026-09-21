@@ -69,6 +69,11 @@ class MapaZonasTemplateTests(SimpleTestCase):
         self.assertIn('function parseJsonResponse(response)', self.source)
         self.assertIn("El servidor respondió ' + response.status", self.source)
 
+    def test_property_card_can_open_the_original_publication(self):
+        self.assertIn('propify-card-open', self.source)
+        self.assertIn('Abrir publicación', self.source)
+        self.assertIn('rel="noopener noreferrer"', self.source)
+
     def test_parent_options_follow_the_selected_hierarchy_level(self):
         self.assertIn("cuadrante: 'subzona'", self.source)
         self.assertIn("zona: 'distrito'", self.source)
