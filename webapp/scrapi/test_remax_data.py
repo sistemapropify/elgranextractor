@@ -37,6 +37,7 @@ class RemaxDataTests(unittest.TestCase):
             self.assertEqual(rows[0]['Area Ocupada'], '100.00 m²')
             self.assertEqual(rows[0]['Oficina'], 'REMAX ADELANTE')
             self.assertEqual(rows[0]['Agente'], 'Said Lelis Retamozo Chullo')
+            self.assertEqual(rows[0]['Distrito'], 'Alto Selva Alegre')
 
     def test_real_listing_to_persistence_row(self):
         raw = {'ID': '1198201', 'Tipo': 'DEPARTAMENTO FLAT EN ALQUILER',
@@ -50,6 +51,8 @@ class RemaxDataTests(unittest.TestCase):
         self.assertEqual((row['precio_soles'], row['precio_usd']), (1400, 416))
         self.assertEqual((row['area_m2'], row['dormitorios'], row['banos'], row['estacionamientos']), (100, 3, 2, 0))
         self.assertEqual(row['departamento'], 'Arequipa')
+        self.assertEqual(row['provincia'], 'Arequipa')
+        self.assertEqual(row['distrito'], 'Alto Selva Alegre')
         self.assertEqual(row['precision_ubicacion'], 'exacta')
         self.assertIn('Said Lelis', row['agencia_agente'])
         self.assertNotIn('Cochera', row['amenities'] or '')
@@ -58,6 +61,26 @@ class RemaxDataTests(unittest.TestCase):
     def test_currency_prefix_and_millions(self):
         self.assertEqual(limpiar_precio("S/. 1'306,500.00"), 1306500)
         self.assertEqual(limpiar_precio('USD 416.00'), 416)
+
+    def test_full_location_in_district_is_cleaned_before_persistence(self):
+        for district in ('Arequipa, Arequipa, Alto Selva Alegre',
+                         ' Arequipa, Arequipa, Alto Selva Alegre, ',
+                         'Alto Selva Alegre'):
+            raw = {'ID': '1198201', 'Distrito': district,
+                   'Departamento': 'Arequipa', 'Provincia': 'Arequipa',
+                   'Ubicacion Full': 'Arequipa, Arequipa, Alto Selva Alegre'}
+            row = normalize('remax', remax_scraper, raw)
+            self.assertEqual(row['distrito'], 'Alto Selva Alegre')
+            self.assertEqual(row['departamento'], 'Arequipa')
+            self.assertEqual(row['provincia'], 'Arequipa')
+            self.assertEqual(row['direccion_texto'], raw['Ubicacion Full'])
+            self.assertEqual(row['datos_crudos']['Distrito'], district)
+
+    def test_district_fallback_requires_complete_location(self):
+        row = estandarizar({'Ubicacion Full': 'Arequipa, Arequipa, Cayma'}, '2026-09-20')
+        self.assertEqual(row['distrito'], 'Cayma')
+        for location in ('Arequipa', 'Arequipa, Arequipa', ''):
+            self.assertIsNone(estandarizar({'Ubicacion Full': location}, '2026-09-20')['distrito'])
 
     def test_marker_instead_of_map_center(self):
         script = "var map = L.map('map_property').setView([-12,-77],17); L.marker([-16.38,-71.52],{icon:greenIcon}).addTo(map);"

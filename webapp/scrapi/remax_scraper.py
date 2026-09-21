@@ -166,6 +166,20 @@ def normalizar_ubicacion(texto):
     return texto.strip().title()
 
 
+def normalizar_distrito(prop):
+    """REMAX orders its location as departamento, provincia, distrito.
+
+    Normalize again at the output boundary so resumed/older raw candidates
+    cannot persist the whole location in the district column.
+    """
+    parts = [part.strip() for part in (prop.get('Distrito') or '').split(',') if part.strip()]
+    if parts:
+        return normalizar_ubicacion(parts[-1])
+    location = [part.strip() for part in (prop.get('Ubicacion Full') or '').split(',') if part.strip()]
+    # A shorter general location is not evidence of a district.
+    return normalizar_ubicacion(location[-1]) if len(location) >= 3 else None
+
+
 def parsear_antiguedad(texto):
     if not texto:
         return None
@@ -217,7 +231,7 @@ def estandarizar(prop, fecha_extraccion):
     tipo_raw = prop.get("Tipo", "")
     tipo_inmueble = clasificar_tipo_inmueble(tipo_raw)
     operacion = clasificar_operacion(tipo_raw)
-    distrito = normalizar_ubicacion(prop.get("Distrito"))
+    distrito = normalizar_distrito(prop)
     provincia = normalizar_ubicacion(prop.get("Provincia"))
     try:
         lat, lng = float(prop.get('Latitud')), float(prop.get('Longitud'))
@@ -386,7 +400,7 @@ async def extraer_listado(page):
             tel_m    = re.search(r'wa\.me\/(\d+)', wa_href) if wa_href else None
             ubic_raw = (await ubic_els[0].inner_text()) if ubic_els else ''
             ubic     = re.sub(r'\s+', ' ', ubic_raw).strip()
-            parts    = [s.strip() for s in ubic.split(',')]
+            parts    = [s.strip() for s in ubic.split(',') if s.strip()]
 
             # Convertir URL relativa a absoluta
             href_raw = await link_el.get_attribute('href') if link_el else ''
@@ -404,7 +418,7 @@ async def extraer_listado(page):
                 'Precio USD':       next((v for v in precios if re.match(r'^(USD|US\$|\$)', v, re.I)), ''),
                 'Departamento':     parts[0] if len(parts) > 0 else '',
                 'Provincia':        parts[1] if len(parts) > 1 else '',
-                'Distrito':         parts[2] if len(parts) > 2 else '',
+                'Distrito':         parts[-1] if len(parts) > 2 else '',
                 'Ubicacion Full':   ubic,
                 'Oficina':          agency_lines[0] if len(agency_lines) > 1 else '',
                 'Agente':           ' '.join(agency_lines[1:]) if len(agency_lines) > 1 else '',
