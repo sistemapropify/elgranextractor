@@ -1,5 +1,7 @@
 import unittest
 import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from bs4 import BeautifulSoup
 from scrapi.remax_scraper import estandarizar, limpiar_precio, coordenadas_marcador
 from scrapi import remax_scraper
@@ -8,28 +10,18 @@ from scrapi.paged_engine import normalize
 
 class RemaxDataTests(unittest.TestCase):
     def test_grid_and_list_cards_preserve_currency_area_and_agent(self):
-        class Element:
-            def __init__(self, node):
-                self.node = node
-            async def query_selector(self, selector):
-                node = self.node.select_one(selector)
-                return Element(node) if node else None
-            async def query_selector_all(self, selector):
-                return [Element(node) for node in self.node.select(selector)]
-            async def inner_text(self):
-                return self.node.get_text()
-            async def get_attribute(self, name):
-                return self.node.get(name)
         for layout in ('__propiedadgen', '__propiedadgen2'):
             html = '''<div class="LAYOUT"><span class="badge-danger-xs">ID: 1198201</span>
             <div class="__imagen"><a href="/web/search/property/1198201/"><img src="/cover.jpg"></a></div>
             <span class="badge-blue-xs">DEPARTAMENTO FLAT EN ALQUILER</span>
             <div class="__casventap"><li>USD 416.00</li><li>-</li><li>S/. 1,400.00</li></div>
             <div class="__casadat"><h5>Arequipa, Arequipa, Alto Selva Alegre</h5>
-            <h5>REMAX ADELANTE\nSaid Lelis Retamozo Chullo</h5></div>
+            <h5>REMAX ADELANTE<br>Said Lelis Retamozo Chullo</h5></div>
             <div class="__icofeat"><p>Área Construida : <strong>100.00 m²</strong></p></div>
             <div class="__icofeat"><p>Área Ocupada : <strong>100.00 m²</strong></p></div></div>'''.replace('LAYOUT', layout)
-            rows = asyncio.run(remax_scraper.extraer_listado(Element(BeautifulSoup(html, 'html.parser'))))
+            page = SimpleNamespace(content=AsyncMock(return_value=html))
+            rows = asyncio.run(remax_scraper.extraer_listado(page))
+            page.content.assert_awaited_once()
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]['Precio S/.'], 'S/. 1,400.00')
             self.assertEqual(rows[0]['Precio USD'], 'USD 416.00')
@@ -38,6 +30,17 @@ class RemaxDataTests(unittest.TestCase):
             self.assertEqual(rows[0]['Oficina'], 'REMAX ADELANTE')
             self.assertEqual(rows[0]['Agente'], 'Said Lelis Retamozo Chullo')
             self.assertEqual(rows[0]['Distrito'], 'Alto Selva Alegre')
+
+    def test_forty_cards_use_one_browser_read(self):
+        html = ''.join(
+            f'<div class="__propiedadgen2"><span class="badge-danger-xs">{i}</span>'
+            f'<div class="__imagen"><a href="/web/search/property/{i}/"></a></div></div>'
+            for i in range(40))
+        page = SimpleNamespace(content=AsyncMock(return_value=html))
+        rows = asyncio.run(remax_scraper.extraer_listado(page))
+        self.assertEqual(len(rows), 40)
+        self.assertEqual(len({row['ID'] for row in rows}), 40)
+        page.content.assert_awaited_once()
 
     def test_real_listing_to_persistence_row(self):
         raw = {'ID': '1198201', 'Tipo': 'DEPARTAMENTO FLAT EN ALQUILER',

@@ -5,6 +5,7 @@ import openpyxl
 import signal
 import sys
 import logging
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 from datetime import datetime
@@ -360,32 +361,38 @@ async def navegar_con_cloudflare(page, url, timeout=30):
 
 
 async def extraer_listado(page):
-    """Extrae propiedades de la pagina de listado actual con los selectores originales."""
+    """Read one DOM snapshot instead of thousands of remote element operations."""
+    html = await page.content()
+    return await asyncio.to_thread(parsear_listado_html, html)
+
+
+def parsear_listado_html(html):
+    """Parse the rendered grid/list using the same selectors and field mapping."""
     props = []
-    cards = await page.query_selector_all('.__propiedadgen, .__propiedadgen2')
+    cards = BeautifulSoup(html, 'html.parser').select('.__propiedadgen, .__propiedadgen2')
 
     for card in cards:
         try:
-            id_el    = await card.query_selector('.badge-danger-xs')
-            link_el  = await card.query_selector('.__imagen a')
-            img_el   = await card.query_selector('.__imagen img')
-            tipo_el  = await card.query_selector('.badge-blue-xs')
-            wa_el    = await card.query_selector('.__agenteproint a[href*="wa.me"]')
-            precio_els = await card.query_selector_all('.__casventap li')
-            ubic_els   = await card.query_selector_all('.__casadat h5')
+            id_el    = card.select_one('.badge-danger-xs')
+            link_el  = card.select_one('.__imagen a')
+            img_el   = card.select_one('.__imagen img')
+            tipo_el  = card.select_one('.badge-blue-xs')
+            wa_el    = card.select_one('.__agenteproint a[href*="wa.me"]')
+            precio_els = card.select('.__casventap li')
+            ubic_els   = card.select('.__casadat h5')
 
             precios = []
             for p in precio_els:
-                t = (await p.inner_text()).strip()
+                t = p.get_text(' ', strip=True)
                 if t != '-':
                     precios.append(t)
 
             feats = {}
-            feat_els = await card.query_selector_all('.__icofeat')
+            feat_els = card.select('.__icofeat')
             for f in feat_els:
-                p_el = await f.query_selector('p')
+                p_el = f.select_one('p')
                 if p_el:
-                    txt = (await p_el.inner_text()).strip()
+                    txt = p_el.get_text(' ', strip=True)
                     m = re.match(r'(.+?)\s*:\s*(.+)', txt)
                     if m:
                         feats[_sin_acentos(m.group(1).strip())] = m.group(2).strip()
@@ -393,27 +400,27 @@ async def extraer_listado(page):
             def feature(name):
                 return feats.get(_sin_acentos(name), '')
 
-            agency_lines = (await ubic_els[1].inner_text()).strip().splitlines() if len(ubic_els) > 1 else []
+            agency_lines = ubic_els[1].get_text('\n', strip=True).splitlines() if len(ubic_els) > 1 else []
             agency_lines = [line.strip() for line in agency_lines if line.strip()]
 
-            wa_href  = await wa_el.get_attribute('href') if wa_el else ''
+            wa_href  = wa_el.get('href', '') if wa_el else ''
             tel_m    = re.search(r'wa\.me\/(\d+)', wa_href) if wa_href else None
-            ubic_raw = (await ubic_els[0].inner_text()) if ubic_els else ''
+            ubic_raw = ubic_els[0].get_text(' ', strip=True) if ubic_els else ''
             ubic     = re.sub(r'\s+', ' ', ubic_raw).strip()
             parts    = [s.strip() for s in ubic.split(',') if s.strip()]
 
             # Convertir URL relativa a absoluta
-            href_raw = await link_el.get_attribute('href') if link_el else ''
+            href_raw = link_el.get('href', '') if link_el else ''
             if href_raw and href_raw.startswith('/'):
                 href_raw = SITE_DOMAIN + href_raw
 
-            img_src = await img_el.get_attribute('src') if img_el else ''
+            img_src = img_el.get('src', '') if img_el else ''
             if img_src and img_src.startswith('/'):
                 img_src = SITE_DOMAIN + img_src
 
             props.append({
-                'ID':               (await id_el.inner_text()).strip() if id_el else '',
-                'Tipo':             (await tipo_el.inner_text()).strip() if tipo_el else '',
+                'ID':               id_el.get_text(' ', strip=True) if id_el else '',
+                'Tipo':             tipo_el.get_text(' ', strip=True) if tipo_el else '',
                 'Precio S/.':       next((v for v in precios if re.match(r'^(S/|PEN)', v, re.I)), ''),
                 'Precio USD':       next((v for v in precios if re.match(r'^(USD|US\$|\$)', v, re.I)), ''),
                 'Departamento':     parts[0] if len(parts) > 0 else '',
@@ -448,7 +455,8 @@ async def extraer_listado(page):
                 'WhatsApp Link':    wa_href,
             })
         except Exception as e:
-            print(f"  [WARN] Error en card: {e}")
+            # A silently skipped card must never certify complete coverage.
+            raise RuntimeError(f'listing.card_failed: {e}') from e
 
     return props
 

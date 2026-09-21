@@ -262,11 +262,26 @@ async def crawl_pages(portal, source_url, source, page, detail_page, *, emit,
     next_url = page_url(portal, source_url, start_page)
     for n in range(max(1, start_page), max_pages + 1):
         await navigate(page, source, portal, next_url, emit)
-        props = await source.extraer_listado(page)
+        extraction_started = time.monotonic()
+        await emit(event='listing.extraction_started', page=n,
+                   message=f'{portal}: leyendo tarjetas de página {n}', effective_url=page.url)
+        try:
+            props = await asyncio.wait_for(source.extraer_listado(page), timeout=90)
+        except ScrapingInterrupted:
+            raise
+        except Exception as exc:
+            await emit(event='listing.extraction_failed', level='error', page=n,
+                       effective_url=page.url, error_type=type(exc).__name__,
+                       duration_ms=int((time.monotonic() - extraction_started) * 1000),
+                       message=f'{portal}: error leyendo página {n}: {exc or "tiempo límite de 90 s agotado"}; avance anterior conservado')
+            raise
+        await emit(event='listing.extraction_finished', page=n, raw_rows=len(props),
+                   duration_ms=int((time.monotonic() - extraction_started) * 1000),
+                   message=f'{portal}: lectura de página {n} terminada, {len(props)} tarjetas')
         unique, invalid, duplicates = unique_items(props)
         for raw in unique.values():
             raw['_source_url'] = source_url
-        state = await page.evaluate(PAGINATION_JS)
+        state = await asyncio.wait_for(page.evaluate(PAGINATION_JS), timeout=30)
         stats.final_url = page.url
         signature = tuple(sorted(unique))
         effective_number = parse_qs(urlsplit(page.url).query).get('page', [str(n)])[0]
