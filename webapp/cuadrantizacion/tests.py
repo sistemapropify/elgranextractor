@@ -75,6 +75,15 @@ class MapaZonasTemplateTests(SimpleTestCase):
         self.assertIn("usdPricePerM2, 'US$'", marker_formatter)
         self.assertNotIn('property.price_per_m2, property.currency_symbol', marker_formatter)
 
+    def test_area_selector_lists_all_filtered_properties_inside_rectangle(self):
+        self.assertIn('id="select-properties-area"', self.source)
+        self.assertIn('id="property-area-select-surface"', self.source)
+        self.assertIn('function propertiesInsideSelectedArea()', self.source)
+        self.assertIn('propertyAreaSelectionBounds.contains', self.source)
+        self.assertIn('filteredPropifyProperties().filter', self.source)
+        self.assertIn('function showPropertyAreaCards(properties)', self.source)
+        self.assertIn("properties.map(propertyAreaCardHtml).join('')", self.source)
+
     def test_save_error_parser_accepts_html_server_errors(self):
         self.assertIn('function parseJsonResponse(response)', self.source)
         self.assertIn("El servidor respondió ' + response.status", self.source)
@@ -87,7 +96,10 @@ class MapaZonasTemplateTests(SimpleTestCase):
     def test_parent_options_follow_the_selected_hierarchy_level(self):
         self.assertIn("cuadrante: 'subzona'", self.source)
         self.assertIn("zona: 'distrito'", self.source)
-        self.assertIn("'?nivel=' + encodeURIComponent(parentLevel)", self.source)
+        self.assertIn(
+            "'/cuadrantizacion/zonas/?nivel=' + encodeURIComponent(parentLevel)",
+            self.source,
+        )
         self.assertIn("levelSelect.addEventListener('change'", self.source)
 
 

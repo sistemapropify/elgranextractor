@@ -311,6 +311,112 @@
     background: rgba(21, 184, 166, .12);
 }
 
+.property-area-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 6px;
+}
+
+.property-area-button {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 8px;
+    border: 1px solid #15b8a6;
+    border-radius: 6px;
+    background: rgba(21, 184, 166, .12);
+    color: #5eead4;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.property-area-button:hover,
+.property-area-button.active {
+    background: #0d9488;
+    color: #fff;
+}
+
+.property-area-button.secondary {
+    flex: 0 0 auto;
+    border-color: var(--border-color, #30363d);
+    background: var(--bg-secondary, #161b22);
+    color: var(--text-secondary, #8b949e);
+}
+
+.property-area-button[hidden] { display: none; }
+
+.property-area-select-surface {
+    position: absolute;
+    inset: 0;
+    z-index: 90;
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.property-area-select-surface[hidden] { display: none; }
+
+.property-area-drag-box {
+    position: absolute;
+    display: none;
+    border: 2px solid #14b8a6;
+    background: rgba(20, 184, 166, .2);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, .5) inset;
+    pointer-events: none;
+}
+
+.property-area-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: min(62vh, 520px);
+    overflow-y: auto;
+}
+
+.property-area-card {
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 9px;
+    padding: 8px;
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 8px;
+    background: rgba(13, 17, 23, .52);
+}
+
+.property-area-card__thumb {
+    width: 62px;
+    height: 62px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: var(--bg-primary, #0d1117);
+}
+
+.property-area-card__portal {
+    color: #5eead4;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.property-area-card__title {
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.property-area-card__meta {
+    margin-top: 3px;
+    color: var(--text-secondary, #8b949e);
+    font-size: 10px;
+}
+
+.property-area-card__price {
+    margin-top: 4px;
+    color: #3fb950;
+    font-size: 11px;
+    font-weight: 800;
+}
+
 .propify-floating-card {
     position: absolute;
     top: 76px;
@@ -818,6 +924,9 @@ window.onGoogleMapsLoaded = function() {
     <div class="map-main">
         <div id="map-container">
             <div id="map"></div>
+            <div class="property-area-select-surface" id="property-area-select-surface" hidden aria-label="Arrastra para seleccionar propiedades">
+                <div class="property-area-drag-box" id="property-area-drag-box"></div>
+            </div>
 
             <!-- Controles del mapa -->
             <div class="map-controls" id="map-controls">
@@ -912,6 +1021,10 @@ window.onGoogleMapsLoaded = function() {
                     <select id="propify-district-filter" aria-label="Filtrar por distrito">
                         <option value="">Todos los distritos</option>
                     </select>
+                    <div class="property-area-actions">
+                        <button type="button" class="property-area-button" id="select-properties-area">▱ Seleccionar área</button>
+                        <button type="button" class="property-area-button secondary" id="clear-properties-area" hidden>Limpiar</button>
+                    </div>
                 </div>
 
                 <div class="legend">
@@ -1040,6 +1153,9 @@ let propifyPropertyMarkers = [];
 let propifyPropertiesLoaded = false;
 let propifyProperties = [];
 let propifyPropertiesRequest = null;
+let propertyAreaProjection = null;
+let propertyAreaSelectionBounds = null;
+let propertyAreaSelectionRectangle = null;
 
 const PROPIFY_MARKER_ICON = "{% static 'requerimientos/data/Pin-propify.png' %}";
 const REMAX_MARKER_ICON = "{% static 'requerimientos/data/pin-remax.png' %}";
@@ -1203,6 +1319,7 @@ function initMap() {
     loadDistricts();
     setupZoneHierarchySelector();
     setupPropifyPropertyLayer();
+    setupPropertyAreaSelection();
 
     // Configurar búsqueda de dirección
     setupAddressSearch();
@@ -1600,7 +1717,7 @@ function setupPropifyPropertyLayer() {
         propifyPropertyMarkers.forEach(function(marker) {
             marker.setMap(toggle.checked ? map : null);
         });
-        if (!toggle.checked) closePropifyFloatingCard();
+        if (!toggle.checked) clearPropertyAreaSelection();
     });
 
     sourceFilters.forEach(function(filter) {
@@ -1693,6 +1810,198 @@ function filteredPropifyProperties() {
 function closePropifyFloatingCard() {
     var card = document.getElementById('propify-floating-card');
     if (card) card.hidden = true;
+}
+
+function propertyAreaCardHtml(property) {
+    var image = property.image_url
+        ? '<img class="property-area-card__thumb" src="' + escapeMapHtml(property.image_url) + '" alt="" loading="lazy" decoding="async">'
+        : '<div class="property-area-card__thumb propify-card-thumb--empty">Sin foto</div>';
+    var markerPrice = formatPropifyMarkerPrice(property);
+    var link = property.url
+        ? '<a class="propify-card-open" href="' + escapeMapHtml(property.url) + '" target="_blank" rel="noopener noreferrer">Abrir publicación ↗</a>'
+        : '';
+
+    return '<article class="property-area-card">' +
+        image +
+        '<div>' +
+            '<div class="property-area-card__portal">' + escapeMapHtml(property.source || 'Propiedad') + '</div>' +
+            '<div class="property-area-card__title">' + escapeMapHtml(property.title || property.code || 'Propiedad disponible') + '</div>' +
+            '<div class="property-area-card__meta">' + escapeMapHtml(property.operation_type) + ' · ' +
+                escapeMapHtml(property.property_type) + ' · ' + escapeMapHtml(property.district) + '</div>' +
+            '<div class="property-area-card__price">' +
+                (markerPrice || formatPropifyPrice(property.price, property.currency_symbol)) + '</div>' +
+            (link ? '<div class="propify-card-actions">' + link + '</div>' : '') +
+        '</div>' +
+    '</article>';
+}
+
+function propertiesInsideSelectedArea() {
+    if (!propertyAreaSelectionBounds) return [];
+    return filteredPropifyProperties().filter(function(property) {
+        var lat = Number(property.lat);
+        var lng = Number(property.lng);
+        return Number.isFinite(lat) && Number.isFinite(lng) &&
+            propertyAreaSelectionBounds.contains(new google.maps.LatLng(lat, lng));
+    });
+}
+
+function showPropertyAreaCards(properties) {
+    var card = document.getElementById('propify-floating-card');
+    var body = document.getElementById('propify-floating-card-body');
+    var source = document.getElementById('propify-floating-card-source');
+    if (!card || !body) return;
+
+    if (source) {
+        source.textContent = properties.length + (properties.length === 1
+            ? ' propiedad en el área'
+            : ' propiedades en el área');
+    }
+    body.innerHTML = properties.length
+        ? '<div class="property-area-card-list">' + properties.map(propertyAreaCardHtml).join('') + '</div>'
+        : '<div class="propify-card-sub">No hay propiedades visibles dentro del área seleccionada.</div>';
+    card.hidden = false;
+}
+
+function refreshPropertyAreaSelectionResults() {
+    if (!propertyAreaSelectionBounds) return;
+    showPropertyAreaCards(propertiesInsideSelectedArea());
+}
+
+function clearPropertyAreaSelection() {
+    propertyAreaSelectionBounds = null;
+    if (propertyAreaSelectionRectangle) {
+        propertyAreaSelectionRectangle.setMap(null);
+        propertyAreaSelectionRectangle = null;
+    }
+    var surface = document.getElementById('property-area-select-surface');
+    var dragBox = document.getElementById('property-area-drag-box');
+    var selectButton = document.getElementById('select-properties-area');
+    var clearButton = document.getElementById('clear-properties-area');
+    if (surface) surface.hidden = true;
+    if (dragBox) dragBox.style.display = 'none';
+    if (selectButton) selectButton.classList.remove('active');
+    if (clearButton) clearButton.hidden = true;
+    closePropifyFloatingCard();
+}
+
+function setupPropertyAreaSelection() {
+    var surface = document.getElementById('property-area-select-surface');
+    var dragBox = document.getElementById('property-area-drag-box');
+    var selectButton = document.getElementById('select-properties-area');
+    var clearButton = document.getElementById('clear-properties-area');
+    if (!surface || !dragBox || !selectButton || !clearButton) return;
+
+    propertyAreaProjection = new google.maps.OverlayView();
+    propertyAreaProjection.onAdd = function() {};
+    propertyAreaProjection.draw = function() {};
+    propertyAreaProjection.onRemove = function() {};
+    propertyAreaProjection.setMap(map);
+
+    selectButton.addEventListener('click', function() {
+        if (!surface.hidden) {
+            surface.hidden = true;
+            selectButton.classList.remove('active');
+            dragBox.style.display = 'none';
+            return;
+        }
+        if (window.__polyTool && window.__polyTool.isActive()) window.__polyTool.cancel();
+        if (propertyAreaSelectionRectangle) {
+            propertyAreaSelectionRectangle.setMap(null);
+            propertyAreaSelectionRectangle = null;
+        }
+        propertyAreaSelectionBounds = null;
+        closePropifyFloatingCard();
+        clearButton.hidden = true;
+        surface.hidden = false;
+        selectButton.classList.add('active');
+        showAlert('Arrastra un rectángulo sobre el mapa. Se mostrarán todas las propiedades dentro del área.', 'info');
+    });
+
+    clearButton.addEventListener('click', clearPropertyAreaSelection);
+
+    surface.addEventListener('pointerdown', function(event) {
+        if (event.button !== undefined && event.button !== 0) return;
+        event.preventDefault();
+        var surfaceRect = surface.getBoundingClientRect();
+        var startX = event.clientX - surfaceRect.left;
+        var startY = event.clientY - surfaceRect.top;
+        dragBox.style.display = 'block';
+        dragBox.style.left = startX + 'px';
+        dragBox.style.top = startY + 'px';
+        dragBox.style.width = '0';
+        dragBox.style.height = '0';
+        surface.setPointerCapture(event.pointerId);
+
+        function move(moveEvent) {
+            var currentX = Math.max(0, Math.min(surfaceRect.width, moveEvent.clientX - surfaceRect.left));
+            var currentY = Math.max(0, Math.min(surfaceRect.height, moveEvent.clientY - surfaceRect.top));
+            dragBox.style.left = Math.min(startX, currentX) + 'px';
+            dragBox.style.top = Math.min(startY, currentY) + 'px';
+            dragBox.style.width = Math.abs(currentX - startX) + 'px';
+            dragBox.style.height = Math.abs(currentY - startY) + 'px';
+        }
+
+        function stop(stopEvent) {
+            surface.releasePointerCapture(stopEvent.pointerId);
+            surface.removeEventListener('pointermove', move);
+            surface.removeEventListener('pointerup', stop);
+            surface.removeEventListener('pointercancel', cancel);
+            var endX = Math.max(0, Math.min(surfaceRect.width, stopEvent.clientX - surfaceRect.left));
+            var endY = Math.max(0, Math.min(surfaceRect.height, stopEvent.clientY - surfaceRect.top));
+            var width = Math.abs(endX - startX);
+            var height = Math.abs(endY - startY);
+            dragBox.style.display = 'none';
+
+            if (width < 8 || height < 8) {
+                showAlert('Arrastra un área un poco más grande para seleccionar propiedades.', 'warning');
+                return;
+            }
+
+            var projection = propertyAreaProjection && propertyAreaProjection.getProjection();
+            if (!projection) {
+                showAlert('El mapa todavía está cargando. Intenta seleccionar el área nuevamente.', 'warning');
+                return;
+            }
+            var first = projection.fromContainerPixelToLatLng(
+                new google.maps.Point(Math.min(startX, endX), Math.min(startY, endY))
+            );
+            var second = projection.fromContainerPixelToLatLng(
+                new google.maps.Point(Math.max(startX, endX), Math.max(startY, endY))
+            );
+            propertyAreaSelectionBounds = new google.maps.LatLngBounds();
+            propertyAreaSelectionBounds.extend(first);
+            propertyAreaSelectionBounds.extend(second);
+            propertyAreaSelectionRectangle = new google.maps.Rectangle({
+                map: map,
+                bounds: propertyAreaSelectionBounds,
+                clickable: false,
+                fillColor: '#14b8a6',
+                fillOpacity: 0.14,
+                strokeColor: '#14b8a6',
+                strokeOpacity: 1,
+                strokeWeight: 2,
+                zIndex: 450
+            });
+            surface.hidden = true;
+            selectButton.classList.remove('active');
+            clearButton.hidden = false;
+            refreshPropertyAreaSelectionResults();
+        }
+
+        function cancel(cancelEvent) {
+            if (surface.hasPointerCapture(cancelEvent.pointerId)) {
+                surface.releasePointerCapture(cancelEvent.pointerId);
+            }
+            surface.removeEventListener('pointermove', move);
+            surface.removeEventListener('pointerup', stop);
+            surface.removeEventListener('pointercancel', cancel);
+            dragBox.style.display = 'none';
+        }
+
+        surface.addEventListener('pointermove', move);
+        surface.addEventListener('pointerup', stop);
+        surface.addEventListener('pointercancel', cancel);
+    });
 }
 
 function showPropifyFloatingCard(property) {
@@ -1857,6 +2166,7 @@ function renderPropifyPropertyMarkers() {
             ? String(filtered.length)
             : filtered.length + '/' + propifyProperties.length;
     }
+    refreshPropertyAreaSelectionResults();
 }
 
 function loadPropifyProperties() {
