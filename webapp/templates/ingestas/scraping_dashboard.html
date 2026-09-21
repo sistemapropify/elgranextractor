@@ -548,6 +548,17 @@
             <input id="logProperty" placeholder="ID de propiedad" aria-label="Filtrar propiedad" onchange="if(currentJobId) connectSSE(currentJobId)">
             <button type="button" onclick="exportLogs()">Exportar logs filtrados</button>
         </div>
+        <section id="verificationPanel" hidden style="padding:16px;background:#fff5d6;color:#252525;" aria-labelledby="verificationHeading">
+            <h3 id="verificationHeading">Properati necesita tu verificación</h3>
+            <p>Resuelve el ejercicio de la imagen. Tu respuesta se enviará al navegador que está extrayendo las propiedades.</p>
+            <img id="verificationImage" alt="Verificación solicitada por Properati" style="display:block;max-width:100%;max-height:480px;margin:8px auto;">
+            <form id="verificationForm">
+                <label for="verificationAnswer">Tu respuesta</label>
+                <input id="verificationAnswer" inputmode="numeric" autocomplete="off" maxlength="13" required pattern="-?[0-9]{1,12}">
+                <button id="verificationSubmit" type="submit">Enviar respuesta</button>
+            </form>
+            <p id="verificationMessage" role="status" aria-live="polite"></p>
+        </section>
         <div class="terminal-body" id="terminalBody">
             <div class="terminal-empty" id="terminalEmpty">
                 <i class="bi bi-terminal" style="font-size:24px;display:block;margin-bottom:8px;"></i>
@@ -636,6 +647,68 @@
 let currentJobId = null;
 let eventSource = null;
 let tableRequest = null;
+let verificationId = null;
+let verificationLoading = false;
+
+async function loadVerification(jobId) {
+    if (verificationLoading || jobId !== currentJobId) return;
+    verificationLoading = true;
+    try {
+        const response = await fetch(`/ingestas/scraping/verificacion/${jobId}/`, {
+            cache: 'no-store', signal: AbortSignal.timeout(10000)
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (jobId !== currentJobId) return;
+        const item = data.verification;
+        const panel = document.getElementById('verificationPanel');
+        panel.hidden = !item;
+        if (!item) {
+            verificationId = null;
+            document.getElementById('verificationImage').removeAttribute('src');
+            return;
+        }
+        document.getElementById('verificationSubmit').disabled = false;
+        if (verificationId !== item.id) {
+            verificationId = item.id;
+            document.getElementById('verificationAnswer').value = '';
+            document.getElementById('verificationImage').src = 'data:image/png;base64,' + item.screenshot;
+            document.getElementById('verificationMessage').textContent = 'Disponible hasta ' + new Date(item.expires_at).toLocaleTimeString() + '. Si vence, las fichas pendientes se conservan.';
+            document.getElementById('verificationSubmit').disabled = false;
+        }
+    } catch (error) {
+        document.getElementById('verificationSubmit').disabled = true;
+        if (verificationId) document.getElementById('verificationMessage').textContent = 'No se pudo comprobar la conexión. Se volverá a intentar automáticamente.';
+    } finally {
+        verificationLoading = false;
+    }
+}
+
+document.getElementById('verificationForm').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    if (!verificationId || !currentJobId) return;
+    const jobId = currentJobId;
+    const button = document.getElementById('verificationSubmit');
+    const message = document.getElementById('verificationMessage');
+    const form = new FormData();
+    form.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    form.append('verification_id', verificationId);
+    form.append('answer', document.getElementById('verificationAnswer').value.trim());
+    button.disabled = true;
+    try {
+        const response = await fetch(`/ingestas/scraping/verificacion/${jobId}/`, {
+            method: 'POST', body: form, signal: AbortSignal.timeout(10000)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'No se pudo enviar la respuesta.');
+        message.textContent = 'Respuesta enviada. Esperando la confirmación de Properati…';
+        document.getElementById('verificationAnswer').value = '';
+        appendLog('info', 'Respuesta enviada a Properati; esperando confirmación.');
+    } catch (error) {
+        message.textContent = error.message;
+        button.disabled = false;
+    }
+});
 
 // ── URLs de listado por portal ──
 function recogerUrls() {
@@ -938,6 +1011,7 @@ function loadStats(jobId) {
         })
         .then(data => {
             updateUI(data.estado);
+            loadVerification(jobId);
             document.getElementById('statDetectadas').textContent = data.detectadas || 0;
             document.getElementById('statNuevas').textContent = data.nuevas || 0;
             document.getElementById('statActualizadas').textContent = data.actualizadas || 0;

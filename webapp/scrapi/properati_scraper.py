@@ -14,6 +14,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from camoufox.async_api import AsyncCamoufox
 from scrapi.camoufox_launcher import camoufox_kwargs
+from scrapi.contracts import ScrapingInterrupted
 from captura.azure_storage import upload_bytes
 # ============================================================
 # CONFIGURACIÃ“N
@@ -498,6 +499,9 @@ async def esperar_cloudflare(page, timeout=30):
             return True
     except Exception:
         pass
+    handler = getattr(page, '_manual_verification', None)
+    if handler:
+        return await handler(page)
     print("   [WARN] Timeout esperando Cloudflare")
     return False
 
@@ -1011,6 +1015,8 @@ async def extraer_detalle(page, prop):
             if detalles.get('tipo_propiedad'):
                 prop['Tipo Propiedad'] = detalles['tipo_propiedad']
 
+    except ScrapingInterrupted:
+        raise
     except Exception as e:
         print(f"   [ERROR] Error en detalle: {e}")
         import traceback

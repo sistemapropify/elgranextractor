@@ -32,6 +32,7 @@ urlpatterns = [
     path('scraping/control/', views.ScrapingControlView.as_view(), name='scraping_control'),
     path('scraping/stream/<int:job_id>/', views.ScrapingStreamView.as_view(), name='scraping_stream'),
     path('scraping/status/<int:job_id>/', views.ScrapingStatusView.as_view(), name='scraping_status'),
+    path('scraping/verificacion/<int:job_id>/', views.ScrapingVerificationView.as_view(), name='scraping_verificacion'),
     path('scraping/propiedades/', views.ScrapingPropiedadesView.as_view(), name='scraping_propiedades'),
     path('scraping/historial/', views.ScrapingHistorialView.as_view(), name='scraping_historial'),
     path('scraping/test-import/', views.test_camoufox_import, name='test_import'),

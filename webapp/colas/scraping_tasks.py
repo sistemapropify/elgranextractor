@@ -594,6 +594,10 @@ def _run_scraping(job_id: int, stop_event=None):
                 pending_details = int(run_counters(portal_run.id).get('pending', 0))
                 if resultado.success and not pending_details:
                     break
+                if 'portal.paused:' in (resultado.message or ''):
+                    # A human-response timeout or persistent block must not reopen
+                    # a fresh browser and discard the user's verification window.
+                    break
                 if _error_camoufox_no_reintentable(resultado):
                     _crear_log(
                         job, 'error',

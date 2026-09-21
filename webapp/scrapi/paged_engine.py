@@ -174,7 +174,8 @@ async def prepare_detail(portal, source, page, raw, emit, *, store_images=False)
                        message=f'{portal}: abriendo ficha {key}')
             candidate = deepcopy(raw)
             try:
-                await asyncio.wait_for(enrich(portal, source, page, candidate), timeout=100)
+                detail_timeout = 440 if getattr(page, '_manual_verification', None) else 100
+                await asyncio.wait_for(enrich(portal, source, page, candidate), timeout=detail_timeout)
             finally:
                 if portal == 'properati':
                     page._properati_next_visit = time.monotonic() + 10
@@ -368,7 +369,7 @@ async def crawl_pages(portal, source_url, source, page, detail_page, *, emit,
 
 def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
               progress_callback=None, batch_callback=None, resume_state=None,
-              listing_only=False):
+              listing_only=False, manual_verification=None):
     source = importlib.import_module(f'scrapi.{portal}_scraper')
     state = resume_state or {}
 
@@ -391,6 +392,12 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
                 # El listado y las fichas deben conservar la misma sesión.
                 context = await browser.new_context()
                 page, detail_page = await context.new_page(), await context.new_page()
+                if manual_verification:
+                    from .manual_verification import resolve
+                    async def verify(target):
+                        return await resolve(target, manual_verification, emit)
+                    page._manual_verification = verify
+                    detail_page._manual_verification = verify
             else:
                 page, detail_page = await browser.new_page(), await browser.new_page()
             await guarded_navigation(page, portal)

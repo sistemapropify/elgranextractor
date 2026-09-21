@@ -6,7 +6,7 @@ import sys
 import json
 import time
 from django.utils import timezone
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.views.generic import FormView, View, TemplateView, ListView, DetailView
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -2258,6 +2258,28 @@ class ScrapingStatusView(ScrapingLoginRequiredMixin, View):
                 for l in ultimos_logs
             ],
         })
+
+
+class ScrapingVerificationView(ScrapingLoginRequiredMixin, View):
+    """Same authenticated access and CSRF protection as scraping controls."""
+    def get(self, request, job_id):
+        from .scraping_verification import public_state
+        job = get_object_or_404(ScrapingJob, pk=job_id)
+        response = JsonResponse({'verification': public_state(job)})
+        response['Cache-Control'] = 'no-store'
+        return response
+
+    def post(self, request, job_id):
+        import uuid
+        from .scraping_verification import submit_answer
+        try:
+            challenge_id = uuid.UUID(request.POST.get('verification_id', ''))
+            submit_answer(job_id, challenge_id, request.POST.get('answer', '').strip())
+        except (ValueError, ScrapingJob.DoesNotExist) as exc:
+            return JsonResponse({'error': str(exc)}, status=409)
+        response = JsonResponse({'success': True})
+        response['Cache-Control'] = 'no-store'
+        return response
 
 
 class ScrapingPropiedadesView(ListView):

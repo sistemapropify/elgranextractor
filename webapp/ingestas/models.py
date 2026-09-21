@@ -667,6 +667,20 @@ class ScrapingLog(models.Model):
         )
 
 
+class ScrapingVerification(models.Model):
+    """Temporary human response mailbox tied to one live browser execution."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    run = models.ForeignKey(EjecucionPortal, on_delete=models.CASCADE)
+    execution_token = models.UUIDField()
+    expires_at = models.DateTimeField()
+    state = models.CharField(max_length=16, default='waiting')
+    screenshot = models.TextField(default='')
+    answer = models.CharField(max_length=16, default='')
+
+    class Meta:
+        db_table = 'scraping_verifications'
+
+
 class ScrapingCandidate(models.Model):
     """Durable discovery queue and idempotent observation for one portal run."""
     run = models.ForeignKey(EjecucionPortal, on_delete=models.CASCADE, related_name='candidates')
