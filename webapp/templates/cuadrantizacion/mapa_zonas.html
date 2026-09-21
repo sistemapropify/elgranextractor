@@ -226,6 +226,148 @@
     border: 1px solid rgba(255,255,255,0.1);
 }
 
+.property-layer-toggle {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 10px;
+    padding: 8px;
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 6px;
+    color: var(--text-primary, #f0f6fc);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.property-layer-toggle input {
+    margin: 0;
+    accent-color: #15b8a6;
+}
+
+.property-layer-toggle img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+}
+
+.property-layer-toggle .layer-label {
+    flex: 1;
+}
+
+.property-layer-toggle .panel-badge {
+    min-width: 24px;
+    text-align: center;
+}
+
+.property-map-filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.property-map-filters select {
+    min-width: 0;
+    width: 100%;
+    padding: 6px 7px;
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 6px;
+    background: var(--bg-secondary, #161b22);
+    color: var(--text-primary, #f0f6fc);
+    font-size: 11px;
+}
+
+.propify-floating-card {
+    position: absolute;
+    top: 76px;
+    right: 18px;
+    z-index: 700;
+    width: 310px;
+    max-width: calc(100% - 36px);
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 10px;
+    background: var(--bg-card, #161b22);
+    color: var(--text-primary, #e6edf3);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .5);
+    overflow: hidden;
+}
+
+.propify-floating-card[hidden] { display: none; }
+
+.propify-floating-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 9px;
+    background: #0d9488;
+    color: #fff;
+    cursor: move;
+    touch-action: none;
+    user-select: none;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .35px;
+}
+
+.propify-floating-card__close {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .18);
+    color: #fff;
+    font-size: 17px;
+    line-height: 20px;
+    cursor: pointer;
+}
+
+.propify-floating-card__body { padding: 10px 12px; }
+.propify-card-summary { display: flex; gap: 12px; align-items: flex-start; }
+.propify-card-thumb {
+    width: 84px;
+    height: 84px;
+    flex: 0 0 84px;
+    object-fit: cover;
+    border-radius: 8px;
+    background: var(--bg-primary, #0d1117);
+}
+.propify-card-thumb--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-subtle, #484f58);
+    font-size: 10px;
+}
+.propify-card-info { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.propify-card-title { font-size: 13px; font-weight: 700; line-height: 1.25; }
+.propify-card-sub { color: var(--text-secondary, #8b949e); font-size: 12px; line-height: 1.25; }
+.propify-card-price { color: var(--accent-green-light, #3fb950); font-size: 13px; font-weight: 700; }
+.propify-card-m2 { color: #5eead4; font-size: 11px; font-weight: 700; }
+.propify-card-code { color: var(--text-subtle, #6e7681); font-size: 10px; }
+.propify-card-address {
+    margin-top: 9px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color, #30363d);
+    color: var(--text-secondary, #8b949e);
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.propify-price-label {
+    padding: 2px 5px !important;
+    border: 1px solid rgba(255, 255, 255, .25) !important;
+    border-radius: 5px !important;
+    background: rgba(13, 17, 23, .9) !important;
+    color: #ffffff !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .8);
+}
+
 /* Zone info panel */
 .zone-info-panel {
     position: absolute;
@@ -663,6 +805,21 @@ window.onGoogleMapsLoaded = function() {
 
                 <button class="btn-success btn-block" id="save-zone">Guardar zona</button>
 
+                <label class="property-layer-toggle" for="toggle-propify-properties">
+                    <input type="checkbox" id="toggle-propify-properties" checked>
+                    <img src="{% static 'requerimientos/data/Pin-propify.png' %}" alt="">
+                    <span class="layer-label">Propiedades Propify disponibles</span>
+                    <span class="panel-badge" id="propify-properties-count">…</span>
+                </label>
+                <div class="property-map-filters" id="propify-property-filters">
+                    <select id="propify-type-filter" aria-label="Filtrar por tipo de propiedad">
+                        <option value="">Todos los tipos</option>
+                    </select>
+                    <select id="propify-district-filter" aria-label="Filtrar por distrito">
+                        <option value="">Todos los distritos</option>
+                    </select>
+                </div>
+
                 <div class="legend">
                     <div class="legend-item">
                         <span class="legend-color" style="background: #58a6ff;"></span>
@@ -678,6 +835,14 @@ window.onGoogleMapsLoaded = function() {
                     </div>
                 </div>
             </div>
+
+            <section class="propify-floating-card" id="propify-floating-card" hidden aria-label="Propiedad Propify">
+                <div class="propify-floating-card__head" id="propify-floating-card-head">
+                    <span>Propify · Disponible</span>
+                    <button type="button" class="propify-floating-card__close" id="propify-floating-card-close" aria-label="Cerrar">&times;</button>
+                </div>
+                <div class="propify-floating-card__body" id="propify-floating-card-body"></div>
+            </section>
 
             <!-- Panel de información de zona -->
             <div class="zone-info-panel" id="zone-info-panel" style="display: none;">
@@ -777,6 +942,12 @@ let currentZoneData = null;
 let markers = [];
 let zones = [];
 let allZones = [];
+let propifyPropertyMarkers = [];
+let propifyPropertiesLoaded = false;
+let propifyProperties = [];
+
+const PROPIFY_MARKER_ICON = "{% static 'requerimientos/data/Pin-propify.png' %}";
+const PROPIFY_PROPERTIES_ENDPOINT = "{% url 'api_propify_available_properties' %}";
 
 // Colores para zonas
 const ZONE_COLORS = {
@@ -850,6 +1021,47 @@ function getCookie(name) {
     return cookieValue;
 }
 
+function escapeMapHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function parseJsonResponse(response) {
+    return response.text().then(function(body) {
+        var data = null;
+        if (body) {
+            try {
+                data = JSON.parse(body);
+            } catch (error) {
+                data = null;
+            }
+        }
+
+        if (!response.ok) {
+            var detail = data && (data.detail || data.error || data.non_field_errors);
+            if (!detail && data && typeof data === 'object') {
+                detail = Object.keys(data).map(function(key) {
+                    var value = Array.isArray(data[key]) ? data[key].join(', ') : data[key];
+                    return key + ': ' + value;
+                }).join(' · ');
+            }
+            if (!detail) {
+                detail = 'El servidor respondió ' + response.status + '. Revisa los logs del servidor.';
+            }
+            throw new Error(detail);
+        }
+
+        if (!data) {
+            throw new Error('El servidor no devolvió una respuesta JSON válida.');
+        }
+        return data;
+    });
+}
+
 // ============================================================
 // Inicialización del mapa
 // ============================================================
@@ -893,6 +1105,7 @@ function initMap() {
     loadZones();
     loadDistricts();
     loadZoneParents();
+    setupPropifyPropertyLayer();
 
     // Configurar búsqueda de dirección
     setupAddressSearch();
@@ -907,7 +1120,9 @@ function initMap() {
     document.getElementById('refresh-zones-btn').addEventListener('click', function() {
         loadZones();
         loadDistricts();
-        showAlert('Zonas actualizadas', 'success');
+        var toggle = document.getElementById('toggle-propify-properties');
+        if (toggle && toggle.checked) loadPropifyProperties();
+        showAlert('Mapa actualizado', 'success');
     });
 
     showLoading(false);
@@ -1242,10 +1457,7 @@ function setupSaveZone() {
             if (response.status === 403) {
                 throw new Error('No se autorizó el guardado. Comprueba tu sesión y permisos. Si volviste a iniciar sesión, abre el mapa antes de dibujar.');
             }
-            if (!response.ok) {
-                return response.json().then(function(err) { throw new Error(JSON.stringify(err)); });
-            }
-            return response.json();
+            return parseJsonResponse(response);
         })
         .then(function(result) {
             showAlert('Zona "' + name + '" guardada exitosamente.', 'success');
@@ -1265,6 +1477,246 @@ function setupSaveZone() {
             showLoading(false);
         });
     });
+}
+
+function setupPropifyPropertyLayer() {
+    var toggle = document.getElementById('toggle-propify-properties');
+    var typeFilter = document.getElementById('propify-type-filter');
+    var districtFilter = document.getElementById('propify-district-filter');
+    if (!toggle) return;
+
+    setupDraggablePropifyCard();
+
+    toggle.addEventListener('change', function() {
+        if (typeFilter) typeFilter.disabled = !toggle.checked;
+        if (districtFilter) districtFilter.disabled = !toggle.checked;
+        if (toggle.checked && !propifyPropertiesLoaded) {
+            loadPropifyProperties();
+            return;
+        }
+        propifyPropertyMarkers.forEach(function(marker) {
+            marker.setMap(toggle.checked ? map : null);
+        });
+        if (!toggle.checked) closePropifyFloatingCard();
+    });
+
+    [typeFilter, districtFilter].forEach(function(filter) {
+        if (filter) filter.addEventListener('change', renderPropifyPropertyMarkers);
+    });
+
+    if (toggle.checked) loadPropifyProperties();
+}
+
+function clearPropifyPropertyMarkers() {
+    propifyPropertyMarkers.forEach(function(marker) { marker.setMap(null); });
+    propifyPropertyMarkers = [];
+    closePropifyFloatingCard();
+}
+
+function formatPropifyPrice(value, currencySymbol) {
+    if (value === null || value === undefined || value === '') return 'Precio a consultar';
+    var amount = Number(value);
+    if (!Number.isFinite(amount)) return escapeMapHtml(value);
+    return ((currencySymbol || '') + ' ' + amount.toLocaleString('es-PE', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+    })).trim();
+}
+
+function formatPropifyPricePerM2(value, currencySymbol) {
+    if (value === null || value === undefined || value === '') return '';
+    var amount = Number(value);
+    if (!Number.isFinite(amount) || amount <= 0) return '';
+    return ((currencySymbol || '') + ' ' + amount.toLocaleString('es-PE', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }) + '/m²').trim();
+}
+
+function populatePropifyFilter(select, values, defaultLabel) {
+    if (!select) return;
+    var current = select.value;
+    var unique = Array.from(new Set(values.filter(Boolean))).sort(function(a, b) {
+        return a.localeCompare(b, 'es', { sensitivity: 'base' });
+    });
+    select.innerHTML = '<option value="">' + defaultLabel + '</option>';
+    unique.forEach(function(value) {
+        var option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+    });
+    if (unique.indexOf(current) !== -1) select.value = current;
+}
+
+function filteredPropifyProperties() {
+    var type = document.getElementById('propify-type-filter').value;
+    var district = document.getElementById('propify-district-filter').value;
+    return propifyProperties.filter(function(property) {
+        return (!type || property.property_type === type) &&
+            (!district || property.district === district);
+    });
+}
+
+function closePropifyFloatingCard() {
+    var card = document.getElementById('propify-floating-card');
+    if (card) card.hidden = true;
+}
+
+function showPropifyFloatingCard(property) {
+    var card = document.getElementById('propify-floating-card');
+    var body = document.getElementById('propify-floating-card-body');
+    if (!card || !body) return;
+
+    var image = property.image_url
+        ? '<img class="propify-card-thumb" src="' + escapeMapHtml(property.image_url) + '" alt="" loading="lazy" decoding="async">'
+        : '<div class="propify-card-thumb propify-card-thumb--empty">Sin foto</div>';
+    var code = property.code
+        ? '<div class="propify-card-code">' + escapeMapHtml(property.code) + '</div>'
+        : '';
+    var address = property.address
+        ? '<div class="propify-card-address">' + escapeMapHtml(property.address) + '</div>'
+        : '';
+    var pricePerM2 = formatPropifyPricePerM2(property.price_per_m2, property.currency_symbol);
+
+    body.innerHTML =
+        '<div class="propify-card-summary">' +
+            image +
+            '<div class="propify-card-info">' +
+                '<div class="propify-card-title">' + escapeMapHtml(property.title) + '</div>' +
+                '<div class="propify-card-sub">' + escapeMapHtml(property.property_type) + ' · ' + escapeMapHtml(property.district) + '</div>' +
+                '<div class="propify-card-price">' + formatPropifyPrice(property.price, property.currency_symbol) + '</div>' +
+                (pricePerM2 ? '<div class="propify-card-m2">' + pricePerM2 + '</div>' : '') +
+                code +
+            '</div>' +
+        '</div>' +
+        address;
+
+    var imageElement = body.querySelector('img');
+    if (imageElement) {
+        imageElement.addEventListener('error', function() {
+            var placeholder = document.createElement('div');
+            placeholder.className = 'propify-card-thumb propify-card-thumb--empty';
+            placeholder.textContent = 'Sin foto';
+            imageElement.replaceWith(placeholder);
+        }, { once: true });
+    }
+
+    card.hidden = false;
+}
+
+function setupDraggablePropifyCard() {
+    var card = document.getElementById('propify-floating-card');
+    var handle = document.getElementById('propify-floating-card-head');
+    var close = document.getElementById('propify-floating-card-close');
+    var container = document.getElementById('map-container');
+    if (!card || !handle || !container || handle.dataset.dragReady === '1') return;
+    handle.dataset.dragReady = '1';
+    if (close) close.addEventListener('click', closePropifyFloatingCard);
+
+    handle.addEventListener('pointerdown', function(event) {
+        if (event.target.closest('button')) return;
+        event.preventDefault();
+        var cardRect = card.getBoundingClientRect();
+        var containerRect = container.getBoundingClientRect();
+        var offsetX = event.clientX - cardRect.left;
+        var offsetY = event.clientY - cardRect.top;
+        card.style.right = 'auto';
+        handle.setPointerCapture(event.pointerId);
+
+        function move(moveEvent) {
+            var maxLeft = Math.max(0, container.clientWidth - card.offsetWidth);
+            var maxTop = Math.max(0, container.clientHeight - card.offsetHeight);
+            card.style.left = Math.min(maxLeft, Math.max(0, moveEvent.clientX - containerRect.left - offsetX)) + 'px';
+            card.style.top = Math.min(maxTop, Math.max(0, moveEvent.clientY - containerRect.top - offsetY)) + 'px';
+        }
+
+        function stop(stopEvent) {
+            handle.releasePointerCapture(stopEvent.pointerId);
+            handle.removeEventListener('pointermove', move);
+            handle.removeEventListener('pointerup', stop);
+            handle.removeEventListener('pointercancel', stop);
+        }
+
+        handle.addEventListener('pointermove', move);
+        handle.addEventListener('pointerup', stop);
+        handle.addEventListener('pointercancel', stop);
+    });
+}
+
+function renderPropifyPropertyMarkers() {
+    clearPropifyPropertyMarkers();
+    var count = document.getElementById('propify-properties-count');
+    var toggle = document.getElementById('toggle-propify-properties');
+    var filtered = filteredPropifyProperties();
+
+    filtered.forEach(function(property) {
+        var pricePerM2 = formatPropifyPricePerM2(property.price_per_m2, property.currency_symbol);
+        var marker = new google.maps.Marker({
+            position: { lat: Number(property.lat), lng: Number(property.lng) },
+            map: toggle && toggle.checked ? map : null,
+            title: property.title || property.code || 'Propiedad Propify',
+            icon: {
+                url: PROPIFY_MARKER_ICON,
+                scaledSize: new google.maps.Size(40, 40),
+                anchor: new google.maps.Point(20, 40),
+                labelOrigin: new google.maps.Point(20, 50)
+            },
+            label: pricePerM2 ? {
+                text: pricePerM2,
+                className: 'propify-price-label'
+            } : null,
+            zIndex: 500
+        });
+
+        marker.addListener('click', function(event) {
+            if (window.__polyTool && window.__polyTool.isActive()) {
+                window.__polyTool.addPoint(event);
+                return;
+            }
+            showPropifyFloatingCard(property);
+        });
+        propifyPropertyMarkers.push(marker);
+    });
+
+    if (count) {
+        count.textContent = filtered.length === propifyProperties.length
+            ? String(filtered.length)
+            : filtered.length + '/' + propifyProperties.length;
+    }
+}
+
+function loadPropifyProperties() {
+    var count = document.getElementById('propify-properties-count');
+    if (count) count.textContent = '…';
+
+    fetch(PROPIFY_PROPERTIES_ENDPOINT, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Accept': 'application/json' }
+    })
+        .then(parseJsonResponse)
+        .then(function(data) {
+            propifyProperties = data.properties || [];
+            populatePropifyFilter(
+                document.getElementById('propify-type-filter'),
+                propifyProperties.map(function(property) { return property.property_type; }),
+                'Todos los tipos'
+            );
+            populatePropifyFilter(
+                document.getElementById('propify-district-filter'),
+                propifyProperties.map(function(property) { return property.district; }),
+                'Todos los distritos'
+            );
+            propifyPropertiesLoaded = true;
+            renderPropifyPropertyMarkers();
+        })
+        .catch(function(error) {
+            propifyPropertiesLoaded = false;
+            if (count) count.textContent = '!';
+            console.error('Error loading available Propify properties:', error);
+            showAlert('No se pudieron cargar las propiedades Propify: ' + error.message, 'warning');
+        });
 }
 
 function loadZones() {

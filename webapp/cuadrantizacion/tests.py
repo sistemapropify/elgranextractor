@@ -1,8 +1,14 @@
+import json
+from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from django.conf import settings
 from django.template.loader import get_template
-from django.test import SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase
+
+from . import views
 
 
 class MapaZonasTemplateTests(SimpleTestCase):
@@ -29,3 +35,94 @@ class MapaZonasTemplateTests(SimpleTestCase):
     def test_refresh_clears_previous_zone_overlays(self):
         self.assertIn('renderedZoneOverlays', self.source)
         self.assertIn('overlay.setMap(null);', self.source)
+
+    def test_available_propify_layer_uses_existing_branded_pin(self):
+        self.assertIn('toggle-propify-properties', self.source)
+        self.assertIn('Pin-propify.png', self.source)
+        self.assertIn('PROPIFY_PROPERTIES_ENDPOINT', self.source)
+        self.assertIn('Propify · Disponible', self.source)
+
+    def test_propify_markers_have_type_district_filters_and_draggable_card(self):
+        self.assertIn('propify-type-filter', self.source)
+        self.assertIn('propify-district-filter', self.source)
+        self.assertIn('setupDraggablePropifyCard()', self.source)
+        self.assertIn('width: 84px;', self.source)
+        self.assertIn("className: 'propify-price-label'", self.source)
+        self.assertIn("+ '/m²'", self.source)
+
+    def test_save_error_parser_accepts_html_server_errors(self):
+        self.assertIn('function parseJsonResponse(response)', self.source)
+        self.assertIn("El servidor respondió ' + response.status", self.source)
+
+
+class AvailablePropifyPropertiesApiTests(SimpleTestCase):
+    def setUp(self):
+        self.request = RequestFactory().get(
+            '/cuadrantizacion/propiedades-propify-disponibles/'
+        )
+
+    @patch('cuadrantizacion.views._available_propify_properties')
+    def test_returns_only_payload_produced_by_available_filter(self, available_properties):
+        available_properties.return_value = [{
+            'id': 14,
+            'code': 'P-014',
+            'title': 'Casa disponible',
+            'price': '150000.00',
+            'address': 'Cayma',
+            'property_type': 'Casa',
+            'district': 'Cayma',
+            'image_url': 'https://example.test/casa.jpg',
+            'currency_symbol': '$',
+            'price_per_m2': '833.33',
+            'area_m2': '180.00',
+            'lat': -16.35,
+            'lng': -71.54,
+            'status': 'Disponible',
+        }]
+
+        response = views.api_propify_available_properties(self.request)
+        payload = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload['total'], 1)
+        self.assertEqual(payload['status_filter'], 'Disponible')
+        self.assertEqual(payload['properties'][0]['code'], 'P-014')
+
+    @patch(
+        'cuadrantizacion.views._available_propify_properties',
+        side_effect=RuntimeError('database unavailable'),
+    )
+    def test_database_failure_returns_json_instead_of_html(self, _available_properties):
+        response = views.api_propify_available_properties(self.request)
+        payload = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(payload['properties'], [])
+        self.assertIn('error', payload)
+
+
+class ZonaValorCreateTests(SimpleTestCase):
+    @patch('cuadrantizacion.views.calcular_area_poligono', return_value=Decimal('125.50'))
+    def test_create_saves_polygon_without_running_price_calculation(self, area_calculator):
+        zone = SimpleNamespace(
+            id=7,
+            nivel='cuadrante',
+            coordenadas=[[-16.4, -71.5], [-16.4, -71.4], [-16.3, -71.4]],
+            area_total=None,
+            save=Mock(),
+        )
+        serializer = Mock()
+        serializer.save.return_value = zone
+        view = views.ZonaValorViewSet()
+        view.request = SimpleNamespace(
+            current_user=SimpleNamespace(username='tester')
+        )
+
+        # Bypass only transaction.atomic's wrapper; the create logic itself is tested.
+        views.ZonaValorViewSet.perform_create.__wrapped__(view, serializer)
+
+        area_calculator.assert_called_once_with(zone.coordenadas)
+        zone.save.assert_called_once_with(
+            update_fields=['area_total', 'fecha_actualizacion']
+        )
+        self.assertEqual(zone.area_total, Decimal('125.50'))

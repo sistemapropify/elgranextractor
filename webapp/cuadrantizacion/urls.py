@@ -20,6 +20,11 @@ urlpatterns = [
     
     # Vistas HTML
     path('mapa/', views.mapa_zonas_valor, name='mapa_zonas_valor'),
+    path(
+        'propiedades-propify-disponibles/',
+        views.api_propify_available_properties,
+        name='api_propify_available_properties',
+    ),
     path('jerarquia/', views.configurar_jerarquia, name='configurar_jerarquia'),
     path('heatmap/', views.mapa_heatmap, name='mapa_heatmap'),
     path('heatmap-data/', views.api_heatmap_data, name='api_heatmap_data'),

@@ -1,5 +1,9 @@
+import logging
+from decimal import Decimal, InvalidOperation
+from urllib.parse import quote
+
 from django.shortcuts import get_object_or_404
-from django.db import transaction
+from django.db import connections, transaction
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import viewsets, status, generics
 from rest_framework.authentication import BaseAuthentication, SessionAuthentication
@@ -21,6 +25,10 @@ from .services import (
     punto_en_poligono, calcular_area_poligono,
     actualizar_estadisticas_zona, encontrar_zona_por_punto
 )
+
+
+logger = logging.getLogger(__name__)
+PROPIFY_MEDIA_BASE_URL = 'https://propifymedia01.blob.core.windows.net/media'
 
 
 class PrometeoSessionAuthentication(BaseAuthentication):
@@ -85,24 +93,22 @@ class ZonaValorViewSet(viewsets.ModelViewSet):
     
     @transaction.atomic
     def perform_create(self, serializer):
-        """Calcular área automáticamente al crear una zona y calcular precio inicial."""
+        """Persist the zone and calculate only values derivable from its polygon."""
         zona = serializer.save()
-        
-        # Calcular área del polígono
-        area = calcular_area_poligono(zona.coordenadas)
+
+        area = calcular_area_poligono(zona.coordenadas or [])
         if area:
             zona.area_total = area
-        
-        # Calcular precio inicial basado en propiedades dentro de la zona
-        from .services import calcular_precio_m2_zona
-        resultado = calcular_precio_m2_zona(zona.id)
-        
-        if resultado and resultado.get('precio_promedio_m2'):
-            zona.precio_promedio_m2 = resultado['precio_promedio_m2']
-            zona.desviacion_estandar_m2 = resultado.get('desviacion_estandar_m2', 0)
-            zona.cantidad_propiedades_analizadas = resultado.get('cantidad_propiedades_utilizadas', 0)
-        
-        zona.save()
+            zona.save(update_fields=['area_total', 'fecha_actualizacion'])
+
+        logger.info(
+            'Zona de valor creada: id=%s nivel=%s vertices=%s area_m2=%s usuario=%s',
+            zona.id,
+            zona.nivel,
+            len(zona.coordenadas or []),
+            zona.area_total,
+            getattr(getattr(self.request, 'current_user', None), 'username', None),
+        )
     
     @action(detail=True, methods=['get'])
     def estadisticas(self, request, pk=None):
@@ -582,6 +588,184 @@ def mapa_zonas_valor(request):
         'orden_niveles': [nivel[0] for nivel in ZonaValor.NIVELES],  # Lista de códigos en orden
     }
     return render(request, 'cuadrantizacion/mapa_zonas.html', context)
+
+
+def _available_propify_properties():
+    """Return visible Propify listings that are currently available and mapped."""
+    from propifai.models import PropifaiProperty
+
+    with connections['propifai'].cursor() as cursor:
+        cursor.execute("SELECT id, name FROM property_status")
+        available_status_ids = [
+            status_id
+            for status_id, name in cursor.fetchall()
+            if (name or '').strip().casefold() in {'available', 'disponible'}
+        ]
+
+    if not available_status_ids:
+        logger.warning(
+            'No se encontraron estados Available/Disponible en property_status; '
+            'el mapa de cuadrantizacion no mostrara propiedades Propify.'
+        )
+        return []
+
+    rows = list(
+        PropifaiProperty.objects.using('propifai')
+        .filter(
+            is_visible=True,
+            property_status_id__in=available_status_ids,
+            latitude__isnull=False,
+            longitude__isnull=False,
+        )
+        .values(
+            'id', 'code', 'title', 'price', 'map_address', 'display_address',
+            'latitude', 'longitude', 'property_type_id', 'district_id',
+            'currency_id',
+        )
+        .order_by('id')
+    )
+
+    with connections['propifai'].cursor() as cursor:
+        cursor.execute("SELECT id, name FROM property_type")
+        property_type_map = {row[0]: row[1] for row in cursor.fetchall()}
+        cursor.execute("SELECT id, name FROM district")
+        district_map = {row[0]: row[1] for row in cursor.fetchall()}
+
+    image_map = {}
+    specs_map = {}
+    property_ids = [row['id'] for row in rows]
+    try:
+        for offset in range(0, len(property_ids), 500):
+            batch = property_ids[offset:offset + 500]
+            placeholders = ','.join(['%s'] * len(batch))
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute(
+                    f"""
+                        SELECT property_id, MIN([file])
+                        FROM property_media
+                        WHERE media_type = 'image'
+                          AND property_id IN ({placeholders})
+                        GROUP BY property_id
+                    """,
+                    batch,
+                )
+                image_map.update(dict(cursor.fetchall()))
+    except Exception:
+        logger.warning(
+            'No se pudo cargar property_media para el mapa; se usara la imagen por codigo.',
+            exc_info=True,
+        )
+
+    try:
+        for offset in range(0, len(property_ids), 500):
+            batch = property_ids[offset:offset + 500]
+            placeholders = ','.join(['%s'] * len(batch))
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute(
+                    f"""
+                        SELECT property_id, land_area, built_area
+                        FROM property_specs
+                        WHERE property_id IN ({placeholders})
+                    """,
+                    batch,
+                )
+                specs_map.update({
+                    row[0]: {'land_area': row[1], 'built_area': row[2]}
+                    for row in cursor.fetchall()
+                })
+    except Exception:
+        logger.warning(
+            'No se pudo cargar property_specs para calcular el precio por m2 del mapa.',
+            exc_info=True,
+        )
+
+    properties = []
+    for row in rows:
+        try:
+            latitude = float(row['latitude'])
+            longitude = float(row['longitude'])
+        except (TypeError, ValueError):
+            continue
+
+        if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+            logger.warning(
+                'Propiedad Propify %s omitida por coordenadas invalidas: %s, %s',
+                row['id'], row['latitude'], row['longitude'],
+            )
+            continue
+
+        price = row['price']
+        property_type = property_type_map.get(row['property_type_id']) or 'Propiedad'
+        specs = specs_map.get(row['id'], {})
+        if 'terreno' in property_type.casefold():
+            area = specs.get('land_area') or specs.get('built_area')
+        else:
+            area = specs.get('built_area') or specs.get('land_area')
+        price_per_m2 = None
+        try:
+            if price is not None and area is not None and Decimal(str(area)) > 0:
+                calculated_price = Decimal(str(price)) / Decimal(str(area))
+                if calculated_price > 0:
+                    price_per_m2 = str(calculated_price.quantize(Decimal('0.01')))
+        except (InvalidOperation, TypeError, ValueError, ZeroDivisionError):
+            price_per_m2 = None
+
+        image_path = image_map.get(row['id'])
+        if image_path and str(image_path).startswith(('http://', 'https://')):
+            image_url = str(image_path)
+        elif image_path:
+            encoded_path = '/'.join(
+                quote(part, safe='')
+                for part in str(image_path).lstrip('/').split('/')
+            )
+            image_url = f'{PROPIFY_MEDIA_BASE_URL}/{encoded_path}'
+        elif row['code']:
+            image_url = f"{PROPIFY_MEDIA_BASE_URL}/{quote(str(row['code']), safe='')}.jpg"
+        else:
+            image_url = None
+
+        properties.append({
+            'id': row['id'],
+            'code': row['code'] or '',
+            'title': row['title'] or row['code'] or 'Propiedad Propify',
+            'price': str(price) if price is not None else None,
+            'address': row['display_address'] or row['map_address'] or '',
+            'property_type': property_type,
+            'district': district_map.get(row['district_id']) or 'Sin distrito',
+            'image_url': image_url,
+            'currency_symbol': '$' if row['currency_id'] == 1 else 'S/.',
+            'price_per_m2': price_per_m2,
+            'area_m2': str(area) if area is not None else None,
+            'lat': latitude,
+            'lng': longitude,
+            'status': 'Disponible',
+        })
+
+    return properties
+
+
+def api_propify_available_properties(request):
+    """Markers for the available Propify layer on the zoning map."""
+    try:
+        properties = _available_propify_properties()
+    except Exception:
+        logger.exception(
+            'No se pudieron cargar las propiedades Propify disponibles para cuadrantizacion.'
+        )
+        return JsonResponse(
+            {
+                'properties': [],
+                'total': 0,
+                'error': 'No se pudieron cargar las propiedades disponibles.',
+            },
+            status=503,
+        )
+
+    return JsonResponse({
+        'properties': properties,
+        'total': len(properties),
+        'status_filter': 'Disponible',
+    })
 
 
 def configurar_jerarquia(request):
