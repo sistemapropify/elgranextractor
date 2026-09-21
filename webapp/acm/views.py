@@ -14,7 +14,46 @@ from django.conf import settings
 from ingestas.models import PropiedadRaw
 from intelligence.models import User
 from .utils import haversine, calcular_precio_m2
-from .models import ACMLink
+from .models import ACMLink, ACMTestProperty
+
+
+def _ensure_acm_test_snapshot():
+    """Create the initial isolated snapshot once; normal ACM data is untouched."""
+    if ACMTestProperty.objects.exists():
+        return
+    rows = []
+    for prop in PropiedadRaw.objects.iterator():
+        rows.append(ACMTestProperty(
+            source_id=f'raw-{prop.pk}', source=prop.portal or '',
+            tipo_propiedad=prop.tipo_propiedad or '', precio_usd=prop.precio_usd,
+            precio_final_venta=prop.precio_final_venta, descripcion=prop.descripcion or '',
+            portal=prop.portal or '', url_propiedad=prop.url_propiedad or '',
+            coordenadas=prop.coordenadas or '', departamento=prop.departamento or '',
+            provincia=prop.provincia or '', distrito=prop.distrito or '',
+            area_terreno=prop.area_terreno, area_construida=prop.area_construida,
+            numero_habitaciones=prop.numero_habitaciones, numero_banos=prop.numero_banos,
+            numero_cocheras=prop.numero_cocheras, imagenes_propiedad=prop.imagenes_propiedad or '',
+            estado_propiedad=prop.estado_propiedad or '', datos_crudos={'source_pk': prop.pk},
+        ))
+        if len(rows) >= 1000:
+            ACMTestProperty.objects.bulk_create(rows, ignore_conflicts=True)
+            rows = []
+    if rows:
+        ACMTestProperty.objects.bulk_create(rows, ignore_conflicts=True)
+
+
+def acm_pruebas_view(request):
+    _ensure_acm_test_snapshot()
+    current_user = getattr(request, 'current_user', None)
+    return render(request, 'acm/acm_analisis.html', {
+        'tipos_propiedad': list(ACMTestProperty.objects.exclude(tipo_propiedad='').values_list(
+            'tipo_propiedad', flat=True).distinct())[:20],
+        'google_maps_api_key': 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',
+        'user_id': str(current_user.id) if current_user else None,
+        'user_phone': getattr(current_user, 'phone', None), 'historial_count': 0,
+        'acm_test_mode': True, 'acm_api_prefix': '/acm/pruebas/',
+        'acm_test_count': ACMTestProperty.objects.count(),
+    })
 
 
 def acm_dashboard(request):
@@ -118,6 +157,8 @@ def acm_view(request):
         'user_id': user_id,
         'user_phone': user_phone,
         'historial_count': historial_count,
+        'acm_api_prefix': '/acm/',
+        'acm_test_mode': False,
     }
     return render(request, 'acm/acm_analisis.html', context)
 
@@ -147,7 +188,8 @@ def buscar_comparables(request):
             return JsonResponse({'status': 'error', 'message': 'Coordenadas inválidas'}, status=400)
         
         # Obtener propiedades locales (PropiedadRaw)
-        propiedades_locales = PropiedadRaw.objects.exclude(
+        local_model = ACMTestProperty if getattr(request, '_acm_test_mode', False) else PropiedadRaw
+        propiedades_locales = local_model.objects.exclude(
             coordenadas__isnull=True
         ).exclude(
             coordenadas=''
@@ -270,6 +312,8 @@ def buscar_comparables(request):
             traceback.print_exc()
         
         # Combinar ambas listas
+        if getattr(request, '_acm_test_mode', False):
+            propiedades_propifai_list = []
         todas_propiedades = propiedades_list + propiedades_propifai_list
         
         # ── DEBUG: Verificar colisión de IDs ──
@@ -440,6 +484,16 @@ def buscar_comparables(request):
         return JsonResponse({'status': 'error', 'message': f'Error en los datos: {str(e)}'}, status=400)
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': f'Error interno: {str(e)}'}, status=500)
+
+
+def buscar_comparables_pruebas(request):
+    _ensure_acm_test_snapshot()
+    request._acm_test_mode = True
+    return buscar_comparables(request)
+
+
+def endpoint_prueba_no_persistente(request):
+    return JsonResponse({'status': 'error', 'message': 'El entorno de pruebas no guarda enlaces ACM en producción.'}, status=403)
 
 
 @csrf_exempt

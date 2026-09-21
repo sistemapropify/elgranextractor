@@ -2,6 +2,7 @@ import uuid
 import random
 from django.db import models
 from django.conf import settings
+from decimal import Decimal
 
 
 def generar_codigo_acm():
@@ -93,3 +94,56 @@ class ACMLink(models.Model):
     def codigo_display(self):
         """Retorna el código ACM o un fallback con UUID corto."""
         return self.codigo or f"ACM-{self.short_id}"
+
+
+class ACMTestProperty(models.Model):
+    """Snapshot editable for ACM experiments; never writes to PropiedadRaw."""
+    source_id = models.CharField(max_length=120, unique=True)
+    source = models.CharField(max_length=50, blank=True, default='')
+    tipo_propiedad = models.CharField(max_length=100, blank=True, default='')
+    precio_usd = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    precio_final_venta = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    descripcion = models.TextField(blank=True, default='')
+    portal = models.CharField(max_length=50, blank=True, default='')
+    url_propiedad = models.URLField(max_length=500, blank=True, default='')
+    coordenadas = models.CharField(max_length=100, blank=True, default='')
+    departamento = models.CharField(max_length=100, blank=True, default='')
+    provincia = models.CharField(max_length=100, blank=True, default='')
+    distrito = models.CharField(max_length=100, blank=True, default='')
+    area_terreno = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    area_construida = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    numero_habitaciones = models.IntegerField(null=True, blank=True)
+    numero_banos = models.IntegerField(null=True, blank=True)
+    numero_cocheras = models.IntegerField(null=True, blank=True)
+    imagenes_propiedad = models.TextField(blank=True, default='')
+    estado_propiedad = models.CharField(max_length=50, blank=True, default='')
+    datos_crudos = models.JSONField(default=dict, blank=True)
+    synced_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'acm_test_properties'
+        ordering = ['-synced_at', 'id']
+
+    @property
+    def lat(self):
+        try:
+            return float(str(self.coordenadas).split(',')[0].strip())
+        except (ValueError, IndexError, AttributeError):
+            return None
+
+    @property
+    def lng(self):
+        try:
+            return float(str(self.coordenadas).split(',')[1].strip())
+        except (ValueError, IndexError, AttributeError):
+            return None
+
+    def primera_imagen(self):
+        return str(self.imagenes_propiedad).split(',')[0].strip() or None
+
+    @property
+    def id_propiedad(self):
+        return self.source_id
+
+    def get_estado_propiedad_display(self):
+        return self.estado_propiedad or 'En Publicación'

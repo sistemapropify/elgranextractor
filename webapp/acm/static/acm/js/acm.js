@@ -7,6 +7,7 @@ let circuloRadio = null;
 let marcadoresComparables = new Map(); // id -> {marker, data, seleccionado}
 let propiedadesSeleccionadas = new Map(); // id -> data
 let propiedadesEncontradas = []; // Todas las propiedades encontradas en la búsqueda
+const ACM_API_PREFIX = window.ACM_API_PREFIX || '/acm/';
 
 // URLs de iconos PNG personalizados por fuente
 const ICONO_PRINCIPAL = 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png';
@@ -266,7 +267,7 @@ async function buscarComparables() {
 
     try {
         // Enviar solicitud AJAX
-        const response = await fetch('/acm/buscar-comparables/', {
+        const response = await fetch(ACM_API_PREFIX + 'buscar-comparables/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -504,7 +505,7 @@ async function solicitarAnalisisAvanzado() {
             });
         });
         
-        const response = await fetch('/acm/analisis-espacial/png/', {
+        const response = await fetch(ACM_API_PREFIX + 'analisis-espacial/png/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1446,7 +1447,7 @@ async function compartirACM_WhatsApp() {
         };
 
         // Enviar al backend para crear el enlace único
-        const response = await fetch('/acm/generar-enlace/', {
+        const response = await fetch(ACM_API_PREFIX + 'generar-enlace/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1630,7 +1631,7 @@ async function generarPDF_ACM() {
             user_id: (typeof ACM_USER_ID !== 'undefined' && ACM_USER_ID !== null) ? ACM_USER_ID : undefined
         };
 
-        const response = await fetch('/acm/guardar-acm/', {
+        const response = await fetch(ACM_API_PREFIX + 'guardar-acm/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

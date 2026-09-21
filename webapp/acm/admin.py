@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import ACMLink
+from .models import ACMLink, ACMTestProperty
 
 # Dominio base para enlaces públicos
 DOMINIO_BASE = "https://acm.propifai.com"
@@ -108,3 +108,10 @@ class ACMLinkAdmin(admin.ModelAdmin):
         except (ValueError, TypeError):
             return obj.valor_comercial
     valor_comercial_formateado.short_description = 'Valor comercial'
+
+
+@admin.register(ACMTestProperty)
+class ACMTestPropertyAdmin(admin.ModelAdmin):
+    list_display = ('source_id', 'source', 'tipo_propiedad', 'distrito', 'precio_usd', 'synced_at')
+    search_fields = ('source_id', 'distrito', 'tipo_propiedad', 'portal')
+    list_filter = ('source', 'portal', 'tipo_propiedad')

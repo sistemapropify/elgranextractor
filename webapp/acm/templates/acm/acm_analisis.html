@@ -920,8 +920,9 @@
 
 <!-- Header estilo Intelligence Collections (solo visible en desktop >=992px) -->
 <div class="d-none d-lg-block acm-page-header">
-    <h1><i class="bi bi-search me-2"></i>Nuevo Análisis Comparativo</h1>
+    <h1><i class="bi bi-search me-2"></i>{% if acm_test_mode %}ACM — Entorno de pruebas{% else %}Nuevo Análisis Comparativo{% endif %}</h1>
     <div class="header-actions">
+        {% if acm_test_mode %}<span class="badge bg-warning text-dark me-2">{{ acm_test_count }} registros aislados</span>{% endif %}
         <a href="/acm/" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i> Volver
         </a>
