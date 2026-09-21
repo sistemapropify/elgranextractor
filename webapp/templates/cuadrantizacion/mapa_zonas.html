@@ -870,15 +870,15 @@ window.onGoogleMapsLoaded = function() {
                 <div class="property-map-filters" id="propify-property-filters">
                     <div class="portal-checkboxes" id="propify-source-filters" aria-label="Filtrar por portales">
                         <label class="portal-checkbox">
-                            <input type="checkbox" name="property-source" value="propify" checked>
+                            <input type="checkbox" name="property-source" value="propify">
                             <span>Propify</span>
                         </label>
                         <label class="portal-checkbox">
-                            <input type="checkbox" name="property-source" value="remax" checked>
+                            <input type="checkbox" name="property-source" value="remax">
                             <span>Remax</span>
                         </label>
                         <label class="portal-checkbox">
-                            <input type="checkbox" name="property-source" value="properati" checked>
+                            <input type="checkbox" name="property-source" value="properati">
                             <span>Properati</span>
                         </label>
                     </div>
@@ -1021,6 +1021,7 @@ let allZones = [];
 let propifyPropertyMarkers = [];
 let propifyPropertiesLoaded = false;
 let propifyProperties = [];
+let propifyPropertiesRequest = null;
 
 const PROPIFY_MARKER_ICON = "{% static 'requerimientos/data/Pin-propify.png' %}";
 const REMAX_MARKER_ICON = "{% static 'requerimientos/data/pin-remax.png' %}";
@@ -1584,7 +1585,10 @@ function setupPropifyPropertyLayer() {
         if (!toggle.checked) closePropifyFloatingCard();
     });
 
-    sourceFilters.concat([precisionFilter, operationFilter, typeFilter, districtFilter]).forEach(function(filter) {
+    sourceFilters.forEach(function(filter) {
+        filter.addEventListener('change', loadPropifyProperties);
+    });
+    [precisionFilter, operationFilter, typeFilter, districtFilter].forEach(function(filter) {
         if (filter) filter.addEventListener('change', renderPropifyPropertyMarkers);
     });
 
@@ -1832,11 +1836,27 @@ function renderPropifyPropertyMarkers() {
 
 function loadPropifyProperties() {
     var count = document.getElementById('propify-properties-count');
-    if (count) count.textContent = '…';
+    var selectedSources = Array.from(document.querySelectorAll('input[name="property-source"]:checked'))
+        .map(function(filter) { return filter.value; });
 
-    fetch(PROPIFY_PROPERTIES_ENDPOINT, {
+    if (!selectedSources.length) {
+        if (propifyPropertiesRequest) propifyPropertiesRequest.abort();
+        propifyPropertiesRequest = null;
+        propifyProperties = [];
+        propifyPropertiesLoaded = false;
+        clearPropifyPropertyMarkers();
+        if (count) count.textContent = '0';
+        return;
+    }
+
+    if (count) count.textContent = '…';
+    if (propifyPropertiesRequest) propifyPropertiesRequest.abort();
+    propifyPropertiesRequest = new AbortController();
+
+    fetch(PROPIFY_PROPERTIES_ENDPOINT + '?sources=' + encodeURIComponent(selectedSources.join(',')), {
         credentials: 'same-origin',
         cache: 'no-store',
+        signal: propifyPropertiesRequest.signal,
         headers: { 'Accept': 'application/json' }
     })
         .then(parseJsonResponse)
@@ -1872,6 +1892,7 @@ function loadPropifyProperties() {
             }
         })
         .catch(function(error) {
+            if (error.name === 'AbortError') return;
             propifyPropertiesLoaded = false;
             if (count) count.textContent = '!';
             console.error('Error loading available properties:', error);

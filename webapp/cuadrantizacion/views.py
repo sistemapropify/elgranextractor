@@ -799,14 +799,14 @@ def _available_propify_properties():
     return properties
 
 
-def _available_scraped_properties():
+def _available_scraped_properties(sources=('remax', 'properati')):
     """Return active mapped listings from the supported competitor portals."""
     from ingestas.models import PropiedadesCompetencia
 
     rows = (
         PropiedadesCompetencia.objects
         .filter(
-            fuente__in=('remax', 'properati'),
+            fuente__in=sources,
             estado_publicacion='activa',
             latitud__isnull=False,
             longitud__isnull=False,
@@ -894,12 +894,27 @@ def _available_scraped_properties():
 
 def api_available_map_properties(request):
     """Available Propify, Remax and Properati markers for the zoning map."""
+    requested_sources = {
+        source.strip().casefold()
+        for source in request.GET.get('sources', 'propify,remax,properati').split(',')
+        if source.strip().casefold() in {'propify', 'remax', 'properati'}
+    }
     properties = []
     failed_sources = []
-    for source, loader in (
-        ('Propify', _available_propify_properties),
-        ('Remax/Properati', _available_scraped_properties),
-    ):
+    loaders = []
+    if 'propify' in requested_sources:
+        loaders.append(('Propify', _available_propify_properties))
+    competitor_sources = tuple(
+        source for source in ('remax', 'properati') if source in requested_sources
+    )
+    if competitor_sources:
+        source_label = '/'.join(source.title() for source in competitor_sources)
+        loaders.append((
+            source_label,
+            lambda: _available_scraped_properties(competitor_sources),
+        ))
+
+    for source, loader in loaders:
         try:
             properties.extend(loader())
         except Exception:
@@ -920,6 +935,7 @@ def api_available_map_properties(request):
         'properties': properties,
         'total': len(properties),
         'status_filter': 'Disponible',
+        'requested_sources': sorted(requested_sources),
         'failed_sources': failed_sources,
     })
 
