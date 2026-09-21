@@ -36,9 +36,11 @@ class MapaZonasTemplateTests(SimpleTestCase):
         self.assertIn('renderedZoneOverlays', self.source)
         self.assertIn('overlay.setMap(null);', self.source)
 
-    def test_available_propify_layer_uses_existing_branded_pin(self):
+    def test_available_property_layer_uses_portal_branded_pins(self):
         self.assertIn('toggle-propify-properties', self.source)
         self.assertIn('Pin-propify.png', self.source)
+        self.assertIn('pin-remax.png', self.source)
+        self.assertIn('pin-properati.png', self.source)
         self.assertIn('PROPIFY_PROPERTIES_ENDPOINT', self.source)
         self.assertIn('Propify · Disponible', self.source)
 
@@ -46,6 +48,8 @@ class MapaZonasTemplateTests(SimpleTestCase):
         self.assertIn('propify-type-filter', self.source)
         self.assertIn('propify-district-filter', self.source)
         self.assertIn('propify-operation-filter', self.source)
+        self.assertIn('propify-source-filter', self.source)
+        self.assertIn('propify-precision-filter', self.source)
         self.assertIn('setupDraggablePropifyCard()', self.source)
         self.assertIn('width: 84px;', self.source)
         self.assertIn("className: 'propify-price-label'", self.source)
@@ -133,6 +137,44 @@ class AvailablePropifyPropertiesApiTests(SimpleTestCase):
         self.assertIsNone(
             views._price_per_m2_in_usd('3440.00', currency_id=1)
         )
+
+    @patch('cuadrantizacion.views._available_scraped_properties')
+    @patch('cuadrantizacion.views._available_propify_properties')
+    def test_map_api_combines_only_supported_sources(self, propify, scraped):
+        propify.return_value = [{
+            'id': 1, 'source': 'Propify', 'location_precision': 'Exacta'
+        }]
+        scraped.return_value = [
+            {'id': 'remax-2', 'source': 'Remax', 'location_precision': 'Exacta'},
+            {'id': 'properati-3', 'source': 'Properati', 'location_precision': 'Aproximada'},
+        ]
+
+        response = views.api_available_map_properties(self.request)
+        payload = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload['total'], 3)
+        self.assertEqual(
+            {row['source'] for row in payload['properties']},
+            {'Propify', 'Remax', 'Properati'},
+        )
+
+    @patch(
+        'cuadrantizacion.views._available_scraped_properties',
+        side_effect=RuntimeError('default database unavailable'),
+    )
+    @patch('cuadrantizacion.views._available_propify_properties')
+    def test_map_api_keeps_working_when_one_source_fails(self, propify, _scraped):
+        propify.return_value = [{
+            'id': 1, 'source': 'Propify', 'location_precision': 'Exacta'
+        }]
+
+        response = views.api_available_map_properties(self.request)
+        payload = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload['total'], 1)
+        self.assertEqual(payload['failed_sources'], ['Remax/Properati'])
 
 
 class ZonaValorCreateTests(SimpleTestCase):

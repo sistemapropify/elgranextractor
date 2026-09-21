@@ -832,10 +832,16 @@ window.onGoogleMapsLoaded = function() {
                 <label class="property-layer-toggle" for="toggle-propify-properties">
                     <input type="checkbox" id="toggle-propify-properties" checked>
                     <img src="{% static 'requerimientos/data/Pin-propify.png' %}" alt="">
-                    <span class="layer-label">Propiedades Propify disponibles</span>
+                    <span class="layer-label">Propiedades disponibles</span>
                     <span class="panel-badge" id="propify-properties-count">…</span>
                 </label>
                 <div class="property-map-filters" id="propify-property-filters">
+                    <select id="propify-source-filter" aria-label="Filtrar por portal">
+                        <option value="">Todos los portales</option>
+                    </select>
+                    <select id="propify-precision-filter" aria-label="Filtrar por precisión">
+                        <option value="">Todas las precisiones</option>
+                    </select>
                     <select class="operation-filter" id="propify-operation-filter" aria-label="Filtrar por operación">
                         <option value="">Venta y alquiler</option>
                     </select>
@@ -863,9 +869,9 @@ window.onGoogleMapsLoaded = function() {
                 </div>
             </div>
 
-            <section class="propify-floating-card" id="propify-floating-card" hidden aria-label="Propiedad Propify">
+            <section class="propify-floating-card" id="propify-floating-card" hidden aria-label="Propiedad disponible">
                 <div class="propify-floating-card__head" id="propify-floating-card-head">
-                    <span>Propify · Disponible</span>
+                    <span id="propify-floating-card-source">Propify · Disponible</span>
                     <button type="button" class="propify-floating-card__close" id="propify-floating-card-close" aria-label="Cerrar">&times;</button>
                 </div>
                 <div class="propify-floating-card__body" id="propify-floating-card-body"></div>
@@ -974,7 +980,9 @@ let propifyPropertiesLoaded = false;
 let propifyProperties = [];
 
 const PROPIFY_MARKER_ICON = "{% static 'requerimientos/data/Pin-propify.png' %}";
-const PROPIFY_PROPERTIES_ENDPOINT = "{% url 'api_propify_available_properties' %}";
+const REMAX_MARKER_ICON = "{% static 'requerimientos/data/pin-remax.png' %}";
+const PROPERATI_MARKER_ICON = "{% static 'requerimientos/data/pin-properati.png' %}";
+const PROPIFY_PROPERTIES_ENDPOINT = "{% url 'api_available_map_properties' %}";
 
 // Colores para zonas
 const ZONE_COLORS = {
@@ -1508,6 +1516,8 @@ function setupSaveZone() {
 
 function setupPropifyPropertyLayer() {
     var toggle = document.getElementById('toggle-propify-properties');
+    var sourceFilter = document.getElementById('propify-source-filter');
+    var precisionFilter = document.getElementById('propify-precision-filter');
     var operationFilter = document.getElementById('propify-operation-filter');
     var typeFilter = document.getElementById('propify-type-filter');
     var districtFilter = document.getElementById('propify-district-filter');
@@ -1519,6 +1529,8 @@ function setupPropifyPropertyLayer() {
         if (typeFilter) typeFilter.disabled = !toggle.checked;
         if (districtFilter) districtFilter.disabled = !toggle.checked;
         if (operationFilter) operationFilter.disabled = !toggle.checked;
+        if (sourceFilter) sourceFilter.disabled = !toggle.checked;
+        if (precisionFilter) precisionFilter.disabled = !toggle.checked;
         if (toggle.checked && !propifyPropertiesLoaded) {
             loadPropifyProperties();
             return;
@@ -1529,7 +1541,7 @@ function setupPropifyPropertyLayer() {
         if (!toggle.checked) closePropifyFloatingCard();
     });
 
-    [operationFilter, typeFilter, districtFilter].forEach(function(filter) {
+    [sourceFilter, precisionFilter, operationFilter, typeFilter, districtFilter].forEach(function(filter) {
         if (filter) filter.addEventListener('change', renderPropifyPropertyMarkers);
     });
 
@@ -1596,11 +1608,15 @@ function populatePropifyFilter(select, values, defaultLabel) {
 }
 
 function filteredPropifyProperties() {
+    var source = document.getElementById('propify-source-filter').value;
+    var precision = document.getElementById('propify-precision-filter').value;
     var operation = document.getElementById('propify-operation-filter').value;
     var type = document.getElementById('propify-type-filter').value;
     var district = document.getElementById('propify-district-filter').value;
     return propifyProperties.filter(function(property) {
-        return (!operation || property.operation_type === operation) &&
+        return (!source || property.source === source) &&
+            (!precision || property.location_precision === precision) &&
+            (!operation || property.operation_type === operation) &&
             (!type || property.property_type === type) &&
             (!district || property.district === district);
     });
@@ -1614,7 +1630,9 @@ function closePropifyFloatingCard() {
 function showPropifyFloatingCard(property) {
     var card = document.getElementById('propify-floating-card');
     var body = document.getElementById('propify-floating-card-body');
+    var source = document.getElementById('propify-floating-card-source');
     if (!card || !body) return;
+    if (source) source.textContent = (property.source || 'Propiedad') + ' · Disponible';
 
     var image = property.image_url
         ? '<img class="propify-card-thumb" src="' + escapeMapHtml(property.image_url) + '" alt="" loading="lazy" decoding="async">'
@@ -1660,6 +1678,7 @@ function showPropifyFloatingCard(property) {
                 '<div class="propify-card-title">' + escapeMapHtml(property.title) + '</div>' +
                 '<div class="propify-card-sub">' + escapeMapHtml(property.operation_type) + ' · ' + escapeMapHtml(property.property_type) + '</div>' +
                 '<div class="propify-card-sub">' + escapeMapHtml(property.district) + '</div>' +
+                '<div class="propify-card-sub">Ubicación ' + escapeMapHtml(property.location_precision || 'Desconocida') + '</div>' +
                 '<div class="propify-card-price">' + formatPropifyPrice(property.price, property.currency_symbol) + '</div>' +
                 (pricePerM2 ? '<div class="propify-card-m2">' + pricePerM2 +
                     (pricePerM2Usd ? '<span class="propify-card-m2-usd">(' + pricePerM2Usd + ')</span>' : '') +
@@ -1730,12 +1749,15 @@ function renderPropifyPropertyMarkers() {
 
     filtered.forEach(function(property) {
         var markerPrice = formatPropifyMarkerPrice(property);
+        var markerIcon = property.source_key === 'remax'
+            ? REMAX_MARKER_ICON
+            : (property.source_key === 'properati' ? PROPERATI_MARKER_ICON : PROPIFY_MARKER_ICON);
         var marker = new google.maps.Marker({
             position: { lat: Number(property.lat), lng: Number(property.lng) },
             map: toggle && toggle.checked ? map : null,
-            title: property.title || property.code || 'Propiedad Propify',
+            title: property.title || property.code || 'Propiedad disponible',
             icon: {
-                url: PROPIFY_MARKER_ICON,
+                url: markerIcon,
                 scaledSize: new google.maps.Size(40, 40),
                 anchor: new google.maps.Point(20, 40),
                 labelOrigin: new google.maps.Point(20, 50)
@@ -1777,6 +1799,16 @@ function loadPropifyProperties() {
         .then(function(data) {
             propifyProperties = data.properties || [];
             populatePropifyFilter(
+                document.getElementById('propify-source-filter'),
+                propifyProperties.map(function(property) { return property.source; }),
+                'Todos los portales'
+            );
+            populatePropifyFilter(
+                document.getElementById('propify-precision-filter'),
+                propifyProperties.map(function(property) { return property.location_precision; }),
+                'Todas las precisiones'
+            );
+            populatePropifyFilter(
                 document.getElementById('propify-operation-filter'),
                 propifyProperties.map(function(property) { return property.operation_type; }),
                 'Venta y alquiler'
@@ -1793,12 +1825,18 @@ function loadPropifyProperties() {
             );
             propifyPropertiesLoaded = true;
             renderPropifyPropertyMarkers();
+            if (data.failed_sources && data.failed_sources.length) {
+                showAlert(
+                    'Se cargó el mapa parcialmente. No respondieron: ' + data.failed_sources.join(', ') + '.',
+                    'warning'
+                );
+            }
         })
         .catch(function(error) {
             propifyPropertiesLoaded = false;
             if (count) count.textContent = '!';
-            console.error('Error loading available Propify properties:', error);
-            showAlert('No se pudieron cargar las propiedades Propify: ' + error.message, 'warning');
+            console.error('Error loading available properties:', error);
+            showAlert('No se pudieron cargar las propiedades disponibles: ' + error.message, 'warning');
         });
 }
 

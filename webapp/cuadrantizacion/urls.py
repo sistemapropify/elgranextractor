@@ -25,6 +25,11 @@ urlpatterns = [
         views.api_propify_available_properties,
         name='api_propify_available_properties',
     ),
+    path(
+        'propiedades-mapa-disponibles/',
+        views.api_available_map_properties,
+        name='api_available_map_properties',
+    ),
     path('jerarquia/', views.configurar_jerarquia, name='configurar_jerarquia'),
     path('heatmap/', views.mapa_heatmap, name='mapa_heatmap'),
     path('heatmap-data/', views.api_heatmap_data, name='api_heatmap_data'),

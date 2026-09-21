@@ -773,6 +773,8 @@ def _available_propify_properties():
 
         properties.append({
             'id': row['id'],
+            'source': 'Propify',
+            'source_key': 'propify',
             'code': row['code'] or '',
             'title': row['title'] or row['code'] or 'Propiedad Propify',
             'price': str(price) if price is not None else None,
@@ -791,9 +793,135 @@ def _available_propify_properties():
             'lat': latitude,
             'lng': longitude,
             'status': 'Disponible',
+            'location_precision': 'Exacta',
         })
 
     return properties
+
+
+def _available_scraped_properties():
+    """Return active mapped listings from the supported competitor portals."""
+    from ingestas.models import PropiedadesCompetencia
+
+    rows = (
+        PropiedadesCompetencia.objects
+        .filter(
+            fuente__in=('remax', 'properati'),
+            estado_publicacion='activa',
+            latitud__isnull=False,
+            longitud__isnull=False,
+        )
+        .values(
+            'id', 'fuente', 'id_origen', 'titulo', 'tipo_inmueble',
+            'tipo_operacion', 'precio_soles', 'precio_usd', 'area_m2',
+            'distrito', 'direccion_texto', 'latitud', 'longitud',
+            'precision_ubicacion', 'imagen_url',
+        )
+        .order_by('fuente', 'id')
+    )
+
+    properties = []
+    for row in rows:
+        try:
+            latitude = float(row['latitud'])
+            longitude = float(row['longitud'])
+        except (TypeError, ValueError):
+            continue
+        if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+            logger.warning(
+                'Propiedad %s %s omitida por coordenadas invalidas: %s, %s',
+                row['fuente'], row['id_origen'], row['latitud'], row['longitud'],
+            )
+            continue
+
+        source_key = (row['fuente'] or '').strip().casefold()
+        source = {'remax': 'Remax', 'properati': 'Properati'}.get(
+            source_key, source_key.title()
+        )
+        operation_type, is_rental = _normalize_propify_operation(row['tipo_operacion'])
+        property_type = row['tipo_inmueble'] or 'Propiedad'
+        area = _positive_area(row['area_m2'])
+        is_land = 'terreno' in property_type.casefold()
+        area_source = 'land_area' if is_land else 'built_area'
+
+        # Remax normalmente publica soles y USD simultáneamente. Se conserva
+        # el precio principal en soles; Properati usa la moneda disponible.
+        if row['precio_soles'] is not None and row['precio_soles'] > 0:
+            price = row['precio_soles']
+            currency_symbol = 'S/.'
+            currency_id = 2
+        else:
+            price = row['precio_usd']
+            currency_symbol = '$'
+            currency_id = 1
+
+        price_per_m2 = _sale_price_per_m2(price, area, is_rental)
+        price_per_m2_usd = _price_per_m2_in_usd(price_per_m2, currency_id)
+        precision = (row['precision_ubicacion'] or 'desconocida').strip().casefold()
+        precision_label = {
+            'exacta': 'Exacta',
+            'aproximada': 'Aproximada',
+            'desconocida': 'Desconocida',
+        }.get(precision, 'Desconocida')
+
+        properties.append({
+            'id': f"{source_key}-{row['id']}",
+            'source': source,
+            'source_key': source_key,
+            'code': row['id_origen'] or '',
+            'title': row['titulo'] or row['id_origen'] or f'Propiedad {source}',
+            'price': str(price) if price is not None else None,
+            'address': row['direccion_texto'] or '',
+            'property_type': property_type,
+            'operation_type': operation_type,
+            'is_rental': is_rental,
+            'district': row['distrito'] or 'Sin distrito',
+            'image_url': row['imagen_url'] or None,
+            'currency_symbol': currency_symbol,
+            'price_per_m2': price_per_m2,
+            'price_per_m2_usd': price_per_m2_usd,
+            'built_area_m2': str(area) if area is not None and not is_land else None,
+            'land_area_m2': str(area) if area is not None and is_land else None,
+            'area_used': area_source if price_per_m2 is not None else None,
+            'lat': latitude,
+            'lng': longitude,
+            'status': 'Disponible',
+            'location_precision': precision_label,
+        })
+
+    return properties
+
+
+def api_available_map_properties(request):
+    """Available Propify, Remax and Properati markers for the zoning map."""
+    properties = []
+    failed_sources = []
+    for source, loader in (
+        ('Propify', _available_propify_properties),
+        ('Remax/Properati', _available_scraped_properties),
+    ):
+        try:
+            properties.extend(loader())
+        except Exception:
+            failed_sources.append(source)
+            logger.exception(
+                'No se pudieron cargar propiedades %s para cuadrantizacion.', source
+            )
+
+    if not properties and failed_sources:
+        return JsonResponse({
+            'properties': [],
+            'total': 0,
+            'error': 'No se pudieron cargar las propiedades disponibles.',
+            'failed_sources': failed_sources,
+        }, status=503)
+
+    return JsonResponse({
+        'properties': properties,
+        'total': len(properties),
+        'status_filter': 'Disponible',
+        'failed_sources': failed_sources,
+    })
 
 
 def api_propify_available_properties(request):
