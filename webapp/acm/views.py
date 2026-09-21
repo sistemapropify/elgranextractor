@@ -8,8 +8,9 @@ from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.db import transaction
 from django.db.models import Q, F
-from django.db.utils import OperationalError, ProgrammingError
+from django.db.utils import IntegrityError, OperationalError, ProgrammingError
 from django.utils import timezone
 from django.conf import settings
 from ingestas.models import PropiedadRaw
@@ -22,25 +23,37 @@ def _ensure_acm_test_snapshot():
     """Create the initial isolated snapshot once; normal ACM data is untouched."""
     if ACMTestProperty.objects.exists():
         return
-    rows = []
-    for prop in PropiedadRaw.objects.iterator():
-        rows.append(ACMTestProperty(
-            source_id=f'raw-{prop.pk}', source=prop.portal or '',
-            tipo_propiedad=prop.tipo_propiedad or '', precio_usd=prop.precio_usd,
-            precio_final_venta=prop.precio_final_venta, descripcion=prop.descripcion or '',
-            portal=prop.portal or '', url_propiedad=prop.url_propiedad or '',
-            coordenadas=prop.coordenadas or '', departamento=prop.departamento or '',
-            provincia=prop.provincia or '', distrito=prop.distrito or '',
-            area_terreno=prop.area_terreno, area_construida=prop.area_construida,
-            numero_habitaciones=prop.numero_habitaciones, numero_banos=prop.numero_banos,
-            numero_cocheras=prop.numero_cocheras, imagenes_propiedad=prop.imagenes_propiedad or '',
-            estado_propiedad=prop.estado_propiedad or '', datos_crudos={'source_pk': prop.pk},
-        ))
-        if len(rows) >= 1000:
-            ACMTestProperty.objects.bulk_create(rows, ignore_conflicts=True)
+    try:
+        # SQL Server does not implement ``ignore_conflicts``. Keep the complete
+        # snapshot in one transaction so concurrent first visits either create
+        # it once or observe the winning transaction without leaving half a copy.
+        with transaction.atomic():
+            if ACMTestProperty.objects.exists():
+                return
             rows = []
-    if rows:
-        ACMTestProperty.objects.bulk_create(rows, ignore_conflicts=True)
+            for prop in PropiedadRaw.objects.iterator():
+                rows.append(ACMTestProperty(
+                    source_id=f'raw-{prop.pk}', source=prop.portal or '',
+                    tipo_propiedad=prop.tipo_propiedad or '', precio_usd=prop.precio_usd,
+                    precio_final_venta=prop.precio_final_venta, descripcion=prop.descripcion or '',
+                    portal=prop.portal or '', url_propiedad=prop.url_propiedad or '',
+                    coordenadas=prop.coordenadas or '', departamento=prop.departamento or '',
+                    provincia=prop.provincia or '', distrito=prop.distrito or '',
+                    area_terreno=prop.area_terreno, area_construida=prop.area_construida,
+                    numero_habitaciones=prop.numero_habitaciones, numero_banos=prop.numero_banos,
+                    numero_cocheras=prop.numero_cocheras, imagenes_propiedad=prop.imagenes_propiedad or '',
+                    estado_propiedad=prop.estado_propiedad or '', datos_crudos={'source_pk': prop.pk},
+                ))
+                if len(rows) >= 1000:
+                    ACMTestProperty.objects.bulk_create(rows, batch_size=100)
+                    rows = []
+            if rows:
+                ACMTestProperty.objects.bulk_create(rows, batch_size=100)
+    except IntegrityError:
+        # Another request may have committed the same unique source IDs first.
+        # Any other integrity failure must remain visible instead of being hidden.
+        if not ACMTestProperty.objects.exists():
+            raise
 
 
 def acm_pruebas_view(request):
