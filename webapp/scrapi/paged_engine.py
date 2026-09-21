@@ -157,10 +157,27 @@ async def prepare_detail(portal, source, page, raw, emit, *, store_images=False)
     key = stable_id(raw)
     for attempt in range(1, 7):
         try:
+            if portal == 'properati':
+                # A fixed quiet interval after each attempt limits request volume.
+                # Applies to resumed candidates and retries as well as new details.
+                next_visit = getattr(page, '_properati_next_visit', 0)
+                remaining = max(0, next_visit - time.monotonic())
+                if remaining:
+                    await emit(event='rate_limit.waiting', property_id=key,
+                               message=f'Properati: pausa de {remaining:.0f} s entre visitas')
+                    while remaining > 0:
+                        await asyncio.sleep(min(remaining, 5))
+                        await emit(event='rate_limit.waiting', property_id=key,
+                                   message='Properati: respetando intervalo entre visitas')
+                        remaining = max(0, next_visit - time.monotonic())
             await emit(event='detail.started', property_id=key, attempt=attempt,
                        message=f'{portal}: abriendo ficha {key}')
             candidate = deepcopy(raw)
-            await asyncio.wait_for(enrich(portal, source, page, candidate), timeout=100)
+            try:
+                await asyncio.wait_for(enrich(portal, source, page, candidate), timeout=100)
+            finally:
+                if portal == 'properati':
+                    page._properati_next_visit = time.monotonic() + 10
             row = normalize(portal, source, candidate)
             raw.update(candidate)
             if attempt > 1:

@@ -20,6 +20,9 @@ def transient_failure(exc):
 
 def retry_delay(exc, attempt):
     """Six transport attempts; three attempts for extraction/validation errors."""
+    if any(marker in str(exc).lower() for marker in (
+            'detail.blocked', 'navigation.blocked', 'http 403', 'http 429')):
+        return min(60 * attempt, 120) if attempt < 3 else None
     transient = transient_failure(exc)
     if attempt >= (6 if transient else 3):
         return None

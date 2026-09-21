@@ -13,6 +13,11 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(retry_delay(RuntimeError('location.coordinates_missing'), 3))
         self.assertFalse(transient_failure(RuntimeError('HTTP 404')))
 
+    def test_access_blocks_have_longer_bounded_waits(self):
+        self.assertEqual(retry_delay(RuntimeError('detail.blocked'), 1), 60)
+        self.assertEqual(retry_delay(RuntimeError('HTTP 429'), 2), 120)
+        self.assertIsNone(retry_delay(RuntimeError('HTTP 403'), 3))
+
     def test_wrapped_transport_error_is_preserved(self):
         error = RuntimeError('detail.extraction_failed')
         error.__cause__ = TimeoutError()
@@ -32,7 +37,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(paged_engine, 'enrich', enrich), \
              patch.object(paged_engine, 'normalize', return_value={'datos_crudos': {}}), \
              patch.object(paged_engine, 'wait_for_retry', new_callable=AsyncMock):
-            await paged_engine.prepare_detail('properati', None, SimpleNamespace(url='detail'), raw, emit)
+            await paged_engine.prepare_detail('remax', None, SimpleNamespace(url='detail'), raw, emit)
         self.assertEqual(calls, ['abc'] * 4)
         self.assertTrue(raw['complete'])
         self.assertIn('recovery.succeeded', [call.kwargs['event'] for call in emit.call_args_list])
@@ -41,6 +46,22 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         emit = AsyncMock(side_effect=ScrapingInterrupted('stopped'))
         with self.assertRaises(ScrapingInterrupted):
             await wait_for_retry(60, emit)
+
+    async def test_properati_spaces_visits_after_success(self):
+        page = SimpleNamespace(url='detail')
+        with patch.object(paged_engine, 'enrich', new_callable=AsyncMock), \
+             patch.object(paged_engine, 'normalize', return_value={'datos_crudos': {}}):
+            before = paged_engine.time.monotonic()
+            await paged_engine.prepare_detail('properati', None, page, {'ID': 'abc'}, AsyncMock())
+        self.assertGreaterEqual(page._properati_next_visit, before + 10)
+
+    async def test_missing_map_does_not_trigger_extra_http_request(self):
+        from scrapi.properati_scraper import _html_servidor
+        page = SimpleNamespace(content=AsyncMock(return_value='<h1>Inmueble</h1>'),
+                               request=SimpleNamespace(get=AsyncMock()))
+        self.assertEqual(await _html_servidor(page, 'https://www.properati.com.pe/detalle/example'),
+                         '<h1>Inmueble</h1>')
+        page.request.get.assert_not_awaited()
 
     async def test_properati_does_not_extract_after_navigation_failure(self):
         from scrapi.properati_scraper import navegar_con_cloudflare

@@ -480,7 +480,9 @@ async def esperar_cloudflare(page, timeout=30):
     while asyncio.get_event_loop().time() - inicio < timeout:
         try:
             titulo = await page.title()
-            if "Just a moment" not in titulo and titulo.strip():
+            if titulo.strip() and not any(marker in titulo.lower() for marker in (
+                    'just a moment', 'access denied', 'attention required',
+                    'security verification', 'verify you are human')):
                 print(f"   Cloudflare resuelto! Titulo: {titulo}")
                 return True
         except Exception:
@@ -489,7 +491,9 @@ async def esperar_cloudflare(page, timeout=30):
     await page.wait_for_timeout(5000)
     try:
         titulo = await page.title()
-        if "Just a moment" not in titulo and titulo.strip():
+        if titulo.strip() and not any(marker in titulo.lower() for marker in (
+                'just a moment', 'access denied', 'attention required',
+                'security verification', 'verify you are human')):
             print(f"   Cloudflare resuelto! Titulo: {titulo}")
             return True
     except Exception:
@@ -633,14 +637,8 @@ async def _html_servidor(page, url):
     dom = await page.content()
     if map_object(dom):
         return dom
-    try:
-        response = await page.request.get(url, timeout=15000)
-        if response.ok and response.url.rstrip('/') == url.rstrip('/'):
-            text = await response.text()
-            if map_object(text):
-                return text
-    except Exception:
-        logger.warning('properati.location.http_fallback_failed url=%s', url)
+    # Do not double each failed visit with a separate HTTP request. Its session
+    # and challenge handling differ from the browser and can amplify throttling.
     return dom
 
 
@@ -956,7 +954,19 @@ async def extraer_detalle(page, prop):
         }
         if lat is None or lng is None:
             # Missing coordinates must remain retryable, not silently marked saved.
-            raise RuntimeError('location.coordinates_missing: no se obtuvo el par de coordenadas de la ficha')
+            title = (await page.title())[:160]
+            blocked = await page.locator(
+                '#challenge-running, #challenge-stage, #cf-challenge-running, '
+                'form#challenge-form, iframe[src*="challenges.cloudflare.com"]'
+            ).count() > 0
+            evidence = (f'http={getattr(page, "_scraping_document_status", None)}; '
+                        f'title={title!r}; map_data={bool(map_object(html_content))}; '
+                        f'location_block={await page.locator("#location-map").count() > 0}; '
+                        f'challenge={blocked}; html_bytes={len(html_content.encode("utf-8"))}')
+            prop['_location_evidence']['diagnostic'] = evidence
+            if blocked:
+                raise RuntimeError(f'detail.blocked: verificación de acceso presente; {evidence}')
+            raise RuntimeError(f'location.coordinates_missing: no se obtuvo el par de coordenadas de la ficha; {evidence}')
         if precision == 'desconocida':
             raise RuntimeError('location.precision_unknown: no se pudo verificar el mapa de la ficha')
         logger.info('properati.location.extracted id=%s precision=%s source=%s',
