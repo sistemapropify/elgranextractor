@@ -502,6 +502,7 @@ async def navegar_con_cloudflare(page, url, timeout=30):
     """Navega a una URL esperando que Cloudflare se resuelva."""
     page._scraping_initial_html = None
     page._scraping_initial_url = None
+    page._scraping_document_status = None
     try:
         response = await page.goto(url, wait_until='domcontentloaded', timeout=60000)
         # Guardar el HTML servido en ESTA navegación: es el SSR que contiene
@@ -515,7 +516,12 @@ async def navegar_con_cloudflare(page, url, timeout=30):
         except Exception:
             pass
     except Exception as e:
-        print(f"   [WARN] Error en navegacion: {e}")
+        raise RuntimeError(f'navigation.failed: {e}') from e
+    if response is None:
+        raise RuntimeError('navigation.not_ready: no se recibió respuesta del servidor')
+    page._scraping_document_status = response.status
+    if response.status >= 400:
+        raise RuntimeError(f'navigation.http_error: HTTP {response.status}')
     if not await esperar_cloudflare(page, timeout):
         raise RuntimeError('navigation.blocked: Properati no confirmó acceso al contenido')
     await page.wait_for_timeout(2000)

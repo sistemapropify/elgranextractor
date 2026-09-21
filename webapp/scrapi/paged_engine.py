@@ -7,12 +7,14 @@ import asyncio
 import importlib
 import os
 import time
+from copy import deepcopy
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 from .contracts import Discovery, ScrapeRows, ScrapingInterrupted
 from .normalization import number, operation, property_type, urbania_row, validate_row
 from .source_config import page_url, validate_url
+from .retry_policy import retry_delay, transient_failure, wait_for_retry
 
 PAGINATION_JS = r"""() => {
  const links = [...document.querySelectorAll('a,button')];
@@ -153,23 +155,30 @@ async def guarded_navigation(page, portal):
 async def prepare_detail(portal, source, page, raw, emit, *, store_images=False):
     """Use the same bounded retries, normalization and images on initial/resumed work."""
     key = stable_id(raw)
-    for attempt in range(1, 4):
+    for attempt in range(1, 7):
         try:
             await emit(event='detail.started', property_id=key, attempt=attempt,
                        message=f'{portal}: abriendo ficha {key}')
-            await asyncio.wait_for(enrich(portal, source, page, raw), timeout=100)
-            row = normalize(portal, source, raw)
+            candidate = deepcopy(raw)
+            await asyncio.wait_for(enrich(portal, source, page, candidate), timeout=100)
+            row = normalize(portal, source, candidate)
+            raw.update(candidate)
+            if attempt > 1:
+                await emit(event='recovery.succeeded', property_id=key, attempt=attempt,
+                           message=f'{portal}: ficha recuperada tras reintento')
             break
         except ScrapingInterrupted:
             raise
         except Exception as exc:
-            await emit(event='detail.retry' if attempt < 3 else 'detail.failed',
-                       level='warning' if attempt < 3 else 'error', property_id=key,
+            delay = retry_delay(exc, attempt)
+            await emit(event='detail.retry' if delay is not None else 'detail.failed',
+                       level='warning' if delay is not None else 'error', property_id=key,
                        attempt=attempt, error_type=type(exc).__name__,
+                       transient=transient_failure(exc), retry_in_seconds=delay,
                        message=f'{type(exc).__name__}: {exc or "se agotó el tiempo de respuesta"}')
-            if attempt == 3:
+            if delay is None:
                 raise
-            await asyncio.sleep(attempt * 2)
+            await wait_for_retry(delay, emit, property_id=key, attempt=attempt)
     if portal in ('adondevivir', 'properati') and store_images and row.get('imagen_url'):
         try:
             blob_image = await asyncio.wait_for(asyncio.to_thread(
@@ -191,7 +200,7 @@ async def prepare_detail(portal, source, page, raw, emit, *, store_images=False)
 
 
 async def navigate(page, source, portal, url, emit):
-    for attempt in range(1, 4):
+    for attempt in range(1, 7):
         await emit(event='navigation.started', message=f'{portal}: abriendo listado',
                    requested_url=url, attempt=attempt)
         start = time.monotonic()
@@ -214,11 +223,13 @@ async def navigate(page, source, portal, url, emit):
         except ScrapingInterrupted:
             raise
         except Exception as exc:
+            delay = retry_delay(exc, attempt)
             await emit(event='navigation.failed', level='error', message=str(exc),
-                       requested_url=url, attempt=attempt, error_type=type(exc).__name__)
-            if attempt == 3:
+                       requested_url=url, attempt=attempt, error_type=type(exc).__name__,
+                       transient=transient_failure(exc), retry_in_seconds=delay)
+            if delay is None:
                 raise
-            await asyncio.sleep(attempt * 2)
+            await wait_for_retry(delay, emit, requested_url=url, attempt=attempt)
 
 
 async def crawl_pages(portal, source_url, source, page, detail_page, *, emit,
