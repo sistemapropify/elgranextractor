@@ -8,10 +8,21 @@ from scrapi.contracts import ScrapingInterrupted
 class ManualVerificationTests(unittest.IsolatedAsyncioTestCase):
     def page(self):
         self.solved = False
-        self.field = SimpleNamespace(count=AsyncMock(side_effect=lambda: int(not self.solved)), fill=AsyncMock())
+        async def press(key, **kwargs):
+            if key == 'Enter':
+                self.solved = True
+        self.field = SimpleNamespace(
+            count=AsyncMock(side_effect=lambda: int(not self.solved)),
+            fill=AsyncMock(), press=AsyncMock(side_effect=press),
+        )
         async def click(**kwargs):
             self.solved = True
-        self.button = SimpleNamespace(count=AsyncMock(return_value=1), click=AsyncMock(side_effect=click))
+        async def dom_click(script):
+            self.solved = True
+        self.button = SimpleNamespace(
+            count=AsyncMock(return_value=1), click=AsyncMock(side_effect=click),
+            evaluate=AsyncMock(side_effect=dom_click),
+        )
         self.image = SimpleNamespace(screenshot=AsyncMock(return_value=b'png'))
         selectors = {'#math-answer': self.field, '#verify-btn': self.button,
                      '.custom-captcha': self.image,
@@ -61,10 +72,33 @@ class ManualVerificationTests(unittest.IsolatedAsyncioTestCase):
         self.button.click.assert_not_awaited()
         mailbox.assert_called_once_with('close')
 
-    async def test_disabled_portal_button_stops_with_pending_intact(self):
+    async def test_changed_portal_button_uses_dom_click_fallback(self):
         page = self.page()
         self.button.click.side_effect = TimeoutError()
         mailbox = Mock(side_effect=lambda action, **kwargs: 'id' if action == 'open' else '123')
-        with self.assertRaisesRegex(ScrapingInterrupted, 'botón de verificación'):
-            await resolve(page, mailbox, AsyncMock())
+        with patch('scrapi.manual_verification.asyncio.sleep', AsyncMock()):
+            self.assertTrue(await resolve(page, mailbox, AsyncMock()))
+        self.button.evaluate.assert_awaited_once()
+        self.assertEqual(mailbox.call_args.args, ('close',))
+
+    async def test_disappearing_button_after_fill_is_accepted_when_content_loaded(self):
+        page = self.page()
+        async def fill_and_resolve(answer, **kwargs):
+            self.solved = True
+        self.field.fill.side_effect = fill_and_resolve
+        self.button.click.side_effect = TimeoutError()
+        mailbox = Mock(side_effect=lambda action, **kwargs: 'id' if action == 'open' else '123')
+        with patch('scrapi.manual_verification.asyncio.sleep', AsyncMock()):
+            self.assertTrue(await resolve(page, mailbox, AsyncMock()))
+        self.button.evaluate.assert_not_awaited()
+
+    async def test_all_submit_methods_unavailable_stops_with_pending_intact(self):
+        page = self.page()
+        self.button.click.side_effect = TimeoutError()
+        self.button.count.side_effect = [1, 0]
+        self.field.press.side_effect = TimeoutError()
+        mailbox = Mock(side_effect=lambda action, **kwargs: 'id' if action == 'open' else '123')
+        with patch('scrapi.manual_verification.asyncio.sleep', AsyncMock()):
+            with self.assertRaisesRegex(ScrapingInterrupted, 'no permitió enviar'):
+                await resolve(page, mailbox, AsyncMock())
         self.assertEqual(mailbox.call_args.args, ('close',))
