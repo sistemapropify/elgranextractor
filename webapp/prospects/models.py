@@ -305,6 +305,13 @@ class PropertyProspect(models.Model):
     def __str__(self):
         return f"Prospecto #{self.pk} — {self.district or 'Sin distrito'} ({self.get_status_display()})"
 
+    def clean(self):
+        super().clean()
+        # Dormitorios is structurally not applicable to land. Clearing a value
+        # left by OCR or by a previous property type keeps completion consistent.
+        if str(self.property_type or '').strip().lower() == 'terreno':
+            self.bedrooms = None
+
     @property
     def has_gps(self):
         return self.latitude is not None and self.longitude is not None

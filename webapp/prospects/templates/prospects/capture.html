@@ -898,6 +898,10 @@
               <input type="number" id="id_bedrooms" name="bedrooms"
                      value="{{ form.bedrooms.value|default_if_none:''|unlocalize }}"
                      placeholder="0" min="0">
+              <small id="bedrooms-not-applicable" hidden
+                     style="color:#39ff14;font-weight:700;margin-top:5px;">
+                No aplica para terrenos
+              </small>
             </div>
             <div class="field-group" id="fg-area_m2">
               <label for="id_area_m2">Área m²</label>
@@ -1592,6 +1596,30 @@
     input.dispatchEvent(new Event('change', {bubbles: true}));
   }
 
+  // Terreno no requiere dormitorios. The server applies the same rule, while
+  // this feedback prevents a stale house value from confusing the editor.
+  function actualizarDormitoriosPorTipo() {
+    var tipo = document.getElementById('id_property_type');
+    var dormitorios = document.getElementById('id_bedrooms');
+    var aviso = document.getElementById('bedrooms-not-applicable');
+    if (!tipo || !dormitorios) return;
+    var noAplica = String(tipo.value || '').trim().toLowerCase() === 'terreno';
+    if (noAplica) {
+      if (!dormitorios.disabled) dormitorios.dataset.valorAnterior = dormitorios.value || '';
+      dormitorios.value = '';
+      dormitorios.disabled = true;
+      dormitorios.placeholder = 'No aplica';
+    } else {
+      dormitorios.disabled = false;
+      dormitorios.placeholder = '0';
+      if (!dormitorios.value && dormitorios.dataset.valorAnterior) {
+        dormitorios.value = dormitorios.dataset.valorAnterior;
+      }
+      delete dormitorios.dataset.valorAnterior;
+    }
+    if (aviso) aviso.hidden = !noAplica;
+  }
+
   // ── Toast ────────────────────────────────────────────────────
   function showToast(msg, type = 'success') {
     const c = document.getElementById('toast-container');
@@ -1638,8 +1666,10 @@
     event.preventDefault();
     captureAndSave();
   });
+  document.getElementById('id_property_type').addEventListener('change', actualizarDormitoriosPorTipo);
   document.addEventListener('DOMContentLoaded', prepararModoNuevo);
   document.addEventListener('DOMContentLoaded', toggleOriginFields);
+  document.addEventListener('DOMContentLoaded', actualizarDormitoriosPorTipo);
 
 </script>
 {% if google_maps_api_key %}

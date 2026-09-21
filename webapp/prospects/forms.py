@@ -1,5 +1,34 @@
+import re
+import unicodedata
+
 from django import forms
 from .models import PropertyProspect
+
+
+DISTRICTS_AREQUIPA = (
+    'Alto Selva Alegre', 'Cayma', 'Cerro Colorado', 'Characato', 'Chiguata',
+    'Jacobo Hunter', 'José Luis Bustamante y Rivero', 'La Joya',
+    'Mariano Melgar', 'Miraflores', 'Mollebaya', 'Paucarpata', 'Pocsi',
+    'Polobaya', 'Quequeña', 'Sabandía', 'Sachaca', 'Socabaya', 'Tiabaya',
+    'Uchumayo', 'Yanahuara', 'Yarabamba', 'Yura',
+)
+
+
+def _plain(value):
+    return ''.join(
+        char for char in unicodedata.normalize('NFKD', str(value or '').lower())
+        if not unicodedata.combining(char)
+    )
+
+
+def district_from_address(address):
+    """Infer a known district only when its full name occurs in the address."""
+    normalized = _plain(address)
+    for district in sorted(DISTRICTS_AREQUIPA, key=len, reverse=True):
+        name = _plain(district)
+        if re.search(r'(?<![a-z0-9])' + re.escape(name) + r'(?![a-z0-9])', normalized):
+            return district
+    return ''
 
 
 class ProspectCaptureForm(forms.ModelForm):
@@ -54,6 +83,10 @@ class ProspectCaptureForm(forms.ModelForm):
                 self.add_error(None, 'Selecciona una ubicación completa en el mapa.')
             elif latitude is not None and not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
                 self.add_error(None, 'La ubicación seleccionada está fuera del rango válido.')
+        if not str(cleaned.get('district') or '').strip():
+            inferred = district_from_address(cleaned.get('address'))
+            if inferred:
+                cleaned['district'] = inferred
         return cleaned
 
 

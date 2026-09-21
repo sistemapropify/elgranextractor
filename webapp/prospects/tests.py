@@ -2,12 +2,14 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.contrib.sessions.backends.signed_cookies import SessionStore
+from django.template.loader import get_template
 from django.test import RequestFactory, SimpleTestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from .mobile_api import mobile_capture_detail
+from .forms import ProspectEditForm, district_from_address
 from .models import PropertyProspect
-from .views import ProcessImageView, ProspectDetailView, propify_login
+from .views import ProcessImageView, ProspectDetailView, _datos_completos, propify_login
 
 
 class ProspectLoginNavigationTests(SimpleTestCase):
@@ -120,3 +122,50 @@ class SharedProspectAccessTests(SimpleTestCase):
         prospect.full_clean.assert_called_once_with()
         prospect.save.assert_called_once_with()
         self.assertEqual(response.status_code, 200)
+
+
+class ProspectCompletionTests(SimpleTestCase):
+    def complete(self, **overrides):
+        values = {
+            'district': 'Cayma', 'owner_name': 'Propietario', 'phone': '904030700',
+            'operation_type': 'venta', 'contract_type': 'trato_directo',
+            'property_type': 'terreno', 'price': 140000, 'currency': 'USD',
+            'bedrooms': None, 'area_m2': 180,
+        }
+        values.update(overrides)
+        return SimpleNamespace(**values)
+
+    def test_land_is_complete_without_bedrooms(self):
+        self.assertTrue(_datos_completos(self.complete()))
+
+    def test_house_still_requires_bedrooms(self):
+        self.assertFalse(_datos_completos(self.complete(property_type='casa')))
+
+    def test_missing_district_or_owner_prevents_green_border(self):
+        self.assertFalse(_datos_completos(self.complete(district='')))
+        self.assertFalse(_datos_completos(self.complete(owner_name='')))
+
+    def test_land_clears_stale_bedrooms_during_validation(self):
+        prospect = PropertyProspect(property_type='terreno', bedrooms=4)
+        prospect.clean()
+        self.assertIsNone(prospect.bedrooms)
+
+    def test_editing_land_clears_bedrooms_and_infers_cayma(self):
+        form = ProspectEditForm(data={
+            'origin': 'calle', 'owner_name': 'Propietario', 'phone': '904030700',
+            'operation_type': 'venta', 'contract_type': 'trato_directo',
+            'property_type': 'terreno', 'price': '140000', 'currency': 'USD',
+            'bedrooms': '4', 'area_m2': '180',
+            'address': 'MFG5+CHR Cayma, Perú', 'district': '',
+            'latitude': '', 'longitude': '', 'status': 'pendiente', 'captado': '0',
+        })
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        saved = form.save(commit=False)
+        self.assertEqual(saved.district, 'Cayma')
+        self.assertIsNone(saved.bedrooms)
+
+    def test_district_inference_does_not_guess_generic_arequipa(self):
+        self.assertEqual(district_from_address('Arequipa, Perú'), '')
+
+    def test_capture_template_with_not_applicable_state_compiles(self):
+        self.assertIsNotNone(get_template('prospects/capture.html'))
