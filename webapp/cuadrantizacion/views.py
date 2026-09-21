@@ -590,6 +590,31 @@ def mapa_zonas_valor(request):
     return render(request, 'cuadrantizacion/mapa_zonas.html', context)
 
 
+def _normalize_propify_operation(operation_name):
+    name = (operation_name or 'Sin operación').strip()
+    normalized = name.casefold()
+    if any(term in normalized for term in ('alquiler', 'renta', 'arrendamiento')):
+        return 'Alquiler', True
+    if any(term in normalized for term in ('venta', 'compra')):
+        return 'Venta', False
+    return name, False
+
+
+def _sale_price_per_m2(price, area, is_rental):
+    if is_rental or price is None or area is None:
+        return None
+    try:
+        area_decimal = Decimal(str(area))
+        if area_decimal <= 0:
+            return None
+        calculated_price = Decimal(str(price)) / area_decimal
+        if calculated_price <= 0:
+            return None
+        return str(calculated_price.quantize(Decimal('0.01')))
+    except (InvalidOperation, TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
 def _available_propify_properties():
     """Return visible Propify listings that are currently available and mapped."""
     from propifai.models import PropifaiProperty
@@ -620,7 +645,7 @@ def _available_propify_properties():
         .values(
             'id', 'code', 'title', 'price', 'map_address', 'display_address',
             'latitude', 'longitude', 'property_type_id', 'district_id',
-            'currency_id',
+            'currency_id', 'operation_type_id',
         )
         .order_by('id')
     )
@@ -630,6 +655,8 @@ def _available_propify_properties():
         property_type_map = {row[0]: row[1] for row in cursor.fetchall()}
         cursor.execute("SELECT id, name FROM district")
         district_map = {row[0]: row[1] for row in cursor.fetchall()}
+        cursor.execute("SELECT id, name FROM operation_type")
+        operation_type_map = {row[0]: row[1] for row in cursor.fetchall()}
 
     image_map = {}
     specs_map = {}
@@ -696,19 +723,14 @@ def _available_propify_properties():
 
         price = row['price']
         property_type = property_type_map.get(row['property_type_id']) or 'Propiedad'
+        operation_name = operation_type_map.get(row['operation_type_id'])
+        operation_type, is_rental = _normalize_propify_operation(operation_name)
         specs = specs_map.get(row['id'], {})
         if 'terreno' in property_type.casefold():
             area = specs.get('land_area') or specs.get('built_area')
         else:
             area = specs.get('built_area') or specs.get('land_area')
-        price_per_m2 = None
-        try:
-            if price is not None and area is not None and Decimal(str(area)) > 0:
-                calculated_price = Decimal(str(price)) / Decimal(str(area))
-                if calculated_price > 0:
-                    price_per_m2 = str(calculated_price.quantize(Decimal('0.01')))
-        except (InvalidOperation, TypeError, ValueError, ZeroDivisionError):
-            price_per_m2 = None
+        price_per_m2 = _sale_price_per_m2(price, area, is_rental)
 
         image_path = image_map.get(row['id'])
         if image_path and str(image_path).startswith(('http://', 'https://')):
@@ -731,6 +753,8 @@ def _available_propify_properties():
             'price': str(price) if price is not None else None,
             'address': row['display_address'] or row['map_address'] or '',
             'property_type': property_type,
+            'operation_type': operation_type,
+            'is_rental': is_rental,
             'district': district_map.get(row['district_id']) or 'Sin distrito',
             'image_url': image_url,
             'currency_symbol': '$' if row['currency_id'] == 1 else 'S/.',

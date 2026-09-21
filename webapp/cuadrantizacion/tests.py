@@ -45,6 +45,7 @@ class MapaZonasTemplateTests(SimpleTestCase):
     def test_propify_markers_have_type_district_filters_and_draggable_card(self):
         self.assertIn('propify-type-filter', self.source)
         self.assertIn('propify-district-filter', self.source)
+        self.assertIn('propify-operation-filter', self.source)
         self.assertIn('setupDraggablePropifyCard()', self.source)
         self.assertIn('width: 84px;', self.source)
         self.assertIn("className: 'propify-price-label'", self.source)
@@ -70,6 +71,8 @@ class AvailablePropifyPropertiesApiTests(SimpleTestCase):
             'price': '150000.00',
             'address': 'Cayma',
             'property_type': 'Casa',
+            'operation_type': 'Venta',
+            'is_rental': False,
             'district': 'Cayma',
             'image_url': 'https://example.test/casa.jpg',
             'currency_symbol': '$',
@@ -99,6 +102,25 @@ class AvailablePropifyPropertiesApiTests(SimpleTestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(payload['properties'], [])
         self.assertIn('error', payload)
+
+    def test_rental_uses_total_price_instead_of_price_per_square_meter(self):
+        operation, is_rental = views._normalize_propify_operation('Arrendamiento')
+
+        self.assertEqual(operation, 'Alquiler')
+        self.assertTrue(is_rental)
+        self.assertIsNone(
+            views._sale_price_per_m2('1400.00', '100.00', is_rental=True)
+        )
+
+    def test_sale_normalizes_operation_and_calculates_price_per_square_meter(self):
+        operation, is_rental = views._normalize_propify_operation('Compra')
+
+        self.assertEqual(operation, 'Venta')
+        self.assertFalse(is_rental)
+        self.assertEqual(
+            views._sale_price_per_m2('150000.00', '100.00', is_rental=False),
+            '1500.00',
+        )
 
 
 class ZonaValorCreateTests(SimpleTestCase):

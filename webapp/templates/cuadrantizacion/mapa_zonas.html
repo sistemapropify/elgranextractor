@@ -277,6 +277,8 @@
     font-size: 11px;
 }
 
+.property-map-filters .operation-filter { grid-column: 1 / -1; }
+
 .propify-floating-card {
     position: absolute;
     top: 76px;
@@ -812,6 +814,9 @@ window.onGoogleMapsLoaded = function() {
                     <span class="panel-badge" id="propify-properties-count">…</span>
                 </label>
                 <div class="property-map-filters" id="propify-property-filters">
+                    <select class="operation-filter" id="propify-operation-filter" aria-label="Filtrar por operación">
+                        <option value="">Venta y alquiler</option>
+                    </select>
                     <select id="propify-type-filter" aria-label="Filtrar por tipo de propiedad">
                         <option value="">Todos los tipos</option>
                     </select>
@@ -1481,6 +1486,7 @@ function setupSaveZone() {
 
 function setupPropifyPropertyLayer() {
     var toggle = document.getElementById('toggle-propify-properties');
+    var operationFilter = document.getElementById('propify-operation-filter');
     var typeFilter = document.getElementById('propify-type-filter');
     var districtFilter = document.getElementById('propify-district-filter');
     if (!toggle) return;
@@ -1490,6 +1496,7 @@ function setupPropifyPropertyLayer() {
     toggle.addEventListener('change', function() {
         if (typeFilter) typeFilter.disabled = !toggle.checked;
         if (districtFilter) districtFilter.disabled = !toggle.checked;
+        if (operationFilter) operationFilter.disabled = !toggle.checked;
         if (toggle.checked && !propifyPropertiesLoaded) {
             loadPropifyProperties();
             return;
@@ -1500,7 +1507,7 @@ function setupPropifyPropertyLayer() {
         if (!toggle.checked) closePropifyFloatingCard();
     });
 
-    [typeFilter, districtFilter].forEach(function(filter) {
+    [operationFilter, typeFilter, districtFilter].forEach(function(filter) {
         if (filter) filter.addEventListener('change', renderPropifyPropertyMarkers);
     });
 
@@ -1533,6 +1540,13 @@ function formatPropifyPricePerM2(value, currencySymbol) {
     }) + '/m²').trim();
 }
 
+function formatPropifyMarkerPrice(property) {
+    if (property.is_rental) {
+        return formatPropifyPrice(property.price, property.currency_symbol);
+    }
+    return formatPropifyPricePerM2(property.price_per_m2, property.currency_symbol);
+}
+
 function populatePropifyFilter(select, values, defaultLabel) {
     if (!select) return;
     var current = select.value;
@@ -1550,10 +1564,12 @@ function populatePropifyFilter(select, values, defaultLabel) {
 }
 
 function filteredPropifyProperties() {
+    var operation = document.getElementById('propify-operation-filter').value;
     var type = document.getElementById('propify-type-filter').value;
     var district = document.getElementById('propify-district-filter').value;
     return propifyProperties.filter(function(property) {
-        return (!type || property.property_type === type) &&
+        return (!operation || property.operation_type === operation) &&
+            (!type || property.property_type === type) &&
             (!district || property.district === district);
     });
 }
@@ -1577,14 +1593,17 @@ function showPropifyFloatingCard(property) {
     var address = property.address
         ? '<div class="propify-card-address">' + escapeMapHtml(property.address) + '</div>'
         : '';
-    var pricePerM2 = formatPropifyPricePerM2(property.price_per_m2, property.currency_symbol);
+    var pricePerM2 = property.is_rental
+        ? ''
+        : formatPropifyPricePerM2(property.price_per_m2, property.currency_symbol);
 
     body.innerHTML =
         '<div class="propify-card-summary">' +
             image +
             '<div class="propify-card-info">' +
                 '<div class="propify-card-title">' + escapeMapHtml(property.title) + '</div>' +
-                '<div class="propify-card-sub">' + escapeMapHtml(property.property_type) + ' · ' + escapeMapHtml(property.district) + '</div>' +
+                '<div class="propify-card-sub">' + escapeMapHtml(property.operation_type) + ' · ' + escapeMapHtml(property.property_type) + '</div>' +
+                '<div class="propify-card-sub">' + escapeMapHtml(property.district) + '</div>' +
                 '<div class="propify-card-price">' + formatPropifyPrice(property.price, property.currency_symbol) + '</div>' +
                 (pricePerM2 ? '<div class="propify-card-m2">' + pricePerM2 + '</div>' : '') +
                 code +
@@ -1651,7 +1670,7 @@ function renderPropifyPropertyMarkers() {
     var filtered = filteredPropifyProperties();
 
     filtered.forEach(function(property) {
-        var pricePerM2 = formatPropifyPricePerM2(property.price_per_m2, property.currency_symbol);
+        var markerPrice = formatPropifyMarkerPrice(property);
         var marker = new google.maps.Marker({
             position: { lat: Number(property.lat), lng: Number(property.lng) },
             map: toggle && toggle.checked ? map : null,
@@ -1662,8 +1681,8 @@ function renderPropifyPropertyMarkers() {
                 anchor: new google.maps.Point(20, 40),
                 labelOrigin: new google.maps.Point(20, 50)
             },
-            label: pricePerM2 ? {
-                text: pricePerM2,
+            label: markerPrice ? {
+                text: markerPrice,
                 className: 'propify-price-label'
             } : null,
             zIndex: 500
@@ -1698,6 +1717,11 @@ function loadPropifyProperties() {
         .then(parseJsonResponse)
         .then(function(data) {
             propifyProperties = data.properties || [];
+            populatePropifyFilter(
+                document.getElementById('propify-operation-filter'),
+                propifyProperties.map(function(property) { return property.operation_type; }),
+                'Venta y alquiler'
+            );
             populatePropifyFilter(
                 document.getElementById('propify-type-filter'),
                 propifyProperties.map(function(property) { return property.property_type; }),
