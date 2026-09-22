@@ -1264,6 +1264,16 @@ function escapeMapHtml(value) {
         .replace(/'/g, '&#039;');
 }
 
+// Algunas fuentes (p. ej. Remax) publican fotos en un bucket privado que
+// responde 403; en ese caso se muestra "Sin foto" en lugar del ícono roto.
+function propifyImageFallback(image) {
+    if (!image || !image.parentNode) return;
+    var placeholder = document.createElement('div');
+    placeholder.className = image.className + ' propify-card-thumb--empty';
+    placeholder.textContent = 'Sin foto';
+    image.replaceWith(placeholder);
+}
+
 function parseJsonResponse(response) {
     return response.text().then(function(body) {
         var data = null;
@@ -1840,7 +1850,7 @@ function closePropifyFloatingCard() {
 
 function propertyAreaCardHtml(property) {
     var image = property.image_url
-        ? '<img class="property-area-card__thumb" src="' + escapeMapHtml(property.image_url) + '" alt="" loading="lazy" decoding="async">'
+        ? '<img class="property-area-card__thumb" src="' + escapeMapHtml(property.image_url) + '" alt="" loading="lazy" decoding="async" onerror="propifyImageFallback(this)">'
         : '<div class="property-area-card__thumb propify-card-thumb--empty">Sin foto</div>';
     var markerPrice = formatPropifyMarkerPrice(property);
     var link = property.url
