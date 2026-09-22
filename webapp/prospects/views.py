@@ -18,7 +18,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.conf import settings
 
-from .models import ActivityLog, PropertyProspect, ProspectComment
+from .models import ActivityLog, MobileProspectUser, PropertyProspect, ProspectComment
 from .forms import ProspectCaptureForm, ProspectEditForm
 from .propify_auth import (
     PropifyAuthError,
@@ -32,6 +32,25 @@ from .propify_auth import (
 )
 
 logger = logging.getLogger(__name__)
+
+PROSPECT_ASSIGNER_USERNAME = 'shio09'
+
+
+def _puede_asignar_prospecciones(request):
+    principal = getattr(request, 'propify_user', None)
+    username = str(getattr(principal, 'username', '') or '').strip()
+    return username.casefold() == PROSPECT_ASSIGNER_USERNAME
+
+
+def _agentes_asignables():
+    """Usuarios Propify conocidos que pueden recibir una prospección."""
+    usernames = MobileProspectUser.objects.values_list('username', flat=True)
+    return sorted({
+        str(username).strip()
+        for username in usernames
+        if str(username).strip()
+        and str(username).strip().casefold() != PROSPECT_ASSIGNER_USERNAME
+    }, key=str.casefold)
 
 
 _COMMENT_COLORS = [
@@ -648,6 +667,75 @@ def tomar_prospeccion(request, pk):
 
 @csrf_exempt
 @propify_web_required
+def asignar_prospeccion(request, pk):
+    """Asigna una captación completa a un usuario Propify.
+
+    Esta acción de supervisión es exclusiva de Shio09. La validación se hace
+    aquí, además de ocultar el control en la interfaz, para impedir llamadas
+    manuales al endpoint desde otros usuarios.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Método no permitido.'}, status=405)
+    if not _puede_asignar_prospecciones(request):
+        return JsonResponse({
+            'ok': False,
+            'error': 'Solo Shio09 puede asignar responsables.',
+        }, status=403)
+
+    username_solicitado = (request.POST.get('username') or '').strip()
+    username_destino = ''
+    if username_solicitado:
+        agente = MobileProspectUser.objects.filter(
+            username__iexact=username_solicitado,
+        ).first()
+        if agente is None or agente.username.strip().casefold() == PROSPECT_ASSIGNER_USERNAME:
+            return JsonResponse({
+                'ok': False,
+                'error': 'El agente seleccionado no es válido.',
+            }, status=400)
+        username_destino = agente.username.strip()
+
+    with transaction.atomic():
+        prospect = get_object_or_404(
+            PropertyProspect.objects.select_for_update(),
+            pk=pk,
+        )
+        if not _datos_completos(prospect):
+            return JsonResponse({
+                'ok': False,
+                'error': 'La prospección todavía no tiene todos los datos completos.',
+            }, status=409)
+
+        prospect.tomada_por_username = username_destino
+        prospect.tomada_en = timezone.now() if username_destino else None
+        prospect.save(update_fields=['tomada_por_username', 'tomada_en'])
+        if username_destino:
+            descripcion = 'Asignó la prospección #%s a %s.' % (
+                prospect.pk,
+                username_destino,
+            )
+        else:
+            descripcion = 'Retiró la asignación de la prospección #%s.' % prospect.pk
+        registrar_actividad(
+            request,
+            'asignacion',
+            descripcion,
+            prospect=prospect,
+        )
+
+    tomada_en = (
+        timezone.localtime(prospect.tomada_en).strftime('%d/%m/%Y %H:%M')
+        if prospect.tomada_en else ''
+    )
+    return JsonResponse({
+        'ok': True,
+        'tomada_por_username': username_destino,
+        'tomada_en': tomada_en,
+    })
+
+
+@csrf_exempt
+@propify_web_required
 def caducar_prospeccion(request, pk):
     """Marca una captación como caducada y la oculta del panel y del mapa."""
     prospect = get_object_or_404(PropertyProspect, pk=pk)
@@ -1121,6 +1209,8 @@ def prospect_dashboard(request):
     return render(request, 'prospects/dashboard.html', {
         'todas_propiedades_json': data,
         'usuario_actual_username': usuario_actual_username,
+        'puede_asignar_prospecciones': _puede_asignar_prospecciones(request),
+        'agentes_asignables': _agentes_asignables(),
         'puede_metricas': _propify_puede_metricas(request),
         'distritos_arequipa': districts,
         'tipos_propiedad': tipos_presentes,

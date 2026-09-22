@@ -40,6 +40,7 @@ urlpatterns = [
 
     # Tomar / soltar prospección (dashboard cartográfico)
     path('<int:pk>/tomar/', views.tomar_prospeccion, name='tomar'),
+    path('<int:pk>/asignar/', views.asignar_prospeccion, name='asignar'),
     path('<int:pk>/caducar/', views.caducar_prospeccion, name='caducar'),
     path('<int:pk>/comments/', views.prospect_comments, name='comments'),
 

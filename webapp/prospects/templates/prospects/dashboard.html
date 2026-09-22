@@ -312,6 +312,50 @@
         white-space: nowrap;
     }
 
+    /* Asignación supervisada: solo se genera para Shio09 y datos completos. */
+    .ppc-asignar-row {
+        display: flex;
+        justify-content: flex-end;
+        margin: -2px -2px 8px 0;
+    }
+    .ppc-asignar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 7px;
+        width: 100%;
+        padding: 9px;
+        border: 1px solid #58a6ff66;
+        border-radius: 9px;
+        background: rgba(88, 166, 255, .08);
+    }
+    .ppc-asignar__label {
+        margin-right: auto;
+        color: var(--text-secondary, #8b949e);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .ppc-asignar__select {
+        min-width: 180px;
+        padding: 7px 9px;
+        border: 1px solid var(--border-color, #30363d);
+        border-radius: 7px;
+        background: var(--bg-card, #161b22);
+        color: var(--text-primary, #e6edf3);
+    }
+    .ppc-asignar__btn {
+        padding: 7px 12px;
+        border: 1px solid var(--accent-blue, #58a6ff);
+        border-radius: 7px;
+        background: var(--accent-blue, #58a6ff);
+        color: #0d1117;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .ppc-asignar__btn:disabled { opacity: .55; cursor: wait; }
+
     /* Estado CAPTADO / NO CAPTADO */
     .ppc-captado {
         display: inline-flex;
@@ -751,9 +795,16 @@
         </select>
     </div>
     <div class="capture-filters__field">
-        <label for="prospect-filter-agente">Agente</label>
+        <label for="prospect-filter-agente">Agente de captura</label>
         <select id="prospect-filter-agente">
             <option value="">Todos</option>
+        </select>
+    </div>
+    <div class="capture-filters__field">
+        <label for="prospect-filter-asignado">Responsable asignado</label>
+        <select id="prospect-filter-asignado">
+            <option value="">Todos</option>
+            <option value="__sin_asignar__">Sin asignar</option>
         </select>
     </div>
     <label class="capture-filters__check" id="filtro-inmobiliaria-label"
@@ -771,10 +822,15 @@
 
 {% block extra_js %}
 {{ block.super }}
+{{ agentes_asignables|json_script:"prospect-agentes-asignables" }}
 <script>
 (function () {
     // Usuario Propify que está viendo el panel (identidad para "tomar prospección").
     var USUARIO_ACTUAL = '{{ usuario_actual_username|default:""|escapejs }}';
+    var PUEDE_ASIGNAR = {{ puede_asignar_prospecciones|yesno:"true,false" }};
+    var AGENTES_ASIGNABLES = JSON.parse(
+        document.getElementById('prospect-agentes-asignables').textContent || '[]'
+    ) || [];
 
     // Filtro por teléfono: '' = todas, 'con' = con teléfono, 'sin' = sin teléfono
     var filtroTelefono = '';
@@ -802,18 +858,22 @@
         var tipo = (document.getElementById('prospect-filter-tipo') || {}).value || '';
         var origenFiltro = ((document.getElementById('prospect-filter-origen') || {}).value || '').toLowerCase();
         var agenteFiltro = ((document.getElementById('prospect-filter-agente') || {}).value || '').trim();
+        var asignadoFiltro = ((document.getElementById('prospect-filter-asignado') || {}).value || '').trim();
         var d = (p.distrito_nombre || '').toString().trim()
               || (p.distrito || '').toString().trim()
               || (m._distrito || '');
         var t = (p.tipo_propiedad || '').toString().trim();
         var o = (p.origen || '').toString().toLowerCase();
         var agente = (p.agente || '').toString().trim();
+        var asignado = (p.tomada_por_username || '').toString().trim();
         var conTelefono = telefonoMarcador(p);
 
         var okDistrito = !distrito || d === distrito;
         var okTipo = !tipo || t === tipo;
         var okOrigen = !origenFiltro || o === origenFiltro;
         var okAgente = !agenteFiltro || agente === agenteFiltro;
+        var okAsignado = !asignadoFiltro
+            || (asignadoFiltro === '__sin_asignar__' ? !asignado : asignado === asignadoFiltro);
         var okTelefono = !filtroTelefono
             || (filtroTelefono === 'con' && conTelefono)
             || (filtroTelefono === 'sin' && !conTelefono);
@@ -821,7 +881,8 @@
         // Contrato de inmobiliaria: oculto salvo que la casilla esté marcada.
         var contrato = (p.contrato_raw || '').toString().trim().toLowerCase();
         var okInmobiliaria = filtroInmobiliaria || contrato !== 'inmobiliaria';
-        return okDistrito && okTipo && okOrigen && okAgente && okTelefono && okCompletos && okInmobiliaria;
+        return okDistrito && okTipo && okOrigen && okAgente && okAsignado
+            && okTelefono && okCompletos && okInmobiliaria;
     }
 
     // Llena el selector de agentes con los agentes que realmente tienen captaciones.
@@ -843,6 +904,29 @@
         });
     }
     poblarFiltroAgente();
+
+    function poblarFiltroAsignado() {
+        var sel = document.getElementById('prospect-filter-asignado');
+        if (!sel) return;
+        var todas = (typeof todasPropiedadesJSON !== 'undefined') ? todasPropiedadesJSON : [];
+        var responsables = [];
+        todas.forEach(function (p) {
+            var username = (p.tomada_por_username || '').toString().trim();
+            if (username && responsables.indexOf(username) === -1) responsables.push(username);
+        });
+        responsables.sort(function (x, y) { return x.localeCompare(y); });
+        responsables.forEach(function (username) {
+            var existe = Array.prototype.some.call(sel.options, function (opcion) {
+                return opcion.value === username;
+            });
+            if (existe) return;
+            var op = document.createElement('option');
+            op.value = username;
+            op.textContent = username;
+            sel.appendChild(op);
+        });
+    }
+    poblarFiltroAsignado();
 
     function actualizarEstadoTarjetasTelefono() {
         var sinCard = document.getElementById('stat-sin-telefono');
@@ -1073,6 +1157,75 @@
         });
     }
     initTomarProspeccion();
+
+    function controlAsignarHtml(p) {
+        if (!PUEDE_ASIGNAR || !p || !p.completo) return '';
+        var actual = (p.tomada_por_username || '').toString().trim();
+        var agentes = AGENTES_ASIGNABLES.slice();
+        if (actual && agentes.indexOf(actual) === -1) agentes.push(actual);
+        agentes.sort(function (x, y) { return x.localeCompare(y); });
+        var opciones = '<option value="">Sin asignar</option>';
+        agentes.forEach(function (username) {
+            var seleccionado = username === actual ? ' selected' : '';
+            opciones += '<option value="' + escaparHtml(username) + '"' + seleccionado + '>' +
+                escaparHtml(username) + '</option>';
+        });
+        return '<div class="ppc-asignar" data-prospect="' + escaparHtml(p.id) + '">' +
+            '<span class="ppc-asignar__label">Responsable</span>' +
+            '<select class="ppc-asignar__select" aria-label="Agente responsable">' + opciones + '</select>' +
+            '<button type="button" class="ppc-asignar__btn">' +
+                (actual ? 'Reasignar' : 'Asignar') +
+            '</button></div>';
+    }
+
+    function initAsignarProspeccion() {
+        var container = document.getElementById('selected-property');
+        if (!container || container.getAttribute('data-asignar-init')) return;
+        container.setAttribute('data-asignar-init', '1');
+        container.addEventListener('click', function (e) {
+            var boton = e.target && e.target.closest ? e.target.closest('.ppc-asignar__btn') : null;
+            if (!boton) return;
+            e.preventDefault();
+            e.stopPropagation();
+            var control = boton.closest('.ppc-asignar');
+            var selector = control ? control.querySelector('.ppc-asignar__select') : null;
+            var pid = control ? control.getAttribute('data-prospect') : '';
+            if (!selector || !pid) return;
+            boton.disabled = true;
+            selector.disabled = true;
+            fetch('/prospects/' + encodeURIComponent(pid) + '/asignar/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json',
+                },
+                body: 'username=' + encodeURIComponent(selector.value || ''),
+            }).then(function (r) {
+                return r.json().catch(function () {
+                    return { ok: false, error: 'El servidor respondió con un formato inesperado.' };
+                });
+            }).then(function (data) {
+                if (!data || !data.ok) {
+                    if (window.alert) window.alert((data && data.error) ? data.error : 'No se pudo asignar la prospección.');
+                    sincronizarPanel();
+                    return;
+                }
+                for (var i = 0; i < todasPropiedadesJSON.length; i++) {
+                    if (String(todasPropiedadesJSON[i].id) === String(pid)) {
+                        todasPropiedadesJSON[i].tomada_por_username = data.tomada_por_username || '';
+                        todasPropiedadesJSON[i].tomada_en = data.tomada_en || '';
+                        break;
+                    }
+                }
+                poblarFiltroAsignado();
+                sincronizarPanel();
+            }).catch(function () {
+                if (window.alert) window.alert('Error de red. Inténtalo de nuevo.');
+                sincronizarPanel();
+            });
+        });
+    }
+    initAsignarProspeccion();
 
     // ── "Prospección caducó": ocultar captación que ya no está disponible ──
     function controlCaducoHtml(p) {
@@ -1495,7 +1648,10 @@
         fila('Registrado', p.creado);
         fila('Notas', p.notas);
         if (p.lat && p.lng) fila('Coordenadas', p.lat + ', ' + p.lng);
-        var acciones = '<div class="ppc-tomar-row">' + controlTomarHtml(p) + '</div>' +
+        var controlAsignar = controlAsignarHtml(p);
+        var acciones = (controlAsignar
+            ? '<div class="ppc-asignar-row">' + controlAsignar + '</div>'
+            : '') + '<div class="ppc-tomar-row">' + controlTomarHtml(p) + '</div>' +
             '<div class="ppc-caduco-row">' + controlCaducoHtml(p) + '</div>';
         var resultado = acciones + cronologiaHtml(p) + filas.join('');
         if (p.id) {
@@ -1544,10 +1700,12 @@
         var tipoSel = document.getElementById('prospect-filter-tipo');
         var origenSel = document.getElementById('prospect-filter-origen');
         var agenteSel = document.getElementById('prospect-filter-agente');
+        var asignadoSel = document.getElementById('prospect-filter-asignado');
         if (distritoSel) distritoSel.value = '';
         if (tipoSel) tipoSel.value = '';
         if (origenSel) origenSel.value = '';
         if (agenteSel) agenteSel.value = '';
+        if (asignadoSel) asignadoSel.value = '';
         filtroTelefono = '';
         filtroCompletos = false;
         filtroInmobiliaria = false;
@@ -1609,10 +1767,15 @@
         var tp = document.getElementById('prospect-filter-tipo');
         var o = document.getElementById('prospect-filter-origen');
         var a = document.getElementById('prospect-filter-agente');
+        var asignado = document.getElementById('prospect-filter-asignado');
         if (d && d.value) partes.push('distrito=' + d.value);
         if (tp && tp.value) partes.push('tipo=' + tp.value);
         if (o && o.value) partes.push('origen=' + o.value);
         if (a && a.value) partes.push('agente=' + a.value);
+        if (asignado && asignado.value) {
+            partes.push('responsable=' + (asignado.value === '__sin_asignar__'
+                ? 'sin asignar' : asignado.value));
+        }
         if (filtroTelefono) partes.push('telefono=' + filtroTelefono);
         if (filtroCompletos) partes.push('datos_completos=si');
         registrarActividad('filtro', partes.length
@@ -1841,6 +2004,7 @@
         var tipoSel = document.getElementById('prospect-filter-tipo');
         var origenSel = document.getElementById('prospect-filter-origen');
         var agenteSel = document.getElementById('prospect-filter-agente');
+        var asignadoSel = document.getElementById('prospect-filter-asignado');
         function reiniciarSeleccionYAplicarFiltros() {
             prospectoSeleccionadoId = null;
             idsExpandidos.clear();
@@ -1851,6 +2015,7 @@
         if (tipoSel) tipoSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
         if (origenSel) origenSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
         if (agenteSel) agenteSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
+        if (asignadoSel) asignadoSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
 
         // Contrato: al abrir el dashboard la casilla siempre está desmarcada,
         // de modo que las de inmobiliaria quedan ocultas.

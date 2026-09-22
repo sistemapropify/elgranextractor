@@ -3,12 +3,14 @@ from unittest.mock import MagicMock, patch
 
 from django.contrib.sessions.backends.signed_cookies import SessionStore
 from django.template.loader import get_template
-from django.test import RequestFactory, SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase
+from django.urls import reverse
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from .mobile_api import mobile_capture_detail
 from .forms import ProspectEditForm, district_from_address
-from .models import PropertyProspect
+from .models import MobileProspectUser, PropertyProspect
+from .propify_auth import WEB_PROFILE_SESSION_KEY, WEB_TOKEN_SESSION_KEY
 from .views import ProcessImageView, ProspectDetailView, _datos_completos, propify_login
 
 
@@ -169,3 +171,86 @@ class ProspectCompletionTests(SimpleTestCase):
 
     def test_capture_template_with_not_applicable_state_compiles(self):
         self.assertIsNotNone(get_template('prospects/capture.html'))
+
+
+class ProspectAssignmentTests(TestCase):
+    def setUp(self):
+        self.agent = MobileProspectUser.objects.create(username='AgenteDemo')
+        self.complete_prospect = PropertyProspect.objects.create(
+            district='Cayma',
+            owner_name='Propietario',
+            phone='904030700',
+            operation_type='venta',
+            contract_type='trato_directo',
+            property_type='terreno',
+            price=140000,
+            currency='USD',
+            area_m2=180,
+        )
+
+    def login_as(self, username):
+        session = self.client.session
+        session[WEB_TOKEN_SESSION_KEY] = 'test-token'
+        session[WEB_PROFILE_SESSION_KEY] = {'id': username, 'username': username}
+        session.save()
+
+    def test_shio09_can_assign_complete_prospect(self):
+        self.login_as('Shio09')
+
+        response = self.client.post(
+            reverse('prospects:asignar', args=[self.complete_prospect.pk]),
+            {'username': self.agent.username},
+            HTTP_ACCEPT='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.complete_prospect.refresh_from_db()
+        self.assertEqual(self.complete_prospect.tomada_por_username, self.agent.username)
+        self.assertIsNotNone(self.complete_prospect.tomada_en)
+
+    def test_other_user_cannot_assign_prospect(self):
+        self.login_as('OtroSupervisor')
+
+        response = self.client.post(
+            reverse('prospects:asignar', args=[self.complete_prospect.pk]),
+            {'username': self.agent.username},
+            HTTP_ACCEPT='application/json',
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.complete_prospect.refresh_from_db()
+        self.assertEqual(self.complete_prospect.tomada_por_username, '')
+
+    def test_incomplete_prospect_cannot_be_assigned(self):
+        self.login_as('Shio09')
+        incomplete = PropertyProspect.objects.create(
+            district='Cayma',
+            contract_type='trato_directo',
+            property_type='terreno',
+        )
+
+        response = self.client.post(
+            reverse('prospects:asignar', args=[incomplete.pk]),
+            {'username': self.agent.username},
+            HTTP_ACCEPT='application/json',
+        )
+
+        self.assertEqual(response.status_code, 409)
+        incomplete.refresh_from_db()
+        self.assertEqual(incomplete.tomada_por_username, '')
+
+    def test_shio09_can_clear_assignment(self):
+        self.login_as('shio09')
+        self.complete_prospect.tomada_por_username = self.agent.username
+        self.complete_prospect.save(update_fields=['tomada_por_username'])
+
+        response = self.client.post(
+            reverse('prospects:asignar', args=[self.complete_prospect.pk]),
+            {'username': ''},
+            HTTP_ACCEPT='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.complete_prospect.refresh_from_db()
+        self.assertEqual(self.complete_prospect.tomada_por_username, '')
+        self.assertIsNone(self.complete_prospect.tomada_en)
