@@ -125,7 +125,12 @@ class WorkerShutdownTests(TestCase):
 class DetailRecoveryTests(IsolatedAsyncioTestCase):
     async def test_unresolved_navigation_never_becomes_an_empty_success(self):
         import importlib
-        page = SimpleNamespace(goto=AsyncMock(), title=AsyncMock(return_value='Just a moment'),
+        # ``goto`` debe devolver una respuesta real: los scrapers inspeccionan
+        # ``response.status``/``response.url`` antes de declarar el bloqueo.
+        url = 'https://example.test/'
+        response = SimpleNamespace(status=200, url=url, text=AsyncMock(return_value=''))
+        page = SimpleNamespace(goto=AsyncMock(return_value=response), url=url,
+                               title=AsyncMock(return_value='Just a moment'),
                                wait_for_timeout=AsyncMock())
         for portal in ('urbania', 'properati', 'remax'):
             source = importlib.import_module(f'scrapi.{portal}_scraper')
