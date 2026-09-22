@@ -549,6 +549,25 @@
     text-shadow: 0 1px 2px rgba(0, 0, 0, .8);
 }
 
+/* Rótulo de precio bajo el pin: AT (rojo) y AC (negro) en dos líneas. */
+.propify-price-overlay {
+    position: absolute;
+    transform: translateX(-50%);
+    padding: 2px 6px;
+    border: 1px solid rgba(13, 17, 23, .25);
+    border-radius: 5px;
+    background: rgba(255, 255, 255, .95);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+}
+.propify-price-overlay__at { display: block; color: #d32f2f; }
+.propify-price-overlay__ac { display: block; color: #111111; }
+
 /* Zone info panel */
 .zone-info-panel {
     position: absolute;
@@ -1151,6 +1170,7 @@ let markers = [];
 let zones = [];
 let allZones = [];
 let propifyPropertyMarkers = [];
+let propifyPriceLabelOverlays = [];
 let propifyPropertiesLoaded = false;
 let propifyProperties = [];
 let propifyPropertiesRequest = null;
@@ -1718,6 +1738,9 @@ function setupPropifyPropertyLayer() {
         propifyPropertyMarkers.forEach(function(marker) {
             marker.setMap(toggle.checked ? map : null);
         });
+        propifyPriceLabelOverlays.forEach(function(overlay) {
+            overlay.setMap(toggle.checked ? map : null);
+        });
         if (!toggle.checked) clearPropertyAreaSelection();
     });
 
@@ -1734,6 +1757,8 @@ function setupPropifyPropertyLayer() {
 function clearPropifyPropertyMarkers() {
     propifyPropertyMarkers.forEach(function(marker) { marker.setMap(null); });
     propifyPropertyMarkers = [];
+    propifyPriceLabelOverlays.forEach(function(overlay) { overlay.setMap(null); });
+    propifyPriceLabelOverlays = [];
     closePropifyFloatingCard();
 }
 
@@ -2122,6 +2147,56 @@ function setupDraggablePropifyCard() {
     });
 }
 
+function propifyMarkerUsdPerM2(local, usd, currencySymbol) {
+    if (usd) return usd;
+    return currencySymbol === '$' ? local : null;
+}
+
+function propifyMarkerPriceHtml(property) {
+    if (property.is_rental) return '';
+    var at = formatPropifyPricePerM2(
+        propifyMarkerUsdPerM2(property.land_price_per_m2, property.land_price_per_m2_usd, property.currency_symbol),
+        '$'
+    );
+    var ac = formatPropifyPricePerM2(
+        propifyMarkerUsdPerM2(property.built_price_per_m2, property.built_price_per_m2_usd, property.currency_symbol),
+        '$'
+    );
+    var html = '';
+    if (at) html += '<span class="propify-price-overlay__at">AT: ' + at + '</span>';
+    if (ac) html += '<span class="propify-price-overlay__ac">AC: ' + ac + '</span>';
+    return html;
+}
+
+// Marker.label solo admite texto plano; para dos líneas con colores distintos
+// se dibuja el rótulo con un overlay propio.
+function PropifyPriceLabelOverlay(position, html) {
+    this.position = position;
+    this.html = html;
+    this.div = null;
+}
+PropifyPriceLabelOverlay.prototype = new google.maps.OverlayView();
+PropifyPriceLabelOverlay.prototype.onAdd = function() {
+    var div = document.createElement('div');
+    div.className = 'propify-price-overlay';
+    div.innerHTML = this.html;
+    this.div = div;
+    this.getPanes().overlayLayer.appendChild(div);
+};
+PropifyPriceLabelOverlay.prototype.draw = function() {
+    if (!this.div) return;
+    var projection = this.getProjection();
+    if (!projection) return;
+    var point = projection.fromLatLngToDivPixel(this.position);
+    if (!point) return;
+    this.div.style.left = point.x + 'px';
+    this.div.style.top = (point.y + 6) + 'px';
+};
+PropifyPriceLabelOverlay.prototype.onRemove = function() {
+    if (this.div && this.div.parentNode) this.div.parentNode.removeChild(this.div);
+    this.div = null;
+};
+
 function renderPropifyPropertyMarkers() {
     clearPropifyPropertyMarkers();
     var count = document.getElementById('propify-properties-count');
@@ -2129,26 +2204,30 @@ function renderPropifyPropertyMarkers() {
     var filtered = filteredPropifyProperties();
 
     filtered.forEach(function(property) {
-        var markerPrice = formatPropifyMarkerPrice(property);
         var markerIcon = property.source_key === 'remax'
             ? REMAX_MARKER_ICON
             : (property.source_key === 'properati' ? PROPERATI_MARKER_ICON : PROPIFY_MARKER_ICON);
+        var position = { lat: Number(property.lat), lng: Number(property.lng) };
         var marker = new google.maps.Marker({
-            position: { lat: Number(property.lat), lng: Number(property.lng) },
+            position: position,
             map: toggle && toggle.checked ? map : null,
             title: property.title || property.code || 'Propiedad disponible',
             icon: {
                 url: markerIcon,
                 scaledSize: new google.maps.Size(40, 40),
-                anchor: new google.maps.Point(20, 40),
-                labelOrigin: new google.maps.Point(20, 50)
+                anchor: new google.maps.Point(20, 40)
             },
-            label: markerPrice ? {
-                text: markerPrice,
-                className: 'propify-price-label'
-            } : null,
             zIndex: 500
         });
+
+        var labelHtml = propifyMarkerPriceHtml(property);
+        if (labelHtml) {
+            var overlay = new PropifyPriceLabelOverlay(
+                new google.maps.LatLng(position.lat, position.lng), labelHtml
+            );
+            overlay.setMap(toggle && toggle.checked ? map : null);
+            propifyPriceLabelOverlays.push(overlay);
+        }
 
         marker.addListener('click', function(event) {
             if (window.__polyTool && window.__polyTool.isActive()) {
