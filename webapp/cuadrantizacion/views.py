@@ -13,6 +13,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.views import APIView
 
+from captura.azure_storage import generate_read_sas_url
+
 from .models import ZonaValor, PropiedadValoracion, EstadisticaZona, HistorialPrecioZona
 from .serializers import (
     ZonaValorSerializer, PropiedadValoracionSerializer,
@@ -628,6 +630,21 @@ def _price_per_m2_in_usd(price_per_m2, currency_id):
         return None
 
 
+def _map_image_url(image_url):
+    """Return a browser-readable image URL for map property cards."""
+    value = str(image_url or '').strip()
+    if not value:
+        return None
+    if '.blob.core.windows.net/' not in value.casefold():
+        return value
+    try:
+        return generate_read_sas_url(value, expiry_minutes=120)
+    except Exception:
+        # A broken image must never prevent the rest of the map from loading.
+        logger.exception('No se pudo firmar una imagen privada para el mapa.')
+        return value
+
+
 def _positive_area(value):
     try:
         return value if value is not None and Decimal(str(value)) > 0 else None
@@ -886,7 +903,7 @@ def _available_scraped_properties(sources=('remax', 'properati')):
             'operation_type': operation_type,
             'is_rental': is_rental,
             'district': row['distrito'] or 'Sin distrito',
-            'image_url': row['imagen_url'] or None,
+            'image_url': _map_image_url(row['imagen_url']),
             'url': row['url'] if str(row['url'] or '').startswith(('http://', 'https://')) else None,
             'currency_symbol': currency_symbol,
             'price_per_m2': price_per_m2,

@@ -201,6 +201,26 @@ class AvailablePropifyPropertiesApiTests(SimpleTestCase):
             views._price_per_m2_in_usd('3440.00', currency_id=1)
         )
 
+    @patch('cuadrantizacion.views.generate_read_sas_url')
+    def test_private_scraped_image_is_signed_for_map_cards(self, signer):
+        source = (
+            'https://granextractormedia.blob.core.windows.net/'
+            'propiedadesimagenes/propiedades/properati.jpg'
+        )
+        signer.return_value = source + '?sv=temporary'
+
+        result = views._map_image_url(source)
+
+        self.assertEqual(result, source + '?sv=temporary')
+        signer.assert_called_once_with(source, expiry_minutes=120)
+
+    @patch('cuadrantizacion.views.generate_read_sas_url')
+    def test_external_image_url_is_not_modified(self, signer):
+        source = 'https://img.properati.com/photo.jpg'
+
+        self.assertEqual(views._map_image_url(source), source)
+        signer.assert_not_called()
+
     @patch('cuadrantizacion.views._available_scraped_properties')
     @patch('cuadrantizacion.views._available_propify_properties')
     def test_map_api_combines_only_supported_sources(self, propify, scraped):
