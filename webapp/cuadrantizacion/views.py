@@ -832,6 +832,7 @@ def _available_scraped_properties(sources=('remax', 'properati')):
         .values(
             'id', 'fuente', 'id_origen', 'titulo', 'tipo_inmueble',
             'tipo_operacion', 'precio_soles', 'precio_usd', 'area_m2',
+            'area_terreno', 'area_construida',
             'distrito', 'direccion_texto', 'latitud', 'longitud',
             'precision_ubicacion', 'imagen_url',
             'url',
@@ -859,9 +860,25 @@ def _available_scraped_properties(sources=('remax', 'properati')):
         )
         operation_type, is_rental = _normalize_propify_operation(row['tipo_operacion'])
         property_type = row['tipo_inmueble'] or 'Propiedad'
-        area = _positive_area(row['area_m2'])
         is_land = 'terreno' in property_type.casefold()
-        area_source = 'land_area' if is_land else 'built_area'
+        # Igual que en Propify: las dos superficies viajan por separado y la
+        # tarjeta del mapa las muestra juntas.
+        land_area = _positive_area(row.get('area_terreno'))
+        built_area = _positive_area(row.get('area_construida'))
+        if land_area is None and built_area is None:
+            # Registros antiguos sin superficies separadas: el área principal
+            # histórica ocupa el slot que corresponde según el tipo.
+            legacy_area = _positive_area(row['area_m2'])
+            if is_land:
+                land_area = legacy_area
+            else:
+                built_area = legacy_area
+        if is_land:
+            area = land_area or built_area
+            area_source = 'land_area' if land_area else ('built_area' if built_area else None)
+        else:
+            area = built_area or land_area
+            area_source = 'built_area' if built_area else ('land_area' if land_area else None)
 
         # Remax normalmente publica soles y USD simultáneamente. Se conserva
         # el precio principal en soles; Properati usa la moneda disponible.
@@ -908,8 +925,8 @@ def _available_scraped_properties(sources=('remax', 'properati')):
             'currency_symbol': currency_symbol,
             'price_per_m2': price_per_m2,
             'price_per_m2_usd': price_per_m2_usd,
-            'built_area_m2': str(area) if area is not None and not is_land else None,
-            'land_area_m2': str(area) if area is not None and is_land else None,
+            'built_area_m2': str(built_area) if built_area is not None else None,
+            'land_area_m2': str(land_area) if land_area is not None else None,
             'area_used': area_source if price_per_m2 is not None else None,
             'lat': latitude,
             'lng': longitude,
