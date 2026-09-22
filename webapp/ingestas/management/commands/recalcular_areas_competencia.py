@@ -68,7 +68,13 @@ class Command(BaseCommand):
             a_guardar = []
             for propiedad in lote_actual:
                 revisados += 1
+                # Los scrapers guardan la evidencia de la superficie en
+                # ``datos_crudos`` (p. ej. ``Caracteristicas`` de Urbania o
+                # ``Area Terreno``/``Area Construida`` de Remax), así que ese
+                # respaldo se revisa además del título y la descripción.
+                crudos = propiedad.datos_crudos if isinstance(propiedad.datos_crudos, dict) else {}
                 datos = calcular_areas({
+                    **crudos,
                     'Titulo': propiedad.titulo,
                     'Descripcion': propiedad.descripcion,
                 })
