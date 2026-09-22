@@ -370,12 +370,20 @@ def upload_image(image_url: str | None, item_id: str, position: int = 0) -> str 
 
 
 def standardize(item: dict[str, Any], extraction_date: str | None = None) -> dict[str, Any]:
+    from scrapi.areas import calcular_areas
+
     price = item.get("price") or {}
     location = _clean(item.get("location"))
     parts = [part.strip() for part in location.split(",") if part.strip()]
     district = parts[0] if parts else None
     raw = json.loads(json.dumps(item, default=str, ensure_ascii=False))
     searchable = _clean(f"{item.get('title', '')} {item.get('description', '')}")
+    # Superficies por separado: en la descripción suelen venir etiquetadas
+    # ("ÁREA DE TERRENO: 120 m2" y "ÁREA CONSTRUIDA: 185 m2").
+    areas_detalle = calcular_areas({
+        'title': item.get('title'),
+        'description': item.get('description'),
+    })
     area_match = re.search(r"(\d+(?:[.,]\d+)?)\s*m(?:²|2)\b", searchable, re.I)
     bedrooms_match = re.search(r"(\d+)\s*(?:dormitorios?|habitaciones?)\b", searchable, re.I)
     bathrooms_match = re.search(r"(\d+)\s*baños?\b", searchable, re.I)
@@ -389,7 +397,12 @@ def standardize(item: dict[str, Any], extraction_date: str | None = None) -> dic
         "tipo_operacion": operation(searchable),
         "precio_soles": price.get("amount") if reported_price and price.get("currency") == "PEN" else None,
         "precio_usd": price.get("amount") if reported_price and price.get("currency") == "USD" else None,
-        "area_m2": _number(area_match.group(1)) if area_match else None,
+        "area_m2": (
+            areas_detalle['area_m2'] if areas_detalle['area_m2'] is not None
+            else (_number(area_match.group(1)) if area_match else None)
+        ),
+        "area_terreno": areas_detalle['area_terreno'],
+        "area_construida": areas_detalle['area_construida'],
         "dormitorios": int(bedrooms_match.group(1)) if bedrooms_match else None,
         "banos": int(bathrooms_match.group(1)) if bathrooms_match else None,
         "estacionamientos": None,

@@ -4,6 +4,8 @@ import re
 import unicodedata
 from numbers import Number
 
+from .areas import calcular_areas
+
 
 def plain(value):
     return ''.join(c for c in unicodedata.normalize('NFKD', str(value or '').lower())
@@ -64,9 +66,12 @@ def operation(text):
 
 def urbania_row(prop, stamp):
     feats = str(prop.get('Caracteristicas') or '')
-    areas = re.findall(r'(?<![\d.,])([\d]+(?:[.,][\d]+)*)\s*m[²2]', feats, re.I)
-    # A range describes several units; do not turn one endpoint into an exact area.
-    area_range = bool(re.search(r'\d\s*(?:-|–|a)\s*\d[\d.,]*\s*m[²2]', feats))
+    # Área de terreno y construida, cada una por su lado (campos del portal y,
+    # si faltan, el texto de características: "128 m2 totales / 90 m2 construidos").
+    detalle_areas = calcular_areas({**prop, 'Caracteristicas': feats})
+    # Un rango describe varias unidades; no se convierte un extremo en área exacta.
+    if re.search(r'\d\s*(?:-|–|a)\s*\d[\d.,]*\s*m[²2]', feats):
+        detalle_areas = {'area_terreno': None, 'area_construida': None, 'area_m2': None}
     def count(pattern):
         match = re.search(pattern, feats, re.I)
         return int(match[1]) if match else None
@@ -84,7 +89,10 @@ def urbania_row(prop, stamp):
         'fecha_extraccion': stamp, 'titulo': title or None,
         'tipo_inmueble': property_type(f'{prop.get("Tipo", "")} {title}'),
         'tipo_operacion': operation(f'{prop.get("Operacion", "")} {title} {prop.get("_source_url", "")}'),
-        **prices(prop.get('Precio')), 'area_m2': number(areas[0]) if areas and not area_range else None,
+        **prices(prop.get('Precio')),
+        'area_m2': detalle_areas['area_m2'],
+        'area_terreno': detalle_areas['area_terreno'],
+        'area_construida': detalle_areas['area_construida'],
         'dormitorios': count(r'(\d+)\s*dorm'), 'banos': count(r'(\d+)\s*bañ'),
         'estacionamientos': count(r'(\d+)\s*(?:estac|coch)'),
         'departamento': location[-1] if len(location) >= 3 else None,
@@ -102,7 +110,7 @@ def validate_row(row):
     if not str(row.get('id_origen') or '').strip():
         raise ValueError('listing.missing_id: publicación sin ID estable')
     issues = []
-    for field in ('precio_soles', 'precio_usd', 'area_m2'):
+    for field in ('precio_soles', 'precio_usd', 'area_m2', 'area_terreno', 'area_construida'):
         value = row.get(field)
         if value is not None and (not math.isfinite(float(value)) or float(value) <= 0):
             issues.append(field)

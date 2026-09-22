@@ -8,6 +8,37 @@ from scrapi.normalization import validate_row
 logger = logging.getLogger(__name__)
 
 _COLUMNA_PRECISION_CACHE = {}
+_COLUMNAS_OPCIONALES_CACHE = {}
+
+# Campos agregados en migraciones recientes: (campo del modelo, columna en BD).
+# El deploy y el `migrate` no son atómicos, así que si la columna todavía no
+# existe se omite el campo en lugar de romper el guardado del scraping.
+CAMPOS_OPCIONALES = (
+    ('precision_ubicacion', 'precision_ubicacion'),
+    ('area_terreno', 'area_terreno_m2'),
+    ('area_construida', 'area_construida_m2'),
+)
+
+
+def _columnas_opcionales_disponibles():
+    """Conjunto de columnas opcionales que ya existen en la tabla."""
+    cached = _COLUMNAS_OPCIONALES_CACHE.get('valor')
+    if cached is not None:
+        return cached
+    columnas_objetivo = {columna for _, columna in CAMPOS_OPCIONALES}
+    try:
+        from django.db import connection
+        from ingestas.models import PropiedadesCompetencia
+        tabla = PropiedadesCompetencia._meta.db_table
+        with connection.cursor() as cursor:
+            existentes = {
+                c.name for c in connection.introspection.get_table_description(cursor, tabla)
+            }
+        disponibles = columnas_objetivo & existentes
+    except Exception:
+        disponibles = set(columnas_objetivo)  # ante la duda, comportamiento previo
+    _COLUMNAS_OPCIONALES_CACHE['valor'] = disponibles
+    return disponibles
 
 
 def _precision_disponible_en_bd():
@@ -45,8 +76,9 @@ def guardar_propiedades(propiedades, fuente, lifecycle_run_id=None, execution_to
         seen.add(key)
         try:
             row = validate_row(prop)
-            if not _precision_disponible_en_bd():
-                row.pop('precision_ubicacion', None)
+            for campo, columna in CAMPOS_OPCIONALES:
+                if columna not in _columnas_opcionales_disponibles():
+                    row.pop(campo, None)
             with transaction.atomic():
                 run = lock_run(lifecycle_run_id, execution_token) if lifecycle_run_id else None
                 if run and run.portal != fuente:

@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 from datetime import datetime
 from camoufox.async_api import AsyncCamoufox
 from scrapi.camoufox_launcher import camoufox_kwargs
+from scrapi.areas import calcular_areas
 
 BASE_URL = "https://www.remax.pe/web/search/all/propertys/list/?departament__in=4&page={}"
 SITE_DOMAIN = "https://www.remax.pe"
@@ -250,7 +251,8 @@ def estandarizar(prop, fecha_extraccion):
         "tipo_operacion": operacion,
         "precio_soles": limpiar_precio(prop.get("Precio S/.")),
         "precio_usd": limpiar_precio(prop.get("Precio USD")),
-        "area_m2": calcular_area_m2(prop),
+        # Área principal + las dos superficies por separado (terreno / construida).
+        **calcular_areas(prop),
         "dormitorios": normalizar_conteo(prop.get("Habitaciones"), tipo_inmueble),
         "banos": normalizar_conteo(prop.get("Banos"), tipo_inmueble),
         "estacionamientos": parse_num_prefix(prop.get("Cocheras")),
@@ -274,7 +276,8 @@ def estandarizar(prop, fecha_extraccion):
 
 CAMPOS_ESTANDAR = [
     "fuente", "id_origen", "fecha_extraccion", "titulo", "tipo_inmueble",
-    "tipo_operacion", "precio_soles", "precio_usd", "area_m2", "dormitorios",
+    "tipo_operacion", "precio_soles", "precio_usd", "area_m2",
+    "area_terreno", "area_construida", "dormitorios",
     "banos", "estacionamientos", "distrito", "provincia", "direccion_texto",
     "descripcion", "amenities", "latitud", "longitud", "url", "imagen_url",
     "antiguedad_anios", "agencia_agente", "departamento", "precision_ubicacion",

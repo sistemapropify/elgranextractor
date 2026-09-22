@@ -320,6 +320,20 @@ class PropiedadesCompetencia(models.Model):
         null=True, blank=True,
         verbose_name='Área (m²)'
     )
+    # Superficies por separado: la de terreno se usa para el precio/m² de un
+    # terreno y la construida para comparar terreno vs construcción en una casa.
+    area_terreno = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        null=True, blank=True,
+        db_column='area_terreno_m2',
+        verbose_name='Área de terreno (m²)'
+    )
+    area_construida = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        null=True, blank=True,
+        db_column='area_construida_m2',
+        verbose_name='Área construida (m²)'
+    )
     dormitorios = models.IntegerField(
         null=True, blank=True,
         verbose_name='Dormitorios'
