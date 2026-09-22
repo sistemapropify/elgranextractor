@@ -773,6 +773,15 @@ def _available_propify_properties():
             area_source = 'built_area' if built_area else ('land_area' if land_area else None)
         price_per_m2 = _sale_price_per_m2(price, area, is_rental)
         price_per_m2_usd = _price_per_m2_in_usd(price_per_m2, row['currency_id'])
+        # Precio por m² de cada superficie, para comparar terreno vs construcción.
+        built_price_per_m2 = _sale_price_per_m2(price, built_area, is_rental)
+        built_price_per_m2_usd = _price_per_m2_in_usd(
+            built_price_per_m2, row['currency_id']
+        )
+        land_price_per_m2 = _sale_price_per_m2(price, land_area, is_rental)
+        land_price_per_m2_usd = _price_per_m2_in_usd(
+            land_price_per_m2, row['currency_id']
+        )
 
         image_path = image_map.get(row['id'])
         if image_path and str(image_path).startswith(('http://', 'https://')):
@@ -805,6 +814,10 @@ def _available_propify_properties():
             'currency_symbol': '$' if row['currency_id'] == 1 else 'S/.',
             'price_per_m2': price_per_m2,
             'price_per_m2_usd': price_per_m2_usd,
+            'built_price_per_m2': built_price_per_m2,
+            'built_price_per_m2_usd': built_price_per_m2_usd,
+            'land_price_per_m2': land_price_per_m2,
+            'land_price_per_m2_usd': land_price_per_m2_usd,
             'built_area_m2': str(built_area) if built_area is not None else None,
             'land_area_m2': str(land_area) if land_area is not None else None,
             'area_used': area_source if price_per_m2 is not None else None,
@@ -901,6 +914,23 @@ def _available_scraped_properties(sources=('remax', 'properati')):
             price_per_m2_usd = _price_per_m2_in_usd(
                 price_per_m2, currency_id
             )
+        # Precio por m² de cada superficie, para comparar terreno vs construcción.
+        built_price_per_m2 = _sale_price_per_m2(price, built_area, is_rental)
+        built_price_per_m2_usd = _sale_price_per_m2(
+            row['precio_usd'], built_area, is_rental
+        )
+        if built_price_per_m2_usd is None:
+            built_price_per_m2_usd = _price_per_m2_in_usd(
+                built_price_per_m2, currency_id
+            )
+        land_price_per_m2 = _sale_price_per_m2(price, land_area, is_rental)
+        land_price_per_m2_usd = _sale_price_per_m2(
+            row['precio_usd'], land_area, is_rental
+        )
+        if land_price_per_m2_usd is None:
+            land_price_per_m2_usd = _price_per_m2_in_usd(
+                land_price_per_m2, currency_id
+            )
         precision = (row['precision_ubicacion'] or 'desconocida').strip().casefold()
         precision_label = {
             'exacta': 'Exacta',
@@ -925,6 +955,10 @@ def _available_scraped_properties(sources=('remax', 'properati')):
             'currency_symbol': currency_symbol,
             'price_per_m2': price_per_m2,
             'price_per_m2_usd': price_per_m2_usd,
+            'built_price_per_m2': built_price_per_m2,
+            'built_price_per_m2_usd': built_price_per_m2_usd,
+            'land_price_per_m2': land_price_per_m2,
+            'land_price_per_m2_usd': land_price_per_m2_usd,
             'built_area_m2': str(built_area) if built_area is not None else None,
             'land_area_m2': str(land_area) if land_area is not None else None,
             'area_used': area_source if price_per_m2 is not None else None,

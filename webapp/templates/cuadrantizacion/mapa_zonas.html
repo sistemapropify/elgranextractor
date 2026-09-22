@@ -508,6 +508,7 @@
 }
 .propify-card-area-value { display: block; margin-top: 2px; font-size: 12px; font-weight: 700; }
 .propify-card-area-used { color: #3fb950; margin-left: 3px; }
+.propify-card-area-m2 { display: block; margin-top: 2px; color: #5eead4; font-size: 11px; font-weight: 700; }
 .propify-card-address {
     margin-top: 9px;
     padding-top: 8px;
@@ -2024,33 +2025,34 @@ function showPropifyFloatingCard(property) {
         ? '<div class="propify-card-actions"><a class="propify-card-open" href="' +
             escapeMapHtml(property.url) + '" target="_blank" rel="noopener noreferrer">Abrir publicación ↗</a></div>'
         : '';
-    var pricePerM2 = property.is_rental
-        ? ''
-        : formatPropifyPricePerM2(property.price_per_m2, property.currency_symbol);
-    var pricePerM2Usd = property.price_per_m2_usd && property.currency_symbol !== '$'
-        ? formatPropifyPricePerM2(property.price_per_m2_usd, '$')
-        : '';
-    var areas = [];
-    if (property.built_area_m2) {
-        areas.push(
-            '<div class="propify-card-area">' +
-                '<span class="propify-card-area-label">Área construida</span>' +
-                '<span class="propify-card-area-value">' + formatPropifyArea(property.built_area_m2) +
-                    (property.area_used === 'built_area' ? '<span class="propify-card-area-used" title="Área usada para calcular el precio por m²">✓</span>' : '') +
-                '</span>' +
-            '</div>'
-        );
+    function areaBlock(label, areaValue, pricePerM2, pricePerM2Usd, usedKey) {
+        var area = formatPropifyArea(areaValue);
+        if (!area) return '';
+        var m2 = '';
+        if (!property.is_rental) {
+            var local = formatPropifyPricePerM2(pricePerM2, property.currency_symbol);
+            var usd = property.currency_symbol !== '$'
+                ? formatPropifyPricePerM2(pricePerM2Usd, '$')
+                : '';
+            if (local) {
+                m2 = '<span class="propify-card-area-m2">' + local +
+                    (usd ? '<span class="propify-card-m2-usd">(' + usd + ')</span>' : '') +
+                    '</span>';
+            }
+        }
+        return '<div class="propify-card-area">' +
+            '<span class="propify-card-area-label">' + label + '</span>' +
+            '<span class="propify-card-area-value">' + area +
+                (property.area_used === usedKey ? '<span class="propify-card-area-used" title="Área usada para calcular el precio por m²">✓</span>' : '') +
+            '</span>' +
+            m2 +
+        '</div>';
     }
-    if (property.land_area_m2) {
-        areas.push(
-            '<div class="propify-card-area">' +
-                '<span class="propify-card-area-label">Área de terreno</span>' +
-                '<span class="propify-card-area-value">' + formatPropifyArea(property.land_area_m2) +
-                    (property.area_used === 'land_area' ? '<span class="propify-card-area-used" title="Área usada para calcular el precio por m²">✓</span>' : '') +
-                '</span>' +
-            '</div>'
-        );
-    }
+    // Primero el terreno (izquierda) y luego la construcción (derecha).
+    var areas = [
+        areaBlock('Área de terreno', property.land_area_m2, property.land_price_per_m2, property.land_price_per_m2_usd, 'land_area'),
+        areaBlock('Área construida', property.built_area_m2, property.built_price_per_m2, property.built_price_per_m2_usd, 'built_area')
+    ].filter(function(block) { return block !== ''; });
 
     body.innerHTML =
         '<div class="propify-card-summary">' +
@@ -2061,9 +2063,6 @@ function showPropifyFloatingCard(property) {
                 '<div class="propify-card-sub">' + escapeMapHtml(property.district) + '</div>' +
                 '<div class="propify-card-sub">Ubicación ' + escapeMapHtml(property.location_precision || 'Desconocida') + '</div>' +
                 '<div class="propify-card-price">' + formatPropifyPrice(property.price, property.currency_symbol) + '</div>' +
-                (pricePerM2 ? '<div class="propify-card-m2">' + pricePerM2 +
-                    (pricePerM2Usd ? '<span class="propify-card-m2-usd">(' + pricePerM2Usd + ')</span>' : '') +
-                    '</div>' : '') +
                 code +
             '</div>' +
         '</div>' +
