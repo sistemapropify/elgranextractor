@@ -53,6 +53,13 @@ PATRON_METROS = r'(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:m2|mts2|mt2|metros\s+cuadrados)
 # Medidas del terreno en formato "frente x fondo" (8.00 X 16.00 = 128 m²).
 PATRON_MEDIDAS = r'(\d{1,4}(?:[.,]\d{1,2})?)\s*[x×]\s*(\d{1,4}(?:[.,]\d{1,2})?)'
 
+# Rango de superficies ("60 a 120 m²", "80 - 120 m2"): describe varias unidades
+# y no se debe tomar un extremo como si fuera la superficie exacta.
+PATRON_RANGO_AREAS = (
+    r'\d{1,5}(?:[.,]\d{1,2})?\s*(?:-|–|a)\s*\d{1,5}(?:[.,]\d{1,2})?'
+    r'\s*(?:m2|mts2|mt2|metros\s+cuadrados)'
+)
+
 # Campos estructurados por portal, en orden de prioridad.
 CAMPOS_CONSTRUIDA = (
     'Area Construida', 'Área Construida', 'area_construida', 'area_construida_m2',
@@ -69,6 +76,15 @@ CAMPOS_TEXTO = (
 )
 
 CLAVES = ('area_terreno', 'area_construida')
+
+# Palabras que identifican un lote/terreno: en ellos la superficie que representa
+# la propiedad es la del suelo, no la de una construcción accesoria.
+PALABRAS_TERRENO = ('terreno', 'lote', 'parcela', 'chacra')
+# Campos donde cada portal declara el tipo de inmueble.
+CAMPOS_TIPO = (
+    'Tipo', 'tipo', 'tipo_inmueble', 'Tipo de propiedad', 'Tipo Propiedad',
+    'TipoInmueble',
+)
 
 
 def normalizar_texto(valor) -> str:
@@ -186,6 +202,20 @@ def extraer_areas_de_texto(texto) -> dict:
     return {'area_terreno': terreno, 'area_construida': construida}
 
 
+def extraer_area_generica(texto) -> float | None:
+    """Primer ``N m²`` del texto cuando no hay etiqueta de terreno/construcción.
+
+    Respaldo histórico de ``area_m2``: un anuncio que solo dice "128.5 m²" no
+    debe quedarse sin superficie por no declarar cuál es. Un rango
+    ("60 a 120 m²") no se resuelve a un extremo.
+    """
+    normalizado = normalizar_texto(texto)
+    if not normalizado.strip() or re.search(PATRON_RANGO_AREAS, normalizado):
+        return None
+    coincidencia = re.search(PATRON_METROS, normalizado)
+    return parsear_area(coincidencia.group(1)) if coincidencia else None
+
+
 def _primer_campo(prop: dict, campos) -> float | None:
     for campo in campos:
         valor = parsear_area(prop.get(campo))
@@ -221,11 +251,21 @@ def area_desde_medidas(medidas) -> float | None:
     return round(frente * fondo, 2)
 
 
+def _es_terreno(prop: dict) -> bool:
+    """True si el anuncio es un lote/terreno (su área principal es la del suelo)."""
+    tipo = ' '.join(
+        str((prop or {}).get(campo) or '') for campo in CAMPOS_TIPO
+    )
+    tipo = normalizar_texto(tipo)
+    return any(palabra in tipo for palabra in PALABRAS_TERRENO)
+
+
 def calcular_areas(prop: dict) -> dict:
     """Superficies de una propiedad: estructuradas primero y texto como respaldo.
 
-    Retorna ``{'area_terreno', 'area_construida', 'area_m2'}`` donde ``area_m2`` es el
-    valor principal histórico (construida si existe; si no, terreno).
+    Retorna ``{'area_terreno', 'area_construida', 'area_m2'}``. ``area_m2`` es el
+    valor principal histórico: en un terreno/lote manda el área de terreno; en el
+    resto de inmuebles manda la construida (y si falta, la de terreno).
     """
     datos = extraer_areas_estructuradas(prop)
     # "Medidas: 8.00 X 16.00" describe el terreno (frente x fondo).
@@ -237,7 +277,16 @@ def calcular_areas(prop: dict) -> dict:
             if datos[clave] is None:
                 datos[clave] = desde_texto.get(clave)
     terreno, construida = datos['area_terreno'], datos['area_construida']
-    datos['area_m2'] = construida if construida is not None else terreno
+    if _es_terreno(prop):
+        # Un lote no se mide por la construcción accesoria que pueda tener.
+        datos['area_m2'] = terreno if terreno is not None else construida
+    else:
+        datos['area_m2'] = construida if construida is not None else terreno
+    # Respaldo histórico: si el anuncio solo dice "128.5 m²" (sin etiqueta de
+    # terreno ni de construcción), se conserva como área principal. No se
+    # inventa terreno/construida porque el texto no lo aclara.
+    if datos['area_m2'] is None:
+        datos['area_m2'] = extraer_area_generica(_texto_disponible(prop))
     return datos
 
 

@@ -595,6 +595,9 @@
                 <option value="posible_retirada">Posible retirada</option>
                 <option value="retirada">Retirada</option>
             </select>
+            <button type="button" onclick="exportarTabla()" title="Descarga en Excel las propiedades con los filtros activos">
+                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+            </button>
         </div>
     </div>
     <div id="tablaContainer" style="overflow-x:auto;max-height:300px;overflow-y:auto;">
@@ -608,6 +611,10 @@
                     <th>Precio USD</th>
                     <th>Precio S/.</th>
                     <th>Área m²</th>
+                    <th>Área terreno</th>
+                    <th>Área construida</th>
+                    <th>$/m² terreno</th>
+                    <th>$/m² construido</th>
                     <th>Dorm</th>
                     <th>Baños</th>
                     <th>Estac</th>
@@ -634,7 +641,7 @@
                 </tr>
             </thead>
             <tbody id="tablaBody">
-                <tr><td colspan="30" style="text-align:center;color:var(--terminal-info);padding:20px;">Cargando...</td></tr>
+                <tr><td colspan="34" style="text-align:center;color:var(--terminal-info);padding:20px;">Cargando...</td></tr>
             </tbody>
         </table>
     </div>
@@ -1035,18 +1042,30 @@ function loadStats(jobId) {
 }
 
 // ── Tabla ──
-function loadTable() {
+function filtrosTabla() {
+    const params = new URLSearchParams();
     const fuente = document.getElementById('filterFuente').value;
     const distrito = document.getElementById('filterDistrito').value;
     const tipo = document.getElementById('filterTipo').value;
     const estado = document.getElementById('filterEstado').value;
-    const params = new URLSearchParams();
-    params.set('page', '1');
-    params.set('limit', '25');
     if (fuente) params.set('fuente', fuente);
     if (distrito) params.set('distrito', distrito);
     if (tipo) params.set('tipo', tipo);
     if (estado) params.set('estado', estado);
+    return params;
+}
+
+function exportarTabla() {
+    // Exporta la tabla propiedades_competencia respetando los filtros activos.
+    const params = filtrosTabla();
+    const url = '/ingestas/scraping/propiedades/exportar/?' + params.toString();
+    window.location.href = url;
+}
+
+function loadTable() {
+    const params = filtrosTabla();
+    params.set('page', '1');
+    params.set('limit', '25');
 
     if (tableRequest) tableRequest.abort();
     tableRequest = new AbortController();

@@ -1642,6 +1642,7 @@ from django.db.models import Count
 from django.utils import timezone
 
 from .models import PropiedadesCompetencia, ScrapingJob, ScrapingLog
+from .scraping_export import construir_libro, filtrar_propiedades
 
 
 SCRAPING_ACTIVE_STATES = ('idle', 'running', 'paused')
@@ -2297,22 +2298,8 @@ class ScrapingPropiedadesView(ListView):
         return max(20, min(requested, 250))
 
     def get_queryset(self):
-        qs = PropiedadesCompetencia.objects.all()
-        fuente = self.request.GET.get('fuente')
-        distrito = self.request.GET.get('distrito')
-        tipo = self.request.GET.get('tipo')
-        estado = self.request.GET.get('estado')
-        if fuente:
-            qs = qs.filter(fuente=fuente)
-        if distrito:
-            qs = qs.filter(distrito__icontains=distrito)
-        if tipo:
-            qs = qs.filter(tipo_inmueble=tipo)
-        if estado:
-            qs = qs.filter(estado_publicacion=estado)
-        # Las inserciones más recientes siempre aparecen arriba. El ID
-        # descendente resuelve de forma estable los lotes que comparten fecha.
-        return qs.order_by('-fecha_extraccion', '-id')
+        # Mismos filtros y orden que la exportación a Excel.
+        return filtrar_propiedades(self.request.GET)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -2338,6 +2325,33 @@ class ScrapingPropiedadesView(ListView):
             self.request.GET.get('estado'),
         ])
         return ctx
+
+
+class ScrapingPropiedadesExportView(ScrapingLoginRequiredMixin, View):
+    """Descarga en Excel la tabla de propiedades scrapeadas.
+
+    Respeta los filtros activos del dashboard (fuente, distrito, tipo y
+    estado) y permite adjuntar una segunda hoja con el JSON crudo de cada
+    propiedad usando ``?incluir_crudos=1``.
+    """
+
+    def get(self, request):
+        incluir_crudos = (request.GET.get('incluir_crudos') or '').lower() in (
+            '1', 'true', 'si', 'sí', 'yes', 'on',
+        )
+        propiedades = filtrar_propiedades(request.GET)
+        libro, total = construir_libro(
+            propiedades.iterator(chunk_size=500),
+            incluir_crudos=incluir_crudos,
+        )
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        nombre = f'propiedades_scrapeadas_{timezone.localdate():%Y%m%d}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+        response['X-Total-Propiedades'] = str(total)
+        libro.save(response)
+        return response
 
 
 class ScrapingHistorialView(TemplateView):

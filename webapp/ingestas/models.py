@@ -455,6 +455,49 @@ class PropiedadesCompetencia(models.Model):
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
 
+    # ── Precio por m² (uno por cada superficie) ──────────────────────────────
+    # Se calcula al vuelo: en un terreno interesa el del área de terreno y en una
+    # casa interesa comparar el de terreno contra el de construcción.
+    @property
+    def moneda_precio(self):
+        """Moneda del precio disponible (USD tiene prioridad)."""
+        if self.precio_usd:
+            return 'USD'
+        if self.precio_soles:
+            return 'PEN'
+        return ''
+
+    def precio_m2_de(self, area):
+        """Precio por m² para una superficie dada (``None`` si falta algún dato)."""
+        try:
+            metros = float(area or 0)
+        except (TypeError, ValueError):
+            return None
+        if metros <= 0:
+            return None
+        precio = self.precio_usd or self.precio_soles
+        if not precio:
+            return None
+        try:
+            return round(float(precio) / metros, 2)
+        except (TypeError, ValueError, ZeroDivisionError):
+            return None
+
+    @property
+    def precio_m2_terreno(self):
+        """Precio por m² del terreno (el que corresponde a un lote)."""
+        return self.precio_m2_de(self.area_terreno)
+
+    @property
+    def precio_m2_construida(self):
+        """Precio por m² construido (para compararlo con el de terreno)."""
+        return self.precio_m2_de(self.area_construida)
+
+    @property
+    def precio_m2(self):
+        """Precio por m² del área principal (compatibilidad)."""
+        return self.precio_m2_de(self.area_m2)
+
     class Meta:
         db_table = 'propiedades_competencia'
         verbose_name = "Propiedad de Competencia"

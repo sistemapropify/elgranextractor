@@ -1,6 +1,6 @@
 {% if page_obj %}
 <tr>
-    <td colspan="30" style="padding:7px 10px;color:var(--terminal-info);background:rgba(56,139,253,.06);">
+    <td colspan="34" style="padding:7px 10px;color:var(--terminal-info);background:rgba(56,139,253,.06);">
         Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }}
         de {{ page_obj.paginator.count }} propiedades, ordenadas por extracción reciente.
     </td>
@@ -25,6 +25,10 @@
     <td>{% if p.precio_usd %}${{ p.precio_usd|floatformat:0 }}{% else %}—{% endif %}</td>
     <td>{% if p.precio_soles %}S/{{ p.precio_soles|floatformat:0 }}{% else %}—{% endif %}</td>
     <td>{% if p.area_m2 %}{{ p.area_m2|floatformat:1 }}{% else %}—{% endif %}</td>
+    <td>{% if p.area_terreno %}{{ p.area_terreno|floatformat:1 }}{% else %}—{% endif %}</td>
+    <td>{% if p.area_construida %}{{ p.area_construida|floatformat:1 }}{% else %}—{% endif %}</td>
+    <td style="white-space:nowrap;">{% if p.precio_m2_terreno %}{% if p.moneda_precio == 'PEN' %}S/{% else %}${% endif %}{{ p.precio_m2_terreno|floatformat:0 }}{% else %}—{% endif %}</td>
+    <td style="white-space:nowrap;">{% if p.precio_m2_construida %}{% if p.moneda_precio == 'PEN' %}S/{% else %}${% endif %}{{ p.precio_m2_construida|floatformat:0 }}{% else %}—{% endif %}</td>
     <td>{{ p.dormitorios|default:'—' }}</td>
     <td>{{ p.banos|default:'—' }}</td>
     <td>{{ p.estacionamientos|default:'—' }}</td>
@@ -70,7 +74,7 @@
 </tr>
 {% empty %}
 <tr>
-    <td colspan="30" style="text-align:center;color:var(--terminal-info);padding:20px;">
+    <td colspan="34" style="text-align:center;color:var(--terminal-info);padding:20px;">
         <i class="bi bi-inbox" style="font-size:20px;display:block;margin-bottom:4px;"></i>
         No hay propiedades scrapeadas aún
     </td>

@@ -112,6 +112,28 @@ class AreasCalculoTests(SimpleTestCase):
     def test_medidas_como_respaldo(self):
         self.assertEqual(calcular_area_m2({'Medidas': '10 X 20'}), 200.0)
 
+    def test_area_generica_sin_etiqueta_cubre_area_m2(self):
+        # Un anuncio que solo dice "120 m2" conserva su área principal; no se
+        # inventa terreno ni construida porque el texto no lo aclara.
+        self.assertEqual(
+            calcular_areas({'description': 'Hermosa casa con 120 m2 y vista al parque'}),
+            {'area_terreno': None, 'area_construida': None, 'area_m2': 120.0},
+        )
+
+    def test_rango_no_se_resuelve_a_un_extremo(self):
+        self.assertEqual(
+            calcular_areas({'description': 'Lotes de 60 a 120 m2 en preventa'}),
+            {'area_terreno': None, 'area_construida': None, 'area_m2': None},
+        )
+
+    def test_terreno_prefiere_su_area_de_terreno(self):
+        # En un lote manda el suelo aunque exista una construcción accesoria.
+        self.assertEqual(
+            calcular_areas({'Tipo': 'TERRENO URBANO EN VENTA',
+                            'Area Terreno': '180 m2', 'Area Construida': '12 m2'}),
+            {'area_terreno': 180.0, 'area_construida': 12.0, 'area_m2': 180.0},
+        )
+
     def test_propiedad_vacia(self):
         self.assertEqual(
             calcular_areas({}),
