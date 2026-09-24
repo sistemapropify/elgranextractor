@@ -85,11 +85,9 @@ def reason(record, p):
         issues.append('Terreno fuera del rango de tamaño comparable (0,5 a 2 veces)')
     if record['kind'] != 'Terreno' and positive(record.get('built')) and not .5 <= record['built']/p['built'] <= 2:
         issues.append('Construcción fuera del rango de tamaño comparable (0,5 a 2 veces)')
-    if record['kind'] != 'Terreno':
-        for key,label in (('rooms','Habitaciones'),('baths','Baños'),('floor','Piso')):
-            requested=p.get(key)
-            if requested is not None and number(record.get(key))!=requested:
-                issues.append(f'{label}: sin dato o no coincide con {requested:g} solicitado; solo referencia')
+    # Rooms, bathrooms and floor remain descriptive until the model can assign
+    # an economic adjustment to their differences. Exact matching here would
+    # discard otherwise comparable properties and bias small samples to zero.
     return issues
 
 

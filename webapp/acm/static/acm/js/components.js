@@ -66,12 +66,7 @@
   // Keep all consulted records visible so an excluded outer land can be selected again.
   function visibleRows(){return snapshot?.records||[];}
   const value=r=>presentation.property(r,result,excluded);
-  function mapGroup(r){
-    const v=value(r);
-    if(v.status==='land'&&v.selected)return 'land';
-    if(v.status==='house'||v.status==='area')return 'property';
-    return r.kind==='Terreno'?'other_reference':'property_reference';
-  }
+  const mapGroup=r=>presentation.group(r,value(r));
   function visibleMapRows(){const layers=new Set(Array.from(document.querySelectorAll('[name=map_layer]:checked'),x=>x.value));return visibleRows().filter(r=>layers.has(mapGroup(r)));}
   function renderMap(){
     if(!map||!result)return;clearMap();drawCircles();
@@ -88,13 +83,21 @@
   }
   function renderSummary(){
     const r=result,n=r.new,validSoil=r.land_unit!=null;
-    $('cmp-warnings').innerHTML=snapshot.warnings.concat(result.new?result.messages:[]).map(w=>'<div class="cmp-warning">'+escape(w)+'</div>').join('');
+    const targetRows=visibleRows().filter(row=>row.kind===snapshot.params.property_type),usedRows=targetRows.filter(row=>mapGroup(row)===(snapshot.params.property_type==='Terreno'?'land':'property'));
+    let diagnostic='';
+    if(!usedRows.length&&targetRows.length){
+      const counts=new Map();targetRows.forEach(row=>row.issues.forEach(issue=>counts.set(issue,(counts.get(issue)||0)+1)));
+      const reasons=[...counts].sort((a,b)=>b[1]-a[1]).slice(0,4).map(([reason,count])=>count+' × '+reason);
+      diagnostic='<div class="cmp-warning"><strong>0 '+escape(snapshot.params.property_type.toLowerCase())+'s aptas de '+targetRows.length+' encontradas.</strong>'+(reasons.length?'<br>Principales motivos: '+reasons.map(escape).join(' · '):' Revisa los datos y la selección manual.')+'</div>';
+    }
+    $('cmp-warnings').innerHTML=diagnostic+snapshot.warnings.concat(result.new?result.messages:[]).map(w=>'<div class="cmp-warning">'+escape(w)+'</div>').join('');
     if(r.model!=='components'){
       const basis=r.model==='land'?'terreno':'superficie construida';
       $('cmp-new').innerHTML='<h2>Valoración · '+escape(r.property_type)+'</h2><p class="cmp-muted">'+(r.house_count+r.land_count)+' comparables seleccionados</p>'+(n?'<div class="cmp-line"><span>Mediana por m² de '+basis+'</span><strong>'+money(n.unit)+'/m²</strong></div><div class="cmp-total">'+money(n.total)+'</div><p class="cmp-muted">'+decimals(snapshot.params[n.area_basis])+' m² × '+money(n.unit)+'/m²<br>Rango orientativo: '+money(n.range_low)+' – '+money(n.range_high)+'</p><div class="cmp-difference">Frente al anterior: '+money(n.delta)+' ('+decimals(n.delta_pct)+'%)</div>':'<p class="cmp-warning">'+r.messages.map(escape).join('<br>')+'</p>');
       $('cmp-old').innerHTML='<span>Cálculo anterior</span><strong>'+money(r.old?.total)+'</strong><small>Promedio ponderado por distancia sobre la misma superficie y selección.</small>';return;
     }
-    $('cmp-new').innerHTML='<h2>Valoración por componentes</h2><p class="cmp-muted">'+r.land_count+' terrenos · '+r.house_count+' casas seleccionadas · suelo hasta '+r.land_radius+' m</p>'+
+    const usedHouses=Number.isFinite(r.usable_house_count)?r.usable_house_count:0;
+    $('cmp-new').innerHTML='<h2>Valoración por componentes</h2><p class="cmp-muted">'+r.land_count+' terrenos usados · '+usedHouses+' casas usadas · suelo hasta '+r.land_radius+' m</p>'+
       (validSoil?'<div class="cmp-line"><span>Suelo de la microzona</span><strong>'+money(r.land_unit)+'/m²</strong></div>':'')+
       (n?'<div class="cmp-line"><span>Terreno objetivo</span><strong>'+money(n.land_value)+'</strong></div><div class="cmp-line"><span>Construcción y mejoras</span><strong>'+money(n.built_value)+'</strong></div><div class="cmp-total">'+money(n.total)+'</div><p class="cmp-muted">Aporte de mejoras: '+money(n.built_unit)+'/m² construido.<br>Rango central orientativo: '+money(n.range_low)+' – '+money(n.range_high)+'.</p><div class="cmp-difference">Frente al anterior: '+(n.delta>=0?'+':'')+money(n.delta)+' ('+(n.delta_pct>=0?'+':'')+decimals(n.delta_pct)+'%)</div>':'<p class="cmp-warning">'+r.messages.map(escape).join('<br>')+'</p>');
     $('cmp-old').innerHTML='<span>Cálculo anterior</span><strong>'+money(r.old?.total)+'</strong><small>'+(r.old?money(r.old.unit)+'/m² construido<br>':'')+'Mismas casas seleccionadas. Solo comparación; no alimenta el nuevo valor.</small>';
@@ -114,9 +117,10 @@
   function badge(r){const v=value(r);const text={area:'Incluida en el análisis',house:'Incluida en el análisis',review:'Requiere revisión',land:v.selected?'Terreno incluido':'Terreno de referencia',reference:'Solo referencia',excluded:'Desmarcada',pending:'Cálculo pendiente'};return '<span class="cmp-badge '+(['house','land','area'].includes(v.status)?'':'ref')+'">'+text[v.status]+'</span>';}
   function fixImages(container){container.querySelectorAll('img').forEach(img=>img.addEventListener('error',()=>{const empty=document.createElement('div');empty.className='cmp-photo-empty';empty.textContent='Sin foto';img.replaceWith(empty);},{once:true}));}
   function renderCards(){
-    const rows=visibleRows(),houses=rows.filter(r=>r.kind!=='Terreno'&&!r.issues.length),lands=rows.filter(r=>r.kind==='Terreno'&&!r.issues.length),refs=rows.filter(r=>r.issues.length);
+    const rows=visibleRows(),houses=rows.filter(r=>mapGroup(r)==='property'),lands=rows.filter(r=>mapGroup(r)==='land'),refs=rows.filter(r=>!['property','land'].includes(mapGroup(r)));
     $('cmp-house-count').textContent=houses.length;$('cmp-land-count').textContent=lands.length;$('cmp-ref-count').textContent=refs.length;
-    $('cmp-counts').textContent=rows.length+' encontrados · '+(result?(result.house_count+result.land_count)+' seleccionados':'Recalculando selección');
+    const propertyType=snapshot.params.property_type,found=rows.filter(r=>r.kind===propertyType).length;
+    $('cmp-counts').textContent=found+' '+propertyType.toLowerCase()+(found===1?' encontrada':'s encontradas')+' · '+houses.length+' comparables usados · '+lands.length+' terrenos usados · '+refs.length+' solo referencia';
     $('cmp-map-count').textContent=rows.length+' propiedades';
     document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));
     const selected=tab==='reference'?refs:tab==='Casa'?houses:lands;

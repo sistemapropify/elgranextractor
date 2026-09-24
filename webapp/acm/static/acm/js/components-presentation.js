@@ -37,7 +37,12 @@
   function marker(record, value, mode) {
     return precision(record).short + ' · ' + markerValue(record, value, mode);
   }
-  const api = {property, marker, precision};
+  function group(record, value) {
+    if (value.status === 'land' && value.selected) return 'land';
+    if (value.status === 'house' || value.status === 'area') return 'property';
+    return record.kind === 'Terreno' ? 'other_reference' : 'property_reference';
+  }
+  const api = {property, marker, precision, group};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ACMComponentsPresentation = api;
 })(typeof window !== 'undefined' ? window : globalThis);

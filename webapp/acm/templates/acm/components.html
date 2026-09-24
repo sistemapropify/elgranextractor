@@ -16,9 +16,9 @@
         <label class="cmp-address-field">Ubicación<input id="cmp-address" placeholder="Dirección o clic en el mapa" autocomplete="off"></label>
         <label id="cmp-land-field">Terreno (m²)<input name="land" type="number" min="0.01" max="1000000" step="any" required placeholder="150"></label>
         <label id="cmp-built-field">Construcción (m²)<input name="built" type="number" min="0.01" max="1000000" step="any" required placeholder="200"></label>
-        <label id="cmp-rooms-field">Habitaciones<input name="rooms" type="number" min="0" max="200" step="1" placeholder="Sin filtro"></label>
-        <label id="cmp-baths-field">Baños<input name="baths" type="number" min="0" max="200" step="0.5" placeholder="Sin filtro"></label>
-        <label id="cmp-floor-field" hidden>Piso<input name="floor" type="number" min="0" max="200" step="1" placeholder="Sin filtro" disabled></label></div>
+        <label id="cmp-rooms-field">Habitaciones (informativo)<input name="rooms" type="number" min="0" max="200" step="1" placeholder="Opcional"></label>
+        <label id="cmp-baths-field">Baños (informativo)<input name="baths" type="number" min="0" max="200" step="0.5" placeholder="Opcional"></label>
+        <label id="cmp-floor-field" hidden>Piso (informativo)<input name="floor" type="number" min="0" max="200" step="1" placeholder="Opcional" disabled></label></div>
         <div class="cmp-search-actions"><label>Radio de comparables: <strong id="cmp-radius-label">500 m</strong>
           <input name="radius" type="range" min="100" max="2000" step="100" value="500"></label>
         <button class="cmp-primary" id="cmp-search" type="submit">Buscar y calcular</button></div>
@@ -27,7 +27,7 @@
         <div class="cmp-fields"><label>Latitud<input name="lat" type="number" step="any" min="-90" max="90" value="-16.3989" required></label>
         <label>Longitud<input name="lng" type="number" step="any" min="-180" max="180" value="-71.535" required></label></div>
         <label id="cmp-expansion-field">Ampliación máxima de suelo para casas<select name="max_radius"><option value="2000">Hasta 2.000 m</option><option value="3000">Hasta 3.000 m</option><option value="5000">Hasta 5.000 m</option></select></label>
-        <p class="cmp-muted">Casas: la búsqueda de terrenos de referencia se amplía de 500 en 500 m cuando no encuentra ninguno. Los comparables del inmueble a valorar permanecen en el radio elegido. Habitaciones, baños y piso son filtros opcionales: si los completas, solo calculan los anuncios con ese dato coincidente; los demás quedan como referencia.</p>
+        <p class="cmp-muted">Casas: la búsqueda de terrenos de referencia se amplía de 500 en 500 m cuando no encuentra ninguno. Los comparables permanecen en el radio elegido. Habitaciones, baños y piso son informativos: no excluyen comparables ni modifican el valor mientras no exista un ajuste económico validado para esas diferencias.</p>
         </details>
       </form>
       <section class="cmp-panel cmp-map-panel">
@@ -52,7 +52,7 @@
       </section>
       <p class="cmp-note">Estimación de <strong>precios de oferta</strong>, no de ventas cerradas. El remanente incluye construcción y mejoras; no representa un coste de obra verificado. Si falta precio USD, conversión referencial S/3,44 por dólar.</p>
       <div class="cmp-toolbar"><strong id="cmp-counts">Sin comparables</strong><button id="cmp-export" type="button" disabled>Descargar análisis</button></div>
-      <nav class="cmp-tabs" aria-label="Grupos de comparables"><button data-tab="Casa" aria-pressed="true">Comparables <span id="cmp-house-count"></span></button><button data-tab="Terreno" aria-pressed="false">Terrenos <span id="cmp-land-count"></span></button><button data-tab="reference" aria-pressed="false">Solo referencia <span id="cmp-ref-count"></span></button></nav>
+      <nav class="cmp-tabs" aria-label="Grupos de comparables"><button data-tab="Casa" aria-pressed="true">Comparables usados <span id="cmp-house-count"></span></button><button data-tab="Terreno" aria-pressed="false">Terrenos usados <span id="cmp-land-count"></span></button><button data-tab="reference" aria-pressed="false">Solo referencia <span id="cmp-ref-count"></span></button></nav>
       <div id="cmp-cards"><p class="cmp-muted">Aquí aparecerán Propify y los portales seleccionados.</p></div>
       <details class="cmp-panel"><summary>Cómo se obtiene la estimación</summary>
         <p>Terrenos: mediana del precio/m² de suelo entre al menos 1 terreno válido dentro del radio elegido. Departamentos y oficinas: mediana de precio/m² construido de al menos 1 comparable completo del mismo tipo. Casas: desglose por componentes explicado a continuación. No se mezclan tipos ni se imputan superficies ausentes.</p>
@@ -71,7 +71,7 @@
 {% endblock %}
 {% block extra_scripts %}
 {{ block.super }}
-<script src="{% static 'acm/js/components-presentation.js' %}?v=4"></script>
-<script src="{% static 'acm/js/components.js' %}?v=6"></script>
+<script src="{% static 'acm/js/components-presentation.js' %}?v=5"></script>
+<script src="{% static 'acm/js/components.js' %}?v=7"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}

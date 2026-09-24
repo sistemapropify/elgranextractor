@@ -57,13 +57,14 @@ class ComponentsEngineTests(SimpleTestCase):
             self.assertEqual(result['new']['total'],110000)
             self.assertEqual(len(result['breakdown']),3)
 
-    def test_rooms_baths_filter_and_missing_data_visible(self):
+    def test_rooms_baths_are_informative_and_do_not_discard_comparables(self):
         p=parameters({**params(),'rooms':3,'baths':2})
         rows=candidates([record('match',rooms=3,baths=2),record('missing'),record('different',rooms=4,baths=2)],p)
         by_id={r['id']:r for r in rows}
         self.assertFalse(by_id['match']['issues'])
-        self.assertTrue(by_id['missing']['issues'])
-        self.assertTrue(by_id['different']['issues'])
+        self.assertFalse(by_id['missing']['issues'])
+        self.assertFalse(by_id['different']['issues'])
+        self.assertEqual(calculate(rows,p)['house_count'],3)
 
     def test_user_example_separates_300000_land(self):
         result=calculate(candidates(sample(),params()),params())

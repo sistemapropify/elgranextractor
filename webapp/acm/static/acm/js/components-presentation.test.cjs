@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const {property, marker, precision} = require('./components-presentation.js');
+const {property, marker, precision, group} = require('./components-presentation.js');
 const house = {id:'a', precision:'exacta', kind:'Casa', price:350000, land:150, built:200, issues:[]};
 const result = {land_ids:['land'], messages:[], breakdown:[{id:'a', land_unit:2000,
   land_value:300000, remainder:50000, built_unit:250, usable:true}]};
@@ -24,3 +24,8 @@ const approximate={...house,precision:'aproximada',issues:['Ubicación no exacta
 assert.equal(marker(approximate,property(approximate,result),'land'),'Apx · Solo referencia');
 assert.match(marker(approximate,property(approximate,result),'price'),/^Apx · Anuncio/);
 assert.equal(precision({...house,precision:null}).short,'S/d');
+assert.equal(group(house,detail),'property');
+const land={...house,id:'land',kind:'Terreno',built:null};
+assert.equal(group(land,{status:'land',selected:true}),'land');
+assert.equal(group(land,{status:'land',selected:false}),'other_reference');
+assert.equal(group(approximate,property(approximate,result)),'property_reference');
