@@ -166,14 +166,32 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
             house_rows.append((row['source'].upper(), row.get('code') or row['id'], _money(row['price']),
                                f'{_number(row["land"],2)} m²', _money(detail['land_value']),
                                _money(detail['remainder']), f'{_number(row["built"],2)} m²',
+                               f'{_number(detail.get("land_similarity"),1)}%', f'{_number(detail.get("built_similarity"),1)}%',
                                _unit(detail['built_unit']), _money(detail['target_estimate']),
                                'Sí' if detail['usable'] else 'No'))
         if house_rows:
-            table(('Portal','Código','Precio','Terreno','Valor suelo','Remanente','Construido','Remanente por m²','Valor sugerido','Usada'), house_rows,
-                  (.5,.7,.75,.6,.75,.75,.65,.9,.8,.4))
+            table(('Portal','Código','Precio','Terreno','Valor suelo','Remanente','Construido','Sim. terreno','Sim. construcción','Remanente por m²','Valor sugerido','Usada'), house_rows,
+                  (.5,.7,.75,.6,.75,.75,.65,.65,.75,.9,.8,.4))
             if built_units:
-                doc.add_paragraph(_median_text(built_units))
-                paragraph = doc.add_paragraph(); paragraph.add_run('Aporte unitario adoptado para construcción y mejoras: ').bold = True; paragraph.add_run(_unit(median(built_units)))
+                if result.get('built_unit_method') == 'closest_comparable':
+                    chosen_id = result.get('built_reference_id')
+                    chosen = by_id.get(chosen_id, {})
+                    chosen_detail = breakdown.get(chosen_id, {})
+                    doc.add_paragraph(
+                        f'Solo hubo dos casas y sus aportes quedaron muy dispersos. Se eligió el comparable más parecido '
+                        f'por superficies y distancia ({chosen.get("source", "").upper()} · {chosen.get("code", chosen_id)}), '
+                        f'en lugar de promediar los dos extremos. El otro anuncio queda como referencia.'
+                    )
+                    paragraph = doc.add_paragraph(); paragraph.add_run('Aporte unitario adoptado para construcción y mejoras: ').bold = True; paragraph.add_run(_unit(chosen_detail.get('built_unit')))
+                elif result.get('built_unit_method') == 'weighted_median':
+                    chosen_id = result.get('built_reference_id')
+                    chosen = by_id.get(chosen_id, {})
+                    chosen_detail = breakdown.get(chosen_id, {})
+                    doc.add_paragraph('Los aportes están muy dispersos. Se usó una mediana ponderada por similitud: las casas con terreno, construcción y ubicación más parecidos tienen mayor peso y no se promedian los extremos.')
+                    paragraph = doc.add_paragraph(); paragraph.add_run('Aporte unitario adoptado para construcción y mejoras: ').bold = True; paragraph.add_run(_unit(chosen_detail.get('built_unit')))
+                else:
+                    doc.add_paragraph(_median_text(built_units))
+                    paragraph = doc.add_paragraph(); paragraph.add_run('Aporte unitario adoptado para construcción y mejoras: ').bold = True; paragraph.add_run(_unit(median(built_units)))
             else:
                 doc.add_paragraph('Ninguna casa dejó un remanente positivo después de descontar el suelo. Por eso no se estimó el aporte de construcción y mejoras.')
         else:

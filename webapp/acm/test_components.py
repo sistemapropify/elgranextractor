@@ -94,6 +94,18 @@ class ComponentsEngineTests(SimpleTestCase):
         self.assertEqual(result['built_unit_max'], units[-1])
         self.assertTrue(any('muy disperso' in message for message in result['messages']))
 
+    def test_two_widely_different_houses_use_closest_comparable(self):
+        raw=[record('near',price=330000,land=281,built=330),
+             record('far',price=790000,land=394,built=394),
+             record('land','Terreno',price=300000,land=268.9)]
+        p={**params(),'land':200,'built':230}
+        result=calculate(candidates(raw,p),p)
+        by_id={row['id']:row for row in result['breakdown']}
+        self.assertEqual(result['built_unit_method'],'closest_comparable')
+        self.assertEqual(result['built_reference_id'],'near')
+        self.assertEqual(result['new']['built_unit'],by_id['near']['built_unit'])
+        self.assertTrue(any('no se promedian extremos' in message for message in result['messages']))
+
     def test_changing_land_selection_updates_every_house_breakdown(self):
         raw=sample()+[record('extra','Terreno',price=180000)]
         raw[-2]['price']=180000

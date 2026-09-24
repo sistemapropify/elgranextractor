@@ -18,6 +18,9 @@
     return {status:detail.usable ? 'house' : 'review', landUnit:detail.land_unit,
       landValue:detail.land_value, remainder:detail.remainder, builtUnit:detail.built_unit,
       targetEstimate:detail.target_estimate,
+      recommended:!!detail.recommended, similarityWeight:detail.similarity_weight,
+      landSimilarity:detail.land_similarity, builtSimilarity:detail.built_similarity,
+      distanceSimilarity:detail.distance_similarity, overallSimilarity:detail.overall_similarity,
       reason:detail.usable ? '' : 'Remanente no positivo: revisar precio, áreas o referencia de suelo'};
   }
   function precision(record) {
