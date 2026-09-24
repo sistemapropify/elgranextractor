@@ -1,6 +1,7 @@
 <dialog id="scraped-editor" style="margin:auto;width:min(850px,95vw);max-height:90vh;overflow:auto;border:1px solid #536478;border-radius:12px;padding:20px;background:#161b22;color:#e6edf3">
 <header style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3>Editar registro scrapeado</h3><button type="button" style="min-height:44px;min-width:90px" onclick="document.getElementById('scraped-editor').close()" aria-label="Cerrar editor">Cerrar ×</button></header>
 <p>Los campos corregidos quedan protegidos al volver a scrapear. Los datos originales y fechas de seguimiento se conservan como evidencia.</p>
+<p><a id="scraped-publication" target="_blank" rel="noopener noreferrer" hidden style="display:none;padding:8px 12px;border:1px solid #52718b;border-radius:7px;color:#8dc8ff">Abrir publicación ↗</a><span id="scraped-publication-missing" hidden>Sin enlace de publicación válido en este registro.</span></p>
 <form id="scraped-edit-form">{% csrf_token %}<div id="scraped-edit-fields"></div>
 <label><input type="checkbox" name="excluida"> Excluir del cálculo ACM (conservar visible en el mapa para revisión)</label>
 <p><label>Motivo / notas de revisión<br><textarea name="motivo" style="width:100%"></textarea></label></p>
@@ -12,16 +13,25 @@
 (function(){
 const modal=document.getElementById('scraped-editor'), form=document.getElementById('scraped-edit-form'), status=document.getElementById('scraped-edit-status');
 let endpoint=null, version=null, saving=false, sequence=0;
+const publication=document.getElementById('scraped-publication'), missingPublication=document.getElementById('scraped-publication-missing');
+function setPublication(raw){
+ publication.hidden=true;publication.style.display='none';publication.removeAttribute('href');missingPublication.hidden=true;
+ if(raw===null)return;
+ try{const url=new URL(String(raw||''));if(!['https:','http:'].includes(url.protocol))throw Error('Invalid protocol');publication.href=url.href;publication.hidden=false;publication.style.display='inline-block';}
+ catch(e){missingPublication.hidden=false;}
+}
 async function read(response){let body;try{body=await response.json();}catch(e){throw Error('El servidor no devolvió JSON. Comprueba tu sesión y vuelve a intentar.');}if(!response.ok)throw Error(body.error+(body.fields?' '+JSON.stringify(body.fields):''));return body;}
 window.openScrapedEditor=async function(id){
  if(saving)return;
  const seq=++sequence;version=null;
+ setPublication(null);document.getElementById('scraped-record').textContent='';
  endpoint='/ingestas/scraping/registros/'+encodeURIComponent(id)+'/editar/';
  document.getElementById('scraped-edit-fields').replaceChildren(); form.querySelector('[type=submit]').disabled=true;
  status.textContent='Cargando…'; if(!modal.open)modal.showModal();
  try{const data=await read(await fetch(endpoint,{credentials:'same-origin',headers:{Accept:'application/json'}}));
  if(seq!==sequence)return;
  document.getElementById('scraped-edit-fields').innerHTML=data.html;
+ setPublication(data.record.url||'');
  document.getElementById('scraped-record').textContent=JSON.stringify(data.record,null,2);
  form.elements.excluida.checked=data.record.excluida;form.elements.motivo.value=data.record.motivo;
  version=data.version;form.querySelector('[type=submit]').disabled=!data.can_edit;

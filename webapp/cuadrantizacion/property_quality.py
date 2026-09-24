@@ -46,8 +46,9 @@ def annotate_map_quality(properties):
             flag('area_missing', 'incomplete', 'Sin superficie explícita para comparar.')
         if raw.get('legacy_area'):
             flag('legacy_area', 'review', 'Superficie histórica sin clasificación explícita: revisar si corresponde a terreno o construcción.')
-        if str(row.get('location_precision') or '').casefold() != 'exacta':
-            flag('location_precision', 'review', 'Ubicación aproximada o desconocida: revisar antes de usar en una microzona.')
+        # Precision is a source limitation, not an editable quality defect.
+        # Keep approximate listings visible, but outside spatial statistics.
+        exact_location = str(row.get('location_precision') or '').strip().casefold() == 'exacta'
         district = str(row.get('district') or '').strip()
         if not district or district.casefold() == 'sin distrito':
             flag('district_missing', 'incomplete', 'Falta distrito.')
@@ -65,7 +66,7 @@ def annotate_map_quality(properties):
         # Whole house price includes land and improvements: never compare its
         # price/built-area ratio to a fixed threshold or call it a soil value.
         surface = land if kind in ('terreno', 'land', 'lote') else built if kind in ('departamento', 'apartment') else None
-        if operation == 'venta' and surface and price and not alerts and row.get('quality_stat_eligible', True):
+        if operation == 'venta' and surface and price and exact_location and not alerts and row.get('quality_stat_eligible', True):
             canonical_kind = 'Terreno' if kind in ('terreno', 'land', 'lote') else 'Departamento'
             groups[(district.casefold(), canonical_kind)].append((row, price / surface, surface))
 

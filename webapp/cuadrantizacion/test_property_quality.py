@@ -10,6 +10,21 @@ def prop(i=1, **kwargs):
 
 
 class MapQualityTests(SimpleTestCase):
+    def test_approximate_location_is_not_a_quality_defect(self):
+        row=prop();row['location_precision']='Aproximada'
+        annotate_map_quality([row])
+        self.assertEqual(row['quality_alerts'],[])
+        self.assertEqual(row['location_precision'],'Aproximada')
+
+    def test_approximate_listing_never_enters_outlier_statistics(self):
+        rows=[prop(i) for i in range(8)]
+        for row,price in zip(rows,[100000,105000,110000,115000,120000,125000,130000,1000000]):
+            row.update(property_type='Departamento',price=price,built_area_m2=100)
+        rows[-1]['location_precision']='Aproximada'
+        result=annotate_map_quality(rows)
+        self.assertEqual(result['outlier'],0)
+        self.assertEqual(rows[-1]['quality_alerts'],[])
+
     def test_expensive_house_is_not_statistical_outlier(self):
         row=prop();row.update(price=1500000,land_area_m2=498,built_area_m2=268)
         annotate_map_quality([row])

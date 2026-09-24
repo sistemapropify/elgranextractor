@@ -19,7 +19,12 @@
       landValue:detail.land_value, remainder:detail.remainder, builtUnit:detail.built_unit,
       reason:detail.usable ? '' : 'Remanente no positivo: revisar precio, áreas o referencia de suelo'};
   }
-  function marker(record, value, mode) {
+  function precision(record) {
+    if (record.precision === 'exacta') return {short:'Exa', label:'Ubicación exacta', kind:'exact'};
+    if (record.precision === 'aproximada') return {short:'Apx', label:'Ubicación aproximada · solo referencia', kind:'approximate'};
+    return {short:'S/d', label:'Precisión sin informar · solo referencia', kind:'unknown'};
+  }
+  function markerValue(record, value, mode) {
     if (mode === 'price') return 'Anuncio ' + money(record.price);
     if (value.status === 'reference') return 'Solo referencia';
     if (value.status === 'excluded') return 'No seleccionada';
@@ -29,7 +34,10 @@
     if (mode === 'improvements') return (value.status === 'review' ? 'Revisar: ' : 'Mejoras ') + money(value.builtUnit) + '/m²';
     return 'Suelo estim. ' + money(value.landUnit) + '/m²';
   }
-  const api = {property, marker};
+  function marker(record, value, mode) {
+    return precision(record).short + ' · ' + markerValue(record, value, mode);
+  }
+  const api = {property, marker, precision};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ACMComponentsPresentation = api;
 })(typeof window !== 'undefined' ? window : globalThis);
