@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 from datetime import datetime
 from camoufox.async_api import AsyncCamoufox
 from scrapi.camoufox_launcher import camoufox_kwargs
-from scrapi.areas import calcular_areas
+from scrapi.remax_areas import calcular_areas_remax as calcular_areas
 from urllib.request import Request, urlopen
 from captura.azure_storage import upload_bytes
 

@@ -213,6 +213,10 @@ class ComponentsEndpointTests(SimpleTestCase):
         self.assertContains(response,'data-search-url="/acm/componentes/buscar/"')
         self.assertContains(response,'id="cmp-detail"')
         self.assertContains(response,'Cerrar detalle')
+        self.assertContains(response,'Casas comparables')
+        self.assertContains(response,'Casas solo referencia')
+        self.assertContains(response,'Terrenos para valor del suelo')
+        self.assertContains(response,'id="scraped-editor"')
         self.assertNotContains(response,'ENTORNO DE PRUEBAS')
 
     def test_page_shell_remains_visible_before_login(self):
@@ -229,6 +233,7 @@ class ComponentsDatabaseTests(TestCase):
             tipo_operacion='Venta',precio_usd=350000,area_terreno=150,area_construida=200,
             latitud=-16.4,longitud=-71.5,precision_ubicacion='exacta',estado_publicacion='activa')
         self.assertEqual(list(scraped_rows(params()))[0]['price'],350000)
+        self.assertEqual(list(scraped_rows(params()))[0]['record_id'],prop.pk)
         prop.precio_usd=360000;prop.save()
         self.assertEqual(list(scraped_rows(params()))[0]['price'],360000)
 
@@ -241,3 +246,4 @@ class ComponentsDatabaseTests(TestCase):
         self.assertEqual(row['price'],100000)
         self.assertEqual(row['land'],150)
         self.assertEqual(row['built'],200)
+        self.assertIsNone(row['record_id'])

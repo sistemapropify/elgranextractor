@@ -80,7 +80,8 @@ def scraped_rows(p):
             'precio_usd','precio_soles','area_terreno','area_construida','latitud','longitud',
             'precision_ubicacion','estado_publicacion','distrito','url','imagen_url','descripcion','dormitorios','banos').iterator(chunk_size=500):
         usd=positive(row['precio_usd']);pen=positive(row['precio_soles'])
-        yield {'id':f"{row['fuente']}-{row['id']}",'source':row['fuente'],'code':row['id_origen'],
+        yield {'id':f"{row['fuente']}-{row['id']}",'record_id':row['id'],
+            'source':row['fuente'],'code':row['id_origen'],
             'title':row['titulo'] or row['id_origen'],'kind':row['tipo_inmueble'],
             'description':row['descripcion'] or '',
             'rooms':row['dormitorios'],'baths':row['banos'],'floor':None,
@@ -100,7 +101,8 @@ def propify_rows():
         if row['operation_type']=='Alquiler':continue
         price=positive(row['price'])
         converted=row['currency_symbol']!='$'
-        yield {'id':f"propify-{row['id']}",'source':'propify','code':row['code'],
+        yield {'id':f"propify-{row['id']}",'record_id':None,
+            'source':'propify','code':row['code'],
             'title':row['title'],'kind':row['property_type'],
             'rooms':number(row.get('bedrooms')),
             'baths':(number(row.get('bathrooms')) or 0)+(number(row.get('half_bathrooms')) or 0)*.5 if row.get('bathrooms') is not None else None,

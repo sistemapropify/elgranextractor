@@ -18,6 +18,15 @@
     document.querySelector('[data-tab="Casa"]').hidden=land;
     document.querySelector('[data-tab="Terreno"]').hidden=!house&&!land;
     const mode=$('cmp-marker-mode');mode.options[0].textContent=house||land?'Suelo / m²':'Oferta / m² construido';mode.options[1].disabled=!house;if(!house&&mode.value==='improvements')mode.value='land';
+    const propertyLayer=document.querySelector('[name=map_layer][value=property]'),landLayer=document.querySelector('[name=map_layer][value=land]'),propertyReferenceLayer=document.querySelector('[name=map_layer][value=property_reference]'),otherReferenceLayer=document.querySelector('[name=map_layer][value=other_reference]');
+    propertyLayer.checked=!land;landLayer.checked=land;propertyReferenceLayer.checked=false;otherReferenceLayer.checked=false;
+    propertyLayer.closest('label').hidden=land;propertyReferenceLayer.closest('label').hidden=land;
+    landLayer.closest('label').hidden=!house&&!land;otherReferenceLayer.closest('label').hidden=!house&&!land;
+    $('cmp-property-layer-label').textContent=house?'Casas comparables':type+'s comparables';
+    $('cmp-property-reference-layer-label').textContent=house?'Casas solo referencia':type+'s solo referencia';
+    $('cmp-land-layer-label').textContent=house?'Terrenos para valor del suelo':'Terrenos comparables';
+    $('cmp-other-reference-layer-label').textContent=land?'Terrenos solo referencia':'Terrenos no usados';
+    if(map&&result)renderMap();
   }
   async function post(path,data){
     if(controller)controller.abort();controller=new AbortController();const current=controller;
@@ -57,16 +66,25 @@
   // Keep all consulted records visible so an excluded outer land can be selected again.
   function visibleRows(){return snapshot?.records||[];}
   const value=r=>presentation.property(r,result,excluded);
+  function mapGroup(r){
+    const v=value(r);
+    if(v.status==='land'&&v.selected)return 'land';
+    if(v.status==='house'||v.status==='area')return 'property';
+    return r.kind==='Terreno'?'other_reference':'property_reference';
+  }
+  function visibleMapRows(){const layers=new Set(Array.from(document.querySelectorAll('[name=map_layer]:checked'),x=>x.value));return visibleRows().filter(r=>layers.has(mapGroup(r)));}
   function renderMap(){
     if(!map||!result)return;clearMap();drawCircles();
     const icons={propify:'Pin-propify.png',remax:'pin-remax.png',properati:'pin-properati.png'};
     const mode=$('cmp-marker-mode').value;
-    visibleRows().forEach(r=>{
+    const rows=visibleMapRows();
+    rows.forEach(r=>{
       const v=value(r),label=presentation.marker(r,v,mode),dim=['reference','excluded','pending'].includes(v.status);
       const icon=icons[r.source]?{url:'/static/requerimientos/data/'+icons[r.source],scaledSize:new google.maps.Size(32,40),anchor:new google.maps.Point(16,40),labelOrigin:new google.maps.Point(16,52)}:{path:google.maps.SymbolPath.CIRCLE,scale:7,fillColor:r.kind==='Terreno'?'#d6a548':'#3789dd',fillOpacity:1,strokeColor:'#ffffff',strokeWeight:1,labelOrigin:new google.maps.Point(0,3)};
       const marker=new google.maps.Marker({map,position:{lat:r.lat,lng:r.lng},title:r.title+' · '+presentation.precision(r).label+' · '+label,opacity:dim?.55:1,icon,label:{text:label,fontSize:'10px',fontWeight:'600',className:'cmp-pin-label'}});
       marker.addListener('click',()=>openDetail(r.id));markers.push(marker);
     });
+    $('cmp-map-count').textContent=rows.length+' visibles de '+visibleRows().length;
   }
   function renderSummary(){
     const r=result,n=r.new,validSoil=r.land_unit!=null;
@@ -107,7 +125,9 @@
   }
   function renderDetail(){
     if(!detailId||!snapshot)return;const r=snapshot.records.find(r=>r.id===detailId);if(!r)return;
-    $('cmp-detail-content').innerHTML=heading(r,false)+areas(r)+features(r)+breakdown(r)+'<div class="cmp-detail-facts"><div>Ubicación<strong>'+escape(presentation.precision(r).label)+'</strong></div><div>Operación<strong>'+escape(r.operation)+'</strong></div><div>Disponibilidad<strong>'+escape(r.state)+'</strong></div><div>Distancia<strong>'+decimals(r.distance)+' m</strong></div><div>Precio<strong>'+(r.converted?'Convertido de soles a 3,44':'USD')+'</strong></div><div>Estado en ACM<strong>'+badge(r)+'</strong></div></div>'+(r.description?'<details><summary>Descripción del anuncio</summary><p class="cmp-description">'+escape(r.description)+'</p></details>':'')+'<p class="cmp-muted">En casas, construcción y mejoras es el remanente después de descontar el suelo estimado. En terrenos, departamentos y oficinas se muestra la referencia por la superficie correspondiente.</p><div class="cmp-card-footer">'+(r.url?'<a href="'+escape(r.url)+'" target="_blank" rel="noopener noreferrer">Abrir publicación ↗</a>':'<span>Sin enlace de publicación</span>')+'</div>';
+    const recordFact=r.record_id?'<div>Registro interno<strong>#'+escape(r.record_id)+'</strong></div>':'';
+    const editAction=r.record_id?'<button type="button" data-edit-record="'+escape(r.record_id)+'">Revisar / editar registro</button>':'';
+    $('cmp-detail-content').innerHTML=heading(r,false)+areas(r)+features(r)+breakdown(r)+'<div class="cmp-detail-facts"><div>Código del portal<strong>'+escape(r.code||'Sin informar')+'</strong></div>'+recordFact+'<div>Ubicación<strong>'+escape(presentation.precision(r).label)+'</strong></div><div>Operación<strong>'+escape(r.operation)+'</strong></div><div>Disponibilidad<strong>'+escape(r.state)+'</strong></div><div>Distancia<strong>'+decimals(r.distance)+' m</strong></div><div>Precio<strong>'+(r.converted?'Convertido de soles a 3,44':'USD')+'</strong></div><div>Estado en ACM<strong>'+badge(r)+'</strong></div></div>'+(r.description?'<details><summary>Descripción del anuncio</summary><p class="cmp-description">'+escape(r.description)+'</p></details>':'')+'<p class="cmp-muted">En casas, construcción y mejoras es el remanente después de descontar el suelo estimado. En terrenos, departamentos y oficinas se muestra la referencia por la superficie correspondiente.</p><div class="cmp-card-footer">'+(r.url?'<a href="'+escape(r.url)+'" target="_blank" rel="noopener noreferrer">Abrir publicación ↗</a>':'<span>Sin enlace de publicación</span>')+editAction+'</div>';
     fixImages($('cmp-detail-content'));
   }
   function openDetail(id){detailId=id;renderDetail();if(!$('cmp-detail').open)$('cmp-detail').showModal();}
@@ -124,8 +144,10 @@
   $('cmp-address').addEventListener('keydown',e=>{if(e.key==='Enter')e.preventDefault();});
   document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{tab=button.dataset.tab;if(snapshot)renderCards();}));
   $('cmp-marker-mode').addEventListener('change',renderMap);
+  document.querySelectorAll('[name=map_layer]').forEach(input=>input.addEventListener('change',renderMap));
   $('cmp-cards').addEventListener('click',e=>{const button=e.target.closest('[data-detail]');if(button)openDetail(button.dataset.detail);});
   $('cmp-detail-close').addEventListener('click',()=>$('cmp-detail').close());
+  $('cmp-detail-content').addEventListener('click',e=>{const button=e.target.closest('[data-edit-record]');if(button&&typeof window.openScrapedEditor==='function')window.openScrapedEditor(button.dataset.editRecord);});
   $('cmp-detail').addEventListener('close',()=>{detailId=null;});
   $('cmp-detail').addEventListener('click',e=>{if(e.target===$('cmp-detail')){const b=e.target.getBoundingClientRect();if(e.clientX<b.left||e.clientX>b.right||e.clientY<b.top||e.clientY>b.bottom)e.target.close();}});
   $('cmp-cards').addEventListener('change',async e=>{

@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}ACM · Suelo y construcción{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=5">
 {% endblock %}
 {% block content %}
 <main class="components-acm">
@@ -32,6 +32,12 @@
       </form>
       <section class="cmp-panel cmp-map-panel">
       <div class="cmp-map-toolbar"><strong id="cmp-map-count">Comparables en el mapa</strong><label>Mostrar bajo el pin<select id="cmp-marker-mode"><option value="land">Suelo estimado / m²</option><option value="improvements">Construcción y mejoras / m²</option><option value="price">Precio total anunciado</option></select></label></div>
+      <fieldset class="cmp-map-layers"><legend>Capas visibles</legend>
+        <label><input type="checkbox" name="map_layer" value="property" checked> <span id="cmp-property-layer-label">Casas comparables</span></label>
+        <label><input type="checkbox" name="map_layer" value="land"> <span id="cmp-land-layer-label">Terrenos para valor del suelo</span></label>
+        <label><input type="checkbox" name="map_layer" value="property_reference"> <span id="cmp-property-reference-layer-label">Casas solo referencia</span></label>
+        <label><input type="checkbox" name="map_layer" value="other_reference"> <span id="cmp-other-reference-layer-label">Otros no usados</span></label>
+      </fieldset>
       <p class="cmp-muted">Exa: exacta · Apx: aproximada · S/d: precisión sin informar. Las ubicaciones aproximadas o sin precisión se muestran como referencia y no intervienen en el cálculo.</p>
       <div id="cmp-map" aria-label="Mapa de influencia"></div>
       <p class="cmp-muted" id="cmp-map-explanation">El valor de suelo se obtiene de los terrenos seleccionados. Cada casa muestra el remanente que su anuncio atribuye a construcción y mejoras.</p>
@@ -61,10 +67,11 @@
   <header class="cmp-detail-header"><div><span>COMPARABLE · ANÁLISIS POR COMPONENTES</span><h2 id="cmp-detail-heading">Detalle de la propiedad</h2></div><button type="button" id="cmp-detail-close" autofocus aria-label="Cerrar detalle">Cerrar <span aria-hidden="true">×</span></button></header>
   <div id="cmp-detail-content"></div>
 </dialog>
+{% include 'ingestas/property_editor.html' %}
 {% endblock %}
 {% block extra_scripts %}
 {{ block.super }}
 <script src="{% static 'acm/js/components-presentation.js' %}?v=4"></script>
-<script src="{% static 'acm/js/components.js' %}?v=5"></script>
+<script src="{% static 'acm/js/components.js' %}?v=6"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}
