@@ -3,7 +3,8 @@ import math
 from statistics import median
 
 VERSION = 'componentes-1'
-MIN_LANDS = 5
+MIN_LANDS = 3
+TARGET_LANDS = 5
 MIN_HOUSES = 3
 SOURCES = ('propify', 'remax', 'properati', 'adondevivir', 'urbania', 'facebook_marketplace')
 
@@ -28,10 +29,17 @@ def distance(a, b, c, d):
 
 
 def parameters(data):
-    output = {}
+    target = kind(data.get('property_type', 'Casa'))
+    if target not in ('Casa','Terreno','Departamento','Oficina'):
+        raise ValueError('Tipo de propiedad inválido')
+    output = {'property_type':target}
     for key, low, high in [('lat',-90,90), ('lng',-180,180), ('radius',100,2000),
                            ('max_radius',100,5000), ('land',.01,1000000), ('built',.01,1000000)]:
+        optional = (key=='built' and target=='Terreno') or (key=='land' and target in ('Departamento','Oficina'))
         value = number(data.get(key))
+        if optional and value in (None,0):
+            output[key] = 0
+            continue
         if value is None or not low <= value <= high:
             raise ValueError(f'{key}: valor inválido (entre {low} y {high}).')
         output[key] = value
@@ -41,6 +49,15 @@ def parameters(data):
     if not isinstance(sources, list) or not sources or any(s not in SOURCES for s in sources):
         raise ValueError('Selecciona al menos una fuente válida.')
     output['sources'] = sorted(set(sources))
+    for key in ('rooms','baths','floor'):
+        raw=data.get(key)
+        value=number(raw)
+        applicable=target!='Terreno' and (key!='rooms' or target!='Oficina') and (key!='floor' or target!='Casa')
+        if not applicable or raw in (None,''):
+            output[key]=None
+        elif value is None or not 0<=value<=200 or (key!='baths' and value!=int(value)):
+            raise ValueError(f'{key}: valor inválido')
+        else: output[key]=value
     return output
 
 
@@ -48,14 +65,16 @@ def kind(value):
     text = str(value or '').strip().casefold()
     if text in ('casa', 'house', 'casas'): return 'Casa'
     if text in ('terreno', 'land', 'lote', 'terrenos', 'lot'): return 'Terreno'
+    if text in ('departamento','apartment','apartamento','flat','duplex'): return 'Departamento'
+    if text in ('oficina','office'): return 'Oficina'
     return None
 
 
 def reason(record, p):
     issues = []
     if not positive(record.get('price')): issues.append('Precio sin informar o inválido')
-    if not positive(record.get('land')): issues.append('Falta área de terreno')
-    if record['kind'] == 'Casa' and not positive(record.get('built')):
+    if record['kind'] in ('Casa','Terreno') and not positive(record.get('land')): issues.append('Falta área de terreno')
+    if record['kind'] != 'Terreno' and not positive(record.get('built')):
         issues.append('Falta área construida')
     if record.get('precision') != 'exacta': issues.append('Ubicación no exacta')
     if record.get('state') != 'activa': issues.append('Disponibilidad sin confirmar')
@@ -63,10 +82,15 @@ def reason(record, p):
     if record.get('review_excluded'): issues.append('Excluida por revisión de calidad')
     if record['kind'] == 'Terreno' and positive(record.get('built')):
         issues.append('Terreno con construcción: revisar antes de usar como suelo')
-    if positive(record.get('land')) and not .5 <= record['land']/p['land'] <= 2:
+    if record['kind'] in ('Casa','Terreno') and positive(record.get('land')) and not .5 <= record['land']/p['land'] <= 2:
         issues.append('Terreno fuera del rango de tamaño comparable (0,5 a 2 veces)')
-    if record['kind'] == 'Casa' and positive(record.get('built')) and not .5 <= record['built']/p['built'] <= 2:
+    if record['kind'] != 'Terreno' and positive(record.get('built')) and not .5 <= record['built']/p['built'] <= 2:
         issues.append('Construcción fuera del rango de tamaño comparable (0,5 a 2 veces)')
+    if record['kind'] != 'Terreno':
+        for key,label in (('rooms','Habitaciones'),('baths','Baños'),('floor','Piso')):
+            requested=p.get(key)
+            if requested is not None and number(record.get(key))!=requested:
+                issues.append(f'{label}: sin dato o no coincide con {requested:g} solicitado; solo referencia')
     return issues
 
 
@@ -80,6 +104,7 @@ def same_listing(a, b):
     for field in ('price', 'land', 'built'):
         av, bv = positive(a.get(field)), positive(b.get(field))
         if field == 'built' and a['kind'] == 'Terreno' and av is None and bv is None: continue
+        if field == 'land' and a['kind'] in ('Departamento','Oficina') and av is None and bv is None: continue
         if av is None or bv is None or abs(av/bv-1) > (.03 if field=='price' else .01): return False
     return True
 
@@ -90,11 +115,13 @@ def candidates(records, p):
         row = dict(source)
         row['kind'] = kind(row.get('kind'))
         if not row['kind']: continue
-        for key in ('lat', 'lng', 'price', 'land', 'built'): row[key] = number(row.get(key))
+        target=p.get('property_type','Casa')
+        if row['kind'] not in ({'Casa','Terreno'} if target=='Casa' else {target}): continue
+        for key in ('lat', 'lng', 'price', 'land', 'built','rooms','baths','floor'): row[key] = number(row.get(key))
         if row['lat'] is None or row['lng'] is None or not -90<=row['lat']<=90 or not -180<=row['lng']<=180:
             continue
         row['distance'] = round(distance(p['lat'],p['lng'],row['lat'],row['lng']),2)
-        if row['distance'] > (p['radius'] if row['kind']=='Casa' else p['max_radius']): continue
+        if row['distance'] > (p['max_radius'] if target=='Casa' and row['kind']=='Terreno' else p['radius']): continue
         row['issues'] = reason(row,p)
         row['duplicate_of'] = None
         result.append(row)
@@ -129,20 +156,24 @@ def old_estimate(houses, built):
 
 
 def calculate(records, p, excluded=()):
+    if p.get('property_type','Casa')!='Casa':
+        return calculate_same_type(records,p,excluded)
     excluded=set(excluded)
     houses=[r for r in records if r['kind']=='Casa' and not r['issues'] and r['id'] not in excluded]
     eligible_lands=[r for r in records if r['kind']=='Terreno' and not r['issues'] and r['id'] not in excluded]
     radius=p['radius']
-    while radius < p['max_radius'] and sum(r['distance']<=radius for r in eligible_lands)<MIN_LANDS:
+    while radius < p['max_radius'] and sum(r['distance']<=radius for r in eligible_lands)<TARGET_LANDS:
         radius=min(radius+500,p['max_radius'])
     lands=[r for r in eligible_lands if r['distance']<=radius]
-    result={'version':VERSION,'status':'insufficient','messages':[], 'land_radius':radius,
+    result={'version':VERSION,'model':'components','property_type':'Casa','status':'insufficient','messages':[], 'land_radius':radius,
             'land_count':len(lands),'house_count':len(houses),'min_lands':MIN_LANDS,'min_houses':MIN_HOUSES,
             'land_ids':[r['id'] for r in lands], 'house_ids':[r['id'] for r in houses],
             'old':old_estimate(houses,p['built']), 'new':None,'breakdown':[], 'land_unit':None}
     if len(lands)<MIN_LANDS:
         result['messages'].append(f'Suelo sin evidencia suficiente: {len(lands)} de {MIN_LANDS} terrenos requeridos.')
         return result
+    if len(lands)<TARGET_LANDS:
+        result['messages'].append(f'Muestra reducida: referencia de suelo calculada con {len(lands)} terrenos válidos. Revisa su comparabilidad.')
     units=sorted(r['price']/r['land'] for r in lands)
     unit=median(units)
     q25=units[int((len(units)-1)*.25)];q75=units[int((len(units)-1)*.75)]
@@ -159,9 +190,9 @@ def calculate(records, p, excluded=()):
             'remainder':remainder,'built_unit':remainder/row['built'],'usable':remainder>0})
         if remainder>0: residuals.append(remainder/row['built'])
     invalid=len(houses)-len(residuals)
+    result['usable_house_count']=len(residuals)
     if invalid:
-        result['messages'].append(f'{invalid} casas tienen remanente no positivo. Desmárcalas o revisa la referencia de suelo; no se han convertido en cero.')
-        return result
+        result['messages'].append(f'{invalid} casas tienen remanente no positivo: quedan visibles para revisión y no intervienen en la mediana de construcción y mejoras.')
     if len(residuals)<MIN_HOUSES:
         result['messages'].append(f'Faltan casas completas: {len(residuals)} de {MIN_HOUSES} requeridas.')
         return result
@@ -174,4 +205,38 @@ def calculate(records, p, excluded=()):
         'built_unit':built_unit, 'range_low':estimates[int((len(estimates)-1)*.25)],
         'range_high':estimates[math.ceil((len(estimates)-1)*.75)],
         'delta':total-result['old']['total'], 'delta_pct':100*(total/result['old']['total']-1)})
+    return result
+
+
+def calculate_same_type(records,p,excluded=()):
+    target=p['property_type'];is_land=target=='Terreno';area='land' if is_land else 'built'
+    rows=[r for r in records if r['kind']==target and not r['issues'] and r['id'] not in set(excluded) and r['distance']<=p['radius']]
+    units=sorted(r['price']/r[area] for r in rows)
+    result={'version':VERSION,'model':'land' if is_land else 'built','property_type':target,
+        'status':'insufficient','messages':[],'land_radius':p['radius'],'land_count':len(rows) if is_land else 0,
+        'house_count':0 if is_land else len(rows),'land_ids':[r['id'] for r in rows] if is_land else [],
+        'house_ids':[] if is_land else [r['id'] for r in rows], 'min_lands':MIN_LANDS,'min_houses':3,
+        'new':None,'old':None,'land_unit':None,'breakdown':[]}
+    if rows:
+        weights=[1/((r['distance'] or 1)+1) for r in rows]
+        old_unit=sum(w*r['price']/r[area] for w,r in zip(weights,rows))/sum(weights)
+        result['old']={'total':old_unit*p[area],'unit':old_unit,'houses':len(rows)}
+    for r in rows:
+        result['breakdown'].append({'id':r['id'],'method':result['model'],'offer_unit':r['price']/r[area],
+            'area':r[area],'adjusted_total':r['price']/r[area]*p[area],'usable':True})
+    minimum=MIN_LANDS if is_land else 3
+    if len(rows)<minimum:
+        result['messages']=[f'Faltan comparables completos de {target.lower()}: {len(rows)} de {minimum} requeridos.']
+        return result
+    if len(rows)<5:
+        result['messages'].append(f'Muestra reducida: cálculo con {len(rows)} comparables completos.')
+    unit=median(units);q25=units[int((len(units)-1)*.25)];q75=units[int((len(units)-1)*.75)]
+    if (q75-q25)/unit>1:
+        result['messages']=['Precios demasiado dispersos: revisa los comparables seleccionados.']
+        return result
+    total=unit*p[area]
+    if is_land:result.update(land_unit=unit,land_dispersion=(q75-q25)/unit)
+    result.update(status='ok',new={'total':total,'unit':unit,'area_basis':area,
+        'range_low':q25*p[area],'range_high':units[math.ceil((len(units)-1)*.75)]*p[area],
+        'delta':total-result['old']['total'],'delta_pct':100*(total/result['old']['total']-1)})
     return result

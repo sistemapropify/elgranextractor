@@ -1,9 +1,11 @@
 from django.urls import path
-from . import views
+from . import views, property_quality_views
 
 app_name = 'ingestas'
 
 urlpatterns = [
+    path('scraping/calidad/', property_quality_views.dashboard, name='scraping_calidad'),
+    path('scraping/registros/<int:pk>/editar/', property_quality_views.PropertyEditor.as_view(), name='scraping_registro_editar'),
     path('', views.IngestasIndexView.as_view(), name='index'),
     path('subir/', views.SubirExcelView.as_view(), name='subir_excel'),
     path('validar/', views.ValidarMapeoView.as_view(), name='validar_mapeo'),

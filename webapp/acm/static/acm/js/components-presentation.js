@@ -14,6 +14,7 @@
     }
     const detail = result.breakdown.find(row => row.id === record.id);
     if (!detail) return {status:'pending', reason:result.messages.join(' ') || 'Referencia de suelo pendiente'};
+    if (detail.method === 'built') return {status:'area', offerUnit:detail.offer_unit, adjustedTotal:detail.adjusted_total};
     return {status:detail.usable ? 'house' : 'review', landUnit:detail.land_unit,
       landValue:detail.land_value, remainder:detail.remainder, builtUnit:detail.built_unit,
       reason:detail.usable ? '' : 'Remanente no positivo: revisar precio, áreas o referencia de suelo'};
@@ -24,6 +25,7 @@
     if (value.status === 'excluded') return 'No seleccionada';
     if (value.status === 'pending') return 'Sin cálculo';
     if (value.status === 'land') return 'Suelo (oferta) ' + money(value.offerUnit) + '/m²';
+    if (value.status === 'area') return 'Oferta ' + money(value.offerUnit) + '/m² construido';
     if (mode === 'improvements') return (value.status === 'review' ? 'Revisar: ' : 'Mejoras ') + money(value.builtUnit) + '/m²';
     return 'Suelo estim. ' + money(value.landUnit) + '/m²';
   }

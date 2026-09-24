@@ -37,8 +37,13 @@ def propose(prop):
         row = normalize(portal, importlib.import_module(f'scrapi.{portal}_scraper'), dict(raw))
     else:
         return None
+    from .models import RevisionPropiedadScraping
+    review = RevisionPropiedadScraping.objects.filter(propiedad=prop).first()
+    protected = set(review.campos_protegidos) if review else set()
     changes = {}
     for field in FIELDS:
+        if field in protected:
+            continue
         old, new = json_value(getattr(prop, field)), row.get(field)
         if new is not None and field in ('precio_soles', 'precio_usd', 'area_m2'):
             model_field = PropiedadesCompetencia._meta.get_field(field)

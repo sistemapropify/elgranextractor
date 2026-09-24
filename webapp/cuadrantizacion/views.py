@@ -727,14 +727,15 @@ def _available_propify_properties():
             with connections['propifai'].cursor() as cursor:
                 cursor.execute(
                     f"""
-                        SELECT property_id, land_area, built_area
+                        SELECT property_id, land_area, built_area, bedrooms, bathrooms, half_bathrooms, unit_location
                         FROM property_specs
                         WHERE property_id IN ({placeholders})
                     """,
                     batch,
                 )
                 specs_map.update({
-                    row[0]: {'land_area': row[1], 'built_area': row[2]}
+                    row[0]: {'land_area': row[1], 'built_area': row[2],
+                             'bedrooms':row[3], 'bathrooms':row[4], 'half_bathrooms':row[5], 'unit_location':row[6]}
                     for row in cursor.fetchall()
                 })
     except Exception:
@@ -800,6 +801,10 @@ def _available_propify_properties():
         properties.append({
             'id': row['id'],
             'source': 'Propify',
+            'bedrooms': specs.get('bedrooms'),
+            'bathrooms': specs.get('bathrooms'),
+            'half_bathrooms': specs.get('half_bathrooms'),
+            'unit_location': specs.get('unit_location'),
             'source_key': 'propify',
             'code': row['code'] or '',
             'title': row['title'] or row['code'] or 'Propiedad Propify',
@@ -832,7 +837,9 @@ def _available_propify_properties():
 
 def _available_scraped_properties(sources=('remax', 'properati')):
     """Return active mapped listings from the supported competitor portals."""
-    from ingestas.models import PropiedadesCompetencia
+    from ingestas.models import PropiedadesCompetencia, RevisionPropiedadScraping
+
+    reviews = {r.propiedad_id: r.motivo for r in RevisionPropiedadScraping.objects.filter(excluida=True)}
 
     rows = (
         PropiedadesCompetencia.objects
@@ -940,6 +947,14 @@ def _available_scraped_properties(sources=('remax', 'properati')):
 
         properties.append({
             'id': f"{source_key}-{row['id']}",
+            'record_id': row['id'],
+            'quality_excluded': row['id'] in reviews,
+            'quality_exclusion_reason': reviews.get(row['id'], ''),
+            '_quality_input': {
+                'usd': row['precio_usd'], 'land': row['area_terreno'],
+                'built': row['area_construida'],
+                'legacy_area': bool(row['area_m2'] and not row['area_terreno'] and not row['area_construida']),
+            },
             'source': source,
             'source_key': source_key,
             'code': row['id_origen'] or '',
@@ -973,6 +988,7 @@ def _available_scraped_properties(sources=('remax', 'properati')):
 
 def api_available_map_properties(request):
     """Available Propify, Remax and Properati markers for the zoning map."""
+    from .property_quality import annotate_map_quality
     requested_sources = {
         source.strip().casefold()
         for source in request.GET.get('sources', 'propify,remax,properati').split(',')
@@ -1010,8 +1026,10 @@ def api_available_map_properties(request):
             'failed_sources': failed_sources,
         }, status=503)
 
+    quality = annotate_map_quality(properties)
     return JsonResponse({
         'properties': properties,
+        'quality_summary': quality,
         'total': len(properties),
         'status_filter': 'Disponible',
         'requested_sources': sorted(requested_sources),

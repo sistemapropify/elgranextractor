@@ -1,0 +1,39 @@
+<dialog id="scraped-editor" style="margin:auto;width:min(850px,95vw);max-height:90vh;overflow:auto;border:1px solid #536478;border-radius:12px;padding:20px;background:#161b22;color:#e6edf3">
+<header style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3>Editar registro scrapeado</h3><button type="button" style="min-height:44px;min-width:90px" onclick="document.getElementById('scraped-editor').close()" aria-label="Cerrar editor">Cerrar ×</button></header>
+<p>Los campos corregidos quedan protegidos al volver a scrapear. Los datos originales y fechas de seguimiento se conservan como evidencia.</p>
+<form id="scraped-edit-form">{% csrf_token %}<div id="scraped-edit-fields"></div>
+<label><input type="checkbox" name="excluida"> Excluir del cálculo ACM (conservar visible en el mapa para revisión)</label>
+<p><label>Motivo / notas de revisión<br><textarea name="motivo" style="width:100%"></textarea></label></p>
+<details><summary>Todos los campos originales del registro (solo lectura)</summary><pre id="scraped-record" style="white-space:pre-wrap;max-height:250px;overflow:auto"></pre></details>
+<p id="scraped-edit-status" role="status"></p><button type="submit">Guardar cambios</button>
+<button type="button" onclick="document.getElementById('scraped-editor').close()">Cerrar</button></form></dialog>
+<style>#scraped-editor::backdrop{background:#000b}#scraped-editor{font:13px/1.5 system-ui}#scraped-editor p{margin:10px 0}#scraped-editor button{background:#263b4b;color:#fff;border:1px solid #52718b;padding:8px 12px;border-radius:7px;cursor:pointer}#scraped-edit-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}#scraped-edit-fields label{display:block;font-size:11px}#scraped-edit-fields input,#scraped-edit-fields select,#scraped-edit-fields textarea,#scraped-editor textarea{width:100%;box-sizing:border-box;background:#0d1117;color:#e6edf3;border:1px solid #425267;border-radius:5px;padding:6px}#scraped-edit-fields textarea{height:70px}</style>
+<script>
+(function(){
+const modal=document.getElementById('scraped-editor'), form=document.getElementById('scraped-edit-form'), status=document.getElementById('scraped-edit-status');
+let endpoint=null, version=null, saving=false, sequence=0;
+async function read(response){let body;try{body=await response.json();}catch(e){throw Error('El servidor no devolvió JSON. Comprueba tu sesión y vuelve a intentar.');}if(!response.ok)throw Error(body.error+(body.fields?' '+JSON.stringify(body.fields):''));return body;}
+window.openScrapedEditor=async function(id){
+ if(saving)return;
+ const seq=++sequence;version=null;
+ endpoint='/ingestas/scraping/registros/'+encodeURIComponent(id)+'/editar/';
+ document.getElementById('scraped-edit-fields').replaceChildren(); form.querySelector('[type=submit]').disabled=true;
+ status.textContent='Cargando…'; if(!modal.open)modal.showModal();
+ try{const data=await read(await fetch(endpoint,{credentials:'same-origin',headers:{Accept:'application/json'}}));
+ if(seq!==sequence)return;
+ document.getElementById('scraped-edit-fields').innerHTML=data.html;
+ document.getElementById('scraped-record').textContent=JSON.stringify(data.record,null,2);
+ form.elements.excluida.checked=data.record.excluida;form.elements.motivo.value=data.record.motivo;
+ version=data.version;form.querySelector('[type=submit]').disabled=!data.can_edit;
+ status.textContent=data.can_edit?'':'Tu cuenta no tiene permiso de edición.';
+ }catch(error){if(seq===sequence)status.textContent=error.message;}
+};
+form.addEventListener('submit',async function(event){event.preventDefault();if(saving)return;saving=true;
+ const button=form.querySelector('[type=submit]');button.disabled=true;status.textContent='Guardando…';
+ const data=new FormData(form);data.set('version',version);data.set('excluida',form.elements.excluida.checked?'true':'false');
+ try{await read(await fetch(endpoint,{method:'POST',credentials:'same-origin',headers:{'X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:data}));
+ modal.close(); if(typeof loadPropifyProperties==='function'){document.getElementById('propify-floating-card').hidden=true;loadPropifyProperties();}else{location.reload();}
+ }catch(error){status.textContent=error.message;}finally{saving=false;button.disabled=false;}
+});
+})();
+</script>

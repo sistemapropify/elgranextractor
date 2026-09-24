@@ -90,6 +90,13 @@ def guardar_propiedades(propiedades, fuente, lifecycle_run_id=None, execution_to
                 fields = {field.name for field in PropiedadesCompetencia._meta.concrete_fields}
                 defaults = {k: v for k, v in row.items() if k in fields
                             and k not in {'id', 'fuente', 'id_origen'} and v is not None}
+                existing = PropiedadesCompetencia.objects.select_for_update().filter(fuente=fuente, id_origen=key).first()
+                if existing:
+                    from ingestas.models import RevisionPropiedadScraping
+                    revision = RevisionPropiedadScraping.objects.filter(propiedad=existing).first()
+                    if revision:
+                        for field in revision.campos_protegidos:
+                            defaults.pop(field, None)
                 if run:
                     defaults.update(estado_publicacion='activa', ultima_vez_vista=timezone.now(),
                         fecha_primera_ausencia=None, fecha_retiro_confirmado=None,

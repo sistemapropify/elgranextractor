@@ -567,6 +567,11 @@
 }
 .propify-price-overlay__at { display: block; color: #d32f2f; }
 .propify-price-overlay__ac { display: block; color: #111111; }
+.map-quality-badge{display:block;padding:3px 6px;margin-bottom:3px;border-radius:5px;font:600 11px/1.4 system-ui;background:#64481b;color:#ffe09c;white-space:nowrap}
+.map-quality-badge.outlier{background:#8c2424;color:#fff}.map-quality-badge.incomplete{background:#424d60;color:#fff}
+.map-quality-box{border:1px solid #ad8247;border-radius:8px;background:#2f261b;padding:10px;margin:10px 0;color:#f6dba8;font-size:12px}
+.map-quality-box ul{margin:6px 0 0;padding-left:17px}.map-quality-box li{margin:5px 0}.map-quality-box p{margin:6px 0;font-size:11px}
+.map-quality-summary{font-size:11px;line-height:1.5;color:#c3cbd4;grid-column:1/-1}.map-quality-help{font-size:10px;color:#aeb8c3;grid-column:1/-1}
 
 /* Zone info panel */
 .zone-info-panel {
@@ -938,6 +943,7 @@ window.onGoogleMapsLoaded = function() {
 {% endblock %}
 
 {% block content %}
+{% include 'ingestas/property_editor.html' %}
 {% csrf_token %}
 <div class="map-layout">
     <!-- Mapa -->
@@ -951,6 +957,7 @@ window.onGoogleMapsLoaded = function() {
             <!-- Controles del mapa -->
             <div class="map-controls" id="map-controls">
                 <div class="drawing-controls">
+                    <a href="/ingestas/scraping/calidad/" class="btn-draw">Calidad de registros</a>
                     <button class="btn-draw" id="draw-polygon" title="Dibujar polígono">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l6-4 6 4 6-4v14l-6 4-6-4-6 4V7z"/></svg>
                         Polígono
@@ -1041,6 +1048,18 @@ window.onGoogleMapsLoaded = function() {
                     <select id="propify-district-filter" aria-label="Filtrar por distrito">
                         <option value="">Todos los distritos</option>
                     </select>
+                    <select id="property-quality-filter" aria-label="Filtrar por calidad de datos">
+                        <option value="">Calidad: todas las propiedades</option>
+                        <option value="alerts">Con alertas de calidad</option>
+                        <option value="outlier">Posibles valores atípicos</option>
+                        <option value="incomplete">Datos incompletos</option>
+                        <option value="review">Revisar datos</option>
+                        <option value="excluded">Excluidas del ACM</option>
+                        <option value="clear">Sin alertas detectadas</option>
+                    </select>
+                    <div id="property-quality-summary" class="map-quality-summary" role="status">Selecciona portales para ver sus alertas de calidad.</div>
+                    <div class="map-quality-help">Rojo: posible atípico · Gris: incompleto · Ámbar: revisar. Haz clic en el pin para ver el motivo. Las alertas no eliminan registros. Solo se evalúan propiedades disponibles con coordenadas que se pueden dibujar.</div>
+                    <button type="button" class="property-area-button secondary" id="locate-quality-properties">Ubicar propiedades filtradas</button>
                     <div class="property-area-actions">
                         <button type="button" class="property-area-button" id="select-properties-area">▱ Seleccionar área</button>
                         <button type="button" class="property-area-button secondary" id="clear-properties-area" hidden>Limpiar</button>
@@ -1731,6 +1750,7 @@ function setupPropifyPropertyLayer() {
     var operationFilter = document.getElementById('propify-operation-filter');
     var typeFilter = document.getElementById('propify-type-filter');
     var districtFilter = document.getElementById('propify-district-filter');
+    var qualityFilter = document.getElementById('property-quality-filter');
     if (!toggle) return;
 
     setupDraggablePropifyCard();
@@ -1738,6 +1758,7 @@ function setupPropifyPropertyLayer() {
     toggle.addEventListener('change', function() {
         if (typeFilter) typeFilter.disabled = !toggle.checked;
         if (districtFilter) districtFilter.disabled = !toggle.checked;
+        if (qualityFilter) qualityFilter.disabled = !toggle.checked;
         if (operationFilter) operationFilter.disabled = !toggle.checked;
         sourceFilters.forEach(function(filter) { filter.disabled = !toggle.checked; });
         if (precisionFilter) precisionFilter.disabled = !toggle.checked;
@@ -1757,7 +1778,20 @@ function setupPropifyPropertyLayer() {
     sourceFilters.forEach(function(filter) {
         filter.addEventListener('change', loadPropifyProperties);
     });
-    [precisionFilter, operationFilter, typeFilter, districtFilter].forEach(function(filter) {
+    var linkedSource = new URLSearchParams(location.search).get('source');
+    if (['remax', 'properati'].indexOf(linkedSource) !== -1) {
+        sourceFilters.forEach(function(filter) { filter.checked = filter.value === linkedSource; });
+    }
+    document.getElementById('locate-quality-properties').addEventListener('click', function() {
+        var rows = filteredPropifyProperties();
+        if (!rows.length) return;
+        if (!toggle.checked) { toggle.checked = true; toggle.dispatchEvent(new Event('change')); }
+        var bounds = new google.maps.LatLngBounds();
+        rows.forEach(function(p) { bounds.extend({lat: Number(p.lat), lng: Number(p.lng)}); });
+        map.fitBounds(bounds, 70);
+        google.maps.event.addListenerOnce(map, 'idle', function() { if (map.getZoom() > 17) map.setZoom(17); });
+    });
+    [precisionFilter, operationFilter, typeFilter, districtFilter, qualityFilter].forEach(function(filter) {
         if (filter) filter.addEventListener('change', renderPropifyPropertyMarkers);
     });
 
@@ -1834,13 +1868,31 @@ function filteredPropifyProperties() {
     var operation = document.getElementById('propify-operation-filter').value;
     var type = document.getElementById('propify-type-filter').value;
     var district = document.getElementById('propify-district-filter').value;
+    var quality = document.getElementById('property-quality-filter').value;
     return propifyProperties.filter(function(property) {
         return selectedSources.indexOf(property.source_key) !== -1 &&
             (!precision || property.location_precision === precision) &&
             (!operation || property.operation_type === operation) &&
             (!type || property.property_type === type) &&
-            (!district || property.district === district);
+            (!district || property.district === district) &&
+            (!quality || (quality === 'alerts' ? (property.quality_alerts || []).length > 0 :
+                quality === 'clear' ? property.quality_status === 'clear' :
+                (property.quality_alerts || []).some(function(a) { return a.category === quality; })));
     });
+}
+
+function propertyQualityBadge(property) {
+    var status = property.quality_status;
+    var labels = {outlier: '⚠ Posible atípico', incomplete: '◼ Datos incompletos', review: '⚠ Revisar datos', excluded: '⛔ Excluida del ACM'};
+    return labels[status] ? '<span class="map-quality-badge ' + status + '">' + labels[status] + '</span>' : '';
+}
+
+function propertyQualityDetails(property) {
+    var alerts = property.quality_alerts || [];
+    if (!alerts.length) return '<p class="propify-card-sub">Sin alertas detectadas con las reglas actuales; no equivale a una validación del precio.</p>';
+    return '<section class="map-quality-box"><strong>Calidad del registro · ' + alerts.length + ' alerta(s)</strong><ul>' +
+        alerts.map(function(a) { return '<li>' + escapeMapHtml(a.message) + '</li>'; }).join('') +
+        '</ul><p>Se conserva el anuncio. Una alerta requiere revisión y no confirma un error.</p></section>';
 }
 
 function closePropifyFloatingCard() {
@@ -1861,11 +1913,13 @@ function propertyAreaCardHtml(property) {
         image +
         '<div>' +
             '<div class="property-area-card__portal">' + escapeMapHtml(property.source || 'Propiedad') + '</div>' +
+            propertyQualityBadge(property) +
             '<div class="property-area-card__title">' + escapeMapHtml(property.title || property.code || 'Propiedad disponible') + '</div>' +
             '<div class="property-area-card__meta">' + escapeMapHtml(property.operation_type) + ' · ' +
                 escapeMapHtml(property.property_type) + ' · ' + escapeMapHtml(property.district) + '</div>' +
             '<div class="property-area-card__price">' +
                 (markerPrice || formatPropifyPrice(property.price, property.currency_symbol)) + '</div>' +
+            propertyQualityDetails(property) +
             (link ? '<div class="propify-card-actions">' + link + '</div>' : '') +
         '</div>' +
     '</article>';
@@ -2103,7 +2157,16 @@ function showPropifyFloatingCard(property) {
         '</div>' +
         (areas.length ? '<div class="propify-card-areas">' + areas.join('') + '</div>' : '') +
         address +
+        propertyQualityDetails(property) +
         publicationLink;
+
+    if (property.record_id) {
+        var editButton = document.createElement('button');
+        editButton.type = 'button'; editButton.textContent = 'Revisar / editar registro';
+        editButton.className = 'propify-card-open';
+        editButton.addEventListener('click', function() { openScrapedEditor(property.record_id); });
+        body.appendChild(editButton);
+    }
 
     var imageElement = body.querySelector('img');
     if (imageElement) {
@@ -2163,7 +2226,8 @@ function propifyMarkerUsdPerM2(local, usd, currencySymbol) {
 }
 
 function propifyMarkerPriceHtml(property) {
-    if (property.is_rental) return '';
+    var qualityBadge = propertyQualityBadge(property);
+    if (property.is_rental) return qualityBadge + '<span>' + escapeMapHtml(formatPropifyPrice(property.price, property.currency_symbol)) + '</span>';
     var at = formatPropifyPricePerM2(
         propifyMarkerUsdPerM2(property.land_price_per_m2, property.land_price_per_m2_usd, property.currency_symbol),
         '$'
@@ -2172,7 +2236,7 @@ function propifyMarkerPriceHtml(property) {
         propifyMarkerUsdPerM2(property.built_price_per_m2, property.built_price_per_m2_usd, property.currency_symbol),
         '$'
     );
-    var html = '';
+    var html = qualityBadge;
     if (at) html += '<span class="propify-price-overlay__at">AT: ' + at + '</span>';
     if (ac) html += '<span class="propify-price-overlay__ac">AC: ' + ac + '</span>';
     return html;
@@ -2221,7 +2285,7 @@ function renderPropifyPropertyMarkers() {
         var marker = new google.maps.Marker({
             position: position,
             map: toggle && toggle.checked ? map : null,
-            title: property.title || property.code || 'Propiedad disponible',
+            title: (property.title || property.code || 'Propiedad disponible') + ((property.quality_alerts || []).length ? ' · ' + property.quality_alerts.map(function(a) { return a.message; }).join(' | ') : ''),
             icon: {
                 url: markerIcon,
                 scaledSize: new google.maps.Size(40, 40),
@@ -2254,6 +2318,9 @@ function renderPropifyPropertyMarkers() {
             ? String(filtered.length)
             : filtered.length + '/' + propifyProperties.length;
     }
+    var alertRows = filtered.filter(function(p) { return (p.quality_alerts || []).length; });
+    var outliers = filtered.filter(function(p) { return p.quality_status === 'outlier'; });
+    document.getElementById('property-quality-summary').textContent = filtered.length + ' propiedades filtradas · ' + alertRows.length + ' con alertas · ' + outliers.length + ' posibles atípicos. Comparación entre las fuentes cargadas.';
     refreshPropertyAreaSelectionResults();
 }
 
@@ -2269,6 +2336,8 @@ function loadPropifyProperties() {
         propifyPropertiesLoaded = false;
         clearPropifyPropertyMarkers();
         if (count) count.textContent = '0';
+        document.getElementById('property-quality-summary').textContent = 'Selecciona portales para ver sus alertas de calidad.';
+        closePropifyFloatingCard();
         return;
     }
 
@@ -2307,6 +2376,16 @@ function loadPropifyProperties() {
             );
             propifyPropertiesLoaded = true;
             renderPropifyPropertyMarkers();
+            var linkedRecord = new URLSearchParams(location.search).get('record');
+            var linkedSource = new URLSearchParams(location.search).get('source');
+            if (linkedRecord && !window.linkedQualityRecordOpened) {
+                var target = propifyProperties.find(function(p) { return String(p.record_id) === linkedRecord && p.source_key === linkedSource; });
+                if (target) {
+                    window.linkedQualityRecordOpened = true;
+                    map.setCenter({lat:Number(target.lat), lng:Number(target.lng)}); map.setZoom(17);
+                    showPropifyFloatingCard(target);
+                }
+            }
             if (data.failed_sources && data.failed_sources.length) {
                 showAlert(
                     'Se cargó el mapa parcialmente. No respondieron: ' + data.failed_sources.join(', ') + '.',

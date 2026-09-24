@@ -24,6 +24,47 @@ def sample():
 
 
 class ComponentsEngineTests(SimpleTestCase):
+    def test_three_lands_produce_house_breakdown_and_estimate(self):
+        raw=sample()[:6]
+        result=calculate(candidates(raw,params()),params())
+        self.assertEqual(result['land_count'],3)
+        self.assertEqual(result['status'],'ok')
+        self.assertEqual(result['new']['total'],340000)
+        self.assertEqual(len(result['breakdown']),3)
+        self.assertTrue(any('Muestra reducida' in m for m in result['messages']))
+
+    def test_nonpositive_house_does_not_block_three_valid_houses(self):
+        raw=sample()+[record('bad',price=100000)]
+        result=calculate(candidates(raw,params()),params())
+        self.assertEqual(result['status'],'ok')
+        self.assertEqual(result['new']['total'],340000)
+        self.assertEqual(result['usable_house_count'],3)
+        self.assertFalse(next(r for r in result['breakdown'] if r['id']=='bad')['usable'])
+    def test_land_target_needs_no_construction_and_stays_in_selected_radius(self):
+        p=parameters({**params(),'property_type':'Terreno','built':0})
+        rows=candidates(sample(),p)
+        result=calculate(rows,p)
+        self.assertEqual({r['kind'] for r in rows},{'Terreno'})
+        self.assertEqual(result['new']['total'],300000)
+        self.assertEqual(result['model'],'land')
+
+    def test_office_and_apartment_do_not_require_land(self):
+        for target in ('Oficina','Departamento'):
+            p=parameters({**params(),'property_type':target,'land':0,'built':100})
+            rows=candidates([record(str(i),kind=target,land=None,built=100,price=price) for i,price in enumerate([100000,110000,120000])],p)
+            result=calculate(rows,p)
+            self.assertEqual(result['model'],'built')
+            self.assertEqual(result['new']['total'],110000)
+            self.assertEqual(len(result['breakdown']),3)
+
+    def test_rooms_baths_filter_and_missing_data_visible(self):
+        p=parameters({**params(),'rooms':3,'baths':2})
+        rows=candidates([record('match',rooms=3,baths=2),record('missing'),record('different',rooms=4,baths=2)],p)
+        by_id={r['id']:r for r in rows}
+        self.assertFalse(by_id['match']['issues'])
+        self.assertTrue(by_id['missing']['issues'])
+        self.assertTrue(by_id['different']['issues'])
+
     def test_user_example_separates_300000_land(self):
         result=calculate(candidates(sample(),params()),params())
         self.assertEqual(result['status'],'ok')
@@ -149,6 +190,12 @@ class ComponentsEndpointTests(SimpleTestCase):
         self.assertContains(response,'id="cmp-detail"')
         self.assertContains(response,'Cerrar detalle')
         self.assertNotContains(response,'ENTORNO DE PRUEBAS')
+
+    def test_page_shell_remains_visible_before_login(self):
+        response=page(self.factory.get('/acm/analisis/'))
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response['X-ACM-Model'],'componentes-1')
+        self.assertEqual(response['Cache-Control'],'no-store')
 
 
 class ComponentsDatabaseTests(TestCase):
