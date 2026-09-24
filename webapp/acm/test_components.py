@@ -2,6 +2,7 @@ import json
 from types import SimpleNamespace
 from unittest.mock import patch
 from django.test import SimpleTestCase, TestCase, RequestFactory
+from django.urls import resolve, reverse
 from acm.components_engine import parameters,candidates,calculate,old_estimate
 from acm.components_views import search,recalculate,page,scraped_rows,propify_rows
 
@@ -29,11 +30,28 @@ class ComponentsEngineTests(SimpleTestCase):
         self.assertEqual(result['land_unit'],2000)
         by_id={r['id']:r for r in result['breakdown']}
         self.assertEqual(by_id['a']['land_value'],300000)
+        self.assertEqual(by_id['a']['land_unit'],2000)
         self.assertEqual(by_id['a']['remainder'],50000)
         self.assertEqual(by_id['a']['built_unit'],250)
         self.assertEqual(by_id['b']['remainder'],20000)
         self.assertAlmostEqual(by_id['b']['built_unit'],133.3333333)
         self.assertEqual(result['new']['total'],340000)
+
+    def test_changing_land_selection_updates_every_house_breakdown(self):
+        raw=sample()+[record('extra','Terreno',price=180000)]
+        raw[-2]['price']=180000
+        raw[-3]['price']=180000
+        rows=candidates(raw,params())
+        before=calculate(rows,params())
+        after=calculate(rows,params(),['extra'])
+        self.assertEqual(before['land_unit'],1600)
+        self.assertEqual(after['land_unit'],2000)
+        self.assertEqual(len(after['breakdown']),3)
+        for b in after['breakdown']:
+            old=next(r for r in before['breakdown'] if r['id']==b['id'])
+            self.assertEqual(b['land_unit'],2000)
+            self.assertNotEqual(b['remainder'],old['remainder'])
+            self.assertAlmostEqual(b['land_value']+b['remainder'],b['price'])
 
     def test_previous_formula_exact(self):
         value=old_estimate([{'price':350000,'built':200,'distance':0},{'price':320000,'built':150,'distance':100}],200)
@@ -121,6 +139,16 @@ class ComponentsEndpointTests(SimpleTestCase):
         self.assertContains(response,'cmp-old')
         self.assertContains(response,'Referencias incompletas',count=0)
         self.assertContains(response,'Solo referencia')
+
+    def test_main_dashboard_uses_components_and_detail_modal(self):
+        self.assertEqual(reverse('acm:acm_analisis'),'/acm/analisis/')
+        self.assertIs(resolve('/acm/analisis/').func,page)
+        req=self.factory.get('/acm/analisis/');req.current_user=self.user
+        response=resolve(req.path).func(req)
+        self.assertContains(response,'data-search-url="/acm/componentes/buscar/"')
+        self.assertContains(response,'id="cmp-detail"')
+        self.assertContains(response,'Cerrar detalle')
+        self.assertNotContains(response,'ENTORNO DE PRUEBAS')
 
 
 class ComponentsDatabaseTests(TestCase):

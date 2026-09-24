@@ -1,7 +1,7 @@
 (() => {
   'use strict';
-  const $ = id => document.getElementById(id), form=$('cmp-form');
-  let snapshot=null,result=null,excluded=new Set(),tab='Casa',map=null,pin=null,circles=[],markers=[],sequence=0,controller=null;
+  const $ = id => document.getElementById(id), form = $('cmp-form'), presentation = window.ACMComponentsPresentation;
+  let snapshot=null, result=null, excluded=new Set(), tab='Casa', map=null, pin=null, circles=[], markers=[], sequence=0, controller=null, detailId=null;
   const money=n=>n==null?'—':new Intl.NumberFormat('es-PE',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
   const decimals=n=>n==null?'Sin informar':new Intl.NumberFormat('es-PE',{maximumFractionDigits:2}).format(n);
   const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -9,7 +9,7 @@
   async function post(path,data){
     if(controller)controller.abort();controller=new AbortController();const current=controller;
     const timer=setTimeout(()=>current.abort(),45000);
-    try{const response=await fetch('/acm/pruebas/componentes/'+path+'/',{method:'POST',credentials:'same-origin',signal:current.signal,headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:JSON.stringify(data)});
+    try{const response=await fetch(path==='buscar'?form.dataset.searchUrl:form.dataset.calculateUrl,{method:'POST',credentials:'same-origin',signal:current.signal,headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:JSON.stringify(data)});
       if(!response.headers.get('content-type')?.includes('application/json'))throw Error('El servidor no devolvió datos. Comprueba tu sesión y vuelve a intentar.');
       const body=await response.json();if(!response.ok)throw Error(body.error||'No se pudo completar la consulta.');return body;
     }catch(e){if(e.name==='AbortError')throw Error('La consulta se canceló o superó 45 segundos. Puedes reintentar.');throw e;}finally{clearTimeout(timer);}
@@ -17,53 +17,104 @@
   function clearMap(){markers.forEach(m=>m.setMap(null));markers=[];}
   function drawCircles(){
     if(!map)return;circles.forEach(c=>c.setMap(null));circles=[];
-    const p=snapshot?.params||input();const center={lat:p.lat,lng:p.lng};if(!Number.isFinite(center.lat)||!Number.isFinite(center.lng))return;
+    const p=snapshot?.params||input(),center={lat:p.lat,lng:p.lng};if(!Number.isFinite(center.lat)||!Number.isFinite(center.lng))return;
     if(!pin)pin=new google.maps.Marker({map,position:center,title:'Casa objetivo',draggable:true});else pin.setPosition(center);
     if(!pin.cmpListener){pin.addListener('dragend',e=>setLocation(e.latLng.lat(),e.latLng.lng()));pin.cmpListener=true;}
     circles.push(new google.maps.Circle({map,center,radius:p.radius,strokeColor:'#4597ec',strokeWeight:2,fillColor:'#4597ec',fillOpacity:.08}));
     if(result?.land_radius>p.radius)circles.push(new google.maps.Circle({map,center,radius:result.land_radius,strokeColor:'#e8b455',strokeWeight:2,fillOpacity:0}));
   }
-  function invalidate(){sequence++;if(controller)controller.abort();snapshot=null;result=null;excluded.clear();clearMap();$('cmp-export').disabled=true;$('cmp-cards').innerHTML='<p class="cmp-muted">Busca nuevamente para aplicar los parámetros.</p>';$('cmp-counts').textContent='Sin comparables';$('cmp-new').innerHTML='<h2>Resultado nuevo</h2><p>Parámetros modificados: vuelve a buscar.</p>';$('cmp-old').innerHTML='<span>Cálculo anterior</span><strong>—</strong>';$('cmp-warnings').replaceChildren();$('cmp-status').textContent='Listo para una nueva búsqueda.';$('cmp-search').disabled=false;drawCircles();}
+  function clearResult(message){
+    result=null;clearMap();drawCircles();$('cmp-export').disabled=true;
+    $('cmp-new').innerHTML='<h2>Valoración por componentes</h2><p class="cmp-muted">'+escape(message)+'</p>';
+    $('cmp-old').innerHTML='<span>Cálculo anterior</span><strong>—</strong>';
+    $('cmp-map-count').textContent='Sin análisis vigente';
+    if(snapshot){renderCards();renderDetail();}else{$('cmp-cards').innerHTML='<p class="cmp-muted">Busca comparables para aplicar el análisis.</p>';$('cmp-counts').textContent='Sin comparables';['house','land','ref'].forEach(k=>$('cmp-'+k+'-count').textContent='');}
+  }
+  function invalidate(){
+    sequence++;if(controller)controller.abort();snapshot=null;excluded.clear();if($('cmp-detail').open)$('cmp-detail').close();
+    clearResult('Parámetros modificados: vuelve a buscar.');$('cmp-warnings').replaceChildren();$('cmp-status').textContent='Listo para una nueva búsqueda.';$('cmp-search').disabled=false;
+  }
   function setLocation(lat,lng){form.elements.lat.value=lat.toFixed(7);form.elements.lng.value=lng.toFixed(7);invalidate();if(map)map.panTo({lat,lng});}
   window.initComponentMap=()=>{
     const p=input();map=new google.maps.Map($('cmp-map'),{center:{lat:p.lat,lng:p.lng},zoom:15,mapTypeControl:false,streetViewControl:false});map.addListener('click',e=>setLocation(e.latLng.lat(),e.latLng.lng()));
     const auto=new google.maps.places.Autocomplete($('cmp-address'),{fields:['geometry','formatted_address'],componentRestrictions:{country:'pe'}});
-    auto.addListener('place_changed',()=>{const place=auto.getPlace();if(place.geometry){setLocation(place.geometry.location.lat(),place.geometry.location.lng());map.setZoom(16);}});drawCircles();
+    auto.addListener('place_changed',()=>{const place=auto.getPlace();if(place.geometry){setLocation(place.geometry.location.lat(),place.geometry.location.lng());map.setZoom(16);}});drawCircles();if(snapshot&&result)renderMap();
   };
   window.gm_authFailure=()=>{$('cmp-status').textContent='No se pudo cargar Google Maps. Puedes ingresar latitud y longitud para buscar.';};
-  function visibleRows(){return snapshot.records.filter(r=>r.kind==='Casa'||r.distance<=result.land_radius);}
+  // Keep all consulted records visible so an excluded outer land can be selected again.
+  function visibleRows(){return snapshot?.records||[];}
+  const value=r=>presentation.property(r,result,excluded);
   function renderMap(){
-    if(!map)return;clearMap();drawCircles();
-    visibleRows().forEach(r=>{const marker=new google.maps.Marker({map,position:{lat:r.lat,lng:r.lng},title:r.title,opacity:(r.issues.length || excluded.has(r.id)) ? .55 : 1,icon:{path:google.maps.SymbolPath.CIRCLE,scale:6,fillColor:r.issues.length?'#98a4b4':r.kind==='Terreno'?'#d6a548':'#3789dd',fillOpacity:1,strokeColor:'#ffffff',strokeWeight:1}});
-      marker.addListener('click',()=>{tab=r.issues.length?'reference':r.kind;renderCards();const card=document.querySelector('[data-record="'+CSS.escape(r.id)+'"]');card?.scrollIntoView({behavior:'smooth',block:'nearest'});});markers.push(marker);});
+    if(!map||!result)return;clearMap();drawCircles();
+    const icons={propify:'Pin-propify.png',remax:'pin-remax.png',properati:'pin-properati.png'};
+    const mode=$('cmp-marker-mode').value;
+    visibleRows().forEach(r=>{
+      const v=value(r),label=presentation.marker(r,v,mode),dim=['reference','excluded','pending'].includes(v.status);
+      const icon=icons[r.source]?{url:'/static/requerimientos/data/'+icons[r.source],scaledSize:new google.maps.Size(32,40),anchor:new google.maps.Point(16,40),labelOrigin:new google.maps.Point(16,52)}:{path:google.maps.SymbolPath.CIRCLE,scale:7,fillColor:r.kind==='Terreno'?'#d6a548':'#3789dd',fillOpacity:1,strokeColor:'#ffffff',strokeWeight:1,labelOrigin:new google.maps.Point(0,3)};
+      const marker=new google.maps.Marker({map,position:{lat:r.lat,lng:r.lng},title:r.title+' · '+label,opacity:dim?.55:1,icon,label:{text:label,fontSize:'10px',fontWeight:'600',className:'cmp-pin-label'}});
+      marker.addListener('click',()=>openDetail(r.id));markers.push(marker);
+    });
   }
   function renderSummary(){
-    const r=result,n=r.new;
+    const r=result,n=r.new,validSoil=r.land_unit!=null&&r.land_dispersion<=1;
     $('cmp-warnings').innerHTML=snapshot.warnings.map(w=>'<div class="cmp-warning">'+escape(w)+'</div>').join('');
-    $('cmp-new').innerHTML='<h2>Resultado nuevo · por componentes</h2>'+
-      '<p class="cmp-muted">'+r.land_count+' terrenos · '+r.house_count+' casas completas · suelo hasta '+r.land_radius+' m</p>'+
-      (r.land_unit!=null?'<div class="cmp-line"><span>Referencia del suelo</span><strong>'+money(r.land_unit)+'/m²</strong></div>':'')+
-      (n?'<div class="cmp-line"><span>Terreno objetivo</span><strong>'+money(n.land_value)+'</strong></div><div class="cmp-line"><span>Construcción y mejoras</span><strong>'+money(n.built_value)+'</strong></div><div class="cmp-total">'+money(n.total)+'</div><p class="cmp-muted">Aporte de mejoras: '+money(n.built_unit)+'/m² construido.<br>Rango central orientativo: '+money(n.range_low)+' – '+money(n.range_high)+'. No es un intervalo de confianza.</p><div class="cmp-difference">Diferencia frente al anterior: '+(n.delta>=0?'+':'')+money(n.delta)+' ('+(n.delta_pct>=0?'+':'')+decimals(n.delta_pct)+'%)</div>':'<p class="cmp-warning">'+r.messages.map(escape).join('<br>')+'</p>');
-    $('cmp-old').innerHTML='<span>Cálculo anterior</span><strong>'+money(r.old?.total)+'</strong><small>'+(r.old?money(r.old.unit)+'/m² construido<br>':'')+'Mismas casas completas seleccionadas. Promedio ponderado por distancia; es una referencia, no una validación del nuevo resultado.</small>';
+    $('cmp-new').innerHTML='<h2>Valoración por componentes</h2><p class="cmp-muted">'+r.land_count+' terrenos · '+r.house_count+' casas seleccionadas · suelo hasta '+r.land_radius+' m</p>'+
+      (validSoil?'<div class="cmp-line"><span>Suelo de la microzona</span><strong>'+money(r.land_unit)+'/m²</strong></div>':'')+
+      (n?'<div class="cmp-line"><span>Terreno objetivo</span><strong>'+money(n.land_value)+'</strong></div><div class="cmp-line"><span>Construcción y mejoras</span><strong>'+money(n.built_value)+'</strong></div><div class="cmp-total">'+money(n.total)+'</div><p class="cmp-muted">Aporte de mejoras: '+money(n.built_unit)+'/m² construido.<br>Rango central orientativo: '+money(n.range_low)+' – '+money(n.range_high)+'.</p><div class="cmp-difference">Frente al anterior: '+(n.delta>=0?'+':'')+money(n.delta)+' ('+(n.delta_pct>=0?'+':'')+decimals(n.delta_pct)+'%)</div>':'<p class="cmp-warning">'+r.messages.map(escape).join('<br>')+'</p>');
+    $('cmp-old').innerHTML='<span>Cálculo anterior</span><strong>'+money(r.old?.total)+'</strong><small>'+(r.old?money(r.old.unit)+'/m² construido<br>':'')+'Mismas casas seleccionadas. Solo comparación; no alimenta el nuevo valor.</small>';
   }
+  function photo(r){return r.image?'<img src="'+escape(r.image)+'" loading="lazy" alt="Foto del anuncio">':'<div class="cmp-photo-empty">Sin foto</div>';}
+  function heading(r,selection){return '<div class="cmp-card-top">'+photo(r)+'<div class="cmp-card-main"><div class="cmp-card-sub">'+escape(r.source.toUpperCase())+' · '+escape(r.code)+' · '+Math.round(r.distance)+' m</div><div class="cmp-card-title">'+escape(r.title)+'</div><div class="cmp-card-price">'+money(r.price)+' <small>anunciado</small></div><div class="cmp-card-sub">'+escape(r.kind)+' · '+escape(r.district||'Sin distrito')+'</div></div>'+(selection&&!r.issues.length?'<label><input type="checkbox" data-include="'+escape(r.id)+'" '+(!excluded.has(r.id)?'checked':'')+' aria-label="Incluir '+escape(r.code)+'"> Incluir</label>':'')+'</div>';}
+  function areas(r){return '<div class="cmp-card-areas"><span>Área de terreno<strong>'+decimals(r.land)+(r.land?' m²':'')+'</strong></span><span>Área construida<strong>'+decimals(r.built)+(r.built?' m²':'')+'</strong></span></div>';}
+  function breakdown(r){
+    const v=value(r);
+    if(v.status==='land')return '<section class="cmp-breakdown"><h3>Terreno · referencia del suelo</h3><div class="cmp-breakdown-grid"><div><span>Oferta por m² de terreno</span><strong>'+money(v.offerUnit)+'/m²</strong></div><div><span>Uso en este análisis</span><small>'+(v.selected?'Incluido en la mediana del suelo':'Fuera del radio requerido; no participa')+'</small></div></div></section>';
+    if(!['house','review'].includes(v.status))return '<p class="cmp-issues">'+escape(v.reason)+'</p>';
+    return '<section class="cmp-breakdown '+(v.status==='review'?'review':'')+'"><h3>Valor atribuido por este anuncio</h3><div class="cmp-breakdown-grid"><div><span>Valor del terreno</span><strong>'+money(v.landValue)+'</strong><small>'+money(v.landUnit)+'/m² de suelo</small></div><div><span>Construcción y mejoras</span><strong>'+money(v.remainder)+'</strong><small>'+money(v.builtUnit)+'/m² construido</small></div></div><p class="cmp-equation">'+money(r.price)+' − ('+decimals(r.land)+' m² × '+money(v.landUnit)+'/m²) = '+money(v.remainder)+' en construcción y mejoras.</p>'+(v.reason?'<p class="cmp-issues">'+escape(v.reason)+'</p>':'')+'</section>';
+  }
+  function badge(r){const v=value(r);const text={house:'Incluida en el análisis',review:'Requiere revisión',land:v.selected?'Terreno incluido':'Terreno de referencia',reference:'Solo referencia',excluded:'Desmarcada',pending:'Cálculo pendiente'};return '<span class="cmp-badge '+(['house','land'].includes(v.status)?'':'ref')+'">'+text[v.status]+'</span>';}
+  function fixImages(container){container.querySelectorAll('img').forEach(img=>img.addEventListener('error',()=>{const empty=document.createElement('div');empty.className='cmp-photo-empty';empty.textContent='Sin foto';img.replaceWith(empty);},{once:true}));}
   function renderCards(){
-    const rows=visibleRows();const houses=rows.filter(r=>r.kind==='Casa'&&!r.issues.length),lands=rows.filter(r=>r.kind==='Terreno'&&!r.issues.length),refs=rows.filter(r=>r.issues.length);
+    const rows=visibleRows(),houses=rows.filter(r=>r.kind==='Casa'&&!r.issues.length),lands=rows.filter(r=>r.kind==='Terreno'&&!r.issues.length),refs=rows.filter(r=>r.issues.length);
     $('cmp-house-count').textContent=houses.length;$('cmp-land-count').textContent=lands.length;$('cmp-ref-count').textContent=refs.length;
-    $('cmp-counts').textContent=rows.length+' encontrados · '+houses.length+' casas aptas · '+lands.length+' terrenos aptos · '+refs.length+' referencias';
+    $('cmp-counts').textContent=rows.length+' encontrados · '+(result?result.house_count+' casas y '+result.land_count+' terrenos seleccionados':'Recalculando selección');
+    $('cmp-map-count').textContent=rows.length+' propiedades';
     document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));
     const selected=tab==='reference'?refs:tab==='Casa'?houses:lands;
-    const breakdown=new Map(result.breakdown.map(r=>[r.id,r]));
-    $('cmp-cards').innerHTML=selected.map(r=>{const b=breakdown.get(r.id);return '<article class="cmp-card" data-record="'+escape(r.id)+'"><div class="cmp-card-top">'+(r.image?'<img src="'+escape(r.image)+'" loading="lazy" alt="Foto del anuncio">':'')+'<div class="cmp-card-main"><div class="cmp-card-sub">'+escape(r.source)+' · '+escape(r.code)+' · '+Math.round(r.distance)+' m</div><div class="cmp-card-title">'+escape(r.title)+'</div><div class="cmp-card-price">'+money(r.price)+'</div><span class="cmp-badge '+(r.issues.length?'ref':'')+'">'+(r.issues.length?'Solo referencia':r.kind==='Casa'?'Casa apta':'Terreno apto')+'</span></div>'+(!r.issues.length?'<label><input type="checkbox" data-include="'+escape(r.id)+'" '+(!excluded.has(r.id)?'checked':'')+'> Incluir</label>':'')+'</div><div class="cmp-card-areas"><span>Terreno: <strong>'+decimals(r.land)+(r.land?' m²':'')+'</strong></span><span>Construcción: <strong>'+decimals(r.built)+(r.built?' m²':'')+'</strong></span></div><div class="cmp-card-sub">'+escape(r.district)+' · Ubicación '+escape(r.precision)+(r.converted?' · Precio convertido de soles':'')+(r.distance>snapshot.params.radius?' · Área ampliada de terrenos':'')+'</div>'+(r.issues.length?'<div class="cmp-issues">'+r.issues.map(escape).join(' · ')+'</div>':'')+(r.kind==='Terreno'&&r.land&&r.price?'<div class="cmp-breakdown">Oferta de suelo: '+money(r.price/r.land)+'/m²</div>':'')+(b?'<div class="cmp-breakdown">Suelo estimado: '+money(b.land_value)+'<br>Remanente de construcción y mejoras: '+money(b.remainder)+' · '+money(b.built_unit)+'/m²'+(!b.usable?'<br><span class="cmp-issues">Requiere revisión: el suelo estimado absorbe el precio.</span>':'')+'</div>':'')+(r.url?'<a href="'+escape(r.url)+'" target="_blank" rel="noopener noreferrer">Abrir publicación ↗</a>':'')+'</article>';}).join('')||'<p class="cmp-muted">No hay registros en este grupo. Puedes revisar los otros grupos o ajustar la búsqueda.</p>';
-    $('cmp-cards').querySelectorAll('img').forEach(img=>img.addEventListener('error',()=>{img.remove();},{once:true}));
+    $('cmp-cards').innerHTML=selected.map(r=>'<article class="cmp-card" data-record="'+escape(r.id)+'">'+heading(r,true)+areas(r)+breakdown(r)+'<div class="cmp-card-footer">'+badge(r)+'<button type="button" data-detail="'+escape(r.id)+'">Ver detalle ↗</button></div></article>').join('')||'<p class="cmp-muted">No hay registros en este grupo.</p>';
+    fixImages($('cmp-cards'));
   }
-  function render(){renderSummary();renderCards();renderMap();$('cmp-export').disabled=false;}
-  form.addEventListener('submit',async e=>{e.preventDefault();const p=input();if(!p.sources.length){$('cmp-status').textContent='Selecciona al menos una fuente.';return;}const seq=++sequence;$('cmp-search').disabled=true;$('cmp-export').disabled=true;$('cmp-status').textContent='Buscando casas y terrenos…';
-    try{const data=await post('buscar',p);if(seq!==sequence)return;snapshot=data;result=data.result;excluded.clear();tab='Casa';render();$('cmp-status').textContent='Búsqueda terminada. Puedes desmarcar comparables para recalcular.';}catch(error){if(seq===sequence){snapshot=null;result=null;clearMap();$('cmp-status').textContent=error.message;$('cmp-new').innerHTML='<h2>Resultado no disponible</h2><p>La búsqueda no terminó. Reintenta.</p>';$('cmp-old').innerHTML='<span>Cálculo anterior</span><strong>—</strong>';$('cmp-cards').replaceChildren();}}finally{if(seq===sequence)$('cmp-search').disabled=false;}});
+  function renderDetail(){
+    if(!detailId||!snapshot)return;const r=snapshot.records.find(r=>r.id===detailId);if(!r)return;
+    $('cmp-detail-content').innerHTML=heading(r,false)+areas(r)+breakdown(r)+'<div class="cmp-detail-facts"><div>Ubicación<strong>'+escape(r.precision||'Sin informar')+'</strong></div><div>Operación<strong>'+escape(r.operation)+'</strong></div><div>Disponibilidad<strong>'+escape(r.state)+'</strong></div><div>Distancia<strong>'+decimals(r.distance)+' m</strong></div><div>Precio<strong>'+(r.converted?'Convertido de soles a 3,44':'USD')+'</strong></div><div>Estado en ACM<strong>'+badge(r)+'</strong></div></div>'+(r.description?'<details><summary>Descripción del anuncio</summary><p class="cmp-description">'+escape(r.description)+'</p></details>':'')+'<p class="cmp-muted">El valor de construcción y mejoras es el remanente del precio anunciado después de descontar el suelo estimado. No representa un presupuesto de obra.</p><div class="cmp-card-footer">'+(r.url?'<a href="'+escape(r.url)+'" target="_blank" rel="noopener noreferrer">Abrir publicación ↗</a>':'<span>Sin enlace de publicación</span>')+'</div>';
+    fixImages($('cmp-detail-content'));
+  }
+  function openDetail(id){detailId=id;renderDetail();if(!$('cmp-detail').open)$('cmp-detail').showModal();}
+  function render(){renderSummary();renderCards();renderMap();renderDetail();$('cmp-export').disabled=false;}
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();const p=input();if(!p.sources.length){$('cmp-status').textContent='Selecciona al menos una fuente.';return;}
+    const seq=++sequence;snapshot=null;excluded.clear();if($('cmp-detail').open)$('cmp-detail').close();clearResult('Buscando comparables…');$('cmp-search').disabled=true;$('cmp-status').textContent='Buscando casas y terrenos…';
+    try{const data=await post('buscar',p);if(seq!==sequence)return;snapshot=data;result=data.result;tab='Casa';render();$('cmp-status').textContent='Análisis actualizado. Desmarca comparables para recalcular el mapa, las tarjetas y el resultado.';}
+    catch(error){if(seq===sequence){snapshot=null;clearResult('La búsqueda no terminó. Reintenta.');$('cmp-status').textContent=error.message;}}
+    finally{if(seq===sequence)$('cmp-search').disabled=false;}
+  });
   form.addEventListener('input',e=>{if(e.target.name){$('cmp-radius-label').textContent=form.elements.radius.value+' m';invalidate();}});
   form.addEventListener('change',e=>{if(e.target.name)invalidate();});
   $('cmp-address').addEventListener('keydown',e=>{if(e.key==='Enter')e.preventDefault();});
   document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{tab=button.dataset.tab;if(snapshot)renderCards();}));
-  $('cmp-cards').addEventListener('change',async e=>{const id=e.target.dataset.include;if(!id||!snapshot)return;e.target.checked?excluded.delete(id):excluded.add(id);const seq=++sequence;$('cmp-status').textContent='Recalculando ambos métodos…';$('cmp-export').disabled=true;
-    try{const data=await post('calcular',{token:snapshot.token,excluded:[...excluded]});if(seq!==sequence)return;result=data.result;render();$('cmp-status').textContent='Resultados actualizados con tu selección.';}catch(error){if(seq===sequence){$('cmp-status').textContent=error.message;$('cmp-new').innerHTML='<h2>Resultado desactualizado</h2><p>No se pudo aplicar la selección. Busca nuevamente.</p>';$('cmp-old').innerHTML='<span>Cálculo anterior</span><strong>—</strong>';}}});
-  $('cmp-export').addEventListener('click',()=>{if(!snapshot||!result)return;const file={fecha:new Date().toISOString(),parametros:snapshot.params,advertencias:snapshot.warnings,excluidos:[...excluded],resultado:result,comparables:visibleRows()};const url=URL.createObjectURL(new Blob([JSON.stringify(file,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='acm-componentes.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+  $('cmp-marker-mode').addEventListener('change',renderMap);
+  $('cmp-cards').addEventListener('click',e=>{const button=e.target.closest('[data-detail]');if(button)openDetail(button.dataset.detail);});
+  $('cmp-detail-close').addEventListener('click',()=>$('cmp-detail').close());
+  $('cmp-detail').addEventListener('close',()=>{detailId=null;});
+  $('cmp-detail').addEventListener('click',e=>{if(e.target===$('cmp-detail')){const b=e.target.getBoundingClientRect();if(e.clientX<b.left||e.clientX>b.right||e.clientY<b.top||e.clientY>b.bottom)e.target.close();}});
+  $('cmp-cards').addEventListener('change',async e=>{
+    const id=e.target.dataset.include;if(!id||!snapshot)return;e.target.checked?excluded.delete(id):excluded.add(id);const seq=++sequence;
+    clearResult('Actualizando selección…');$('cmp-status').textContent='Recalculando suelo y construcción de cada casa…';
+    try{const data=await post('calcular',{token:snapshot.token,excluded:[...excluded]});if(seq!==sequence)return;result=data.result;render();$('cmp-status').textContent='Mapa, propiedades y valoración actualizados con tu selección.';}
+    catch(error){if(seq===sequence){clearResult('No se pudo aplicar la selección. Busca nuevamente.');$('cmp-status').textContent=error.message;}}
+  });
+  $('cmp-export').addEventListener('click',()=>{
+    if(!snapshot||!result)return;const file={fecha:new Date().toISOString(),parametros:snapshot.params,advertencias:snapshot.warnings,excluidos:[...excluded],resultado:result,comparables:visibleRows().map(r=>({...r,analisis:value(r)}))};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(file,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='acm-componentes.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  });
 })();

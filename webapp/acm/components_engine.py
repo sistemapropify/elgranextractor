@@ -155,7 +155,7 @@ def calculate(records, p, excluded=()):
     for row in houses:
         land_value=row['land']*unit
         remainder=row['price']-land_value
-        result['breakdown'].append({'id':row['id'],'price':row['price'],'land_value':land_value,
+        result['breakdown'].append({'id':row['id'],'price':row['price'],'land_unit':unit,'land_value':land_value,
             'remainder':remainder,'built_unit':remainder/row['built'],'usable':remainder>0})
         if remainder>0: residuals.append(remainder/row['built'])
     invalid=len(houses)-len(residuals)

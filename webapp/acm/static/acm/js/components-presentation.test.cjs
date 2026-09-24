@@ -1,0 +1,20 @@
+const assert = require('node:assert/strict');
+const {property, marker} = require('./components-presentation.js');
+const house = {id:'a', kind:'Casa', price:350000, land:150, built:200, issues:[]};
+const result = {land_ids:['land'], messages:[], breakdown:[{id:'a', land_unit:2000,
+  land_value:300000, remainder:50000, built_unit:250, usable:true}]};
+const detail = property(house,result);
+assert.equal(detail.landUnit,2000);
+assert.equal(detail.remainder,50000);
+assert.equal(detail.builtUnit,250);
+assert.match(marker(house,detail,'land'),/2[,.]000/);
+assert.match(marker(house,detail,'improvements'),/250/);
+assert.doesNotMatch(marker(house,detail,'land'),/1[,.]750/);
+assert.equal(property({...house,issues:['Falta terreno']},result).status,'reference');
+assert.equal(property(house,result,new Set(['a'])).status,'excluded');
+assert.equal(marker(house,property(house,null),'land'),'Sin cálculo');
+assert.equal(property(house,{...result,breakdown:[],messages:['Suelo insuficiente']}).status,'pending');
+const updated=property(house,{...result,breakdown:[{...result.breakdown[0],land_unit:1800,land_value:270000,remainder:80000,built_unit:400}]});
+assert.equal(updated.remainder,80000);
+assert.match(marker(house,updated,'improvements'),/400/);
+console.log('Presentation: house breakdown, map labels, references and recalculation verified.');

@@ -921,7 +921,7 @@
 
 <!-- Header estilo Intelligence Collections (solo visible en desktop >=992px) -->
 <div class="d-none d-lg-block acm-page-header">
-    <h1><i class="bi bi-search me-2"></i>{% if acm_test_mode %}ACM — Entorno de pruebas{% else %}Análisis comparativo{% endif %}</h1>
+    <h1><i class="bi bi-search me-2"></i>{% if acm_test_mode %}ACM — Entorno de pruebas{% else %}ACM clásico · precio / superficie{% endif %}</h1>
     <div class="header-actions">
         {% if not acm_test_mode %}<a href="{% url 'acm:acm_analisis_pruebas' %}" class="btn btn-outline-secondary btn-sm">Probar suelo + construcción</a>{% endif %}
         {% if acm_test_mode %}<span class="badge bg-warning text-dark me-2">{{ acm_test_count }} registros aislados</span>{% endif %}

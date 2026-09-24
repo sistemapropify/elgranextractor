@@ -1,4 +1,4 @@
-"""Endpoints de solo lectura para probar el ACM por componentes en producción."""
+"""Dashboard ACM por componentes: consultas en vivo sin modificar los anuncios."""
 import json
 import logging
 import math
@@ -46,6 +46,7 @@ def user_key(request):
 def page(request):
     return render(request,'acm/components.html',{
         'sources':SOURCES,
+        'test_mode':'analisis-pruebas' in request.path,
         'google_maps_api_key':getattr(settings,'GOOGLE_MAPS_API_KEY',None) or 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',
     })
 
@@ -72,10 +73,11 @@ def scraped_rows(p):
     excluded=set(review.objects.filter(excluida=True).values_list('propiedad_id',flat=True)) if review else set()
     for row in query.values('id','fuente','id_origen','titulo','tipo_inmueble','tipo_operacion',
             'precio_usd','precio_soles','area_terreno','area_construida','latitud','longitud',
-            'precision_ubicacion','estado_publicacion','distrito','url','imagen_url').iterator(chunk_size=500):
+            'precision_ubicacion','estado_publicacion','distrito','url','imagen_url','descripcion').iterator(chunk_size=500):
         usd=positive(row['precio_usd']);pen=positive(row['precio_soles'])
         yield {'id':f"{row['fuente']}-{row['id']}",'source':row['fuente'],'code':row['id_origen'],
             'title':row['titulo'] or row['id_origen'],'kind':row['tipo_inmueble'],
+            'description':row['descripcion'] or '',
             'price':usd or (pen/3.44 if pen else None),'converted':not bool(usd) and bool(pen),
             'land':positive(row['area_terreno']),'built':positive(row['area_construida']),
             'lat':float(row['latitud']),'lng':float(row['longitud']),
