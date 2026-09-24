@@ -69,7 +69,7 @@
     });
   }
   function renderSummary(){
-    const r=result,n=r.new,validSoil=r.land_unit!=null&&r.land_dispersion<=1;
+    const r=result,n=r.new,validSoil=r.land_unit!=null;
     $('cmp-warnings').innerHTML=snapshot.warnings.concat(result.new?result.messages:[]).map(w=>'<div class="cmp-warning">'+escape(w)+'</div>').join('');
     if(r.model!=='components'){
       const basis=r.model==='land'?'terreno':'superficie construida';

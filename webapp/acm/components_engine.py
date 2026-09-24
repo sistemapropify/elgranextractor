@@ -3,9 +3,8 @@ import math
 from statistics import median
 
 VERSION = 'componentes-1'
-MIN_LANDS = 3
-TARGET_LANDS = 5
-MIN_HOUSES = 3
+MIN_LANDS = 1
+MIN_HOUSES = 1
 SOURCES = ('propify', 'remax', 'properati', 'adondevivir', 'urbania', 'facebook_marketplace')
 
 
@@ -162,7 +161,7 @@ def calculate(records, p, excluded=()):
     houses=[r for r in records if r['kind']=='Casa' and not r['issues'] and r['id'] not in excluded]
     eligible_lands=[r for r in records if r['kind']=='Terreno' and not r['issues'] and r['id'] not in excluded]
     radius=p['radius']
-    while radius < p['max_radius'] and sum(r['distance']<=radius for r in eligible_lands)<TARGET_LANDS:
+    while radius < p['max_radius'] and not any(r['distance']<=radius for r in eligible_lands):
         radius=min(radius+500,p['max_radius'])
     lands=[r for r in eligible_lands if r['distance']<=radius]
     result={'version':VERSION,'model':'components','property_type':'Casa','status':'insufficient','messages':[], 'land_radius':radius,
@@ -170,9 +169,9 @@ def calculate(records, p, excluded=()):
             'land_ids':[r['id'] for r in lands], 'house_ids':[r['id'] for r in houses],
             'old':old_estimate(houses,p['built']), 'new':None,'breakdown':[], 'land_unit':None}
     if len(lands)<MIN_LANDS:
-        result['messages'].append(f'Suelo sin evidencia suficiente: {len(lands)} de {MIN_LANDS} terrenos requeridos.')
+        result['messages'].append('No hay terrenos válidos seleccionados para obtener una referencia de suelo. No se puede deducir ese precio de las áreas de las casas.')
         return result
-    if len(lands)<TARGET_LANDS:
+    if len(lands)<5:
         result['messages'].append(f'Muestra reducida: referencia de suelo calculada con {len(lands)} terrenos válidos. Revisa su comparabilidad.')
     units=sorted(r['price']/r['land'] for r in lands)
     unit=median(units)
@@ -180,8 +179,7 @@ def calculate(records, p, excluded=()):
     result['land_unit']=unit
     result['land_dispersion']=(q75-q25)/unit
     if result['land_dispersion']>1:
-        result['messages'].append('Suelo demasiado heterogéneo: revisa los terrenos seleccionados antes de calcular.')
-        return result
+        result['messages'].append('Precios de suelo muy dispersos: se muestra el cálculo orientativo con la mediana; revisa los terrenos seleccionados.')
     residuals=[]
     for row in houses:
         land_value=row['land']*unit
@@ -194,8 +192,10 @@ def calculate(records, p, excluded=()):
     if invalid:
         result['messages'].append(f'{invalid} casas tienen remanente no positivo: quedan visibles para revisión y no intervienen en la mediana de construcción y mejoras.')
     if len(residuals)<MIN_HOUSES:
-        result['messages'].append(f'Faltan casas completas: {len(residuals)} de {MIN_HOUSES} requeridas.')
+        result['messages'].append('Se calculó el suelo y el desglose disponible, pero no hay casas seleccionadas con remanente positivo para estimar construcción y mejoras.')
         return result
+    if len(residuals)<3:
+        result['messages'].append(f'Muestra reducida: aporte de construcción estimado con {len(residuals)} casa(s). Resultado orientativo.')
     built_unit=median(residuals)
     land_value=p['land']*unit
     total=land_value+p['built']*built_unit
@@ -215,7 +215,7 @@ def calculate_same_type(records,p,excluded=()):
     result={'version':VERSION,'model':'land' if is_land else 'built','property_type':target,
         'status':'insufficient','messages':[],'land_radius':p['radius'],'land_count':len(rows) if is_land else 0,
         'house_count':0 if is_land else len(rows),'land_ids':[r['id'] for r in rows] if is_land else [],
-        'house_ids':[] if is_land else [r['id'] for r in rows], 'min_lands':MIN_LANDS,'min_houses':3,
+        'house_ids':[] if is_land else [r['id'] for r in rows], 'min_lands':MIN_LANDS,'min_houses':MIN_HOUSES,
         'new':None,'old':None,'land_unit':None,'breakdown':[]}
     if rows:
         weights=[1/((r['distance'] or 1)+1) for r in rows]
@@ -224,7 +224,7 @@ def calculate_same_type(records,p,excluded=()):
     for r in rows:
         result['breakdown'].append({'id':r['id'],'method':result['model'],'offer_unit':r['price']/r[area],
             'area':r[area],'adjusted_total':r['price']/r[area]*p[area],'usable':True})
-    minimum=MIN_LANDS if is_land else 3
+    minimum=1
     if len(rows)<minimum:
         result['messages']=[f'Faltan comparables completos de {target.lower()}: {len(rows)} de {minimum} requeridos.']
         return result
@@ -232,8 +232,7 @@ def calculate_same_type(records,p,excluded=()):
         result['messages'].append(f'Muestra reducida: cálculo con {len(rows)} comparables completos.')
     unit=median(units);q25=units[int((len(units)-1)*.25)];q75=units[int((len(units)-1)*.75)]
     if (q75-q25)/unit>1:
-        result['messages']=['Precios demasiado dispersos: revisa los comparables seleccionados.']
-        return result
+        result['messages'].append('Precios muy dispersos: cálculo orientativo con la mediana; revisa los comparables seleccionados.')
     total=unit*p[area]
     if is_land:result.update(land_unit=unit,land_dispersion=(q75-q25)/unit)
     result.update(status='ok',new={'total':total,'unit':unit,'area_basis':area,

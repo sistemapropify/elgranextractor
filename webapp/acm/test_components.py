@@ -117,13 +117,37 @@ class ComponentsEngineTests(SimpleTestCase):
     def test_exclusion_recalculates_both(self):
         rows=candidates(sample(),params());full=calculate(rows,params());less=calculate(rows,params(),['a'])
         self.assertNotEqual(full['old']['total'],less['old']['total'])
-        self.assertIsNone(less['new']);self.assertEqual(less['house_count'],2)
+        self.assertIsNotNone(less['new']);self.assertEqual(less['house_count'],2)
 
-    def test_negative_remainder_stops_and_is_not_clipped(self):
+    def test_negative_remainder_is_not_clipped_and_other_houses_calculate(self):
         raw=sample();raw[0]['price']=250000
         result=calculate(candidates(raw,params()),params())
-        self.assertIsNone(result['new'])
+        self.assertIsNotNone(result['new'])
         self.assertTrue(any(r['remainder']<0 for r in result['breakdown']))
+
+    def test_one_land_and_one_house_calculate(self):
+        result=calculate(candidates([record('house'),record('land','Terreno')],params()),params())
+        self.assertEqual(result['new']['total'],350000)
+        self.assertEqual(result['land_radius'],500)
+        self.assertTrue(any('Muestra reducida' in m for m in result['messages']))
+
+    def test_dispersion_warns_instead_of_blocking(self):
+        raw=[record('house',price=3000000)]+[record(str(i),'Terreno',price=price) for i,price in enumerate([15000,30000,45000,1500000,1650000])]
+        result=calculate(candidates(raw,params()),params())
+        self.assertGreater(result['land_dispersion'],1)
+        self.assertIsNotNone(result['new'])
+
+    def test_no_land_never_invents_land_value(self):
+        result=calculate(candidates([record('house')],params()),params())
+        self.assertIsNone(result['land_unit'])
+        self.assertIsNone(result['new'])
+
+    def test_single_comparable_for_other_types(self):
+        for target in ('Terreno','Departamento','Oficina'):
+            p=parameters({**params(),'property_type':target})
+            r=record('only',kind=target,built=None if target=='Terreno' else 200)
+            result=calculate(candidates([r],p),p)
+            self.assertEqual(result['status'],'ok')
 
     def test_exact_location_required_for_calculation(self):
         raw=sample();raw[0]['precision']='aproximada'
