@@ -57,10 +57,24 @@
     clearResult('Parámetros modificados: vuelve a buscar.');$('cmp-warnings').replaceChildren();$('cmp-status').textContent='Listo para una nueva búsqueda.';$('cmp-search').disabled=false;
   }
   function setLocation(lat,lng){form.elements.lat.value=lat.toFixed(7);form.elements.lng.value=lng.toFixed(7);invalidate();if(map)map.panTo({lat,lng});}
+  function hideGoogleGestureHint(){
+    const host=$('cmp-map'),phrases=['utiliza la tecla ctrl','usa la tecla ctrl','use ctrl','hold ctrl','mantén pulsada la tecla ctrl'];
+    host.querySelectorAll('.gm-style-pbc,[class*="gm-style-pbc"],div,span').forEach(node=>{
+      const ownText=Array.from(node.childNodes).filter(child=>child.nodeType===Node.TEXT_NODE).map(child=>child.textContent).join(' ').trim().toLocaleLowerCase();
+      const keyboardHint=ownText.includes('ctrl')&&(ownText.includes('rueda')||ownText.includes('scroll')||ownText.includes('desplaz'));
+      if(node.classList?.contains('gm-style-pbc')||keyboardHint||phrases.some(phrase=>ownText.includes(phrase))){
+        const overlay=node.closest('.gm-style-pbc,[class*="gm-style-pbc"]')||node;
+        overlay.style.setProperty('display','none','important');
+        overlay.setAttribute('aria-hidden','true');
+      }
+    });
+  }
   window.initComponentMap=()=>{
     const p=input();map=new google.maps.Map($('cmp-map'),{center:{lat:p.lat,lng:p.lng},zoom:15,mapTypeControl:false,streetViewControl:false});map.addListener('click',e=>setLocation(e.latLng.lat(),e.latLng.lng()));
     const auto=new google.maps.places.Autocomplete($('cmp-address'),{fields:['geometry','formatted_address'],componentRestrictions:{country:'pe'}});
-    auto.addListener('place_changed',()=>{const place=auto.getPlace();if(place.geometry){setLocation(place.geometry.location.lat(),place.geometry.location.lng());map.setZoom(16);}});drawCircles();if(snapshot&&result)renderMap();
+    auto.addListener('place_changed',()=>{const place=auto.getPlace();if(place.geometry){setLocation(place.geometry.location.lat(),place.geometry.location.lng());map.setZoom(16);}});
+    const gestureObserver=new MutationObserver(hideGoogleGestureHint);gestureObserver.observe($('cmp-map'),{childList:true,subtree:true,characterData:true});hideGoogleGestureHint();
+    drawCircles();if(snapshot&&result)renderMap();
   };
   window.gm_authFailure=()=>{$('cmp-status').textContent='No se pudo cargar Google Maps. Puedes ingresar latitud y longitud para buscar.';};
   // Keep all consulted records visible so an excluded outer land can be selected again.
