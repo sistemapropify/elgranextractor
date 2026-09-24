@@ -31,7 +31,8 @@
   async function post(path,data){
     if(controller)controller.abort();controller=new AbortController();const current=controller;
     const timer=setTimeout(()=>current.abort(),45000);
-    try{const response=await fetch(path==='buscar'?form.dataset.searchUrl:form.dataset.calculateUrl,{method:'POST',credentials:'same-origin',signal:current.signal,headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:JSON.stringify(data)});
+    const urls={buscar:form.dataset.searchUrl,calcular:form.dataset.calculateUrl,guardar:form.dataset.saveUrl};
+    try{const response=await fetch(urls[path],{method:'POST',credentials:'same-origin',signal:current.signal,headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:JSON.stringify(data)});
       if(!response.headers.get('content-type')?.includes('application/json'))throw Error('El servidor no devolvió datos. Comprueba tu sesión y vuelve a intentar.');
       const body=await response.json();if(!response.ok)throw Error(body.error||'No se pudo completar la consulta.');return body;
     }catch(e){if(e.name==='AbortError')throw Error('La consulta se canceló o superó 45 segundos. Puedes reintentar.');throw e;}finally{clearTimeout(timer);}
@@ -46,10 +47,11 @@
     if(result?.land_radius>p.radius)circles.push(new google.maps.Circle({map,center,radius:result.land_radius,strokeColor:'#e8b455',strokeWeight:2,fillOpacity:0}));
   }
   function clearResult(message){
-    result=null;clearMap();drawCircles();$('cmp-export').disabled=true;
+    result=null;clearMap();drawCircles();$('cmp-export').disabled=true;$('cmp-word').disabled=true;$('cmp-save').disabled=true;$('cmp-save').textContent='Guardar en historial';
     $('cmp-new').innerHTML='<h2>Valoración por componentes</h2><p class="cmp-muted">'+escape(message)+'</p>';
     $('cmp-old').innerHTML='<span>Cálculo anterior</span><strong>—</strong>';
     $('cmp-map-count').textContent='Sin análisis vigente';
+    $('cmp-calculation-explanation').innerHTML='<p class="cmp-muted">Busca comparables para ver aquí las operaciones con sus valores reales.</p>';
     if(snapshot){renderCards();renderDetail();}else{$('cmp-cards').innerHTML='<p class="cmp-muted">Busca comparables para aplicar el análisis.</p>';$('cmp-counts').textContent='Sin comparables';['house','land','ref'].forEach(k=>$('cmp-'+k+'-count').textContent='');}
   }
   function invalidate(){
@@ -70,7 +72,7 @@
     });
   }
   window.initComponentMap=()=>{
-    const p=input();map=new google.maps.Map($('cmp-map'),{center:{lat:p.lat,lng:p.lng},zoom:15,mapTypeControl:false,streetViewControl:false});map.addListener('click',e=>setLocation(e.latLng.lat(),e.latLng.lng()));
+    const p=input();map=new google.maps.Map($('cmp-map'),{center:{lat:p.lat,lng:p.lng},zoom:15,mapTypeControl:false,streetViewControl:false,gestureHandling:'greedy'});map.addListener('click',e=>setLocation(e.latLng.lat(),e.latLng.lng()));
     const auto=new google.maps.places.Autocomplete($('cmp-address'),{fields:['geometry','formatted_address'],componentRestrictions:{country:'pe'}});
     auto.addListener('place_changed',()=>{const place=auto.getPlace();if(place.geometry){setLocation(place.geometry.location.lat(),place.geometry.location.lng());map.setZoom(16);}});
     const gestureObserver=new MutationObserver(hideGoogleGestureHint);gestureObserver.observe($('cmp-map'),{childList:true,subtree:true,characterData:true});hideGoogleGestureHint();
@@ -116,6 +118,33 @@
       (n?'<div class="cmp-line"><span>Terreno objetivo</span><strong>'+money(n.land_value)+'</strong></div><div class="cmp-line"><span>Construcción y mejoras</span><strong>'+money(n.built_value)+'</strong></div><div class="cmp-total">'+money(n.total)+'</div><p class="cmp-muted">Aporte de mejoras: '+money(n.built_unit)+'/m² construido.<br>Rango central orientativo: '+money(n.range_low)+' – '+money(n.range_high)+'.</p><div class="cmp-difference">Frente al anterior: '+(n.delta>=0?'+':'')+money(n.delta)+' ('+(n.delta_pct>=0?'+':'')+decimals(n.delta_pct)+'%)</div>':'<p class="cmp-warning">'+r.messages.map(escape).join('<br>')+'</p>');
     $('cmp-old').innerHTML='<span>Cálculo anterior</span><strong>'+money(r.old?.total)+'</strong><small>'+(r.old?money(r.old.unit)+'/m² construido<br>':'')+'Mismas casas seleccionadas. Solo comparación; no alimenta el nuevo valor.</small>';
   }
+  function medianExplanation(values){
+    const ordered=[...values].sort((a,b)=>a-b),formatted=ordered.map(v=>money(v)+'/m²').join(', ');
+    if(!ordered.length)return 'No hubo valores aptos.';
+    if(ordered.length%2)return 'Ordenados: '+formatted+'. El valor central es '+money(ordered[Math.floor(ordered.length/2)])+'/m².';
+    const left=ordered[ordered.length/2-1],right=ordered[ordered.length/2];
+    return 'Ordenados: '+formatted+'. Se promedian los dos centrales: ('+money(left)+' + '+money(right)+') ÷ 2 = '+money((left+right)/2)+'/m².';
+  }
+  function calculationTable(headers,rows){return '<div class="cmp-calc-scroll"><table class="cmp-calc-table"><thead><tr>'+headers.map(h=>'<th>'+escape(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(value=>'<td>'+value+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';}
+  function renderCalculationExplanation(){
+    const host=$('cmp-calculation-explanation'),r=result,p=snapshot.params;
+    if(r.model!=='components'){
+      const basis=r.model==='land'?'terreno':'área construida',rows=r.breakdown.map(detail=>{const record=visibleRows().find(row=>row.id===detail.id);return [escape(record?.source?.toUpperCase()||''),escape(record?.code||detail.id),money(detail.price||record?.price),decimals(detail.area)+' m²',money(detail.offer_unit)+'/m²'];});
+      host.innerHTML='<h3>1. Convertimos cada anuncio a una misma unidad</h3><p>Precio anunciado ÷ '+basis+' = precio por m².</p>'+calculationTable(['Portal','Código','Precio','Área','Precio por m²'],rows)+'<h3>2. Tomamos el valor central</h3><p>'+escape(medianExplanation(r.breakdown.map(detail=>detail.offer_unit)))+'</p>'+(r.new?'<h3>3. Aplicamos el valor al inmueble objetivo</h3><p>'+decimals(p[r.new.area_basis])+' m² × '+money(r.new.unit)+'/m² = <strong>'+money(r.new.total)+'</strong>.</p>':'<p>No hubo comparables aptos para completar el cálculo.</p>');return;
+    }
+    const lands=r.land_ids.map(id=>visibleRows().find(row=>row.id===id)).filter(Boolean),landUnits=lands.map(row=>row.price/row.land);
+    const details=r.breakdown.map(detail=>({detail,record:visibleRows().find(row=>row.id===detail.id)})).filter(item=>item.record),usable=details.filter(item=>item.detail.usable);
+    let html='<h3>1. Calculamos el suelo con '+lands.length+' terreno(s)</h3><p>Cada terreno se convierte a precio por m²: precio anunciado ÷ área del terreno.</p>';
+    if(lands.length)html+=calculationTable(['Portal','Código','Operación'],lands.map(row=>[escape(row.source.toUpperCase()),escape(row.code),money(row.price)+' ÷ '+decimals(row.land)+' m² = <strong>'+money(row.price/row.land)+'/m²</strong>']))+'<p>'+escape(medianExplanation(landUnits))+' Se adopta <strong>'+money(r.land_unit)+'/m²</strong> para el suelo.</p>';
+    else html+='<p>No hubo terrenos aptos; el proceso no puede separar suelo y construcción.</p>';
+    html+='<h3>2. Separamos suelo y construcción en cada casa</h3><p>Precio de la casa − (área de terreno × valor del suelo) = remanente. Luego: remanente ÷ área construida = aporte por m² construido.</p>';
+    if(details.length)html+=calculationTable(['Casa','Cálculo del remanente','Aporte por m²','Valor sugerido para el objetivo'],details.map(({record,detail})=>[escape(record.source.toUpperCase()+' · '+record.code),money(record.price)+' − ('+decimals(record.land)+' × '+money(r.land_unit)+') = '+money(detail.remainder),money(detail.built_unit)+'/m²',money(detail.target_estimate)+(detail.usable?'':' · no usada')]));
+    if(usable.length)html+='<p>'+escape(medianExplanation(usable.map(item=>item.detail.built_unit)))+' Este valor central es el aporte unitario aplicado al objetivo.</p>';
+    html+='<h3>3. Aplicamos ambos componentes al inmueble objetivo</h3>';
+    if(r.new)html+='<p>Suelo: '+decimals(p.land)+' m² × '+money(r.land_unit)+'/m² = <strong>'+money(r.new.land_value)+'</strong>.</p><p>Construcción y mejoras: '+decimals(p.built)+' m² × '+money(r.new.built_unit)+'/m² = <strong>'+money(r.new.built_value)+'</strong>.</p><p>Resultado: '+money(r.new.land_value)+' + '+money(r.new.built_value)+' = <strong>'+money(r.new.total)+'</strong>.</p><p>Las casas usadas sugieren valores individuales entre <strong>'+money(r.new.range_low)+'</strong> y <strong>'+money(r.new.range_high)+'</strong> para el inmueble objetivo.</p>';
+    else html+='<p>No se completó este paso porque faltó un componente válido.</p>';
+    host.innerHTML=html;
+  }
   function photo(r){return r.image?'<img src="'+escape(r.image)+'" loading="lazy" alt="Foto del anuncio">':'<div class="cmp-photo-empty">Sin foto</div>';}
   function precisionBadge(r){const p=presentation.precision(r);return '<span class="cmp-precision '+p.kind+'">'+escape(p.label)+'</span>';}
   function heading(r,selection){return '<div class="cmp-card-top">'+photo(r)+'<div class="cmp-card-main"><div class="cmp-card-sub">'+escape(r.source.toUpperCase())+' · '+escape(r.code)+' · '+Math.round(r.distance)+' m</div><div class="cmp-card-title">'+escape(r.title)+'</div><div class="cmp-card-price">'+money(r.price)+' <small>anunciado</small></div><div class="cmp-card-sub">'+escape(r.kind)+' · '+escape(r.district||'Sin distrito')+'</div>'+precisionBadge(r)+'</div>'+(selection&&!r.issues.length?'<label><input type="checkbox" data-include="'+escape(r.id)+'" '+(!excluded.has(r.id)?'checked':'')+' aria-label="Incluir '+escape(r.code)+'"> Incluir</label>':'')+'</div>';}
@@ -126,7 +155,7 @@
     if(v.status==='area')return '<section class="cmp-breakdown"><h3>'+escape(r.kind)+' · comparable por superficie construida</h3><div class="cmp-breakdown-grid"><div><span>Oferta por m² construido</span><strong>'+money(v.offerUnit)+'/m²</strong></div><div><span>Aplicada al área objetivo</span><strong>'+money(v.adjustedTotal)+'</strong></div></div><p class="cmp-equation">Se compara con inmuebles del mismo tipo; no se presenta como valor de suelo independiente.</p></section>';
     if(v.status==='land')return '<section class="cmp-breakdown"><h3>Terreno · referencia del suelo</h3><div class="cmp-breakdown-grid"><div><span>Oferta por m² de terreno</span><strong>'+money(v.offerUnit)+'/m²</strong></div><div><span>Uso en este análisis</span><small>'+(v.selected?'Incluido en la mediana del suelo':'Fuera del radio requerido; no participa')+'</small></div></div></section>';
     if(!['house','review'].includes(v.status))return '<p class="cmp-issues">'+escape(v.reason)+'</p>';
-    return '<section class="cmp-breakdown '+(v.status==='review'?'review':'')+'"><h3>Valor atribuido por este anuncio</h3><div class="cmp-breakdown-grid"><div><span>Valor del terreno</span><strong>'+money(v.landValue)+'</strong><small>'+money(v.landUnit)+'/m² de suelo</small></div><div><span>Construcción y mejoras</span><strong>'+money(v.remainder)+'</strong><small>'+money(v.builtUnit)+'/m² construido</small></div></div><p class="cmp-equation">'+money(r.price)+' − ('+decimals(r.land)+' m² × '+money(v.landUnit)+'/m²) = '+money(v.remainder)+' en construcción y mejoras.</p>'+(v.reason?'<p class="cmp-issues">'+escape(v.reason)+'</p>':'')+'</section>';
+    return '<section class="cmp-breakdown '+(v.status==='review'?'review':'')+'"><h3>Valor atribuido por este anuncio</h3><div class="cmp-breakdown-grid"><div><span>Valor del terreno</span><strong>'+money(v.landValue)+'</strong><small>'+money(v.landUnit)+'/m² de suelo</small></div><div><span>Construcción y mejoras</span><strong>'+money(v.remainder)+'</strong><small>'+money(v.builtUnit)+'/m² construido</small></div><div><span>Valor que sugiere para el inmueble objetivo</span><strong>'+money(v.targetEstimate)+'</strong><small>'+decimals(snapshot.params.land)+' m² terreno + '+decimals(snapshot.params.built)+' m² construidos</small></div></div><p class="cmp-equation">'+money(r.price)+' − ('+decimals(r.land)+' m² × '+money(v.landUnit)+'/m²) = '+money(v.remainder)+' en construcción y mejoras.</p>'+(v.reason?'<p class="cmp-issues">'+escape(v.reason)+'</p>':'')+'</section>';
   }
   function badge(r){const v=value(r);const text={area:'Incluida en el análisis',house:'Incluida en el análisis',review:'Requiere revisión',land:v.selected?'Terreno incluido':'Terreno de referencia',reference:'Solo referencia',excluded:'Desmarcada',pending:'Cálculo pendiente'};return '<span class="cmp-badge '+(['house','land','area'].includes(v.status)?'':'ref')+'">'+text[v.status]+'</span>';}
   function fixImages(container){container.querySelectorAll('img').forEach(img=>img.addEventListener('error',()=>{const empty=document.createElement('div');empty.className='cmp-photo-empty';empty.textContent='Sin foto';img.replaceWith(empty);},{once:true}));}
@@ -149,7 +178,7 @@
     fixImages($('cmp-detail-content'));
   }
   function openDetail(id){detailId=id;renderDetail();if(!$('cmp-detail').open)$('cmp-detail').showModal();}
-  function render(){renderSummary();renderCards();renderMap();renderDetail();$('cmp-export').disabled=false;}
+  function render(){renderSummary();renderCalculationExplanation();renderCards();renderMap();renderDetail();$('cmp-export').disabled=false;$('cmp-word').disabled=!result.new;$('cmp-save').disabled=!result.new;}
   form.addEventListener('submit',async e=>{
     e.preventDefault();const p=input();if(!p.sources.length){$('cmp-status').textContent='Selecciona al menos una fuente.';return;}
     const seq=++sequence;snapshot=null;excluded.clear();if($('cmp-detail').open)$('cmp-detail').close();clearResult('Buscando comparables…');$('cmp-search').disabled=true;$('cmp-status').textContent='Buscando comparables del tipo seleccionado…';
@@ -177,6 +206,18 @@
   $('cmp-export').addEventListener('click',()=>{
     if(!snapshot||!result)return;const file={fecha:new Date().toISOString(),parametros:snapshot.params,advertencias:snapshot.warnings,excluidos:[...excluded],resultado:result,comparables:visibleRows().map(r=>({...r,analisis:value(r)}))};
     const url=URL.createObjectURL(new Blob([JSON.stringify(file,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='acm-componentes.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  });
+  $('cmp-save').addEventListener('click',async()=>{
+    if(!snapshot||!result||!result.new)return;const button=$('cmp-save');button.disabled=true;$('cmp-status').textContent='Guardando análisis y selección en el historial…';
+    try{const data=await post('guardar',{token:snapshot.token,excluded:[...excluded]});button.textContent='Guardado · '+data.code;$('cmp-status').textContent=data.created?'Análisis guardado en el historial.':'Este mismo análisis ya estaba guardado en el historial.';}
+    catch(error){$('cmp-status').textContent=error.message;button.disabled=false;}
+  });
+  $('cmp-word').addEventListener('click',async()=>{
+    if(!snapshot||!result)return;const button=$('cmp-word');button.disabled=true;$('cmp-status').textContent='Generando informe Word con las operaciones del análisis…';
+    try{const response=await fetch(form.dataset.reportUrl,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:JSON.stringify({token:snapshot.token,excluded:[...excluded]})});
+      if(!response.ok){let body={};try{body=await response.json();}catch(e){}throw Error(body.error||'No se pudo generar el informe Word.');}
+      const code=response.headers.get('X-ACM-History-Code')||'';const url=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=url;a.download=(code||'informe-acm')+'.docx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('cmp-save').textContent=code?'Guardado · '+code:'Guardado en historial';$('cmp-save').disabled=true;$('cmp-status').textContent='Informe Word descargado y análisis guardado en el historial.';
+    }catch(error){$('cmp-status').textContent=error.message;}finally{button.disabled=false;}
   });
   configureType();
 })();

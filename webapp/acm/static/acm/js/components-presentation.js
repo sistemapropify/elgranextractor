@@ -17,6 +17,7 @@
     if (detail.method === 'built') return {status:'area', offerUnit:detail.offer_unit, adjustedTotal:detail.adjusted_total};
     return {status:detail.usable ? 'house' : 'review', landUnit:detail.land_unit,
       landValue:detail.land_value, remainder:detail.remainder, builtUnit:detail.built_unit,
+      targetEstimate:detail.target_estimate,
       reason:detail.usable ? '' : 'Remanente no positivo: revisar precio, áreas o referencia de suelo'};
   }
   function precision(record) {

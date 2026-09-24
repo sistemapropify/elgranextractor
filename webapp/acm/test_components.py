@@ -1,10 +1,11 @@
 import json
+from statistics import median
 from types import SimpleNamespace
 from unittest.mock import patch
 from django.test import SimpleTestCase, TestCase, RequestFactory
 from django.urls import resolve, reverse
 from acm.components_engine import parameters,candidates,calculate,old_estimate
-from acm.components_views import search,recalculate,page,scraped_rows,propify_rows
+from acm.components_views import search,recalculate,word_report,save_history,page,scraped_rows,propify_rows
 
 
 def params():
@@ -75,9 +76,23 @@ class ComponentsEngineTests(SimpleTestCase):
         self.assertEqual(by_id['a']['land_unit'],2000)
         self.assertEqual(by_id['a']['remainder'],50000)
         self.assertEqual(by_id['a']['built_unit'],250)
+        self.assertEqual(by_id['a']['target_estimate'],350000)
         self.assertEqual(by_id['b']['remainder'],20000)
         self.assertAlmostEqual(by_id['b']['built_unit'],133.3333333)
         self.assertEqual(result['new']['total'],340000)
+
+    def test_construction_uses_unit_median_and_warns_on_wide_spread(self):
+        raw=[record('a',price=290000,land=120,built=374),
+             record('b',price=655000,land=288,built=360),
+             record('c',price=450000,land=272,built=430),
+             record('land','Terreno',price=135300,land=100)]
+        p={**params(),'built':250}
+        result=calculate(candidates(raw,p),p)
+        units=sorted(row['built_unit'] for row in result['breakdown'])
+        self.assertAlmostEqual(result['new']['built_unit'], median(units))
+        self.assertEqual(result['built_unit_min'], units[0])
+        self.assertEqual(result['built_unit_max'], units[-1])
+        self.assertTrue(any('muy disperso' in message for message in result['messages']))
 
     def test_changing_land_selection_updates_every_house_breakdown(self):
         raw=sample()+[record('extra','Terreno',price=180000)]
@@ -198,6 +213,33 @@ class ComponentsEndpointTests(SimpleTestCase):
         self.assertEqual(recalculate(self.request({'token':data['token']})).status_code,400)
         self.assertEqual(recalculate(self.request({'token':data['token']+'tampered'})).status_code,400)
 
+    @patch('acm.components_views._persist_history')
+    @patch('acm.components_report.build_acm_docx',return_value=b'PK-word-report')
+    @patch('acm.components_views.load_records')
+    def test_word_report_uses_same_signed_selection(self,load,build,persist):
+        persist.return_value=(SimpleNamespace(codigo_display='ACM1234567'),True)
+        load.return_value=(candidates(sample(),params()),[])
+        data=json.loads(search(self.request(params())).content)
+        response=word_report(self.request({'token':data['token'],'excluded':['a']}))
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.content,b'PK-word-report')
+        self.assertEqual(response['Content-Type'],'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        self.assertIn('informe-acm.docx',response['Content-Disposition'])
+        self.assertEqual(response['X-ACM-History-Code'],'ACM1234567')
+        self.assertEqual(build.call_args.args[3],['a'])
+
+    @patch('acm.components_views._persist_history')
+    @patch('acm.components_views.load_records')
+    def test_save_history_uses_signed_result_and_deduplicates(self,load,persist):
+        load.return_value=(candidates(sample(),params()),[])
+        persist.return_value=(SimpleNamespace(id='1',codigo_display='ACM7654321'),False)
+        data=json.loads(search(self.request(params())).content)
+        response=save_history(self.request({'token':data['token'],'excluded':['a']}))
+        body=json.loads(response.content)
+        self.assertEqual(response.status_code,200)
+        self.assertFalse(body['created'])
+        self.assertEqual(body['code'],'ACM7654321')
+
     def test_page_has_old_and_new_panels(self):
         req=self.factory.get('/');req.current_user=self.user
         response=page(req)
@@ -212,6 +254,10 @@ class ComponentsEndpointTests(SimpleTestCase):
         req=self.factory.get('/acm/analisis/');req.current_user=self.user
         response=resolve(req.path).func(req)
         self.assertContains(response,'data-search-url="/acm/componentes/buscar/"')
+        self.assertContains(response,'data-report-url="/acm/componentes/informe-word/"')
+        self.assertContains(response,'data-save-url="/acm/componentes/guardar/"')
+        self.assertContains(response,'Guardar en historial')
+        self.assertContains(response,'Descargar informe Word')
         self.assertContains(response,'id="cmp-detail"')
         self.assertContains(response,'Cerrar detalle')
         self.assertContains(response,'Casas comparables')

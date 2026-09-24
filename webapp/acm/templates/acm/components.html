@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}ACM · Suelo y construcción{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=6">
+<link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=8">
 {% endblock %}
 {% block content %}
 <main class="components-acm">
@@ -10,7 +10,7 @@
     <a href="{% url 'acm:acm_analisis_clasico' %}">ACM clásico ↗</a></header>
   <div class="cmp-layout">
     <section class="cmp-map-column">
-      <form id="cmp-form" class="cmp-panel" data-search-url="{% url 'acm:componentes_buscar' %}" data-calculate-url="{% url 'acm:componentes_calcular' %}">{% csrf_token %}
+      <form id="cmp-form" class="cmp-panel" data-search-url="{% url 'acm:componentes_buscar' %}" data-calculate-url="{% url 'acm:componentes_calcular' %}" data-report-url="{% url 'acm:componentes_informe_word' %}" data-save-url="{% url 'acm:componentes_guardar' %}">{% csrf_token %}
         <div class="cmp-search-grid">
         <label>Tipo de propiedad<select name="property_type"><option>Casa</option><option>Terreno</option><option>Departamento</option><option>Oficina</option></select></label>
         <label class="cmp-address-field">Ubicación<input id="cmp-address" placeholder="Dirección o clic en el mapa" autocomplete="off"></label>
@@ -51,15 +51,10 @@
         <aside id="cmp-old"><span>Cálculo anterior</span><strong>—</strong><small>Mismas casas completas seleccionadas. Precio/m² construido ponderado por distancia.</small></aside>
       </section>
       <p class="cmp-note">Estimación de <strong>precios de oferta</strong>, no de ventas cerradas. El remanente incluye construcción y mejoras; no representa un coste de obra verificado. Si falta precio USD, conversión referencial S/3,44 por dólar.</p>
-      <div class="cmp-toolbar"><strong id="cmp-counts">Sin comparables</strong><button id="cmp-export" type="button" disabled>Descargar análisis</button></div>
+      <div class="cmp-toolbar"><strong id="cmp-counts">Sin comparables</strong><div class="cmp-downloads"><button id="cmp-save" class="cmp-save" type="button" disabled>Guardar en historial</button><button id="cmp-word" type="button" disabled>Descargar informe Word</button><button id="cmp-export" type="button" disabled>Descargar datos JSON</button></div></div>
       <nav class="cmp-tabs" aria-label="Grupos de comparables"><button data-tab="Casa" aria-pressed="true">Comparables usados <span id="cmp-house-count"></span></button><button data-tab="Terreno" aria-pressed="false">Terrenos usados <span id="cmp-land-count"></span></button><button data-tab="reference" aria-pressed="false">Solo referencia <span id="cmp-ref-count"></span></button></nav>
       <div id="cmp-cards"><p class="cmp-muted">Aquí aparecerán Propify y los portales seleccionados.</p></div>
-      <details class="cmp-panel"><summary>Cómo se obtiene la estimación</summary>
-        <p>Terrenos: mediana del precio/m² de suelo entre al menos 1 terreno válido dentro del radio elegido. Departamentos y oficinas: mediana de precio/m² construido de al menos 1 comparable completo del mismo tipo. Casas: desglose por componentes explicado a continuación. No se mezclan tipos ni se imputan superficies ausentes.</p>
-        <ol><li>Suelo: mediana del precio/m² de al menos 1 terreno válido. Solo ubicaciones exactas y superficies entre 0,5 y 2 veces el terreno objetivo.</li><li>Para cada casa completa: precio anunciado menos su terreno multiplicado por esa referencia de suelo.</li><li>Construcción y mejoras: mediana del remanente/m² construido de al menos 1 casa con remanente positivo. Ambas superficies deben estar entre 0,5 y 2 veces las de la casa objetivo.</li><li>Resultado: terreno objetivo × referencia del suelo + construcción objetivo × aporte unitario de mejoras.</li></ol>
-        <p>El resultado es orientativo; una sola observación no acredita precisión de mercado. Una muestra pequeña o precios dispersos se advierten sin bloquear el cálculo. Las casas con remanente no positivo se señalan para revisión y se excluyen de la mediana de mejoras. Los posibles duplicados quedan visibles y fuera del cálculo.</p>
-        <p>El recuadro anterior reproduce el promedio de precio/m² construido ponderado por 1/(distancia+1), aplicado a la construcción objetivo. No compara búsquedas distintas ni introduce descuentos comerciales.</p>
-      </details>
+      <details class="cmp-panel" open><summary>Cómo se calculó este resultado</summary><div id="cmp-calculation-explanation"><p>Busca comparables para ver aquí las operaciones con sus valores reales.</p></div></details>
     </section>
   </div>
 </main>
@@ -71,7 +66,7 @@
 {% endblock %}
 {% block extra_scripts %}
 {{ block.super }}
-<script src="{% static 'acm/js/components-presentation.js' %}?v=5"></script>
-<script src="{% static 'acm/js/components.js' %}?v=8"></script>
+<script src="{% static 'acm/js/components-presentation.js' %}?v=6"></script>
+<script src="{% static 'acm/js/components.js' %}?v=10"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}

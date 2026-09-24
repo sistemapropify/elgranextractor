@@ -183,7 +183,8 @@ def calculate(records, p, excluded=()):
         land_value=row['land']*unit
         remainder=row['price']-land_value
         result['breakdown'].append({'id':row['id'],'price':row['price'],'land_unit':unit,'land_value':land_value,
-            'remainder':remainder,'built_unit':remainder/row['built'],'usable':remainder>0})
+            'remainder':remainder,'built_unit':remainder/row['built'],'usable':remainder>0,
+            'target_estimate':p['land']*unit+p['built']*(remainder/row['built'])})
         if remainder>0: residuals.append(remainder/row['built'])
     invalid=len(houses)-len(residuals)
     result['usable_house_count']=len(residuals)
@@ -194,7 +195,16 @@ def calculate(records, p, excluded=()):
         return result
     if len(residuals)<3:
         result['messages'].append(f'Muestra reducida: aporte de construcción estimado con {len(residuals)} casa(s). Resultado orientativo.')
+    residuals.sort()
     built_unit=median(residuals)
+    result.update(built_unit_min=residuals[0], built_unit_max=residuals[-1],
+                  built_unit_dispersion=(residuals[-1]-residuals[0])/built_unit)
+    if residuals[-1]/residuals[0] > 2.5:
+        result['messages'].append(
+            f'El aporte observado de construcción y mejoras está muy disperso '
+            f'({_unit_message(residuals[0])} a {_unit_message(residuals[-1])}). '
+            f'Se usa la mediana {_unit_message(built_unit)}, pero el resultado requiere revisión.'
+        )
     land_value=p['land']*unit
     total=land_value+p['built']*built_unit
     # Spread of adjusted comparables, not a calibrated confidence interval.
@@ -204,6 +214,10 @@ def calculate(records, p, excluded=()):
         'range_high':estimates[math.ceil((len(estimates)-1)*.75)],
         'delta':total-result['old']['total'], 'delta_pct':100*(total/result['old']['total']-1)})
     return result
+
+
+def _unit_message(value):
+    return f'USD {value:,.0f}/m²'
 
 
 def calculate_same_type(records,p,excluded=()):

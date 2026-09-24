@@ -7,8 +7,8 @@ from functools import wraps
 from django.apps import apps
 from django.conf import settings
 from django.core import signing
-from django.http import JsonResponse
-from django.shortcuts import render
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
@@ -154,15 +154,81 @@ def search(request):
 @authenticated
 def recalculate(request):
     try:
-        data=json.loads(request.body)
-        state=signing.loads(data.get('token',''),salt=SALT,max_age=1800)
-        if state['user']!=user_key(request):raise signing.BadSignature('session mismatch')
-        excluded=data.get('excluded',[])
-        ids={r['id'] for r in state['records']}
-        if not isinstance(excluded,list) or len(excluded)>4000 or any(not isinstance(i,str) or i not in ids for i in excluded):
-            raise ValueError('selection')
+        state,excluded=_signed_selection(request)
         return JsonResponse({'result':calculate(state['records'],state['params'],excluded)})
     except signing.SignatureExpired:
         return JsonResponse({'error':'La búsqueda venció (30 minutos). Busca nuevamente para actualizar los datos.'},status=409)
     except (signing.BadSignature,ValueError,TypeError,KeyError,AttributeError):
         return JsonResponse({'error':'Búsqueda o selección inválida. Busca nuevamente.'},status=400)
+
+
+def _signed_selection(request):
+    data=json.loads(request.body)
+    state=signing.loads(data.get('token',''),salt=SALT,max_age=1800)
+    if state['user']!=user_key(request):raise signing.BadSignature('session mismatch')
+    excluded=data.get('excluded',[])
+    ids={r['id'] for r in state['records']}
+    if not isinstance(excluded,list) or len(excluded)>4000 or any(not isinstance(i,str) or i not in ids for i in excluded):
+        raise ValueError('selection')
+    return state,excluded
+
+
+def _persist_history(user, params, records, result, excluded):
+    from .components_history import persist_component_history
+    return persist_component_history(user,params,records,result,excluded)
+
+
+@require_POST
+@csrf_protect
+@authenticated
+def word_report(request):
+    try:
+        state,excluded=_signed_selection(request)
+        result=calculate(state['records'],state['params'],excluded)
+        history,_=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
+        from .components_report import build_acm_docx
+        content=build_acm_docx(state['params'],state['records'],result,excluded)
+        response=HttpResponse(content,content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        response['Content-Disposition']='attachment; filename="informe-acm.docx"'
+        response['X-ACM-History-Code']=history.codigo_display
+        response['Cache-Control']='no-store'
+        return response
+    except signing.SignatureExpired:
+        return JsonResponse({'error':'La búsqueda venció (30 minutos). Busca nuevamente para descargar el informe.'},status=409)
+    except (signing.BadSignature,ValueError,TypeError,KeyError,AttributeError):
+        return JsonResponse({'error':'Búsqueda o selección inválida. Busca nuevamente.'},status=400)
+    except Exception:
+        logger.exception('ACM componentes: no se pudo generar el informe Word')
+        return JsonResponse({'error':'No se pudo generar el informe Word. El error quedó registrado.'},status=503)
+
+
+@require_POST
+@csrf_protect
+@authenticated
+def save_history(request):
+    try:
+        state,excluded=_signed_selection(request)
+        result=calculate(state['records'],state['params'],excluded)
+        history,created=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
+        return JsonResponse({'status':'ok','created':created,'id':str(history.id),'code':history.codigo_display})
+    except signing.SignatureExpired:
+        return JsonResponse({'error':'La búsqueda venció (30 minutos). Busca nuevamente para guardarla.'},status=409)
+    except ValueError as exc:
+        return JsonResponse({'error':str(exc)},status=422)
+    except (signing.BadSignature,TypeError,KeyError,AttributeError):
+        return JsonResponse({'error':'Búsqueda o selección inválida. Busca nuevamente.'},status=400)
+    except Exception:
+        logger.exception('ACM componentes: no se pudo guardar en el historial')
+        return JsonResponse({'error':'No se pudo guardar el análisis. El error quedó registrado.'},status=503)
+
+
+@authenticated
+def history_word_report(request, uuid):
+    from .models import ACMLink
+    history=get_object_or_404(ACMLink,id=uuid,user=session_user(request),metodo='componentes')
+    from .components_report import build_acm_docx
+    content=build_acm_docx(history.parametros_json,history.propiedades_json,history.resultado_json,())
+    response=HttpResponse(content,content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    response['Content-Disposition']=f'attachment; filename="{history.codigo_display}-acm.docx"'
+    response['Cache-Control']='no-store'
+    return response
