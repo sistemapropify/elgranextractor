@@ -12,6 +12,8 @@ from datetime import datetime
 from camoufox.async_api import AsyncCamoufox
 from scrapi.camoufox_launcher import camoufox_kwargs
 from scrapi.areas import calcular_areas
+from urllib.request import Request, urlopen
+from captura.azure_storage import upload_bytes
 
 BASE_URL = "https://www.remax.pe/web/search/all/propertys/list/?departament__in=4&page={}"
 SITE_DOMAIN = "https://www.remax.pe"
@@ -363,6 +365,59 @@ async def navegar_con_cloudflare(page, url, timeout=30):
         raise RuntimeError('navigation.blocked: Remax no confirmó acceso al contenido')
     await page.wait_for_timeout(1000)
     return await page.title()
+
+
+def subir_imagen_a_blob(imagen_url, prop):
+    """Copia la foto de Remax a nuestro contenedor ``propiedadesimagenes``.
+
+    Remax publica las imágenes en un bucket privado (DigitalOcean Spaces) con
+    una firma temporal: si solo se guarda la URL, al expirar la firma la ficha
+    queda con 403 y el mapa no puede mostrarla. Por eso se copia a nuestro Blob
+    durante el scraping, igual que Properati y Adondevivir.
+    """
+    if not imagen_url:
+        return None
+
+    try:
+        req = Request(imagen_url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+            'Referer': SITE_DOMAIN + '/',
+        })
+        with urlopen(req, timeout=25) as resp:
+            content_type = resp.headers.get_content_type() or 'image/jpeg'
+            content = resp.read()
+
+        if not content:
+            return None
+
+        ext = 'jpg'
+        lowered = (content_type or '').lower()
+        if 'png' in lowered:
+            ext = 'png'
+        elif 'webp' in lowered:
+            ext = 'webp'
+        elif 'gif' in lowered:
+            ext = 'gif'
+        elif 'jpeg' in lowered or 'jpg' in lowered:
+            ext = 'jpg'
+
+        prop_id = str(prop.get('ID') or 'sin_id').strip()
+        safe_id = re.sub(r'[^A-Za-z0-9_-]+', '_', prop_id)[:60]
+        blob_name = f"propiedades/{safe_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
+        return upload_bytes(
+            content,
+            blob_name=blob_name,
+            container_name='propiedadesimagenes',
+            content_type=content_type,
+            metadata={
+                'fuente': 'remax',
+                'id_origen': prop_id,
+                'imagen_origen': imagen_url,
+            },
+        )
+    except Exception as e:
+        print(f"   [WARN] No se pudo subir imagen de Remax a Blob: {e}")
+        return None
 
 
 async def extraer_listado(page):

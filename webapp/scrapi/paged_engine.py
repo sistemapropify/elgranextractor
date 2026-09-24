@@ -199,7 +199,7 @@ async def prepare_detail(portal, source, page, raw, emit, *, store_images=False)
                     raise RuntimeError('portal.paused: Properati mantiene un bloqueo de acceso; cola conservada') from exc
                 raise
             await wait_for_retry(delay, emit, property_id=key, attempt=attempt)
-    if portal in ('adondevivir', 'properati') and store_images and row.get('imagen_url'):
+    if portal in ('adondevivir', 'properati', 'remax') and store_images and row.get('imagen_url'):
         try:
             blob_image = await asyncio.wait_for(asyncio.to_thread(
                 source.subir_imagen_a_blob, row['imagen_url'], raw), timeout=60)
