@@ -847,7 +847,18 @@ def _available_scraped_properties(sources=('remax', 'properati'), include_inacti
     reviews = {r.propiedad_id: r.motivo for r in RevisionPropiedadScraping.objects.filter(excluida=True)}
 
     state_filter = ['activa', 'posible_retirada', 'retirada'] if include_inactive else ['activa']
-    rows = (
+    base_fields = [
+        'id', 'fuente', 'id_origen', 'titulo', 'tipo_inmueble',
+        'tipo_operacion', 'precio_soles', 'precio_usd', 'area_m2',
+        'area_terreno', 'area_construida', 'distrito', 'direccion_texto',
+        'latitud', 'longitud', 'precision_ubicacion', 'imagen_url', 'url',
+    ]
+    lifecycle_fields = [
+        'estado_publicacion', 'primera_vez_vista', 'ultima_vez_vista',
+        'fecha_primera_ausencia', 'fecha_retiro_confirmado',
+        'ausencias_consecutivas',
+    ]
+    rows_query = (
         PropiedadesCompetencia.objects
         .filter(
             fuente__in=sources,
@@ -855,18 +866,19 @@ def _available_scraped_properties(sources=('remax', 'properati'), include_inacti
             latitud__isnull=False,
             longitud__isnull=False,
         )
-        .values(
-            'id', 'fuente', 'id_origen', 'titulo', 'tipo_inmueble',
-            'tipo_operacion', 'precio_soles', 'precio_usd', 'area_m2',
-            'area_terreno', 'area_construida',
-            'distrito', 'direccion_texto', 'latitud', 'longitud',
-            'precision_ubicacion', 'imagen_url', 'estado_publicacion',
-            'primera_vez_vista', 'ultima_vez_vista', 'fecha_primera_ausencia',
-            'fecha_retiro_confirmado', 'ausencias_consecutivas',
-            'url',
-        )
         .order_by('fuente', 'id')
     )
+
+    # Las fechas son añadidos posteriores al scraper. Si el despliegue aún no
+    # aplicó esa migración, no se debe dejar sin datos todo el mapa: se carga la
+    # fila base y se muestran las fechas como no informadas hasta migrar.
+    lifecycle_available = True
+    try:
+        rows = list(rows_query.values(*(base_fields + lifecycle_fields)).iterator(chunk_size=500))
+    except Exception as exc:
+        lifecycle_available = False
+        logger.warning('Ciclo de vida no disponible en cuadrantizacion; usando columnas base: %s', exc)
+        rows = list(rows_query.values(*base_fields).iterator(chunk_size=500))
 
     properties = []
     for row in rows:
@@ -991,13 +1003,13 @@ def _available_scraped_properties(sources=('remax', 'properati'), include_inacti
                 'activa': 'Activa',
                 'posible_retirada': 'Posible retirada',
                 'retirada': 'Retirada',
-            }.get(row['estado_publicacion'], 'Sin verificar'),
-            'publication_state': row['estado_publicacion'] or 'sin_verificar',
-            'first_seen': row['primera_vez_vista'].isoformat() if row['primera_vez_vista'] else None,
-            'last_seen': row['ultima_vez_vista'].isoformat() if row['ultima_vez_vista'] else None,
-            'first_missing': row['fecha_primera_ausencia'].isoformat() if row['fecha_primera_ausencia'] else None,
-            'retired_at': row['fecha_retiro_confirmado'].isoformat() if row['fecha_retiro_confirmado'] else None,
-            'consecutive_absences': row['ausencias_consecutivas'] or 0,
+            }.get(row.get('estado_publicacion'), 'Activa' if not lifecycle_available else 'Sin verificar'),
+            'publication_state': row.get('estado_publicacion') or ('activa' if not lifecycle_available else 'sin_verificar'),
+            'first_seen': row.get('primera_vez_vista').isoformat() if row.get('primera_vez_vista') else None,
+            'last_seen': row.get('ultima_vez_vista').isoformat() if row.get('ultima_vez_vista') else None,
+            'first_missing': row.get('fecha_primera_ausencia').isoformat() if row.get('fecha_primera_ausencia') else None,
+            'retired_at': row.get('fecha_retiro_confirmado').isoformat() if row.get('fecha_retiro_confirmado') else None,
+            'consecutive_absences': row.get('ausencias_consecutivas') or 0,
             'location_precision': precision_label,
         })
 
