@@ -1039,6 +1039,10 @@ window.onGoogleMapsLoaded = function() {
                             <span>Properati</span>
                         </label>
                     </div>
+                    <label class="portal-checkbox" style="grid-column:1/-1">
+                        <input type="checkbox" id="include-publication-history">
+                        <span>Incluir posibles retiradas y retiradas</span>
+                    </label>
                     <select id="propify-precision-filter" aria-label="Filtrar por precisión">
                         <option value="">Todas las precisiones</option>
                     </select>
@@ -1085,7 +1089,7 @@ window.onGoogleMapsLoaded = function() {
                 </div>
             </div>
 
-            <section class="propify-floating-card" id="propify-floating-card" hidden aria-label="Propiedad disponible">
+            <section class="propify-floating-card" id="propify-floating-card" hidden aria-label="Propiedad del portal">
                 <div class="propify-floating-card__head" id="propify-floating-card-head">
                     <span id="propify-floating-card-source">Propify · Disponible</span>
                     <button type="button" class="propify-floating-card__close" id="propify-floating-card-close" aria-label="Cerrar">&times;</button>
@@ -1754,6 +1758,7 @@ function setupPropifyPropertyLayer() {
     var typeFilter = document.getElementById('propify-type-filter');
     var districtFilter = document.getElementById('propify-district-filter');
     var qualityFilter = document.getElementById('property-quality-filter');
+    var historyFilter = document.getElementById('include-publication-history');
     if (!toggle) return;
 
     setupDraggablePropifyCard();
@@ -1781,6 +1786,7 @@ function setupPropifyPropertyLayer() {
     sourceFilters.forEach(function(filter) {
         filter.addEventListener('change', loadPropifyProperties);
     });
+    if (historyFilter) historyFilter.addEventListener('change', loadPropifyProperties);
     var mapQuery = new URLSearchParams(location.search);
     var linkedSources = (mapQuery.get('sources') || mapQuery.get('source') || '').split(',').filter(function(s) { return ['propify','remax','properati'].indexOf(s) !== -1; });
     if (linkedSources.length) {
@@ -1917,7 +1923,7 @@ function propertyAreaCardHtml(property) {
     return '<article class="property-area-card">' +
         image +
         '<div>' +
-            '<div class="property-area-card__portal">' + escapeMapHtml(property.source || 'Propiedad') + '</div>' +
+            '<div class="property-area-card__portal">' + escapeMapHtml(property.source || 'Propiedad') + ' · ' + escapeMapHtml(property.status || 'Sin verificar') + '</div>' +
             propertyQualityBadge(property) +
             '<div class="property-area-card__title">' + escapeMapHtml(property.title || property.code || 'Propiedad disponible') + '</div>' +
             '<div class="property-area-card__meta">' + escapeMapHtml(property.operation_type) + ' · ' +
@@ -2104,7 +2110,7 @@ function showPropifyFloatingCard(property) {
     var body = document.getElementById('propify-floating-card-body');
     var source = document.getElementById('propify-floating-card-source');
     if (!card || !body) return;
-    if (source) source.textContent = (property.source || 'Propiedad') + ' · Disponible';
+    if (source) source.textContent = (property.source || 'Propiedad') + ' · ' + (property.status || 'Estado sin verificar');
 
     var image = property.image_url
         ? '<img class="propify-card-thumb" src="' + escapeMapHtml(property.image_url) + '" alt="" loading="lazy" decoding="async">'
@@ -2156,6 +2162,8 @@ function showPropifyFloatingCard(property) {
                 '<div class="propify-card-sub">' + escapeMapHtml(property.operation_type) + ' · ' + escapeMapHtml(property.property_type) + '</div>' +
                 '<div class="propify-card-sub">' + escapeMapHtml(property.district) + '</div>' +
                 '<div class="propify-card-sub">Ubicación ' + escapeMapHtml(property.location_precision || 'Desconocida') + '</div>' +
+                '<div class="propify-card-sub">Publicación: ' + escapeMapHtml(property.status || 'Sin verificar') +
+                    (property.consecutive_absences ? ' · ausencias consecutivas: ' + escapeMapHtml(String(property.consecutive_absences)) : '') + '</div>' +
                 '<div class="propify-card-price">' + formatPropifyPrice(property.price, property.currency_symbol) + '</div>' +
                 code +
             '</div>' +
@@ -2333,6 +2341,7 @@ function loadPropifyProperties() {
     var count = document.getElementById('propify-properties-count');
     var selectedSources = Array.from(document.querySelectorAll('input[name="property-source"]:checked'))
         .map(function(filter) { return filter.value; });
+    var includeHistory = document.getElementById('include-publication-history');
 
     if (!selectedSources.length) {
         if (propifyPropertiesRequest) propifyPropertiesRequest.abort();
@@ -2350,7 +2359,8 @@ function loadPropifyProperties() {
     if (propifyPropertiesRequest) propifyPropertiesRequest.abort();
     propifyPropertiesRequest = new AbortController();
 
-    fetch(PROPIFY_PROPERTIES_ENDPOINT + '?sources=' + encodeURIComponent(selectedSources.join(',')), {
+    fetch(PROPIFY_PROPERTIES_ENDPOINT + '?sources=' + encodeURIComponent(selectedSources.join(',')) +
+        (includeHistory && includeHistory.checked ? '&include_inactive=1' : ''), {
         credentials: 'same-origin',
         cache: 'no-store',
         signal: propifyPropertiesRequest.signal,

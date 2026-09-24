@@ -39,7 +39,8 @@
     return 'Suelo estim. ' + money(value.landUnit) + '/m²';
   }
   function marker(record, value, mode) {
-    return precision(record).short + ' · ' + markerValue(record, value, mode);
+    const similarity = record.overall_similarity == null ? '' : ' · Sim ' + Number(record.overall_similarity).toLocaleString('es-PE', {maximumFractionDigits:1}) + '%';
+    return precision(record).short + ' · ' + markerValue(record, value, mode) + similarity;
   }
   function group(record, value) {
     if (value.status === 'land' && value.selected) return 'land';

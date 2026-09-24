@@ -119,6 +119,10 @@ def candidates(records, p):
             continue
         row['distance'] = round(distance(p['lat'],p['lng'],row['lat'],row['lng']),2)
         if row['distance'] > (p['max_radius'] if target=='Casa' and row['kind']=='Terreno' else p['radius']): continue
+        # La similitud se calcula para cada registro, incluidos los que quedan
+        # como referencia, para que el agente pueda encontrarlos en el mapa y
+        # decidir con evidencia si conviene incluirlos.
+        row.update(_similarity_metrics(row, p))
         row['issues'] = reason(row,p)
         row['duplicate_of'] = None
         result.append(row)

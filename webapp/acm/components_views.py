@@ -69,7 +69,7 @@ def scraped_rows(p):
         fuente__in=[s for s in p['sources'] if s!='propify'],
         latitud__gte=p['lat']-lat_delta,latitud__lte=p['lat']+lat_delta,
         longitud__gte=p['lng']-lng_delta,longitud__lte=p['lng']+lng_delta,
-    ).exclude(estado_publicacion='retirada').exclude(tipo_operacion='Alquiler')
+    ).exclude(tipo_operacion='Alquiler')
     # Optional quality module may be installed independently; no new schema dependency.
     try:
         review=apps.get_model('ingestas','RevisionPropiedadScraping')
@@ -78,8 +78,11 @@ def scraped_rows(p):
     excluded=set(review.objects.filter(excluida=True).values_list('propiedad_id',flat=True)) if review else set()
     for row in query.values('id','fuente','id_origen','titulo','tipo_inmueble','tipo_operacion',
             'precio_usd','precio_soles','area_terreno','area_construida','latitud','longitud',
-            'precision_ubicacion','estado_publicacion','distrito','url','imagen_url','descripcion','dormitorios','banos').iterator(chunk_size=500):
+            'precision_ubicacion','estado_publicacion','primera_vez_vista','ultima_vez_vista',
+            'fecha_primera_ausencia','fecha_retiro_confirmado','ausencias_consecutivas',
+            'distrito','url','imagen_url','descripcion','dormitorios','banos').iterator(chunk_size=500):
         usd=positive(row['precio_usd']);pen=positive(row['precio_soles'])
+        lifecycle_state = row['estado_publicacion'] or 'sin_verificar'
         yield {'id':f"{row['fuente']}-{row['id']}",'record_id':row['id'],
             'source':row['fuente'],'code':row['id_origen'],
             'title':row['titulo'] or row['id_origen'],'kind':row['tipo_inmueble'],
@@ -88,7 +91,12 @@ def scraped_rows(p):
             'price':usd or (pen/3.44 if pen else None),'converted':not bool(usd) and bool(pen),
             'land':positive(row['area_terreno']),'built':positive(row['area_construida']),
             'lat':float(row['latitud']),'lng':float(row['longitud']),
-            'precision':row['precision_ubicacion'],'state':row['estado_publicacion'],
+            'precision':row['precision_ubicacion'],'state':lifecycle_state,
+            'first_seen':row['primera_vez_vista'].isoformat() if row['primera_vez_vista'] else None,
+            'last_seen':row['ultima_vez_vista'].isoformat() if row['ultima_vez_vista'] else None,
+            'first_missing':row['fecha_primera_ausencia'].isoformat() if row['fecha_primera_ausencia'] else None,
+            'retired_at':row['fecha_retiro_confirmado'].isoformat() if row['fecha_retiro_confirmado'] else None,
+            'consecutive_absences':row['ausencias_consecutivas'] or 0,
             'operation':row['tipo_operacion'],'district':row['distrito'],
             'url':clean_link(row['url']),'image':clean_link(_map_image_url(row['imagen_url'])),
             'review_excluded':row['id'] in excluded}

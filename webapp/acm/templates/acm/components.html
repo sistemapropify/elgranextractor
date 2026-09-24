@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}ACM · Suelo y construcción{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=8">
+<link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=9">
 {% endblock %}
 {% block content %}
 <main class="components-acm">
@@ -67,6 +67,6 @@
 {% block extra_scripts %}
 {{ block.super }}
 <script src="{% static 'acm/js/components-presentation.js' %}?v=6"></script>
-<script src="{% static 'acm/js/components.js' %}?v=10"></script>
+<script src="{% static 'acm/js/components.js' %}?v=11"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}

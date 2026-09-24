@@ -4,6 +4,7 @@
   let snapshot=null, result=null, excluded=new Set(), tab='Casa', map=null, pin=null, circles=[], markers=[], sequence=0, controller=null, detailId=null;
   const money=n=>n==null?'—':new Intl.NumberFormat('es-PE',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
   const decimals=n=>n==null?'Sin informar':new Intl.NumberFormat('es-PE',{maximumFractionDigits:2}).format(n);
+  const formatDate=value=>{if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?String(value):date.toLocaleString('es-PE',{dateStyle:'short',timeStyle:'short'});};
   const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function input(){return {property_type:form.elements.property_type.value,rooms:form.elements.rooms.disabled?null:form.elements.rooms.value,baths:form.elements.baths.disabled?null:form.elements.baths.value,floor:form.elements.floor.disabled?null:form.elements.floor.value,lat:Number(form.elements.lat.value),lng:Number(form.elements.lng.value),land:Number(form.elements.land.value),built:Number(form.elements.built.value),radius:Number(form.elements.radius.value),max_radius:Number(form.elements.max_radius.value),sources:Array.from(form.querySelectorAll('[name=source]:checked'),x=>x.value)};}
   function configureType(){
@@ -84,6 +85,13 @@
   function visibleRows(){return snapshot?.records||[];}
   const value=r=>presentation.property(r,result,excluded);
   const mapGroup=r=>presentation.group(r,value(r));
+  function similarityOrder(rows){return [...rows].sort((a,b)=>{
+    const av=value(a),bv=value(b);
+    const aWeight=av.similarityWeight==null?(a.overall_similarity==null?-1:a.overall_similarity):av.similarityWeight;
+    const bWeight=bv.similarityWeight==null?(b.overall_similarity==null?-1:b.overall_similarity):bv.similarityWeight;
+    if (bWeight!==aWeight) return bWeight-aWeight;
+    return (a.distance||0)-(b.distance||0) || String(a.id).localeCompare(String(b.id));
+  });}
   function visibleMapRows(){const layers=new Set(Array.from(document.querySelectorAll('[name=map_layer]:checked'),x=>x.value));return visibleRows().filter(r=>layers.has(mapGroup(r)));}
   function renderMap(){
     if(!map||!result)return;clearMap();drawCircles();
@@ -93,7 +101,7 @@
     rows.forEach(r=>{
       const v=value(r),label=presentation.marker(r,v,mode),dim=['reference','excluded','pending'].includes(v.status);
       const icon=icons[r.source]?{url:'/static/requerimientos/data/'+icons[r.source],scaledSize:new google.maps.Size(32,40),anchor:new google.maps.Point(16,40),labelOrigin:new google.maps.Point(16,52)}:{path:google.maps.SymbolPath.CIRCLE,scale:7,fillColor:r.kind==='Terreno'?'#d6a548':'#3789dd',fillOpacity:1,strokeColor:'#ffffff',strokeWeight:1,labelOrigin:new google.maps.Point(0,3)};
-      const marker=new google.maps.Marker({map,position:{lat:r.lat,lng:r.lng},title:r.title+' · '+presentation.precision(r).label+' · '+label,opacity:dim?.55:1,icon,label:{text:label,fontSize:'10px',fontWeight:'600',className:'cmp-pin-label'}});
+      const marker=new google.maps.Marker({map,position:{lat:r.lat,lng:r.lng},title:r.title+' · '+presentation.precision(r).label+' · '+label,opacity:dim?.55:1,zIndex:1000+Math.round((r.overall_similarity||0)*10),icon,label:{text:label,fontSize:'10px',fontWeight:'600',className:'cmp-pin-label'}});
       marker.addListener('click',()=>openDetail(r.id));markers.push(marker);
     });
     $('cmp-map-count').textContent=rows.length+' visibles de '+visibleRows().length;
@@ -155,7 +163,9 @@
   }
   function photo(r){return r.image?'<img src="'+escape(r.image)+'" loading="lazy" alt="Foto del anuncio">':'<div class="cmp-photo-empty">Sin foto</div>';}
   function precisionBadge(r){const p=presentation.precision(r);return '<span class="cmp-precision '+p.kind+'">'+escape(p.label)+'</span>';}
-  function heading(r,selection){return '<div class="cmp-card-top">'+photo(r)+'<div class="cmp-card-main"><div class="cmp-card-sub">'+escape(r.source.toUpperCase())+' · '+escape(r.code)+' · '+Math.round(r.distance)+' m</div><div class="cmp-card-title">'+escape(r.title)+'</div><div class="cmp-card-price">'+money(r.price)+' <small>anunciado</small></div><div class="cmp-card-sub">'+escape(r.kind)+' · '+escape(r.district||'Sin distrito')+'</div>'+precisionBadge(r)+'</div>'+(selection&&!r.issues.length?'<label><input type="checkbox" data-include="'+escape(r.id)+'" '+(!excluded.has(r.id)?'checked':'')+' aria-label="Incluir '+escape(r.code)+'"> Incluir</label>':'')+'</div>';}
+  function publicationBadge(r){const labels={activa:'Activa',posible_retirada:'Posible retirada',retirada:'Retirada',sin_verificar:'Sin verificar'};const state=labels[r.state]||'Sin verificar';const misses=r.consecutive_absences?' · '+r.consecutive_absences+' ausencia(s)':'';return '<span class="cmp-publication-state state-'+escape(r.state||'sin_verificar')+'">Publicación: '+escape(state+misses)+'</span>';}
+  function similarityBlock(r){const overall=r.overall_similarity;if(overall==null)return '';const v=value(r);const weight=v.similarityWeight==null?'':'<span>Peso en cálculo '+decimals(v.similarityWeight)+'%</span>';return '<div class="cmp-similarity cmp-similarity-visible"><strong>Similitud con tu inmueble: '+decimals(overall)+'%</strong><span>Terreno '+decimals(r.land_similarity)+'%</span><span>Construcción '+decimals(r.built_similarity)+'%</span><span>Distancia '+decimals(r.distance_similarity)+'%</span>'+weight+'</div>';}
+  function heading(r,selection){return '<div class="cmp-card-top">'+photo(r)+'<div class="cmp-card-main"><div class="cmp-card-sub">'+escape(r.source.toUpperCase())+' · '+escape(r.code)+' · '+Math.round(r.distance)+' m</div><div class="cmp-card-title">'+escape(r.title)+'</div><div class="cmp-card-price">'+money(r.price)+' <small>anunciado</small></div><div class="cmp-card-sub">'+escape(r.kind)+' · '+escape(r.district||'Sin distrito')+'</div>'+precisionBadge(r)+' '+publicationBadge(r)+similarityBlock(r)+'</div>'+(selection&&!r.issues.length?'<label><input type="checkbox" data-include="'+escape(r.id)+'" '+(!excluded.has(r.id)?'checked':'')+' aria-label="Incluir '+escape(r.code)+'"> Incluir</label>':'')+'</div>';}
   function areas(r){return '<div class="cmp-card-areas"><span>Área de terreno<strong>'+decimals(r.land)+(r.land?' m²':'')+'</strong></span><span>Área construida<strong>'+decimals(r.built)+(r.built?' m²':'')+'</strong></span></div>';}
   function features(r){return r.kind==='Terreno'?'':'<p class="cmp-card-sub">Habitaciones: '+decimals(r.rooms)+' · Baños: '+decimals(r.baths)+(r.kind!=='Casa'?' · Piso: '+decimals(r.floor):'')+'</p>';}
   function breakdown(r){
@@ -175,14 +185,15 @@
     $('cmp-map-count').textContent=rows.length+' propiedades';
     document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));
     const selected=tab==='reference'?refs:tab==='Casa'?houses:lands;
-    $('cmp-cards').innerHTML=selected.map(r=>'<article class="cmp-card" data-record="'+escape(r.id)+'">'+heading(r,true)+areas(r)+features(r)+breakdown(r)+'<div class="cmp-card-footer">'+badge(r)+'<button type="button" data-detail="'+escape(r.id)+'">Ver detalle ↗</button></div></article>').join('')||'<p class="cmp-muted">No hay registros en este grupo.</p>';
+    $('cmp-cards').innerHTML=similarityOrder(selected).map(r=>'<article class="cmp-card" data-record="'+escape(r.id)+'">'+heading(r,true)+areas(r)+features(r)+breakdown(r)+'<div class="cmp-card-footer">'+badge(r)+'<button type="button" data-detail="'+escape(r.id)+'">Ver detalle ↗</button></div></article>').join('')||'<p class="cmp-muted">No hay registros en este grupo.</p>';
     fixImages($('cmp-cards'));
   }
   function renderDetail(){
     if(!detailId||!snapshot)return;const r=snapshot.records.find(r=>r.id===detailId);if(!r)return;
     const recordFact=r.record_id?'<div>Registro interno<strong>#'+escape(r.record_id)+'</strong></div>':'';
     const editAction=r.record_id?'<button type="button" data-edit-record="'+escape(r.record_id)+'">Revisar / editar registro</button>':'';
-    $('cmp-detail-content').innerHTML=heading(r,false)+areas(r)+features(r)+breakdown(r)+'<div class="cmp-detail-facts"><div>Código del portal<strong>'+escape(r.code||'Sin informar')+'</strong></div>'+recordFact+'<div>Ubicación<strong>'+escape(presentation.precision(r).label)+'</strong></div><div>Operación<strong>'+escape(r.operation)+'</strong></div><div>Disponibilidad<strong>'+escape(r.state)+'</strong></div><div>Distancia<strong>'+decimals(r.distance)+' m</strong></div><div>Precio<strong>'+(r.converted?'Convertido de soles a 3,44':'USD')+'</strong></div><div>Estado en ACM<strong>'+badge(r)+'</strong></div></div>'+(r.description?'<details><summary>Descripción del anuncio</summary><p class="cmp-description">'+escape(r.description)+'</p></details>':'')+'<p class="cmp-muted">En casas, construcción y mejoras es el remanente después de descontar el suelo estimado. En terrenos, departamentos y oficinas se muestra la referencia por la superficie correspondiente.</p><div class="cmp-card-footer">'+(r.url?'<a href="'+escape(r.url)+'" target="_blank" rel="noopener noreferrer">Abrir publicación ↗</a>':'<span>Sin enlace de publicación</span>')+editAction+'</div>';
+    const lifecycle='<div>Primera vez vista<strong>'+escape(formatDate(r.first_seen))+'</strong></div><div>Última vez vista<strong>'+escape(formatDate(r.last_seen))+'</strong></div><div>Primera ausencia<strong>'+escape(formatDate(r.first_missing))+'</strong></div><div>Retiro confirmado<strong>'+escape(formatDate(r.retired_at))+'</strong></div>';
+    $('cmp-detail-content').innerHTML=heading(r,false)+similarityBlock(r)+areas(r)+features(r)+breakdown(r)+'<div class="cmp-detail-facts"><div>Código del portal<strong>'+escape(r.code||'Sin informar')+'</strong></div>'+recordFact+'<div>Ubicación<strong>'+escape(presentation.precision(r).label)+'</strong></div><div>Operación<strong>'+escape(r.operation)+'</strong></div><div>Disponibilidad<strong>'+publicationBadge(r)+'</strong></div>'+lifecycle+'<div>Distancia<strong>'+decimals(r.distance)+' m</strong></div><div>Precio<strong>'+(r.converted?'Convertido de soles a 3,44':'USD')+'</strong></div><div>Estado en ACM<strong>'+badge(r)+'</strong></div></div>'+(r.description?'<details><summary>Descripción del anuncio</summary><p class="cmp-description">'+escape(r.description)+'</p></details>':'')+'<p class="cmp-muted">En casas, construcción y mejoras, el remanente se calcula después de descontar el suelo estimado. Una publicación retirada permanece visible como referencia y no participa en el cálculo.</p><div class="cmp-card-footer">'+(r.url?'<a href="'+escape(r.url)+'" target="_blank" rel="noopener noreferrer">Abrir publicación ↗</a>':'<span>Sin enlace de publicación</span>')+editAction+'</div>';
     fixImages($('cmp-detail-content'));
   }
   function openDetail(id){detailId=id;renderDetail();if(!$('cmp-detail').open)$('cmp-detail').showModal();}
