@@ -82,6 +82,8 @@
     border-radius: 8px;
     padding: 12px;
     width: 280px;
+    max-height: calc(100% - 20px);
+    overflow-y: auto;
     z-index: 100;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
@@ -957,7 +959,8 @@ window.onGoogleMapsLoaded = function() {
             <!-- Controles del mapa -->
             <div class="map-controls" id="map-controls">
                 <div class="drawing-controls">
-                    <a href="/ingestas/scraping/calidad/" class="btn-draw">Calidad de registros</a>
+                    <a href="?sources=remax,properati&amp;quality=alerts" class="btn-draw" style="background:#75421b;color:#fff;font-weight:700;width:100%;justify-content:center">⚠ Ver alertas / outliers</a>
+                    <a href="/ingestas/scraping/calidad/" class="btn-draw">Lista de registros con alertas ↗</a>
                     <button class="btn-draw" id="draw-polygon" title="Dibujar polígono">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l6-4 6 4 6-4v14l-6 4-6-4-6 4V7z"/></svg>
                         Polígono
@@ -1048,7 +1051,7 @@ window.onGoogleMapsLoaded = function() {
                     <select id="propify-district-filter" aria-label="Filtrar por distrito">
                         <option value="">Todos los distritos</option>
                     </select>
-                    <select id="property-quality-filter" aria-label="Filtrar por calidad de datos">
+                    <select id="property-quality-filter" aria-label="Filtrar por calidad de datos" style="grid-column:1/-1">
                         <option value="">Calidad: todas las propiedades</option>
                         <option value="alerts">Con alertas de calidad</option>
                         <option value="outlier">Posibles valores atípicos</option>
@@ -1778,10 +1781,12 @@ function setupPropifyPropertyLayer() {
     sourceFilters.forEach(function(filter) {
         filter.addEventListener('change', loadPropifyProperties);
     });
-    var linkedSource = new URLSearchParams(location.search).get('source');
-    if (['remax', 'properati'].indexOf(linkedSource) !== -1) {
-        sourceFilters.forEach(function(filter) { filter.checked = filter.value === linkedSource; });
+    var mapQuery = new URLSearchParams(location.search);
+    var linkedSources = (mapQuery.get('sources') || mapQuery.get('source') || '').split(',').filter(function(s) { return ['propify','remax','properati'].indexOf(s) !== -1; });
+    if (linkedSources.length) {
+        sourceFilters.forEach(function(filter) { filter.checked = linkedSources.indexOf(filter.value) !== -1; });
     }
+    if (mapQuery.get('quality') === 'alerts') qualityFilter.value = 'alerts';
     document.getElementById('locate-quality-properties').addEventListener('click', function() {
         var rows = filteredPropifyProperties();
         if (!rows.length) return;
@@ -2376,6 +2381,10 @@ function loadPropifyProperties() {
             );
             propifyPropertiesLoaded = true;
             renderPropifyPropertyMarkers();
+            if (new URLSearchParams(location.search).get('quality') === 'alerts' && !window.qualityAlertsLocated) {
+                window.qualityAlertsLocated = true;
+                document.getElementById('locate-quality-properties').click();
+            }
             var linkedRecord = new URLSearchParams(location.search).get('record');
             var linkedSource = new URLSearchParams(location.search).get('source');
             if (linkedRecord && !window.linkedQualityRecordOpened) {
