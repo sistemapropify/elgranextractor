@@ -29,6 +29,8 @@ function inicializarEventos() {
     if (radioSlider && radioValue) {
         radioSlider.addEventListener('input', () => {
             radioValue.textContent = radioSlider.value;
+            const mapLabel = document.getElementById('radioValueMap');
+            if (mapLabel) mapLabel.textContent = radioSlider.value;
         });
     } else {
         console.warn('ACM: No se encontraron elementos del slider de radio');
@@ -677,6 +679,9 @@ function toggleSeleccionarPropiedad(id) {
 
 // Crear tarjeta de propiedad en panel lateral (mobile offcanvas)
 function crearTarjetaPropiedad(propiedad) {
+    const superficie = (value) => Number(value) > 0
+        ? `${Number(value).toLocaleString('es-PE', {maximumFractionDigits: 2})} m²` : 'Sin dato';
+    const superficies = `Terreno: ${superficie(propiedad.metros_terreno)} · Construida: ${superficie(propiedad.metros_construccion)}`;
     const template = document.getElementById('templatePropiedad');
     const clone = template.content.cloneNode(true);
     
@@ -697,6 +702,7 @@ function crearTarjetaPropiedad(propiedad) {
     // Tipo y estado
     clone.querySelector('.propiedad-tipo').textContent = propiedad.tipo;
     clone.querySelector('.propiedad-estado').textContent = propiedad.estado;
+    clone.querySelector('.propiedad-superficies').textContent = superficies;
     
     // Ubicación
     clone.querySelector('.propiedad-ubicacion').textContent =
@@ -770,6 +776,7 @@ function crearTarjetaPropiedad(propiedad) {
         imgT.src = propiedad.imagen_url || '/static/acm/img/no-image.svg';
         cloneTablet.querySelector('.propiedad-tipo').textContent = propiedad.tipo;
         cloneTablet.querySelector('.propiedad-estado').textContent = propiedad.estado;
+        cloneTablet.querySelector('.propiedad-superficies').textContent = superficies;
         cloneTablet.querySelector('.propiedad-ubicacion').textContent =
             `${propiedad.distrito}, ${propiedad.provincia}`;
         cloneTablet.querySelector('.propiedad-precio').textContent =

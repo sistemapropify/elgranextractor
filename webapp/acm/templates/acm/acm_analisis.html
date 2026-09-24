@@ -915,13 +915,15 @@
         }
     }
 </style>
+<link rel="stylesheet" href="{% static 'acm/css/analysis-compact.css' %}?v=1">
 <!-- Contenedor de toasts para notificaciones -->
 <div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>
 
 <!-- Header estilo Intelligence Collections (solo visible en desktop >=992px) -->
 <div class="d-none d-lg-block acm-page-header">
-    <h1><i class="bi bi-search me-2"></i>{% if acm_test_mode %}ACM — Entorno de pruebas{% else %}Nuevo Análisis Comparativo{% endif %}</h1>
+    <h1><i class="bi bi-search me-2"></i>{% if acm_test_mode %}ACM — Entorno de pruebas{% else %}Análisis comparativo{% endif %}</h1>
     <div class="header-actions">
+        {% if not acm_test_mode %}<a href="{% url 'acm:acm_analisis_pruebas' %}" class="btn btn-outline-secondary btn-sm">Probar suelo + construcción</a>{% endif %}
         {% if acm_test_mode %}<span class="badge bg-warning text-dark me-2">{{ acm_test_count }} registros aislados</span>{% endif %}
         <a href="/acm/" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i> Volver
@@ -941,7 +943,7 @@
                 <div class="card border-0 shadow-sm">
                     <div class="card-header bg-white border-bottom py-2 d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">
-                            <i class="bi bi-sliders me-2"></i>Parametros de Busqueda
+                            <i class="bi bi-sliders me-2"></i>Parámetros
                         </h6>
                         <button type="button" class="btn btn-sm btn-outline-secondary d-lg-none" id="toggleParamsPanel">
                             <i class="bi bi-chevron-down"></i>
@@ -951,7 +953,7 @@
                         <form id="acmForm">
                             {% csrf_token %}
                             <!-- Tipo de propiedad -->
-                            <div class="mb-1">
+                            <div class="mb-1 acm-type-field">
                                 <label for="tipoPropiedad" class="form-label small">Tipo de propiedad</label>
                                 <select class="form-select form-select-sm" id="tipoPropiedad" name="tipo_propiedad" required>
                                     <option value="">Todos los tipos</option>
@@ -991,7 +993,7 @@
                             </div>
 
                             <!-- Radio de busqueda -->
-                            <div class="mb-2">
+                            <div class="mb-2 acm-radius-field">
                                 <label for="radioBusqueda" class="form-label small">
                                     Radio: <span id="radioValue">500</span> m
                                 </label>
@@ -1025,7 +1027,7 @@
                             </span>
                         </h6>
                         <div class="d-flex gap-1 align-items-center">
-                            <span class="badge bg-info" id="radioValue">500</span>
+                            <span class="badge bg-info" id="radioValueMap">500</span>
                             <span class="text-muted small">m</span>
                         </div>
                     </div>
@@ -1037,7 +1039,7 @@
                                 <input type="text" id="acmSearchBox" class="form-control form-control-sm"
                                        placeholder="Buscar direccion en Arequipa...">
                                 <button type="button" id="btnSearchAddress" class="btn btn-primary btn-sm" title="Buscar direccion">
-                                    <i class="bi bi-search"></i>
+                                    Ir
                                 </button>
                             </div>
                             <button type="button" id="btnAnalisisAvanzado" class="btn btn-sm"
@@ -1081,7 +1083,7 @@
                 <div class="card border-0 shadow-sm">
                     <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2">
                         <h6 class="mb-0">
-                            <i class="bi bi-list-check me-2"></i>Comparables Seleccionados
+                            <i class="bi bi-list-check me-2"></i>Comparables seleccionados
                             <span class="badge bg-primary ms-2" id="tabletComparablesCount">0</span>
                         </h6>
                         <button type="button" class="btn btn-sm btn-outline-danger" id="btnEliminarTodosTablet" style="display: none;">
@@ -1098,6 +1100,7 @@
                             </div>
                         </div>
                     </div>
+                    <div class="card-footer p-2"><button type="button" id="btnResumenACMDesktop" class="btn btn-success btn-sm w-100" disabled>Resultado ACM</button></div>
                 </div>
             </div>
 
@@ -1117,14 +1120,6 @@
         </div>
     </div>
 
-    <!-- Boton flotante Resumen ACM para desktop (visible solo en lg+) -->
-    <div class="d-none d-lg-block fixed-bottom p-3" style="z-index: 1050; pointer-events: none;">
-        <div class="d-flex justify-content-end">
-            <button type="button" class="btn btn-success btn shadow-lg" id="btnResumenACMDesktop" disabled style="pointer-events: auto;">
-                <i class="bi bi-bar-chart-line me-1"></i>Resultado ACM
-            </button>
-        </div>
-    </div>
 
 </div>
 
@@ -1191,13 +1186,13 @@
 
 <!-- Template para tarjeta de propiedad -->
 <template id="templatePropiedad">
-    <div class="propiedad-card border-bottom p-3">
-        <div class="row g-2">
-            <div class="col-4">
-                <img src="" class="img-fluid rounded propiedad-imagen" alt="Imagen propiedad"
+    <div class="propiedad-card acm-comparable-card">
+        <div class="acm-comparable-layout">
+            <div class="acm-comparable-photo">
+                <img src="" class="rounded propiedad-imagen" alt="Imagen propiedad" loading="lazy"
                      onerror="this.onerror=null; this.src='/static/acm/img/no-image.svg'">
             </div>
-            <div class="col-8">
+            <div class="acm-comparable-info">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <h6 class="mb-1 propiedad-tipo"></h6>
@@ -1205,15 +1200,16 @@
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <span class="badge bg-primary propiedad-numero"></span>
-                        <button type="button" class="btn btn-sm btn-outline-primary btn-detalle">
-                            <i class="bi bi-eye"></i>
+                        <button type="button" class="btn btn-sm btn-outline-primary btn-detalle" title="Ver detalles" aria-label="Ver detalles">
+                            Ver
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger btn-quitar">
-                            <i class="bi bi-x"></i>
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-quitar" title="Quitar comparable" aria-label="Quitar comparable">
+                            ×
                         </button>
                     </div>
                 </div>
                 <p class="mb-1 small propiedad-ubicacion text-muted"></p>
+                <p class="mb-1 small propiedad-superficies text-muted"></p>
                 <p class="mb-1 propiedad-precio"></p>
                 <p class="mb-1 propiedad-precio-final small text-muted"></p>
                 <div class="mt-2">

@@ -1,12 +1,15 @@
 from django.urls import path
-from . import views
+from . import views, components_views
 
 app_name = 'acm'
 
 urlpatterns = [
     path('', views.acm_dashboard, name='acm_dashboard'),
     path('analisis/', views.acm_view, name='acm_analisis'),
-    path('analisis-pruebas/', views.acm_pruebas_view, name='acm_analisis_pruebas'),
+    path('analisis-pruebas/', components_views.page, name='acm_analisis_pruebas'),
+    path('analisis-pruebas-clasico/', views.acm_pruebas_view, name='acm_analisis_pruebas_clasico'),
+    path('pruebas/componentes/buscar/', components_views.search, name='componentes_buscar'),
+    path('pruebas/componentes/calcular/', components_views.recalculate, name='componentes_calcular'),
     path('buscar-comparables/', views.buscar_comparables, name='buscar_comparables'),
     path('pruebas/buscar-comparables/', views.buscar_comparables_pruebas, name='buscar_comparables_pruebas'),
     path('pruebas/generar-enlace/', views.endpoint_prueba_no_persistente, name='generar_enlace_pruebas'),

@@ -1,0 +1,54 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+{% block title %}ACM de pruebas · Suelo y construcción{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=1">
+{% endblock %}
+{% block content %}
+<main class="components-acm">
+  <header class="cmp-header"><div><span class="cmp-eyebrow">ACM · ENTORNO DE PRUEBAS</span><h1>Suelo + construcción y mejoras</h1><p>Comparables completos para calcular. Registros incompletos para orientar al agente.</p></div>
+    <a href="{% url 'acm:acm_analisis' %}">Volver al ACM original ↗</a></header>
+  <div class="cmp-layout">
+    <section class="cmp-panel">
+      <form id="cmp-form">{% csrf_token %}
+        <h2>Casa que quieres valorizar</h2>
+        <label>Buscar dirección<input id="cmp-address" placeholder="Busca una dirección o haz clic en el mapa" autocomplete="off"></label>
+        <div class="cmp-fields"><label>Terreno (m²)<input name="land" type="number" min="0.01" max="1000000" step="any" required placeholder="150"></label>
+        <label>Construcción (m²)<input name="built" type="number" min="0.01" max="1000000" step="any" required placeholder="200"></label></div>
+        <div class="cmp-fields"><label>Latitud<input name="lat" type="number" step="any" min="-90" max="90" value="-16.3989" required></label>
+        <label>Longitud<input name="lng" type="number" step="any" min="-180" max="180" value="-71.535" required></label></div>
+        <label>Área de influencia de casas: <strong id="cmp-radius-label">500 m</strong>
+          <input name="radius" type="range" min="100" max="2000" step="100" value="500"></label>
+        <label>Ampliación máxima para terrenos<select name="max_radius"><option value="2000">Hasta 2.000 m</option><option value="3000">Hasta 3.000 m</option><option value="5000">Hasta 5.000 m</option></select></label>
+        <p class="cmp-muted">Si faltan terrenos aptos, amplía automáticamente de 500 en 500 m. Las casas permanecen en tu área original.</p>
+        <fieldset><legend>Fuentes</legend><div class="cmp-sources">{% for source in sources %}<label><input type="checkbox" name="source" value="{{ source }}" {% if source == 'propify' or source == 'remax' or source == 'properati' %}checked{% endif %}>{{ source|title }}</label>{% endfor %}</div></fieldset>
+        <button class="cmp-primary" id="cmp-search" type="submit">Buscar y calcular</button>
+      </form>
+      <div id="cmp-map" aria-label="Mapa de influencia"></div>
+      <p class="cmp-muted">Azul: casas dentro del área original. Ámbar: búsqueda de terrenos. Las ubicaciones aproximadas se muestran solo como referencia.</p>
+    </section>
+    <section class="cmp-results">
+      <p id="cmp-status" role="status" aria-live="polite">Selecciona la ubicación y completa las dos superficies para empezar.</p>
+      <div id="cmp-warnings" role="alert"></div>
+      <section class="cmp-panel cmp-summary" aria-label="Resultado ACM">
+        <div id="cmp-new"><h2>Resultado nuevo</h2><p class="cmp-muted">Pendiente de búsqueda</p></div>
+        <aside id="cmp-old"><span>Cálculo anterior</span><strong>—</strong><small>Mismas casas completas seleccionadas. Precio/m² construido ponderado por distancia.</small></aside>
+      </section>
+      <p class="cmp-note">Estimación experimental de <strong>precios de oferta</strong>, no de ventas cerradas. El remanente incluye construcción y mejoras; no representa un coste de obra verificado. Si falta precio USD, conversión referencial S/3,44 por dólar.</p>
+      <div class="cmp-toolbar"><strong id="cmp-counts">Sin comparables</strong><button id="cmp-export" type="button" disabled>Descargar análisis</button></div>
+      <nav class="cmp-tabs" aria-label="Grupos de comparables"><button data-tab="Casa" aria-pressed="true">Casas para cálculo <span id="cmp-house-count"></span></button><button data-tab="Terreno" aria-pressed="false">Terrenos <span id="cmp-land-count"></span></button><button data-tab="reference" aria-pressed="false">Solo referencia <span id="cmp-ref-count"></span></button></nav>
+      <div id="cmp-cards"><p class="cmp-muted">Aquí aparecerán Propify y los portales seleccionados.</p></div>
+      <details class="cmp-panel"><summary>Cómo se obtiene la estimación</summary>
+        <ol><li>Suelo: mediana del precio/m² de al menos 5 terrenos aptos. Solo ubicaciones exactas y superficies entre 0,5 y 2 veces el terreno objetivo.</li><li>Para cada casa completa: precio anunciado menos su terreno multiplicado por esa referencia de suelo.</li><li>Construcción y mejoras: mediana del remanente/m² construido de al menos 3 casas aptas. Ambas superficies deben estar entre 0,5 y 2 veces las de la casa objetivo.</li><li>Resultado: terreno objetivo × referencia del suelo + construcción objetivo × aporte unitario de mejoras.</li></ol>
+        <p>Los mínimos son reglas del piloto, no garantías de precisión. Una distribución muy dispersa de terrenos o un remanente no positivo detiene el cálculo para revisión. Los posibles duplicados quedan visibles y fuera del cálculo.</p>
+        <p>El recuadro anterior reproduce el promedio de precio/m² construido ponderado por 1/(distancia+1), aplicado a la construcción objetivo. No compara búsquedas distintas ni introduce descuentos comerciales.</p>
+      </details>
+    </section>
+  </div>
+</main>
+{% endblock %}
+{% block extra_scripts %}
+{{ block.super }}
+<script src="{% static 'acm/js/components.js' %}?v=1"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
+{% endblock %}
