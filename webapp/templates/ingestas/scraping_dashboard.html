@@ -1072,6 +1072,7 @@ function loadTable() {
     tableRequest = new AbortController();
     fetch('/ingestas/scraping/propiedades/?' + params.toString(), {
         signal: tableRequest.signal,
+        cache: 'no-store',
     })
         .then(r => {
             if (!r.ok) throw new Error('HTTP ' + r.status);
