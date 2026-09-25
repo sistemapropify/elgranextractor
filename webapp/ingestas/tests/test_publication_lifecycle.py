@@ -5,7 +5,12 @@ from ingestas.lifecycle import (
     finalize_portal_run,
     start_or_resume_portal_run,
 )
-from ingestas.models import EjecucionPortal, PropiedadesCompetencia, ScrapingJob
+from ingestas.models import (
+    EjecucionPortal,
+    PropiedadesCompetencia,
+    ScrapingCandidate,
+    ScrapingJob,
+)
 from intelligence.skills.scrapi.db_utils import guardar_propiedades
 
 
@@ -142,6 +147,33 @@ class PublicationLifecycleTests(TestCase):
         self.assertEqual(failed.estado, 'error')
         self.assertFalse(failed.es_confiable)
         self.assertEqual(missing.estado_publicacion, 'activa')
+
+    def test_unverified_candidate_is_excluded_not_marked_absent(self):
+        baseline = self.make_run()
+        self.save_ids(baseline, *[f'p{i}' for i in range(1, 11)])
+        finalize_portal_run(baseline)
+
+        second = self.make_run()
+        self.save_ids(second, *[f'p{i}' for i in range(1, 8)])
+        # 'p8' no se pudo verificar en esta corrida: quedó con error.
+        ScrapingCandidate.objects.create(
+            run=second, source_id='p8', raw={'ID': 'p8'},
+            status='error', error='detail.failed')
+
+        result = finalize_portal_run(second)
+
+        verified_missing = PropiedadesCompetencia.objects.get(id_origen='p9')
+        unverified = PropiedadesCompetencia.objects.get(id_origen='p8')
+
+        self.assertTrue(result['reliable'])
+        self.assertEqual(result['unverified'], 1)
+        self.assertEqual(result['possible'], 2)
+        self.assertEqual(verified_missing.ausencias_consecutivas, 1)
+        self.assertIsNotNone(verified_missing.fecha_primera_ausencia)
+        # La ficha no verificada no se marca ausente ni bloquea al resto.
+        self.assertEqual(unverified.estado_publicacion, 'activa')
+        self.assertEqual(unverified.ausencias_consecutivas, 0)
+        self.assertIsNone(unverified.fecha_primera_ausencia)
 
     def test_resume_reuses_stable_run_token_for_same_job(self):
         job = self.make_job()

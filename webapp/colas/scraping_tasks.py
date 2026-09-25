@@ -638,26 +638,20 @@ def _run_scraping(job_id: int, stop_event=None):
             if _resultado_portal_valido(resultado):
                 save_errors = int(data.get('errores', 0) or 0)
                 if save_errors:
-                    lifecycle_result = {
-                        'reliable': False,
-                        'baseline': False,
-                        'seen': 0,
-                        'possible': 0,
-                        'retired': 0,
-                        'reason': (
-                            f'La ejecución reportó {save_errors} error(es); '
-                            'no se evaluaron ausencias.'
-                        ),
-                    }
-                    fail_portal_run(
-                        portal_run,
-                        lifecycle_result['reason'],
-                        status='incomplete',
-                        execution_token=execution_token,
+                    # Las fichas con error quedan fuera del comparativo (ver
+                    # finalize_portal_run); no deben impedir que el resto de
+                    # publicaciones se evalúe como ausencia.
+                    _crear_log(
+                        job, 'warning',
+                        f'{portal.upper()}: {save_errors} ficha(s) con error; se '
+                        'excluyen del comparativo y se evalúan las demás.',
+                        portal=portal,
                     )
-                else:
-                    record_progress(portal_run.id, {'discovery': data['discovery']}, execution_token)
-                    lifecycle_result = finalize_portal_run(portal_run, execution_token=execution_token)
+                discovery_data = data.get('discovery')
+                if discovery_data is not None:
+                    record_progress(portal_run.id, {'discovery': discovery_data},
+                                    execution_token)
+                lifecycle_result = finalize_portal_run(portal_run, execution_token=execution_token)
                 successful_portals += 1
                 _actualizar_contadores(job, data, base_counters)
                 _registrar_resultado_portal(
@@ -682,12 +676,14 @@ def _run_scraping(job_id: int, stop_event=None):
                         portal=portal,
                     )
                 elif lifecycle_result['reliable']:
+                    unverified = int(lifecycle_result.get('unverified', 0) or 0)
                     _crear_log(
                         job,
                         'info',
                         f'📊 {portal.upper()}: ciclo de vida actualizado · '
                         f'{lifecycle_result["possible"]} posibles retiradas · '
-                        f'{lifecycle_result["retired"]} retiros confirmados.',
+                        f'{lifecycle_result["retired"]} retiros confirmados'
+                        + (f' · {unverified} sin verificar (excluidas).' if unverified else '.'),
                         portal=portal,
                     )
                 else:
