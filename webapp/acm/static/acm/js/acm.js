@@ -323,8 +323,8 @@ async function buscarComparables() {
             // Ajustar vista del mapa para mostrar todos los marcadores + círculo
             ajustarVistaMapa();
 
-            // Mostrar mensaje de éxito
-            mostrarToast('success', `${data.total} propiedades encontradas en el radio de ${radio} metros.`);
+            // El total ya se ve en el encabezado del mapa; sin toast para no
+            // tapar el encabezado de la página.
             
             // Mostrar botón "Análisis Avanzado" con su evento
             const btnAvanzado = document.getElementById('btnAnalisisAvanzado');
