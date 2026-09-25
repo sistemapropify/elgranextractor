@@ -270,6 +270,27 @@ def acm_view(request):
 
 
 @csrf_exempt
+def _propifai_operation_ids(*names):
+    """IDs de ``operation_type`` en Propifai que coinciden con esos nombres.
+
+    En la base Propifai: 1=Compra, 2=Venta, 3=Alquiler, 4=Anticresis. El ACM
+    trabaja solo con ventas, así que se usa para excluir los alquileres.
+    """
+    wanted = {str(name).strip().casefold() for name in names}
+    try:
+        from django.db import connections
+        with connections['propifai'].cursor() as cursor:
+            cursor.execute('SELECT id, name FROM operation_type')
+            return [row[0] for row in cursor.fetchall()
+                    if (row[1] or '').strip().casefold() in wanted]
+    except Exception:
+        logger.warning(
+            'ACM: no se pudo leer operation_type de Propifai; no se filtran alquileres.',
+            exc_info=True,
+        )
+        return []
+
+
 def buscar_comparables(request):
     """
     Endpoint AJAX que recibe parámetros de búsqueda y retorna propiedades comparables.
@@ -352,7 +373,17 @@ def buscar_comparables(request):
             # Obtener TODAS las propiedades de Propifai primero
             # Obtener TODAS las propiedades de Propifai (el filtro por tipo se hace en Python
             # para mantener consistencia con la lógica de determinación de tipo por título)
+            # El ACM es de venta: se excluyen alquileres, anticresis y las
+            # propiedades sin operación declarada.
+            venta_ids = _propifai_operation_ids('venta')
             propiedades_propifai = PropifaiProperty.objects.using('propifai').all()
+            if venta_ids:
+                propiedades_propifai = propiedades_propifai.filter(
+                    operation_type_id__in=venta_ids)
+            else:
+                logger.warning(
+                    'ACM: sin IDs de operación de venta; no se pudo excluir alquileres.'
+                )
             
             # Convertir a lista
             todas_propifai = list(propiedades_propifai)
