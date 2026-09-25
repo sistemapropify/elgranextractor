@@ -150,7 +150,9 @@
     if(details.length)html+=calculationTable(['Casa','Cálculo del remanente','Sim. terreno','Sim. construcción','Aporte por m²','Valor sugerido para el objetivo'],details.map(({record,detail})=>[escape(record.source.toUpperCase()+' · '+record.code),money(record.price)+' − ('+decimals(record.land)+' × '+money(r.land_unit)+') = '+money(detail.remainder),decimals(detail.land_similarity)+'%',decimals(detail.built_similarity)+'%',money(detail.built_unit)+'/m²',detail.usable?money(detail.target_estimate):'No participa · solo referencia']));
     if(usable.length){
       const selected=usable.find(item=>item.detail.id===r.built_reference_id);
-      html+='<p>'+(r.built_unit_method==='closest_comparable'&&selected
+      html+='<p>'+(r.built_unit_method==='closest_built_similarity'&&selected
+        ?'El aporte de construcción y mejoras se toma del comparable con la superficie construida más parecida al objetivo: <strong>'+escape(selected.record.source.toUpperCase()+' · '+selected.record.code)+'</strong>, con '+money(selected.detail.built_unit)+'/m² ('+decimals(selected.detail.built_similarity)+'% de similitud de construcción). Promediar metrajes muy distintos daba valores más bajos; las demás casas quedan como referencia.'
+        :r.built_unit_method==='closest_comparable'&&selected
         ?'Solo hay dos casas y sus aportes están muy dispersos. Se usa el comparable más parecido a las superficies y la ubicación: <strong>'+escape(selected.record.source.toUpperCase()+' · '+selected.record.code)+'</strong>, con '+money(selected.detail.built_unit)+'/m². La otra casa permanece como referencia y no se promedian los extremos.'
         :r.built_unit_method==='weighted_median'
         ?'Los aportes están muy dispersos. Se usa una mediana ponderada por similitud: las casas con terreno, construcción y ubicación más parecidos tienen mayor peso.'

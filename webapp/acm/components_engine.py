@@ -198,7 +198,7 @@ def calculate(records, p, excluded=()):
     invalid=len(houses)-len(residuals)
     result['usable_house_count']=len(residuals)
     if invalid:
-        result['messages'].append(f'{invalid} casas tienen remanente no positivo: quedan visibles para revisión y no intervienen en la mediana de construcción y mejoras.')
+        result['messages'].append(f'{invalid} casas tienen remanente no positivo: quedan visibles para revisión y no intervienen en la estimación de construcción y mejoras.')
     if len(residuals)<MIN_HOUSES:
         result['messages'].append('Se calculó el suelo y el desglose disponible, pero no hay casas seleccionadas con remanente positivo para estimar construcción y mejoras.')
         return result
@@ -209,48 +209,46 @@ def calculate(records, p, excluded=()):
         weight_rows.append((row,built_value,weight))
     weight_total=sum(item[2] for item in weight_rows)
     weight_rows.sort(key=lambda item:item[0]['id'])
-    recommended_row=min(weight_rows,key=lambda item:_comparability_gap(item[0],p))[0]
-    for row,built_value,weight in weight_rows:
-        detail=next(item for item in result['breakdown'] if item['id']==row['id'])
-        detail['similarity_weight']=100*weight/weight_total if weight_total else 0
-        detail['recommended']=row['id']==recommended_row['id']
     if len(residuals)<3:
         result['messages'].append(f'Muestra reducida: aporte de construcción estimado con {len(residuals)} casa(s). Resultado orientativo.')
     residuals.sort()
-    built_unit=median(residuals)
-    built_unit_method='median'
-    built_reference_id=None
-    result.update(built_unit_min=residuals[0], built_unit_max=residuals[-1],
-                  built_unit_dispersion=(residuals[-1]-residuals[0])/built_unit)
-    dispersion_ratio=residuals[-1]/residuals[0] if residuals[0] > 0 else float('inf')
+    built_unit_min=residuals[0]
+    built_unit_max=residuals[-1]
+    # El aporte unitario se toma del comparable con la superficie construida más
+    # parecida al objetivo. Promediar metrajes muy distintos (mediana) daba
+    # valores bajos frente a comparables de construcción similar.
+    chosen_row,built_unit,chosen_similarity=max(
+        ((row,built_value,_similarity_metrics(row,p)['built_similarity'])
+         for row,built_value in usable_rows),
+        key=lambda item:(item[2],-_comparability_gap(item[0],p)),
+    )
+    built_unit_method='closest_built_similarity'
+    built_reference_id=chosen_row['id']
+    for row,built_value,weight in weight_rows:
+        detail=next(item for item in result['breakdown'] if item['id']==row['id'])
+        detail['similarity_weight']=100*weight/weight_total if weight_total else 0
+        detail['recommended']=row['id']==built_reference_id
+    result['messages'].append(
+        f'El aporte de construcción y mejoras se toma del comparable con la '
+        f'superficie construida más parecida al objetivo '
+        f'({_unit_message(built_unit)}; similitud de construcción '
+        f'{chosen_similarity:.1f}%). Las demás casas quedan como referencia.'
+    )
+    result.update(built_unit_min=built_unit_min, built_unit_max=built_unit_max,
+                  built_unit_dispersion=(built_unit_max-built_unit_min)/(built_unit or 1))
+    dispersion_ratio=built_unit_max/built_unit_min if built_unit_min > 0 else float('inf')
     if dispersion_ratio > 2.5:
-        if len(usable_rows)==2:
-            chosen_row,built_unit=min(usable_rows,key=lambda item:_comparability_gap(item[0],p))
-            built_unit_method='closest_comparable'
-            built_reference_id=chosen_row['id']
-            selected_weight=next(item[2] for item in weight_rows if item[0]['id']==chosen_row['id'])/weight_total*100 if weight_total else 0
-            result['messages'].append(
-                f'Los dos aportes de construcción están muy dispersos '
-                f'({_unit_message(residuals[0])} a {_unit_message(residuals[-1])}). '
-                f'Como solo hay dos casas, se usa el comparable más parecido '
-                f'({_unit_message(built_unit)}; peso de similitud {selected_weight:.0f}%) y el otro queda como referencia; no se promedian extremos.'
-            )
-        else:
-            built_unit,built_reference_row=_weighted_median(weight_rows)
-            built_unit_method='weighted_median'
-            built_reference_id=built_reference_row['id']
-            result['messages'].append(
-                f'El aporte observado de construcción y mejoras está muy disperso '
-                f'({_unit_message(residuals[0])} a {_unit_message(residuals[-1])}). '
-                f'Se usa una mediana ponderada por similitud ({_unit_message(built_unit)}); '
-                f'las superficies más parecidas tienen mayor peso y el resultado requiere revisión.'
-            )
+        result['messages'].append(
+            f'Los aportes observados están muy dispersos '
+            f'({_unit_message(built_unit_min)} a {_unit_message(built_unit_max)}); '
+            f'revisa los comparables seleccionados.'
+        )
     land_value=p['land']*unit
     total=land_value+p['built']*built_unit
     # Spread of adjusted comparables, not a calibrated confidence interval.
     estimates=sorted(land_value+p['built']*r for r in residuals)
     result.update(status='ok',built_unit_method=built_unit_method,built_reference_id=built_reference_id,
-        recommended_ids=[recommended_row['id']],
+        recommended_ids=[built_reference_id],
         new={'total':total,'land_value':land_value,'built_value':p['built']*built_unit,
         'built_unit':built_unit, 'range_low':estimates[int((len(estimates)-1)*.25)],
         'range_high':estimates[math.ceil((len(estimates)-1)*.75)],
@@ -278,18 +276,6 @@ def _similarity_metrics(row,p):
     distance=max(0,100*(1-min((row.get('distance') or 0)/radius,1)))
     return {'land_similarity':round(land,1),'built_similarity':round(built,1),
             'distance_similarity':round(distance,1),'overall_similarity':round(land*.45+built*.45+distance*.10,1)}
-
-
-def _weighted_median(weight_rows):
-    """Devuelve el valor central acumulando pesos, sin promediar extremos."""
-    ordered=sorted(weight_rows,key=lambda item:item[1])
-    total=sum(item[2] for item in ordered)
-    accumulated=0
-    for row,built_value,weight in ordered:
-        accumulated+=weight
-        if accumulated>=total/2:
-            return built_value,row
-    return ordered[-1][1],ordered[-1][0]
 
 
 def calculate_same_type(records,p,excluded=()):

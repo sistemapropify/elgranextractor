@@ -173,7 +173,17 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
             table(('Portal','Código','Precio','Terreno','Valor suelo','Remanente','Construido','Sim. terreno','Sim. construcción','Remanente por m²','Valor sugerido','Usada'), house_rows,
                   (.5,.7,.75,.6,.75,.75,.65,.65,.75,.9,.8,.4))
             if built_units:
-                if result.get('built_unit_method') == 'closest_comparable':
+                if result.get('built_unit_method') == 'closest_built_similarity':
+                    chosen_id = result.get('built_reference_id')
+                    chosen = by_id.get(chosen_id, {})
+                    chosen_detail = breakdown.get(chosen_id, {})
+                    doc.add_paragraph(
+                        f'El aporte de construcción y mejoras se toma del comparable con la superficie construida '
+                        f'más parecida al objetivo ({chosen.get("source", "").upper()} · {chosen.get("code", chosen_id)}), '
+                        f'en lugar de promediar metrajes muy distintos. Las demás casas quedan como referencia.'
+                    )
+                    paragraph = doc.add_paragraph(); paragraph.add_run('Aporte unitario adoptado para construcción y mejoras: ').bold = True; paragraph.add_run(_unit(chosen_detail.get('built_unit')))
+                elif result.get('built_unit_method') == 'closest_comparable':
                     chosen_id = result.get('built_reference_id')
                     chosen = by_id.get(chosen_id, {})
                     chosen_detail = breakdown.get(chosen_id, {})

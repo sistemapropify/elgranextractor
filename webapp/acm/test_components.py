@@ -30,7 +30,7 @@ class ComponentsEngineTests(SimpleTestCase):
         result=calculate(candidates(raw,params()),params())
         self.assertEqual(result['land_count'],3)
         self.assertEqual(result['status'],'ok')
-        self.assertEqual(result['new']['total'],340000)
+        self.assertEqual(result['new']['total'],350000)
         self.assertEqual(len(result['breakdown']),3)
         self.assertTrue(any('Muestra reducida' in m for m in result['messages']))
 
@@ -38,7 +38,7 @@ class ComponentsEngineTests(SimpleTestCase):
         raw=sample()+[record('bad',price=100000)]
         result=calculate(candidates(raw,params()),params())
         self.assertEqual(result['status'],'ok')
-        self.assertEqual(result['new']['total'],340000)
+        self.assertEqual(result['new']['total'],350000)
         self.assertEqual(result['usable_house_count'],3)
         self.assertFalse(next(r for r in result['breakdown'] if r['id']=='bad')['usable'])
     def test_land_target_needs_no_construction_and_stays_in_selected_radius(self):
@@ -79,32 +79,40 @@ class ComponentsEngineTests(SimpleTestCase):
         self.assertEqual(by_id['a']['target_estimate'],350000)
         self.assertEqual(by_id['b']['remainder'],20000)
         self.assertAlmostEqual(by_id['b']['built_unit'],133.3333333)
-        self.assertEqual(result['new']['total'],340000)
+        # El aporte adoptado es el del comparable con la construcción más
+        # parecida al objetivo (la casa "a", idéntica en superficies), no la mediana.
+        self.assertEqual(result['built_unit_method'],'closest_built_similarity')
+        self.assertEqual(result['built_reference_id'],'a')
+        self.assertEqual(result['new']['total'],350000)
 
-    def test_construction_uses_unit_median_and_warns_on_wide_spread(self):
+    def test_construction_uses_the_most_similar_built_area(self):
         raw=[record('a',price=290000,land=120,built=374),
              record('b',price=655000,land=288,built=360),
              record('c',price=450000,land=272,built=430),
              record('land','Terreno',price=135300,land=100)]
         p={**params(),'built':250}
         result=calculate(candidates(raw,p),p)
-        units=sorted(row['built_unit'] for row in result['breakdown'])
-        self.assertAlmostEqual(result['new']['built_unit'], median(units))
-        self.assertEqual(result['built_unit_min'], units[0])
-        self.assertEqual(result['built_unit_max'], units[-1])
-        self.assertTrue(any('muy disperso' in message for message in result['messages']))
+        by_id={row['id']:row for row in result['breakdown']}
+        usable=[row for row in result['breakdown'] if row['usable']]
+        expected=max(usable,key=lambda row:row['built_similarity'])
+        # No se promedian metrajes distintos: se adopta el aporte del comparable
+        # con la construcción más parecida al objetivo.
+        self.assertEqual(result['built_unit_method'],'closest_built_similarity')
+        self.assertEqual(result['built_reference_id'],expected['id'])
+        self.assertEqual(result['new']['built_unit'],by_id[expected['id']]['built_unit'])
+        self.assertEqual(result['built_unit_min'],min(row['built_unit'] for row in usable))
+        self.assertEqual(result['built_unit_max'],max(row['built_unit'] for row in usable))
 
-    def test_two_widely_different_houses_use_closest_comparable(self):
+    def test_two_houses_use_the_most_similar_built_area(self):
         raw=[record('near',price=330000,land=281,built=330),
              record('far',price=790000,land=394,built=394),
              record('land','Terreno',price=300000,land=268.9)]
         p={**params(),'land':200,'built':230}
         result=calculate(candidates(raw,p),p)
         by_id={row['id']:row for row in result['breakdown']}
-        self.assertEqual(result['built_unit_method'],'closest_comparable')
+        self.assertEqual(result['built_unit_method'],'closest_built_similarity')
         self.assertEqual(result['built_reference_id'],'near')
         self.assertEqual(result['new']['built_unit'],by_id['near']['built_unit'])
-        self.assertTrue(any('no se promedian extremos' in message for message in result['messages']))
 
     def test_changing_land_selection_updates_every_house_breakdown(self):
         raw=sample()+[record('extra','Terreno',price=180000)]
