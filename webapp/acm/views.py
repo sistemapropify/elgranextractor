@@ -13,7 +13,7 @@ from django.db.models import Q, F
 from django.db.utils import DataError, IntegrityError, OperationalError, ProgrammingError
 from django.utils import timezone
 from django.conf import settings
-from ingestas.models import PropiedadRaw
+from ingestas.models import PropiedadRaw, PropiedadesCompetencia
 from intelligence.models import User
 from .utils import haversine, calcular_precio_m2
 from .models import ACMLink, ACMTestProperty
@@ -167,18 +167,24 @@ def acm_dashboard(request):
     Vista del dashboard principal del módulo ACM.
     Renderiza el template con el historial de análisis y estadísticas.
     """
-    # Obtener tipos de propiedad únicos para estadísticas
-    tipos_locales = PropiedadRaw.objects.exclude(
-        tipo_propiedad__isnull=True
+    # Tipos y zonas del mismo universo que analiza el ACM: scrapeadas y de Venta.
+    tipos_locales = PropiedadesCompetencia.objects.filter(
+        tipo_operacion='Venta'
     ).exclude(
-        tipo_propiedad=''
-    ).values_list('tipo_propiedad', flat=True).distinct()
+        tipo_inmueble__isnull=True
+    ).exclude(
+        tipo_inmueble=''
+    ).values_list('tipo_inmueble', flat=True).distinct()
     
     # Contar propiedades totales como "comparables disponibles"
-    total_comparables = PropiedadRaw.objects.count()
+    total_comparables = PropiedadesCompetencia.objects.filter(
+        tipo_operacion='Venta'
+    ).count()
     
     # Obtener zonas/distritos únicos
-    zonas = PropiedadRaw.objects.exclude(
+    zonas = PropiedadesCompetencia.objects.filter(
+        tipo_operacion='Venta'
+    ).exclude(
         distrito__isnull=True
     ).exclude(
         distrito=''
@@ -216,12 +222,14 @@ def acm_view(request):
     Vista principal del módulo ACM.
     Renderiza el template con el formulario y el mapa.
     """
-    # Obtener tipos de propiedad únicos para el select (de PropiedadRaw)
-    tipos_locales = PropiedadRaw.objects.exclude(
-        tipo_propiedad__isnull=True
+    # Tipos del select: los mismos comparables de Venta que analiza el ACM.
+    tipos_locales = PropiedadesCompetencia.objects.filter(
+        tipo_operacion='Venta'
     ).exclude(
-        tipo_propiedad=''
-    ).values_list('tipo_propiedad', flat=True).distinct()
+        tipo_inmueble__isnull=True
+    ).exclude(
+        tipo_inmueble=''
+    ).values_list('tipo_inmueble', flat=True).distinct()
     
     # Obtener tipos de propiedad de Propifai (si está disponible)
     tipos_propifai = set()
