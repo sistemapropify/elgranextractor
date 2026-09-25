@@ -149,6 +149,19 @@ class ScrapingJobReportingTests(SimpleTestCase):
 
         self.assertTrue(_resultado_portal_valido(result))
 
+    def test_completed_run_with_errors_or_pending_is_still_valid(self):
+        result = SimpleNamespace(
+            success=True,
+            data={
+                'total': 1370,
+                'errores': 3,
+                'pending': 36,
+                'discovery': {'complete': True},
+            },
+        )
+
+        self.assertTrue(_resultado_portal_valido(result))
+
     def test_resumed_portal_with_exhausted_checkpoint_is_valid(self):
         result = SimpleNamespace(
             success=True,

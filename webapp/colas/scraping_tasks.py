@@ -108,13 +108,16 @@ def _mensaje_error_camoufox_no_reintentable(resultado) -> str:
 
 
 def _resultado_portal_valido(resultado) -> bool:
-    """Solo acepta como éxito una extracción que detectó propiedades."""
+    """Acepta la corrida que terminó el recorrido y guardó algo.
+
+    Las fichas con error o pendientes ya no invalidan la corrida: se excluyen
+    del comparativo de ausencias (ver ``finalize_portal_run``), de modo que no
+    bloqueen la detección de retiros del resto de publicaciones.
+    """
     data = resultado.data or {}
     return bool(
         resultado.success
         and data.get('discovery', {}).get('complete') is True
-        and not int(data.get('errores', 0) or 0)
-        and not int(data.get('pending', 0) or 0)
         and (
             int(data.get('total', 0) or 0) > 0
             or bool(data.get('resume_complete'))
