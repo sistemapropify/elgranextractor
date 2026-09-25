@@ -291,6 +291,56 @@ def _propifai_operation_ids(*names):
         return []
 
 
+PEN_TO_USD = Decimal('3.44')
+
+
+def _soles_a_usd(valor):
+    """Convierte soles a dólares con el mismo tipo de cambio del ACM de componentes."""
+    if valor is None:
+        return None
+    try:
+        return (Decimal(str(valor)) / PEN_TO_USD).quantize(Decimal('0.01'))
+    except (InvalidOperation, TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+class _ComparableLocal:
+    """Adapta una ``PropiedadesCompetencia`` a la interfaz del ACM clásico.
+
+    El ACM clásico estaba escrito contra ``PropiedadRaw`` (Excel importado, que
+    no tiene operación). Para usar la tabla del scraper —que sí distingue
+    Venta/Alquiler y está al día— se exponen aquí los mismos atributos.
+    """
+
+    def __init__(self, row):
+        self._row = row
+        self.id = row.id
+        self.lat = float(row.latitud) if row.latitud is not None else None
+        self.lng = float(row.longitud) if row.longitud is not None else None
+        self.tipo_propiedad = row.tipo_inmueble
+        self.precio_usd = row.precio_usd or _soles_a_usd(row.precio_soles)
+        self.precio_final_venta = None
+        self.area_construida = row.area_construida
+        self.area_terreno = row.area_terreno
+        self.numero_habitaciones = row.dormitorios
+        self.numero_banos = row.banos
+        self.estado_propiedad = row.estado_publicacion
+        self.distrito = row.distrito
+        self.provincia = row.provincia
+        self.departamento = row.departamento
+        self.portal = row.fuente
+        self.id_propiedad = row.id_origen
+        self.descripcion = row.descripcion
+        self.url_propiedad = row.url
+
+    def get_estado_propiedad_display(self):
+        return self._row.get_estado_publicacion_display()
+
+    def primera_imagen(self):
+        from cuadrantizacion.views import _map_image_url
+        return _map_image_url(self._row.imagen_url)
+
+
 def buscar_comparables(request):
     """
     Endpoint AJAX que recibe parámetros de búsqueda y retorna propiedades comparables.
@@ -315,22 +365,36 @@ def buscar_comparables(request):
             return JsonResponse({'status': 'error', 'message': 'Coordenadas inválidas'}, status=400)
         
         # Obtener propiedades locales (PropiedadRaw)
-        local_model = ACMTestProperty if getattr(request, '_acm_test_mode', False) else PropiedadRaw
-        propiedades_locales = local_model.objects.exclude(
-            coordenadas__isnull=True
-        ).exclude(
-            coordenadas=''
-        )
+        es_pruebas = bool(getattr(request, '_acm_test_mode', False))
+        if es_pruebas:
+            propiedades_locales = ACMTestProperty.objects.exclude(
+                coordenadas__isnull=True
+            ).exclude(
+                coordenadas=''
+            )
+        else:
+            # Misma fuente que el ACM de componentes: propiedades scrapeadas y
+            # solo de Venta, porque el ACM no analiza alquileres.
+            from ingestas.models import PropiedadesCompetencia
+            propiedades_locales = PropiedadesCompetencia.objects.filter(
+                tipo_operacion='Venta',
+                latitud__isnull=False,
+                longitud__isnull=False,
+            )
         
         # Filtrar por tipo si se especifica
         if tipo_propiedad:
             # Filtro exacto (case-insensitive) sobre tipo_propiedad
+            campo_tipo = 'tipo_propiedad' if es_pruebas else 'tipo_inmueble'
             propiedades_locales = propiedades_locales.filter(
-                Q(tipo_propiedad__iexact=tipo_propiedad)
+                Q(**{f'{campo_tipo}__iexact': tipo_propiedad})
             )
         
         # Convertir a lista para procesar
-        propiedades_list = list(propiedades_locales)
+        propiedades_list = [
+            prop if es_pruebas else _ComparableLocal(prop)
+            for prop in propiedades_locales
+        ]
         
         # Obtener propiedades de Propifai (si está disponible)
         propiedades_propifai_list = []
