@@ -72,13 +72,17 @@ def finalize_portal_run(run, execution_token=None):
     previous = EjecucionPortal.objects.filter(portal=run.portal, source_key=run.source_key,
         estado='completed', es_confiable=True).exclude(pk=run.pk).order_by('-completado_en', '-pk').first()
     discovery = run.discovery or {}
+    # Fichas que esta corrida no pudo verificar (lectura o guardado fallido).
+    # Se excluyen del comparativo: no se marcan ausentes y no bloquean al resto.
+    unverified_ids = list(
+        run.candidates.filter(status__in=['pending', 'error'])
+        .values_list('source_id', flat=True)
+    )
     reason = ''
     if not run.source_key:
         reason = 'La ejecución anterior no tiene identidad de búsqueda; requiere nueva línea base.'
     elif discovery.get('complete') is not True:
         reason = f'Cobertura no demostrada: {discovery.get("stop_reason", "unknown")}.'
-    elif discovery.get('details_failed') or run.candidates.filter(status__in=['pending', 'error']).exists():
-        reason = 'Quedan anuncios pendientes o con errores; no se evaluaron ausencias.'
     elif run.portal == 'facebook_marketplace':
         reason = 'La ausencia en el feed de Marketplace no certifica retiro de una publicación.'
     elif not seen:
@@ -91,6 +95,8 @@ def finalize_portal_run(run, execution_token=None):
         threshold = max(2, int(getattr(settings, 'SCRAPING_LIFECYCLE_MISSES_TO_RETIRE', 2)))
         missing = PublicacionFuente.objects.select_for_update().filter(
             source_key=run.source_key, state__in=['activa', 'posible_retirada']).exclude(last_run=run)
+        if unverified_ids:
+            missing = missing.exclude(propiedad__id_origen__in=unverified_ids)
         for membership in missing:
             membership.misses += 1
             membership.first_missing_at = membership.first_missing_at or now
@@ -117,4 +123,5 @@ def finalize_portal_run(run, execution_token=None):
     run.motivo_no_confiable, run.completado_en = reason or None, now
     run.save()
     return {'reliable': not reason, 'baseline': baseline, 'seen': seen,
-            'possible': possible, 'retired': retired, 'reason': reason}
+            'possible': possible, 'retired': retired, 'reason': reason,
+            'unverified': len(unverified_ids)}

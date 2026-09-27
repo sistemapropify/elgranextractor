@@ -727,14 +727,15 @@ def _available_propify_properties():
             with connections['propifai'].cursor() as cursor:
                 cursor.execute(
                     f"""
-                        SELECT property_id, land_area, built_area
+                        SELECT property_id, land_area, built_area, bedrooms, bathrooms, half_bathrooms, unit_location
                         FROM property_specs
                         WHERE property_id IN ({placeholders})
                     """,
                     batch,
                 )
                 specs_map.update({
-                    row[0]: {'land_area': row[1], 'built_area': row[2]}
+                    row[0]: {'land_area': row[1], 'built_area': row[2],
+                             'bedrooms':row[3], 'bathrooms':row[4], 'half_bathrooms':row[5], 'unit_location':row[6]}
                     for row in cursor.fetchall()
                 })
     except Exception:
@@ -800,6 +801,10 @@ def _available_propify_properties():
         properties.append({
             'id': row['id'],
             'source': 'Propify',
+            'bedrooms': specs.get('bedrooms'),
+            'bathrooms': specs.get('bathrooms'),
+            'half_bathrooms': specs.get('half_bathrooms'),
+            'unit_location': specs.get('unit_location'),
             'source_key': 'propify',
             'code': row['code'] or '',
             'title': row['title'] or row['code'] or 'Propiedad Propify',
@@ -830,28 +835,50 @@ def _available_propify_properties():
     return properties
 
 
-def _available_scraped_properties(sources=('remax', 'properati')):
-    """Return active mapped listings from the supported competitor portals."""
-    from ingestas.models import PropiedadesCompetencia
+def _available_scraped_properties(sources=('remax', 'properati'), include_inactive=False):
+    """Return mapped listings and their lifecycle state from competitor portals.
 
-    rows = (
+    The normal map keeps the lightweight "available" behavior and returns only
+    active listings. Reviewers can request the historical layer explicitly to
+    inspect a possible or confirmed withdrawal without deleting the record.
+    """
+    from ingestas.models import PropiedadesCompetencia, RevisionPropiedadScraping
+
+    reviews = {r.propiedad_id: r.motivo for r in RevisionPropiedadScraping.objects.filter(excluida=True)}
+
+    state_filter = ['activa', 'posible_retirada', 'retirada'] if include_inactive else ['activa']
+    base_fields = [
+        'id', 'fuente', 'id_origen', 'titulo', 'tipo_inmueble',
+        'tipo_operacion', 'precio_soles', 'precio_usd', 'area_m2',
+        'area_terreno', 'area_construida', 'distrito', 'direccion_texto',
+        'latitud', 'longitud', 'precision_ubicacion', 'imagen_url', 'url',
+    ]
+    lifecycle_fields = [
+        'estado_publicacion', 'primera_vez_vista', 'ultima_vez_vista',
+        'fecha_primera_ausencia', 'fecha_retiro_confirmado',
+        'ausencias_consecutivas',
+    ]
+    rows_query = (
         PropiedadesCompetencia.objects
         .filter(
             fuente__in=sources,
-            estado_publicacion='activa',
+            estado_publicacion__in=state_filter,
             latitud__isnull=False,
             longitud__isnull=False,
         )
-        .values(
-            'id', 'fuente', 'id_origen', 'titulo', 'tipo_inmueble',
-            'tipo_operacion', 'precio_soles', 'precio_usd', 'area_m2',
-            'area_terreno', 'area_construida',
-            'distrito', 'direccion_texto', 'latitud', 'longitud',
-            'precision_ubicacion', 'imagen_url',
-            'url',
-        )
         .order_by('fuente', 'id')
     )
+
+    # Las fechas son añadidos posteriores al scraper. Si el despliegue aún no
+    # aplicó esa migración, no se debe dejar sin datos todo el mapa: se carga la
+    # fila base y se muestran las fechas como no informadas hasta migrar.
+    lifecycle_available = True
+    try:
+        rows = list(rows_query.values(*(base_fields + lifecycle_fields)).iterator(chunk_size=500))
+    except Exception as exc:
+        lifecycle_available = False
+        logger.warning('Ciclo de vida no disponible en cuadrantizacion; usando columnas base: %s', exc)
+        rows = list(rows_query.values(*base_fields).iterator(chunk_size=500))
 
     properties = []
     for row in rows:
@@ -940,6 +967,14 @@ def _available_scraped_properties(sources=('remax', 'properati')):
 
         properties.append({
             'id': f"{source_key}-{row['id']}",
+            'record_id': row['id'],
+            'quality_excluded': row['id'] in reviews,
+            'quality_exclusion_reason': reviews.get(row['id'], ''),
+            '_quality_input': {
+                'usd': row['precio_usd'], 'land': row['area_terreno'],
+                'built': row['area_construida'],
+                'legacy_area': bool(row['area_m2'] and not row['area_terreno'] and not row['area_construida']),
+            },
             'source': source,
             'source_key': source_key,
             'code': row['id_origen'] or '',
@@ -964,7 +999,17 @@ def _available_scraped_properties(sources=('remax', 'properati')):
             'area_used': area_source if price_per_m2 is not None else None,
             'lat': latitude,
             'lng': longitude,
-            'status': 'Disponible',
+            'status': {
+                'activa': 'Activa',
+                'posible_retirada': 'Posible retirada',
+                'retirada': 'Retirada',
+            }.get(row.get('estado_publicacion'), 'Activa' if not lifecycle_available else 'Sin verificar'),
+            'publication_state': row.get('estado_publicacion') or ('activa' if not lifecycle_available else 'sin_verificar'),
+            'first_seen': row.get('primera_vez_vista').isoformat() if row.get('primera_vez_vista') else None,
+            'last_seen': row.get('ultima_vez_vista').isoformat() if row.get('ultima_vez_vista') else None,
+            'first_missing': row.get('fecha_primera_ausencia').isoformat() if row.get('fecha_primera_ausencia') else None,
+            'retired_at': row.get('fecha_retiro_confirmado').isoformat() if row.get('fecha_retiro_confirmado') else None,
+            'consecutive_absences': row.get('ausencias_consecutivas') or 0,
             'location_precision': precision_label,
         })
 
@@ -973,6 +1018,8 @@ def _available_scraped_properties(sources=('remax', 'properati')):
 
 def api_available_map_properties(request):
     """Available Propify, Remax and Properati markers for the zoning map."""
+    from .property_quality import annotate_map_quality
+    include_inactive = request.GET.get('include_inactive') in {'1', 'true', 'yes'}
     requested_sources = {
         source.strip().casefold()
         for source in request.GET.get('sources', 'propify,remax,properati').split(',')
@@ -990,7 +1037,7 @@ def api_available_map_properties(request):
         source_label = '/'.join(source.title() for source in competitor_sources)
         loaders.append((
             source_label,
-            lambda: _available_scraped_properties(competitor_sources),
+            lambda: _available_scraped_properties(competitor_sources, include_inactive=include_inactive),
         ))
 
     for source, loader in loaders:
@@ -1010,10 +1057,13 @@ def api_available_map_properties(request):
             'failed_sources': failed_sources,
         }, status=503)
 
+    quality = annotate_map_quality(properties)
     return JsonResponse({
         'properties': properties,
+        'quality_summary': quality,
         'total': len(properties),
-        'status_filter': 'Disponible',
+        'status_filter': 'Historial incluido' if include_inactive else 'Activa',
+        'include_inactive': include_inactive,
         'requested_sources': sorted(requested_sources),
         'failed_sources': failed_sources,
     })

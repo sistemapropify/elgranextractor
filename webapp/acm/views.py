@@ -13,7 +13,7 @@ from django.db.models import Q, F
 from django.db.utils import DataError, IntegrityError, OperationalError, ProgrammingError
 from django.utils import timezone
 from django.conf import settings
-from ingestas.models import PropiedadRaw
+from ingestas.models import PropiedadRaw, PropiedadesCompetencia
 from intelligence.models import User
 from .utils import haversine, calcular_precio_m2
 from .models import ACMLink, ACMTestProperty
@@ -167,18 +167,24 @@ def acm_dashboard(request):
     Vista del dashboard principal del módulo ACM.
     Renderiza el template con el historial de análisis y estadísticas.
     """
-    # Obtener tipos de propiedad únicos para estadísticas
-    tipos_locales = PropiedadRaw.objects.exclude(
-        tipo_propiedad__isnull=True
+    # Tipos y zonas del mismo universo que analiza el ACM: scrapeadas y de Venta.
+    tipos_locales = PropiedadesCompetencia.objects.filter(
+        tipo_operacion='Venta'
     ).exclude(
-        tipo_propiedad=''
-    ).values_list('tipo_propiedad', flat=True).distinct()
+        tipo_inmueble__isnull=True
+    ).exclude(
+        tipo_inmueble=''
+    ).values_list('tipo_inmueble', flat=True).distinct()
     
     # Contar propiedades totales como "comparables disponibles"
-    total_comparables = PropiedadRaw.objects.count()
+    total_comparables = PropiedadesCompetencia.objects.filter(
+        tipo_operacion='Venta'
+    ).count()
     
     # Obtener zonas/distritos únicos
-    zonas = PropiedadRaw.objects.exclude(
+    zonas = PropiedadesCompetencia.objects.filter(
+        tipo_operacion='Venta'
+    ).exclude(
         distrito__isnull=True
     ).exclude(
         distrito=''
@@ -216,12 +222,14 @@ def acm_view(request):
     Vista principal del módulo ACM.
     Renderiza el template con el formulario y el mapa.
     """
-    # Obtener tipos de propiedad únicos para el select (de PropiedadRaw)
-    tipos_locales = PropiedadRaw.objects.exclude(
-        tipo_propiedad__isnull=True
+    # Tipos del select: los mismos comparables de Venta que analiza el ACM.
+    tipos_locales = PropiedadesCompetencia.objects.filter(
+        tipo_operacion='Venta'
     ).exclude(
-        tipo_propiedad=''
-    ).values_list('tipo_propiedad', flat=True).distinct()
+        tipo_inmueble__isnull=True
+    ).exclude(
+        tipo_inmueble=''
+    ).values_list('tipo_inmueble', flat=True).distinct()
     
     # Obtener tipos de propiedad de Propifai (si está disponible)
     tipos_propifai = set()
@@ -270,6 +278,77 @@ def acm_view(request):
 
 
 @csrf_exempt
+def _propifai_operation_ids(*names):
+    """IDs de ``operation_type`` en Propifai que coinciden con esos nombres.
+
+    En la base Propifai: 1=Compra, 2=Venta, 3=Alquiler, 4=Anticresis. El ACM
+    trabaja solo con ventas, así que se usa para excluir los alquileres.
+    """
+    wanted = {str(name).strip().casefold() for name in names}
+    try:
+        from django.db import connections
+        with connections['propifai'].cursor() as cursor:
+            cursor.execute('SELECT id, name FROM operation_type')
+            return [row[0] for row in cursor.fetchall()
+                    if (row[1] or '').strip().casefold() in wanted]
+    except Exception:
+        logger.warning(
+            'ACM: no se pudo leer operation_type de Propifai; no se filtran alquileres.',
+            exc_info=True,
+        )
+        return []
+
+
+PEN_TO_USD = Decimal('3.44')
+
+
+def _soles_a_usd(valor):
+    """Convierte soles a dólares con el mismo tipo de cambio del ACM de componentes."""
+    if valor is None:
+        return None
+    try:
+        return (Decimal(str(valor)) / PEN_TO_USD).quantize(Decimal('0.01'))
+    except (InvalidOperation, TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+class _ComparableLocal:
+    """Adapta una ``PropiedadesCompetencia`` a la interfaz del ACM clásico.
+
+    El ACM clásico estaba escrito contra ``PropiedadRaw`` (Excel importado, que
+    no tiene operación). Para usar la tabla del scraper —que sí distingue
+    Venta/Alquiler y está al día— se exponen aquí los mismos atributos.
+    """
+
+    def __init__(self, row):
+        self._row = row
+        self.id = row.id
+        self.lat = float(row.latitud) if row.latitud is not None else None
+        self.lng = float(row.longitud) if row.longitud is not None else None
+        self.tipo_propiedad = row.tipo_inmueble
+        self.precio_usd = row.precio_usd or _soles_a_usd(row.precio_soles)
+        self.precio_final_venta = None
+        self.area_construida = row.area_construida
+        self.area_terreno = row.area_terreno
+        self.numero_habitaciones = row.dormitorios
+        self.numero_banos = row.banos
+        self.estado_propiedad = row.estado_publicacion
+        self.distrito = row.distrito
+        self.provincia = row.provincia
+        self.departamento = row.departamento
+        self.portal = row.fuente
+        self.id_propiedad = row.id_origen
+        self.descripcion = row.descripcion
+        self.url_propiedad = row.url
+
+    def get_estado_propiedad_display(self):
+        return self._row.get_estado_publicacion_display()
+
+    def primera_imagen(self):
+        from cuadrantizacion.views import _map_image_url
+        return _map_image_url(self._row.imagen_url)
+
+
 def buscar_comparables(request):
     """
     Endpoint AJAX que recibe parámetros de búsqueda y retorna propiedades comparables.
@@ -294,22 +373,36 @@ def buscar_comparables(request):
             return JsonResponse({'status': 'error', 'message': 'Coordenadas inválidas'}, status=400)
         
         # Obtener propiedades locales (PropiedadRaw)
-        local_model = ACMTestProperty if getattr(request, '_acm_test_mode', False) else PropiedadRaw
-        propiedades_locales = local_model.objects.exclude(
-            coordenadas__isnull=True
-        ).exclude(
-            coordenadas=''
-        )
+        es_pruebas = bool(getattr(request, '_acm_test_mode', False))
+        if es_pruebas:
+            propiedades_locales = ACMTestProperty.objects.exclude(
+                coordenadas__isnull=True
+            ).exclude(
+                coordenadas=''
+            )
+        else:
+            # Misma fuente que el ACM de componentes: propiedades scrapeadas y
+            # solo de Venta, porque el ACM no analiza alquileres.
+            from ingestas.models import PropiedadesCompetencia
+            propiedades_locales = PropiedadesCompetencia.objects.filter(
+                tipo_operacion='Venta',
+                latitud__isnull=False,
+                longitud__isnull=False,
+            )
         
         # Filtrar por tipo si se especifica
         if tipo_propiedad:
             # Filtro exacto (case-insensitive) sobre tipo_propiedad
+            campo_tipo = 'tipo_propiedad' if es_pruebas else 'tipo_inmueble'
             propiedades_locales = propiedades_locales.filter(
-                Q(tipo_propiedad__iexact=tipo_propiedad)
+                Q(**{f'{campo_tipo}__iexact': tipo_propiedad})
             )
         
         # Convertir a lista para procesar
-        propiedades_list = list(propiedades_locales)
+        propiedades_list = [
+            prop if es_pruebas else _ComparableLocal(prop)
+            for prop in propiedades_locales
+        ]
         
         # Obtener propiedades de Propifai (si está disponible)
         propiedades_propifai_list = []
@@ -352,7 +445,17 @@ def buscar_comparables(request):
             # Obtener TODAS las propiedades de Propifai primero
             # Obtener TODAS las propiedades de Propifai (el filtro por tipo se hace en Python
             # para mantener consistencia con la lógica de determinación de tipo por título)
+            # El ACM es de venta: se excluyen alquileres, anticresis y las
+            # propiedades sin operación declarada.
+            venta_ids = _propifai_operation_ids('venta')
             propiedades_propifai = PropifaiProperty.objects.using('propifai').all()
+            if venta_ids:
+                propiedades_propifai = propiedades_propifai.filter(
+                    operation_type_id__in=venta_ids)
+            else:
+                logger.warning(
+                    'ACM: sin IDs de operación de venta; no se pudo excluir alquileres.'
+                )
             
             # Convertir a lista
             todas_propifai = list(propiedades_propifai)

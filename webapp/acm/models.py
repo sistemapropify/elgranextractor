@@ -26,6 +26,12 @@ class ACMLink(models.Model):
         ('pdf', 'Generar PDF'),
         ('compartir', 'Compartir WhatsApp'),
         ('ambos', 'Ambos'),
+        ('componentes', 'ACM por componentes'),
+    ]
+
+    METODO_CHOICES = [
+        ('clasico', 'ACM clásico'),
+        ('componentes', 'Suelo + construcción y mejoras'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -37,6 +43,10 @@ class ACMLink(models.Model):
         max_length=20, choices=ORIGEN_CHOICES, default='compartir',
         verbose_name='Origen del guardado'
     )
+    metodo = models.CharField(max_length=20, choices=METODO_CHOICES, default='clasico')
+    parametros_json = models.JSONField(default=dict, blank=True)
+    resultado_json = models.JSONField(default=dict, blank=True)
+    selection_fingerprint = models.CharField(max_length=64, null=True, blank=True, db_index=True)
     user = models.ForeignKey(
         'intelligence.User',
         on_delete=models.CASCADE,

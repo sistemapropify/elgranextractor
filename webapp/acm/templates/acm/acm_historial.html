@@ -46,6 +46,10 @@
         background: #fef3c7;
         color: #92400e;
     }
+    .origen-componentes {
+        background: #e0f2fe;
+        color: #075985;
+    }
     .table-acm th {
         background: #f8fafc;
         color: #475569;
@@ -124,13 +128,19 @@
                                 <span class="codigo-badge">{{ acm.codigo|default:acm.short_id }}</span>
                             </td>
                             <td>{{ acm.tipo_propiedad|capfirst }}</td>
-                            <td>{{ acm.area_m2|floatformat:0 }} m²</td>
+                            <td>
+                                {% if acm.metodo == 'componentes' and acm.tipo_propiedad == 'Casa' %}
+                                T {{ acm.parametros_json.land|floatformat:0 }} m² · C {{ acm.parametros_json.built|floatformat:0 }} m²
+                                {% else %}{{ acm.area_m2|floatformat:0 }} m²{% endif %}
+                            </td>
                             <td>
                                 <strong>US$ {{ acm.valor_comercial|floatformat:2|intcomma }}</strong>
                             </td>
                             <td>{{ acm.num_comparables }}</td>
                             <td>
-                                {% if acm.origen == 'pdf' %}
+                                {% if acm.metodo == 'componentes' %}
+                                <span class="origen-badge origen-componentes"><i class="bi bi-calculator me-1"></i>Componentes</span>
+                                {% elif acm.origen == 'pdf' %}
                                 <span class="origen-badge origen-pdf">
                                     <i class="bi bi-file-earmark-pdf me-1"></i>PDF
                                 </span>
@@ -152,6 +162,12 @@
                             </td>
                             <td class="acciones-cell text-center">
                                 <div class="d-flex gap-1 justify-content-center">
+                                    {% if acm.metodo == 'componentes' %}
+                                    <a href="{% url 'acm:componentes_historial_word' acm.id %}"
+                                       class="btn btn-outline-success btn-sm" title="Descargar informe Word">
+                                        <i class="bi bi-file-earmark-word"></i>
+                                    </a>
+                                    {% else %}
                                     <a href="/acm/ver-pdf/{{ acm.id }}/" target="_blank"
                                        class="btn btn-outline-success btn-sm" title="Ver PDF">
                                         <i class="bi bi-file-earmark-pdf"></i>
@@ -161,6 +177,7 @@
                                             title="Compartir por WhatsApp">
                                         <i class="bi bi-whatsapp"></i>
                                     </button>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -176,7 +193,7 @@
             <div class="empty-state">
                 <i class="bi bi-graph-up"></i>
                 <h5>No hay análisis ACM guardados</h5>
-                <p>Los análisis ACM se guardan automáticamente cuando generas un PDF o compartes por WhatsApp.</p>
+                <p>Los análisis se guardan al usar “Guardar en historial”, descargar el informe Word, generar un PDF o compartir por WhatsApp.</p>
                 <a href="/acm/analisis/" class="btn btn-success">
                     <i class="bi bi-plus-lg me-1"></i>Realizar mi primer análisis
                 </a>

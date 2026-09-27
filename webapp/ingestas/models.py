@@ -783,3 +783,21 @@ class PublicacionFuente(models.Model):
     class Meta:
         db_table = 'scraping_publicacion_fuente'
         constraints = [models.UniqueConstraint(fields=['source_key', 'propiedad'], name='scrap_source_property_uq')]
+
+
+class RevisionPropiedadScraping(models.Model):
+    """Revisión humana independiente de la presencia del anuncio en el portal."""
+    propiedad = models.OneToOneField(PropiedadesCompetencia, on_delete=models.CASCADE,
+                                    related_name='revision_calidad')
+    excluida = models.BooleanField(default=False, db_index=True)
+    motivo = models.TextField(blank=True, default='')
+    campos_protegidos = models.JSONField(default=list)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+
+class CambioPropiedadScraping(models.Model):
+    propiedad = models.ForeignKey(PropiedadesCompetencia, on_delete=models.PROTECT,
+                                 related_name='cambios_manuales')
+    usuario = models.CharField(max_length=200)
+    cambios = models.JSONField()
+    creado_en = models.DateTimeField(auto_now_add=True)
