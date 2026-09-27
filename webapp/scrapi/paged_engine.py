@@ -16,6 +16,18 @@ from .normalization import number, operation, property_type, urbania_row, valida
 from .source_config import page_url, validate_url
 from .retry_policy import portal_blocked, retry_delay, transient_failure, wait_for_retry
 
+# Dominios desde los que Cloudflare sirve su challenge. El guardián de
+# navegación debe dejarlos pasar: si aborta esa navegación, el challenge nunca
+# se resuelve y el portal se queda para siempre en "acceso pendiente".
+CLOUDFLARE_CHALLENGE_HOSTS = {
+    'challenges.cloudflare.com',
+    'static.cloudflareinsights.com',
+    'cloudflare.com',
+    'www.cloudflare.com',
+    'cloudflareaccess.com',
+}
+
+
 def _portal_proxy(portal):
     """Proxy de salida opcional.
 
@@ -166,17 +178,31 @@ async def enrich(portal, source, page, raw):
 
 async def guarded_navigation(page, portal):
     def response_received(response):
-        if response.request.resource_type == 'document' and response.frame == page.main_frame:
-            page._scraping_document_status = response.status
+        try:
+            if response.request.resource_type == 'document' and response.frame == page.main_frame:
+                page._scraping_document_status = response.status
+        except Exception:
+            pass
     page.on('response', response_received)
+
     async def guard(route):
-        request = route.request
-        if request.is_navigation_request() and request.frame == page.main_frame:
-            try:
-                validate_url(portal, request.url)
-            except ValueError:
-                await route.abort('blockedbyclient')
-                return
+        try:
+            request = route.request
+            if request.is_navigation_request() and request.frame == page.main_frame:
+                try:
+                    validate_url(portal, request.url)
+                except ValueError:
+                    # Una navegación al challenge de Cloudflare no es tráfico
+                    # fuera del portal: hay que dejarla pasar o el challenge
+                    # queda sin resolver.
+                    if urlsplit(request.url).hostname not in CLOUDFLARE_CHALLENGE_HOSTS:
+                        await route.abort('blockedbyclient')
+                        return
+        except Exception:
+            # request.frame puede fallar (marcos ya cerrados, service workers).
+            # Si el guardián sale por excepción, nadie continúa la petición y la
+            # navegación principal se cuelga hasta agotar el timeout de goto.
+            pass
         await route.continue_()
     await page.route('**/*', guard)
 
@@ -260,7 +286,15 @@ async def navigate(page, source, portal, url, emit):
             validate_url(portal, page.url)
             ready = await source.esperar_cloudflare(page, timeout=30)
             if ready is False:
-                raise RuntimeError('navigation.blocked: acceso pendiente')
+                try:
+                    _titulo = (await page.title() or '').strip()[:90]
+                except Exception:
+                    _titulo = ''
+                raise RuntimeError(
+                    'navigation.blocked: acceso pendiente'
+                    f' (título={_titulo!r}; HTTP {getattr(page, "_scraping_document_status", None)};'
+                    f' {page.url[:140]})'
+                )
             status = getattr(page, '_scraping_document_status', None) or status
             if status is None or status >= 400:
                 raise RuntimeError(f'navigation.http_error: HTTP {status}')
