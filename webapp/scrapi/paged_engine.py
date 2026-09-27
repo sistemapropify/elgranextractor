@@ -387,12 +387,16 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
             _progress_callback=lambda message: progress_callback and progress_callback({
                 'event': 'runtime.preflight', 'message': message}))
         async with AsyncCamoufox(**options) as browser:
-            if portal == 'properati':
-                # Browser.new_page() crea un contexto aislado por pestaña.
-                # El listado y las fichas deben conservar la misma sesión.
+            # browser.new_page() abre un contexto AISLADO por pestaña: la ficha
+            # de detalle no heredaría la cookie cf_clearance que el listado ya
+            # obtuvo de Cloudflare, y Navent sirve un challenge que nunca se
+            # resuelve (navigation.failed). Los portales que abren fichas
+            # comparten la sesión del listado en un único contexto; Remax y
+            # Facebook, que ya funcionan con pestañas aisladas, quedan igual.
+            if portal in ('adondevivir', 'properati', 'urbania'):
                 context = await browser.new_context()
                 page, detail_page = await context.new_page(), await context.new_page()
-                if manual_verification:
+                if portal == 'properati' and manual_verification:
                     from .manual_verification import resolve
                     async def verify(target):
                         return await resolve(target, manual_verification, emit)
