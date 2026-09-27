@@ -149,12 +149,22 @@ async def enrich(portal, source, page, raw):
     page._scraping_document_status = None
     raw.pop('_detail_error', None)
     if portal == 'adondevivir':
-        lat, lng, kind, image = await source.extraer_coordenadas_desde_detalle(page, url)
+        (lat, lng, kind, image,
+         area_total_ficha, area_cubierta_ficha) = await source.extraer_coordenadas_desde_detalle(page, url)
         raw.update(latitud=lat, longitud=lng)
         if kind:
             raw['tipo'] = kind
         if image:
             raw['imagen_url'] = image
+        # Adondevivir rotula las dos superficies en la ficha: "N m2 cub." y
+        # "N m2 tot.". En este portal "cub." es el area de TERRENO y "tot." el
+        # area CONSTRUIDA. Los campos destino no se renombran: se llenan los que
+        # ya existen ('area' alimenta Area Construida y 'area_total' alimenta
+        # Area Terreno) con la cifra que corresponde a cada uno.
+        if area_total_ficha is not None:
+            raw['area'] = area_total_ficha            # "tot." -> Area Construida
+        if area_cubierta_ficha is not None:
+            raw['area_total'] = area_cubierta_ficha   # "cub." -> Area Terreno
     else:
         await source.extraer_detalle(page, raw)
     validate_url(portal, page.url)

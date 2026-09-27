@@ -616,19 +616,30 @@ async def extraer_coordenadas_desde_detalle(page, url):
                 lat = geo_match.group(1)
                 lng = geo_match.group(2)
 
+        # --- Extraer las superficies etiquetadas de la ficha ---
+        # El listado solo publica una superficie y sin etiqueta; la ficha publica
+        # las dos ("141 m2 tot." / "141 m2 cub."). Aqui solo se leen los numeros:
+        # a que campo va cada uno lo decide quien consume esto, no el portal.
+        area_total_ficha = area_cubierta_ficha = None
+        texto_ficha = await _evaluate_with_timeout(
+            page, "() => document.body.innerText", timeout=15)
+        if texto_ficha:
+            area_total_ficha = area_etiquetada(texto_ficha, 'tot')
+            area_cubierta_ficha = area_etiquetada(texto_ficha, 'cub')
+
         imagen_url = extraer_imagen_desde_html(html_content)
         if imagen_url:
             if imagen_url.startswith("/"):
                 imagen_url = BASE_URL + imagen_url
             if imagen_url.startswith("//"):
                 imagen_url = "https:" + imagen_url
-        return lat, lng, tipo_prop, imagen_url
+        return lat, lng, tipo_prop, imagen_url, area_total_ficha, area_cubierta_ficha
 
     except Exception as e:
         print(f"    [!] Error extrayendo coordenadas de detalle: {e}")
         raise RuntimeError(f'detail.extraction_failed: {e}') from e
 
-    return None, None, tipo_prop, None
+    return None, None, tipo_prop, None, None, None
 
 
 def mapear_tipo_schemaorg(tipo_schema):
@@ -674,6 +685,25 @@ def extraer_imagen_desde_html(html_content):
             return url
 
     return None
+
+
+def area_etiquetada(texto, etiqueta):
+    """Lee '141 m2 tot.' / '141 m2 cub.' del texto de la ficha.
+
+    Adondevivir rotula las dos superficies en la ficha de detalle (el listado
+    solo publica una, sin etiqueta). Se devuelve el numero tal cual, sin
+    interpretar a que campo corresponde.
+    """
+    if not texto:
+        return None
+    patron = rf'(\d[\d.,]*)\s*m(?:2|²|\xb2)\s*{etiqueta}\b'
+    m = re.search(patron, texto, re.IGNORECASE)
+    if not m:
+        return None
+    try:
+        return float(m.group(1).replace(',', ''))
+    except ValueError:
+        return None
 
 
 def subir_imagen_a_blob(imagen_url, prop):
