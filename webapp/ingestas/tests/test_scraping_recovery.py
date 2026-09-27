@@ -132,15 +132,11 @@ class DetailRecoveryTests(IsolatedAsyncioTestCase):
         page = SimpleNamespace(goto=AsyncMock(return_value=response), url=url,
                                title=AsyncMock(return_value='Just a moment'),
                                wait_for_timeout=AsyncMock())
-        for portal in ('urbania', 'properati', 'remax'):
+        for portal in ('urbania', 'properati', 'remax', 'adondevivir'):
             source = importlib.import_module(f'scrapi.{portal}_scraper')
             with patch.object(source, 'esperar_cloudflare', AsyncMock(return_value=False)):
                 with self.assertRaisesRegex(RuntimeError, 'navigation.blocked'):
                     await source.navegar_con_cloudflare(page, 'https://example.test/')
-        from scrapi import adondevivir_scraper as ado
-        with patch.object(ado, 'navegar_con_cloudflare', AsyncMock(return_value=False)):
-            with self.assertRaisesRegex(RuntimeError, 'navigation.failed'):
-                await ado.extraer_coordenadas_desde_detalle(page, 'https://example.test/')
 
     async def test_image_storage_is_explicit_and_shared_with_recovery(self):
         source = SimpleNamespace(subir_imagen_a_blob=MagicMock(return_value='https://account.blob.core.windows.net/propiedadesimagenes/photo.jpg'))

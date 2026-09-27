@@ -5,6 +5,7 @@ import openpyxl
 import signal
 import sys
 import os
+import time
 import unicodedata
 from datetime import datetime
 from urllib.request import Request, urlopen
@@ -397,43 +398,121 @@ def manejar_sigint(sig, frame):
     detener = True
 
 
-async def esperar_cloudflare(page, timeout=120):
+# Títulos de páginas de bloqueo/challenge que Adondevivir (Cloudflare u otros)
+# puede presentar. El antiguo chequeo literal "Just a moment" ya no bastaba.
+_TITULOS_BLOQUEO = (
+    'just a moment',
+    'attention required',
+    'access denied',
+    'checking your browser',
+    'please verify you are a human',
+    'verify you are human',
+    'unusual traffic',
+    'captcha',
+    'forbidden',
+    'demasiadas solicitudes',
+    'unable to connect',
+    'cloudflare',
+)
+
+
+def _titulo_bloqueado(titulo):
+    t = (titulo or '').strip().lower()
+    if not t:
+        return False
+    return any(m in t for m in _TITULOS_BLOQUEO)
+
+
+async def _esperar_carga_real(page, timeout):
+    """Espera un documento con título real (sin challenge ni página vacía).
+
+    Returns: (listo, titulo). Solo un título real (contenido servido) cuenta;
+    un título vacío o de challenge se considera 'todavía no listo'.
     """
-    Espera a que Cloudflare resuelva el challenge.
-    Timeout aumentado a 120s para dar tiempo a resolver captcha manualmente
-    si el navegador no es headless.
-    """
-    start = __import__('time').time()
-    while __import__('time').time() - start < timeout:
+    print(f"      [espera] comprobando documento (hasta {timeout}s)...")
+    inicio = time.monotonic()
+    ultimo_aviso = 0.0
+    while True:
+        transcurrido = time.monotonic() - inicio
+        if transcurrido >= timeout:
+            break
         try:
-            title = await page.title()
-            title_lower = title.lower()
-            if "cloudflare" in title_lower or "just a moment" in title_lower:
-                await asyncio.sleep(2)
-                continue
-            return True
+            titulo = (await page.title() or '').strip()
         except Exception:
-            await asyncio.sleep(1)
+            titulo = ''
+        if titulo and not _titulo_bloqueado(titulo):
+            return True, titulo
+        if transcurrido - ultimo_aviso >= 5:
+            print(f"      [espera] título actual={titulo[:60]!r} ({int(transcurrido)}s/{int(timeout)}s)")
+            ultimo_aviso = transcurrido
+        await asyncio.sleep(1.5)
+    return False, ''
+
+
+async def esperar_cloudflare(page, timeout=30):
+    """Espera a que Cloudflare resuelva el challenge (listado o ficha).
+
+    ACOTADO (~52 s máximo: fase pasiva + 1 reload + fase corta) para no
+    pasarse del presupuesto de 100 s que paged_engine.prepare_detail impone
+    vía asyncio.wait_for. Si el challenge no se despeja, devuelve False y el
+    llamador arma un error visible con diagnóstico.
+    """
+    print("   Esperando resolucion de Cloudflare...")
+    fase1 = min(int(timeout or 30), 20)
+    ok, titulo = await _esperar_carga_real(page, fase1)
+    if ok:
+        print(f"   Cloudflare resuelto! Titulo: {titulo}")
+        return True
+    print("   [WARN] Challenge no resuelto pasivamente; recargando una vez...")
+    try:
+        await page.reload(wait_until='domcontentloaded', timeout=20000)
+    except Exception as exc:
+        print(f"   [WARN] Error en reload: {exc}")
+    ok, titulo = await _esperar_carga_real(page, 12)
+    if ok:
+        print(f"   Cloudflare resuelto tras reload! Titulo: {titulo}")
+        return True
+    print("   [WARN] Timeout esperando Cloudflare")
     return False
 
 
-async def navegar_con_cloudflare(page, url, timeout=120):
+async def navegar_con_cloudflare(page, url, timeout=30):
     """Navega a una URL esperando que Cloudflare se resuelva.
-    
-    Returns:
-        False si Cloudflare no se resolvio o hubo error de navegacion.
+
+    No traga errores: si el goto falla o Cloudflare no se despeja, levanta un
+    RuntimeError con diagnóstico (título, estado HTTP y URL final) para que
+    paged_engine.prepare_detail reintente y el log muestre qué respondió
+    Adondevivir realmente.
     """
     try:
-        await page.goto(url, wait_until="domcontentloaded", timeout=90000)
-        cf_ok = await esperar_cloudflare(page, timeout)
-        if not cf_ok:
-            print(f"  [!] Cloudflare no se resolvio en {timeout}s para {url}")
-            return False
-        await asyncio.sleep(3)
-        return True
-    except Exception as e:
-        print(f"  [!] Error navegando: {e}")
-        return False
+        await page.goto(url, wait_until='domcontentloaded', timeout=30000)
+    except Exception as exc:
+        print(f"   [WARN] Error en navegacion: {exc}")
+        raise RuntimeError(f'navigation.failed: {exc}') from exc
+    if not await esperar_cloudflare(page, timeout):
+        try:
+            titulo_obs = (await page.title() or '').strip()
+        except Exception:
+            titulo_obs = ''
+        status = getattr(page, '_scraping_document_status', None)
+        detalle = 'navigation.blocked: Adondevivir no confirmó acceso al contenido'
+        partes = []
+        if titulo_obs:
+            partes.append(f'título={titulo_obs[:80]!r}')
+        if status is not None:
+            partes.append(f'HTTP {status}')
+        try:
+            final = page.url
+            if final and 'about:' not in final:
+                partes.append(final[:160])
+        except Exception:
+            pass
+        if partes:
+            detalle += ' (' + '; '.join(partes) + ')'
+        print(f"   [BLOCKED] {detalle}")
+        raise RuntimeError(detalle)
+    await asyncio.sleep(3)
+    return True
 
 
 def parsear_precio_soles_dolares(texto):
@@ -488,9 +567,7 @@ def decodificar_coordenadas(base64_str):
 
 async def extraer_coordenadas_desde_detalle(page, url):
     """Navega a una pagina de detalle y extrae coordenadas de mapLatOf/mapLngOf (base64)."""
-    exito = await navegar_con_cloudflare(page, url, timeout=30)
-    if not exito:
-        raise RuntimeError('navigation.failed: Adondevivir no confirmó la carga de la ficha')
+    await navegar_con_cloudflare(page, url, timeout=30)
 
     await asyncio.sleep(2)
 
