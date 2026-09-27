@@ -132,6 +132,12 @@ def normalize(portal, source, raw):
         row['departamento'] = location[-1] if len(location) >= 3 else None
         row['provincia'] = location[-2] if len(location) >= 3 else (location[-1] if len(location) == 2 else None)
         row['distrito'] = location[0] if location else None
+        # Adondevivir no asignaba precision_ubicacion: quedaba en el default
+        # 'desconocida' aunque la ficha diera coordenadas del pin del anunciante
+        # (mapLatOf/mapLngOf). Remax ya lo hace así.
+        row['precision_ubicacion'] = (
+            'exacta' if raw.get('latitud') and raw.get('longitud') else 'desconocida'
+        )
     return validate_row(row)
 
 
