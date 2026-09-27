@@ -471,6 +471,12 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
         proxy = _portal_proxy(portal)
         if proxy:
             launch.update(proxy=proxy, geoip=True)
+        if portal == 'adondevivir' and not os.environ.get('CAMOUFOX_HEADLESS'):
+            # Cloudflare responde 403 con su interstitial a la IP del worker y el
+            # challenge no se resuelve en headless puro. Con display virtual el
+            # navegador corre "con pantalla"; si no hay Xvfb instalado,
+            # camoufox_kwargs cae de vuelta a headless sin romper la corrida.
+            launch['headless'] = 'virtual'
         options = await asyncio.to_thread(camoufox_kwargs, **launch)
         async with AsyncCamoufox(**options) as browser:
             # browser.new_page() abre un contexto AISLADO por pestaña: la ficha

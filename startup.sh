@@ -107,8 +107,8 @@ touch "$CAMOUFOX_DEPS_INSTALLING"
     fi
     for attempt in 1 2 3; do
         timeout 300 apt-get -o Acquire::Check-Valid-Until=false update -qq
-        if $APT install libgtk-3-0 libx11-xcb1 libasound2 \
-           || $APT install libgtk-3-0t64 libx11-xcb1 libasound2t64; then
+        if $APT install libgtk-3-0 libx11-xcb1 libasound2 xvfb \
+           || $APT install libgtk-3-0t64 libx11-xcb1 libasound2t64 xvfb; then
             if ldconfig -p 2>/dev/null | grep -q 'libgtk-3.so.0' \
                || [ -e /usr/lib/x86_64-linux-gnu/libgtk-3.so.0 ] \
                || [ -e /usr/lib/aarch64-linux-gnu/libgtk-3.so.0 ]; then

@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -255,4 +256,13 @@ def camoufox_kwargs(**overrides) -> dict:
         kwargs.update(executable_path=os.environ['CAMOUFOX_EXECUTABLE_PATH'],
                       exclude_addons=[DefaultAddons.UBO])
     kwargs.update(overrides)
+    # Cloudflare sirve su interstitial ("Just a moment...", HTTP 403) a las IP de
+    # datacenter y el challenge no se resuelve en headless puro; con display
+    # virtual (Xvfb) el navegador corre "con pantalla" y lo pasa. Solo aplica a
+    # Linux y a un Xvfb presente: si falta, se vuelve a headless para no romper
+    # la corrida.
+    if kwargs.get('headless') == 'virtual' and not (
+        sys.platform.startswith('linux') and shutil.which('Xvfb')
+    ):
+        kwargs['headless'] = is_headless_server()
     return kwargs
