@@ -27,6 +27,36 @@ ADONDEVIVIR_PROFILE_DIR = os.environ.get(
     else 'camoufox_session_adondevivir',
 )
 
+
+def _portal_proxy(portal):
+    """Proxy de salida opcional.
+
+    Cloudflare bloquea por reputación de IP: la del worker (datacenter) recibe
+    el challenge y el documento nunca llega. Configure <PORTAL>_PROXY (solo ese
+    portal) o SCRAPING_PROXY (todos) con el formato
+    http://usuario:clave@host:puerto o host:puerto. Con geoip, Camoufox ajusta
+    zona horaria e idioma a los del proxy para no delatarse.
+    """
+    raw = ''
+    for name in (f'{portal.upper()}_PROXY', 'SCRAPING_PROXY'):
+        raw = (os.environ.get(name) or '').strip()
+        if raw:
+            break
+    if not raw:
+        return None
+    parts = urlsplit(raw if '://' in raw else f'http://{raw}')
+    if not parts.hostname:
+        raise ValueError(f'{portal}: proxy inválido ({raw!r}).')
+    server = f'{parts.scheme or "http"}://{parts.hostname}'
+    if parts.port:
+        server += f':{parts.port}'
+    proxy = {'server': server}
+    if parts.username:
+        proxy['username'] = parts.username
+    if parts.password:
+        proxy['password'] = parts.password
+    return proxy
+
 PAGINATION_JS = r"""() => {
  const links = [...document.querySelectorAll('a,button')];
  const requestedPage = Number(new URL(location.href).searchParams.get('page') || '1');
@@ -398,6 +428,9 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
             '_progress_callback': lambda message: progress_callback and progress_callback({
                 'event': 'runtime.preflight', 'message': message}),
         }
+        proxy = _portal_proxy(portal)
+        if proxy:
+            launch.update(proxy=proxy, geoip=True)
         if portal == 'adondevivir':
             launch.update(persistent_context=True, user_data_dir=ADONDEVIVIR_PROFILE_DIR)
         options = await asyncio.to_thread(camoufox_kwargs, **launch)
