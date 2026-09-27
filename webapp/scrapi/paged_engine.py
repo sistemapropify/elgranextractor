@@ -16,18 +16,6 @@ from .normalization import number, operation, property_type, urbania_row, valida
 from .source_config import page_url, validate_url
 from .retry_policy import portal_blocked, retry_delay, transient_failure, wait_for_retry
 
-# Perfil persistente de Camoufox para Adondevivir: conserva entre ejecuciones la
-# cookie cf_clearance que emite Cloudflare (Facebook Marketplace usa el mismo
-# esquema). Sin él, cada corrida arranca sin sesión y desde la IP del worker (que
-# Cloudflare trata como tráfico de datacenter) vuelve a pedir el challenge hasta
-# terminar en navigation.blocked.
-ADONDEVIVIR_PROFILE_DIR = os.environ.get(
-    'ADONDEVIVIR_PROFILE_DIR',
-    '/home/data/camoufox_session_adondevivir' if os.name != 'nt'
-    else 'camoufox_session_adondevivir',
-)
-
-
 def _portal_proxy(portal):
     """Proxy de salida opcional.
 
@@ -305,7 +293,25 @@ async def crawl_pages(portal, source_url, source, page, detail_page, *, emit,
     signatures = set()
     next_url = page_url(portal, source_url, start_page)
     for n in range(max(1, start_page), max_pages + 1):
-        await navigate(page, source, portal, next_url, emit)
+        try:
+            await navigate(page, source, portal, next_url, emit)
+        except ScrapingInterrupted:
+            raise
+        except Exception as exc:
+            if portal == 'adondevivir':
+                # navigate() ya agotó sus reintentos. Insistir desde la IP del
+                # worker agrava el bloqueo de Cloudflare (pasó de challenge a
+                # corte total del documento), así que se detiene la corrida y se
+                # conserva la cola en vez de relanzar el navegador y seguir
+                # golpeando el portal.
+                await emit(event='portal.paused', level='error',
+                           message='Adondevivir no responde (bloqueo de Cloudflare); '
+                                   'se detiene para no agravar el bloqueo. Reintente en unas horas.',
+                           error_type=type(exc).__name__)
+                raise ScrapingInterrupted(
+                    'portal.paused: Adondevivir mantiene un bloqueo de acceso; cola conservada'
+                ) from exc
+            raise
         extraction_started = time.monotonic()
         await emit(event='listing.extraction_started', page=n,
                    message=f'{portal}: leyendo tarjetas de página {n}', effective_url=page.url)
@@ -431,8 +437,6 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
         proxy = _portal_proxy(portal)
         if proxy:
             launch.update(proxy=proxy, geoip=True)
-        if portal == 'adondevivir':
-            launch.update(persistent_context=True, user_data_dir=ADONDEVIVIR_PROFILE_DIR)
         options = await asyncio.to_thread(camoufox_kwargs, **launch)
         async with AsyncCamoufox(**options) as browser:
             # browser.new_page() abre un contexto AISLADO por pestaña: la ficha
@@ -441,12 +445,7 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
             # resuelve (navigation.failed). Los portales que abren fichas
             # comparten la sesión del listado en un único contexto; Remax y
             # Facebook, que ya funcionan con pestañas aisladas, quedan igual.
-            if portal == 'adondevivir':
-                # Con persistent_context el objeto entregado ya ES el contexto;
-                # ambas pestañas comparten el perfil que guarda cf_clearance.
-                context = browser
-                page, detail_page = await context.new_page(), await context.new_page()
-            elif portal in ('properati', 'urbania'):
+            if portal in ('adondevivir', 'properati', 'urbania'):
                 context = await browser.new_context()
                 page, detail_page = await context.new_page(), await context.new_page()
                 if portal == 'properati' and manual_verification:
