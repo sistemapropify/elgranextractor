@@ -265,4 +265,10 @@ def camoufox_kwargs(**overrides) -> dict:
         sys.platform.startswith('linux') and shutil.which('Xvfb')
     ):
         kwargs['headless'] = is_headless_server()
+    # Se deja constancia del modo real en el log del job: es lo que distingue si
+    # el display virtual se aplico o si faltaba Xvfb y se retrocedio a headless.
+    modo = kwargs.get('headless')
+    etiqueta = ('display virtual (Xvfb)' if modo == 'virtual'
+                else 'headless (sin Xvfb)' if modo else 'con ventana')
+    _notify(progress_callback, f'Camoufox: modo {etiqueta}')
     return kwargs
