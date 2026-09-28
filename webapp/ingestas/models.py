@@ -801,3 +801,37 @@ class CambioPropiedadScraping(models.Model):
     usuario = models.CharField(max_length=200)
     cambios = models.JSONField()
     creado_en = models.DateTimeField(auto_now_add=True)
+
+
+class RevisionIAAlerta(models.Model):
+    """Triaje automatico de las alertas de calidad.
+
+    La IA lee cada propiedad (campos + descripcion + las alertas que tiene) y dice
+    si la alerta es real, ruido o dudosa. No modifica nada ni decide por el humano:
+    ordena el trabajo, para que la revision manual empiece por lo que importa.
+    """
+
+    VEREDICTOS = [
+        ('real', 'Alerta real'),
+        ('ruido', 'Falso positivo'),
+        ('dudoso', 'Dudoso'),
+        ('error', 'No se pudo analizar'),
+    ]
+
+    propiedad = models.ForeignKey(PropiedadesCompetencia, on_delete=models.CASCADE,
+                                  related_name='revisiones_ia')
+    veredicto = models.CharField(max_length=12, choices=VEREDICTOS, db_index=True)
+    motivo = models.TextField(blank=True, default='')
+    correccion = models.JSONField(default=dict, blank=True,
+                                  help_text='campo -> valor sugerido, si la alerta es real')
+    alertas_revisadas = models.JSONField(default=list, blank=True)
+    confianza = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
+    modelo = models.CharField(max_length=80, blank=True, default='')
+    respuesta_cruda = models.JSONField(null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'calidad_revision_ia'
+        constraints = [models.UniqueConstraint(fields=['propiedad'],
+                                               name='calidad_revision_ia_uq')]

@@ -13,7 +13,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.response import Response
 from cuadrantizacion.views import PrometeoSessionAuthentication
-from .models import PropiedadesCompetencia, RevisionPropiedadScraping, CambioPropiedadScraping
+from .models import (PropiedadesCompetencia, RevisionPropiedadScraping,
+                     CambioPropiedadScraping, RevisionIAAlerta)
 from .property_quality import DATA_FIELDS, analyze, number
 
 EDIT_FIELDS = ('titulo', 'tipo_inmueble', 'tipo_operacion', 'precio_soles', 'precio_usd',
@@ -114,23 +115,33 @@ def dashboard(request):
     if request.GET.get('pub_estado'):
         query = query.filter(estado_publicacion=request.GET['pub_estado'])
     revisions = {r.propiedad_id: r for r in RevisionPropiedadScraping.objects.all()}
+    revisiones_ia = {r.propiedad_id: r for r in RevisionIAAlerta.objects.all()}
     rows = []
     for row in query.values(*DATA_FIELDS).order_by('id').iterator(chunk_size=1000):
         revision = revisions.get(row['id'])
         row['excluida'] = bool(revision and revision.excluida)
         row['motivo'] = revision.motivo if revision else ''
+        ia = revisiones_ia.get(row['id'])
+        row['ia_veredicto'] = ia.veredicto if ia else None
+        row['ia_motivo'] = ia.motivo if ia else ''
+        row['ia_correccion'] = ia.correccion if ia else {}
         rows.append(row)
     rows = analyze(rows)
     summary = {'total': len(rows), 'con_alertas': sum(bool(r['alertas']) for r in rows),
                'excluidas': sum(r['excluida'] for r in rows),
-               'conflicto_descripcion': sum(r['descripcion_conflicto'] for r in rows)}
+               'ia_real': sum(1 for r in rows if r['ia_veredicto'] == 'real'),
+               'ia_ruido': sum(1 for r in rows if r['ia_veredicto'] == 'ruido'),
+               'ia_dudoso': sum(1 for r in rows if r['ia_veredicto'] == 'dudoso'),
+               'ia_sin_revisar': sum(1 for r in rows if r['alertas'] and not r['ia_veredicto'])}
     state = request.GET.get('estado', 'alertas')
     if state == 'alertas':
         rows = [r for r in rows if r['alertas']]
     elif state == 'excluidas':
         rows = [r for r in rows if r['excluida']]
-    elif state == 'descripcion':
-        rows = [r for r in rows if r['descripcion_conflicto']]
+    elif state in ('ia_real', 'ia_ruido', 'ia_dudoso'):
+        rows = [r for r in rows if r['ia_veredicto'] == state[3:]]
+    elif state == 'ia_pendiente':
+        rows = [r for r in rows if r['alertas'] and not r['ia_veredicto']]
     elif state in ('outlier', 'incomplete', 'review'):
         rows = [r for r in rows if r['quality_status'] == state]
     if request.GET.get('exportar') == 'csv':
