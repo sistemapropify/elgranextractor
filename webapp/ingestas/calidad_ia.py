@@ -205,13 +205,28 @@ def triage_pendientes(limite=0):
 
 
 def lanzar_triage_en_background():
-    """Dispara el triaje en un hilo daemon, sin bloquear al llamador.
+    """Dispara el triaje sin bloquear: a Celery (Azure) o a un hilo local.
 
-    Es el punto de entrada que usa el sistema al terminar una corrida de
-    scraping: corre el agente sobre lo nuevo y deja los veredictos en la tabla.
-    Nunca levanta excepciones hacia afuera.
+    En produccion (``SCRAPING_EXECUTION_MODE=celery``) despacha la tarea al worker
+    de Celery, que vive en Azure: el usuario puede apagar su maquina y el triaje
+    sigue corriendo. En desarrollo cae a un hilo local. Nunca levanta excepciones.
     """
+    import os
     import threading
+
+    from django.conf import settings
+
+    modo = str(getattr(settings, 'SCRAPING_EXECUTION_MODE',
+                       os.environ.get('SCRAPING_EXECUTION_MODE', 'thread')) or 'thread').strip().lower()
+
+    if modo == 'celery':
+        try:
+            from colas.scraping_tasks import triage_calidad_task
+            triage_calidad_task.apply_async(retry=False)
+            logger.info('Triaje de calidad despachado a Celery (Azure).')
+            return
+        except Exception as exc:
+            logger.warning('No se pudo despachar a Celery; usando hilo local: %s', exc)
 
     def _correr():
         try:

@@ -820,3 +820,20 @@ def scraping_task_run(job_id: int):
     Útil para desarrollo local.
     """
     _run_scraping(job_id)
+
+
+@shared_task(
+    bind=True,
+    max_retries=0,
+    soft_time_limit=None,
+    time_limit=None,
+)
+def triage_calidad_task(self):
+    """Triaje de calidad con IA. Corre en el worker de Celery (Azure).
+
+    Sin time_limit: la primera pasada puede tardar horas (2100 propiedades x ~7s).
+    Es incremental y cada veredicto se guarda individualmente, asi que si el
+    worker se reinicia, la siguiente corrida continua con lo que falte.
+    """
+    from ingestas.calidad_ia import triage_pendientes
+    return triage_pendientes()
