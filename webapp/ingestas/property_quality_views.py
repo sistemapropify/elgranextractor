@@ -5,7 +5,7 @@ from decimal import Decimal
 from django import forms
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.views import APIView
@@ -67,41 +67,51 @@ class PropertyEditor(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        obj = get_object_or_404(PropiedadesCompetencia, pk=pk)
-        revision = RevisionPropiedadScraping.objects.filter(propiedad=obj).first() or RevisionPropiedadScraping(propiedad=obj)
-        data = snapshot(obj, revision)
-        return Response({'html': PropertyForm(instance=obj).as_p(), 'record': data,
-                         'version': version(data), 'can_edit': allowed(request.user)})
+        try:
+            obj = get_object_or_404(PropiedadesCompetencia, pk=pk)
+            revision = RevisionPropiedadScraping.objects.filter(propiedad=obj).first() or RevisionPropiedadScraping(propiedad=obj)
+            data = snapshot(obj, revision)
+            return Response({'html': PropertyForm(instance=obj).as_p(), 'record': data,
+                             'version': version(data), 'can_edit': allowed(request.user)})
+        except Http404:
+            raise
+        except Exception as exc:
+            return Response({'error': f'Error al cargar el registro: {exc}'}, status=500)
 
     def post(self, request, pk):
         if not allowed(request.user):
             return Response({'error': 'Se requiere permiso para editar propiedades scrapeadas.'}, status=403)
-        with transaction.atomic():
-            obj = get_object_or_404(PropiedadesCompetencia.objects.select_for_update(), pk=pk)
-            revision, _ = RevisionPropiedadScraping.objects.get_or_create(propiedad=obj)
-            before = snapshot(obj, revision)
-            if request.data.get('version') != version(before):
-                return Response({'error': 'El registro cambió. Cierra y vuelve a abrir para revisar los datos actuales.'}, status=409)
-            form = PropertyForm(request.data, instance=obj)
-            if not form.is_valid():
-                return Response({'error': 'Revisa los campos indicados.', 'fields': form.errors}, status=400)
-            revision.excluida = request.data.get('excluida') == 'true'
-            revision.motivo = str(request.data.get('motivo') or '').strip()
-            if revision.excluida and not revision.motivo:
-                return Response({'error': 'Indica el motivo para excluir el registro.'}, status=400)
-            changed = set(form.changed_data)
-            # Keep the legacy primary surface aligned after a manual area/type edit.
-            if changed.intersection({'area_terreno', 'area_construida', 'tipo_inmueble'}):
-                obj.area_m2 = (obj.area_terreno or obj.area_construida) if obj.tipo_inmueble == 'Terreno' else (obj.area_construida or obj.area_terreno)
-                changed.add('area_m2')
-            revision.campos_protegidos = sorted(set(revision.campos_protegidos) | changed)
-            obj.save()
-            revision.save()
-            after = snapshot(obj, revision)
-            changes = {k: {'antes': before[k], 'despues': after[k]} for k in after if before[k] != after[k]}
-            CambioPropiedadScraping.objects.create(propiedad=obj,
-                usuario=str(getattr(request.user, 'username', request.user.pk)), cambios=changes)
-        return Response({'ok': True, 'message': 'Registro guardado. Las correcciones quedan protegidas frente al scraper.'})
+        try:
+            with transaction.atomic():
+                obj = get_object_or_404(PropiedadesCompetencia.objects.select_for_update(), pk=pk)
+                revision, _ = RevisionPropiedadScraping.objects.get_or_create(propiedad=obj)
+                before = snapshot(obj, revision)
+                if request.data.get('version') != version(before):
+                    return Response({'error': 'El registro cambió. Cierra y vuelve a abrir para revisar los datos actuales.'}, status=409)
+                form = PropertyForm(request.data, instance=obj)
+                if not form.is_valid():
+                    return Response({'error': 'Revisa los campos indicados.', 'fields': form.errors}, status=400)
+                revision.excluida = request.data.get('excluida') == 'true'
+                revision.motivo = str(request.data.get('motivo') or '').strip()
+                if revision.excluida and not revision.motivo:
+                    return Response({'error': 'Indica el motivo para excluir el registro.'}, status=400)
+                changed = set(form.changed_data)
+                # Keep the legacy primary surface aligned after a manual area/type edit.
+                if changed.intersection({'area_terreno', 'area_construida', 'tipo_inmueble'}):
+                    obj.area_m2 = (obj.area_terreno or obj.area_construida) if obj.tipo_inmueble == 'Terreno' else (obj.area_construida or obj.area_terreno)
+                    changed.add('area_m2')
+                revision.campos_protegidos = sorted(set(revision.campos_protegidos) | changed)
+                obj.save()
+                revision.save()
+                after = snapshot(obj, revision)
+                changes = {k: {'antes': before[k], 'despues': after[k]} for k in after if before[k] != after[k]}
+                CambioPropiedadScraping.objects.create(propiedad=obj,
+                    usuario=str(getattr(request.user, 'username', request.user.pk)), cambios=changes)
+            return Response({'ok': True, 'message': 'Registro guardado. Las correcciones quedan protegidas frente al scraper.'})
+        except Http404:
+            raise
+        except Exception as exc:
+            return Response({'error': f'Error al guardar el registro: {exc}'}, status=500)
 
 @ensure_csrf_cookie
 def dashboard(request):
