@@ -792,6 +792,10 @@ class RevisionPropiedadScraping(models.Model):
     excluida = models.BooleanField(default=False, db_index=True)
     motivo = models.TextField(blank=True, default='')
     campos_protegidos = models.JSONField(default=list)
+    # Marcada por el humano como "revisada y correcta": no requiere mas accion y
+    # deja de aparecer entre las alertas (se conserva en el filtro "Correctas").
+    correcta = models.BooleanField(default=False, db_index=True)
+    corregida_en = models.DateTimeField(null=True, blank=True)
     actualizado_en = models.DateTimeField(auto_now=True)
 
 

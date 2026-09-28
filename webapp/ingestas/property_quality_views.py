@@ -3,6 +3,7 @@ import hashlib
 import json
 from decimal import Decimal
 from django import forms
+from django.utils import timezone
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import Http404, HttpResponse, JsonResponse
@@ -56,7 +57,8 @@ def value(v):
 def snapshot(obj, revision):
     data = {field.name: value(field.value_from_object(obj)) for field in obj._meta.concrete_fields}
     data.update(excluida=revision.excluida, motivo=revision.motivo,
-                campos_protegidos=revision.campos_protegidos)
+                campos_protegidos=revision.campos_protegidos,
+                correcta=revision.correcta)
     return data
 
 def version(data):
@@ -93,6 +95,8 @@ class PropertyEditor(APIView):
                     return Response({'error': 'Revisa los campos indicados.', 'fields': form.errors}, status=400)
                 revision.excluida = request.data.get('excluida') == 'true'
                 revision.motivo = str(request.data.get('motivo') or '').strip()
+                revision.correcta = request.data.get('correcta') == 'true'
+                revision.corregida_en = timezone.now() if revision.correcta else None
                 if revision.excluida and not revision.motivo:
                     return Response({'error': 'Indica el motivo para excluir el registro.'}, status=400)
                 changed = set(form.changed_data)
@@ -130,6 +134,7 @@ def dashboard(request):
     for row in query.values(*DATA_FIELDS).order_by('id').iterator(chunk_size=1000):
         revision = revisions.get(row['id'])
         row['excluida'] = bool(revision and revision.excluida)
+        row['correcta'] = bool(revision and revision.correcta)
         row['motivo'] = revision.motivo if revision else ''
         ia = revisiones_ia.get(row['id'])
         row['ia_veredicto'] = ia.veredicto if ia else None
@@ -139,6 +144,7 @@ def dashboard(request):
     rows = analyze(rows)
     summary = {'total': len(rows), 'con_alertas': sum(bool(r['alertas']) for r in rows),
                'excluidas': sum(r['excluida'] for r in rows),
+               'correctas': sum(1 for r in rows if r['correcta']),
                'ia_real': sum(1 for r in rows if r['ia_veredicto'] == 'real'),
                'ia_ruido': sum(1 for r in rows if r['ia_veredicto'] == 'ruido'),
                'ia_dudoso': sum(1 for r in rows if r['ia_veredicto'] == 'dudoso'),
@@ -148,7 +154,9 @@ def dashboard(request):
     summary['triaje_revisados'] = summary['con_alertas'] - summary['ia_sin_revisar']
     state = request.GET.get('estado', 'alertas')
     if state == 'alertas':
-        rows = [r for r in rows if r['alertas']]
+        rows = [r for r in rows if r['alertas'] and not r['correcta']]
+    elif state == 'correctas':
+        rows = [r for r in rows if r['correcta']]
     elif state == 'excluidas':
         rows = [r for r in rows if r['excluida']]
     elif state in ('ia_real', 'ia_ruido', 'ia_dudoso'):
