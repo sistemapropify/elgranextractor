@@ -63,6 +63,7 @@ PATRON_RANGO_AREAS = (
 # Campos estructurados por portal, en orden de prioridad.
 CAMPOS_CONSTRUIDA = (
     'Area Construida', 'Área Construida', 'area_construida', 'area_construida_m2',
+    'Area Ocupada', 'Área Ocupada', 'area_ocupada', 'area_ocupada_m2',
     'built_area', 'superficie_construida', 'area_techada', 'area', 'Area',
 )
 CAMPOS_TERRENO = (

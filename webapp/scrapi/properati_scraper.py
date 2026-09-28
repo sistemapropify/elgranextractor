@@ -334,11 +334,13 @@ def mapear_a_formato_remax(prop):
     que espera estandarizar() (mismos nombres de campo que REMAX)."""
     # Determinar tipo raw
     tipo_raw = ""
-    tipo_prop = (prop.get("Tipo Propiedad") or "").strip()
+    # Las fichas nuevas usan ``Tipo Propiedad``; checkpoints y registros
+    # históricos pueden traer el mismo dato bajo ``Tipo``.
+    tipo_prop = (prop.get("Tipo Propiedad") or prop.get("Tipo") or "").strip()
     titulo = (prop.get("Titulo") or "").strip()
 
     if tipo_prop:
-        tipo_raw = f"{tipo_prop} en Venta"
+        tipo_raw = tipo_prop if clasificar_operacion(tipo_prop) else f"{tipo_prop} en Venta"
     elif titulo:
         t_upper = titulo.upper()
         if "DEPARTAMENTO" in t_upper:
@@ -401,13 +403,17 @@ def mapear_a_formato_remax(prop):
     lat = prop.get("Latitud") or ""
     lng = prop.get("Longitud") or ""
 
+    # Properati entrega una única superficie genérica. En lotes corresponde al
+    # terreno; para los demás inmuebles se conserva como área construida.
+    es_terreno = clasificar_tipo_inmueble(tipo_raw) == "Terreno"
+
     return {
         "ID": str(prop.get("ID", "")),
         "Tipo": tipo_raw,
         "Precio S/.": precio_soles,
         "Precio USD": precio_usd,
-        "Area Construida": area_raw,
-        "Area Terreno": "",
+        "Area Construida": "" if es_terreno else area_raw,
+        "Area Terreno": area_raw if es_terreno else "",
         "Medidas": "",
         "Habitaciones": dorm,
         "Banos": banos,

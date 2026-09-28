@@ -14,6 +14,9 @@ from scrapi.areas import (
     parsear_area,
 )
 from scrapi.normalization import validate_row
+from scrapi.properati_scraper import estandarizar as estandarizar_properati
+from scrapi.properati_scraper import mapear_a_formato_remax
+from ingestas.models import PropiedadesCompetencia
 
 DESCRIPCION_CASA = """
 𝗩𝗘𝗡𝗧𝗔 𝗖𝗔𝗦𝗔 𝗠𝗢𝗗𝗘𝗥𝗡𝗔 𝗘𝗡 𝗖𝗔𝗟𝗟𝗘 𝗟𝗢𝗦 𝗔𝗥𝗖𝗘𝗦 - 𝗖𝗔𝗬𝗠𝗔
@@ -102,6 +105,27 @@ class AreasCalculoTests(SimpleTestCase):
             calcular_areas({'Area Terreno': '120 m2', 'Area Construida': '185 m2'}),
             {'area_terreno': 120.0, 'area_construida': 185.0, 'area_m2': 185.0},
         )
+
+    def test_remax_area_ocupada_es_area_construida(self):
+        self.assertEqual(
+            calcular_areas({'Tipo': 'Departamento', 'Area Ocupada': '96.5 m2'}),
+            {'area_terreno': None, 'area_construida': 96.5, 'area_m2': 96.5},
+        )
+
+    def test_properati_terreno_clasifica_area_generica_como_terreno(self):
+        raw = mapear_a_formato_remax({
+            'ID': 'P-1', 'Tipo': 'Terreno en venta', 'Area': '240 m2',
+        })
+        row = estandarizar_properati(raw, '2026-09-24')
+        self.assertEqual(row['area_terreno'], 240)
+        self.assertIsNone(row['area_construida'])
+        self.assertEqual(row['area_m2'], 240)
+
+    def test_alquiler_no_calcula_precio_por_m2(self):
+        propiedad = PropiedadesCompetencia(
+            tipo_operacion='Alquiler', precio_usd=1200, area_construida=100,
+        )
+        self.assertIsNone(propiedad.precio_m2_construida)
 
     def test_adondevivir_area_total_y_area(self):
         self.assertEqual(
