@@ -4,7 +4,8 @@ from cuadrantizacion.property_quality import annotate_map_quality
 
 DATA_FIELDS = ('id', 'fuente', 'id_origen', 'titulo', 'tipo_inmueble', 'tipo_operacion',
     'precio_usd', 'precio_soles', 'area_m2', 'area_terreno', 'area_construida',
-    'distrito', 'latitud', 'longitud', 'precision_ubicacion', 'url', 'estado_publicacion')
+    'distrito', 'latitud', 'longitud', 'precision_ubicacion', 'url',
+    'estado_publicacion', 'ultima_vez_vista', 'fecha_retiro_confirmado')
 
 def number(value):
     try:

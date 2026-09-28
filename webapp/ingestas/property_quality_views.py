@@ -111,6 +111,8 @@ def dashboard(request):
     for param, field in (('portal', 'fuente'), ('tipo', 'tipo_inmueble'), ('distrito', 'distrito'), ('operacion', 'tipo_operacion')):
         if request.GET.get(param):
             query = query.filter(**{field: request.GET[param]})
+    if request.GET.get('pub_estado'):
+        query = query.filter(estado_publicacion=request.GET['pub_estado'])
     revisions = {r.propiedad_id: r for r in RevisionPropiedadScraping.objects.all()}
     rows = []
     for row in query.values(*DATA_FIELDS).order_by('id').iterator(chunk_size=1000):
@@ -145,5 +147,6 @@ def dashboard(request):
         'params': params.urlencode(), 'filters': request.GET,
         'portals': PropiedadesCompetencia.objects.order_by('fuente').values_list('fuente', flat=True).distinct(),
         'types': PropiedadesCompetencia.TIPO_INMUEBLE_CHOICES,
+        'estados_publicacion': PropiedadesCompetencia.ESTADO_PUBLICACION_CHOICES,
         'can_edit': allowed(user),
     })
