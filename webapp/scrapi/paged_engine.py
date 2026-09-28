@@ -184,7 +184,10 @@ async def enrich(portal, source, page, raw):
             and rid in page.url
         )
         if not same_ficha:
-            raise RuntimeError('detail.unexpected_redirect: no se cargó la ficha solicitada')
+            raise RuntimeError(
+                'detail.unexpected_redirect: no se cargó la ficha solicitada'
+                f' (pedida={urlsplit(url).path[:110]!r}; final={page.url[:160]!r})'
+            )
     title = (await page.title()).lower()
     if not title.strip():
         raise RuntimeError('detail.not_ready: la ficha no terminó de cargar')
@@ -341,6 +344,7 @@ async def crawl_pages(portal, source_url, source, page, detail_page, *, emit,
     saved = set(saved_ids)
     failed = set(failed_ids)
     signatures = set()
+    redirect_streak = 0
     next_url = page_url(portal, source_url, start_page)
     for n in range(max(1, start_page), max_pages + 1):
         try:
@@ -413,6 +417,7 @@ async def crawl_pages(portal, source_url, source, page, detail_page, *, emit,
                     row = await prepare_detail(portal, source, detail_page, raw, emit,
                                                store_images=bool(batch_callback))
                     failed.discard(key)
+                    redirect_streak = 0
                 except ScrapingInterrupted:
                     raise
                 except Exception as exc:
@@ -425,6 +430,22 @@ async def crawl_pages(portal, source_url, source, page, detail_page, *, emit,
                     raw['_detail_error'] = str(exc)[:1000]
                     await emit(event='detail.failed', level='error', message=str(exc),
                                page=n, property_id=key, candidate_error={'id': key, 'error': str(exc)})
+                    if portal == 'adondevivir' and 'unexpected_redirect' in str(exc):
+                        # A partir de cierto volumen el portal deja de servir las
+                        # fichas y empieza a redirigir TODAS. Seguir recorriendo
+                        # el listado solo gasta reintentos y agrava el rate-limit:
+                        # se detiene conservando la cola para reanudar más tarde.
+                        redirect_streak += 1
+                        if redirect_streak >= 3:
+                            await emit(event='portal.paused', level='error', page=n,
+                                       message='Adondevivir empezó a redirigir todas las fichas; '
+                                               'se detiene para no insistir. Reintente en unas horas.',
+                                       error_type=type(exc).__name__)
+                            raise ScrapingInterrupted(
+                                'portal.paused: Adondevivir mantiene un bloqueo de acceso; cola conservada'
+                            ) from exc
+                    else:
+                        redirect_streak = 0
                     continue
             else:
                 row = normalize(portal, source, raw)
