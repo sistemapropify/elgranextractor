@@ -789,6 +789,17 @@ def _run_scraping(job_id: int, stop_event=None):
     _crear_log(job, 'success' if job.estado == 'completed' else 'info', resumen)
     logger.info(f"ScrapingJob #{job_id}: {resumen}")
 
+    # ── Triaje de calidad (agente IA) ──
+    # Al terminar la corrida, el agente clasifica en background las alertas nuevas
+    # (las que aun no tienen veredicto) y deja el resultado en RevisionIAAlerta,
+    # visible en el dashboard de Calidad. No bloquea el scraping.
+    try:
+        from ingestas.calidad_ia import lanzar_triage_en_background
+        lanzar_triage_en_background()
+        _crear_log(job, 'info', '🤖 Triaje de calidad (IA) lanzado en segundo plano.')
+    except Exception as exc:
+        logger.warning('No se pudo lanzar el triaje de calidad: %s', exc)
+
 
 @shared_task(
     bind=True,

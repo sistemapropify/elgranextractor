@@ -169,3 +169,55 @@ def propiedades_con_alertas(sin_veredicto=True):
     if sin_veredicto:
         con_alertas = [r for r in con_alertas if r['id'] not in revisadas]
     return con_alertas
+
+
+def triage_pendientes(limite=0):
+    """Triaje de las propiedades con alerta que aun no tienen veredicto.
+
+    Es el cuerpo del agente: recorre las pendientes, las clasifica y guarda el
+    resultado en ``RevisionIAAlerta``. Incremental por diseno: al volver a
+    llamarse salta las ya revisadas. Devuelve el conteo de veredictos.
+    """
+    from .models import RevisionIAAlerta
+
+    pendientes = propiedades_con_alertas(sin_veredicto=True)
+    if limite:
+        pendientes = pendientes[:limite]
+
+    conteo = {}
+    for propiedad in pendientes:
+        resultado = analizar(dict(propiedad))
+        conteo[resultado['veredicto']] = conteo.get(resultado['veredicto'], 0) + 1
+        RevisionIAAlerta.objects.update_or_create(
+            propiedad_id=propiedad['id'],
+            defaults={
+                'veredicto': resultado['veredicto'],
+                'motivo': resultado['motivo'],
+                'correccion': resultado['correccion'],
+                'alertas_revisadas': list(propiedad.get('alertas') or []),
+                'confianza': resultado['confianza'],
+                'modelo': 'deepseek',
+                'respuesta_cruda': {'texto': resultado.get('respuesta_cruda', ''),
+                                    'intentos': resultado.get('intentos')},
+            },
+        )
+    return conteo
+
+
+def lanzar_triage_en_background():
+    """Dispara el triaje en un hilo daemon, sin bloquear al llamador.
+
+    Es el punto de entrada que usa el sistema al terminar una corrida de
+    scraping: corre el agente sobre lo nuevo y deja los veredictos en la tabla.
+    Nunca levanta excepciones hacia afuera.
+    """
+    import threading
+
+    def _correr():
+        try:
+            conteo = triage_pendientes()
+            logger.info('Triaje de calidad terminado: %s', conteo)
+        except Exception as exc:
+            logger.exception('Error en el triaje de calidad: %s', exc)
+
+    threading.Thread(target=_correr, daemon=True, name='triage-calidad').start()
