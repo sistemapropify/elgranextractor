@@ -5,6 +5,7 @@ app_name = 'ingestas'
 
 urlpatterns = [
     path('scraping/calidad/', property_quality_views.dashboard, name='scraping_calidad'),
+    path('scraping/calidad/triaje/', property_quality_views.disparar_triage, name='scraping_calidad_triaje'),
     path('scraping/registros/<int:pk>/editar/', property_quality_views.PropertyEditor.as_view(), name='scraping_registro_editar'),
     path('', views.IngestasIndexView.as_view(), name='index'),
     path('subir/', views.SubirExcelView.as_view(), name='subir_excel'),

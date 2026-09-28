@@ -164,3 +164,20 @@ def dashboard(request):
         'estados_publicacion': PropiedadesCompetencia.ESTADO_PUBLICACION_CHOICES,
         'can_edit': allowed(user),
     })
+
+
+def disparar_triage(request):
+    """Dispara el triaje de IA sobre las alertas pendientes, en segundo plano.
+
+    Devuelve JSON; el analisis corre en un hilo daemon, asi que la respuesta es
+    inmediata y los veredictos van apareciendo en el dashboard a medida que se
+    guardan. La primera vez procesa todo el historico; despues solo lo nuevo.
+    """
+    from ingestas.calidad_ia import lanzar_triage_en_background, propiedades_con_alertas
+
+    if not allowed(user_for(request)):
+        return JsonResponse({'error': 'Se requiere permiso para disparar el triaje.'}, status=403)
+    pendientes = len(propiedades_con_alertas(sin_veredicto=True))
+    lanzar_triage_en_background()
+    return JsonResponse({'ok': True, 'pendientes': pendientes,
+                         'mensaje': f'Triaje lanzado: {pendientes} propiedades por analizar.'})
