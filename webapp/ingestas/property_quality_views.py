@@ -122,12 +122,15 @@ def dashboard(request):
         rows.append(row)
     rows = analyze(rows)
     summary = {'total': len(rows), 'con_alertas': sum(bool(r['alertas']) for r in rows),
-               'excluidas': sum(r['excluida'] for r in rows)}
+               'excluidas': sum(r['excluida'] for r in rows),
+               'conflicto_descripcion': sum(r['descripcion_conflicto'] for r in rows)}
     state = request.GET.get('estado', 'alertas')
     if state == 'alertas':
         rows = [r for r in rows if r['alertas']]
     elif state == 'excluidas':
         rows = [r for r in rows if r['excluida']]
+    elif state == 'descripcion':
+        rows = [r for r in rows if r['descripcion_conflicto']]
     elif state in ('outlier', 'incomplete', 'review'):
         rows = [r for r in rows if r['quality_status'] == state]
     if request.GET.get('exportar') == 'csv':
