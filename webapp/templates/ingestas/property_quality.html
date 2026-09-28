@@ -7,7 +7,15 @@
 <div class="quality-page"><h1>Calidad de propiedades scrapeadas</h1>
 <div class="quality-summary">Evaluadas: <strong>{{ summary.total }}</strong> · Con alertas: <strong>{{ summary.con_alertas }}</strong> · Excluidas del ACM: <strong>{{ summary.excluidas }}</strong><br>
 Triaje IA: <strong style="color:#57d9a3">{{ summary.ia_real }} reales</strong> · <strong style="color:#f4d093">{{ summary.ia_dudoso }} dudosas</strong> · <strong style="color:#aebdcb">{{ summary.ia_ruido }} ruido</strong> · <strong>{{ summary.ia_sin_revisar }} sin revisar</strong>
-{% if summary.ia_sin_revisar %}<button type="button" id="btn-triaje" onclick="dispararTriaje(this)" style="margin-left:10px;padding:6px 12px;background:#263b4b;color:#fff;border:1px solid #52718b;border-radius:6px;cursor:pointer">Analizar con IA ({{ summary.ia_sin_revisar }} pendientes)</button>{% endif %}</div>
+{% if summary.ia_sin_revisar %}<button type="button" id="btn-triaje" onclick="dispararTriaje(this)" style="margin-left:10px;padding:6px 12px;background:#263b4b;color:#fff;border:1px solid #52718b;border-radius:6px;cursor:pointer">Analizar con IA ({{ summary.ia_sin_revisar }} pendientes)</button>{% endif %}
+<div style="margin-top:10px">
+  <div style="background:#1a2735;border:1px solid #354151;border-radius:6px;height:14px;overflow:hidden;max-width:520px">
+    <div style="background:linear-gradient(90deg,#3b82f6,#22d3ee);height:100%;width:{% widthratio summary.triaje_revisados summary.triaje_total 100 %}%;transition:width .4s"></div>
+  </div>
+  <div style="font-size:11px;color:#94a3b8;margin-top:3px">
+    Progreso del triaje: <strong style="color:#e6edf3">{{ summary.triaje_revisados }}</strong> de <strong style="color:#e6edf3">{{ summary.triaje_total }}</strong> analizadas ({% widthratio summary.triaje_revisados summary.triaje_total 100 %}%)
+  </div>
+</div></div>
 <p class="quality-explain">Se conservan todos los registros. Casas: se revisan superficies incompletas y terrenos menores de 30 m²; no se considera atípica una casa por dividir su precio total entre su construcción. Terrenos sin construcción y departamentos: comparación exploratoria de ventas por distrito y tamaño similar (0,5 a 2 veces), mínimo 8 anuncios aptos y regla de 3 IQR. Son alertas para revisar, no errores confirmados. Las reglas son las mismas que en el mapa; las muestras pueden cambiar según los portales seleccionados. La ubicación aproximada no es un error ni requiere corrección: se conserva como referencia y queda fuera del cálculo ACM y de las estadísticas de atípicos. Este informe también incluye registros que no se pueden ubicar por falta de coordenadas.</p>
 <form method="get"><label>Portal <select name="portal"><option value="">Todos</option>{% for p in portals %}<option {% if filters.portal == p %}selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
 <label>Tipo <select name="tipo"><option value="">Todos</option>{% for key,label in types %}<option value="{{ key }}" {% if filters.tipo == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
@@ -29,12 +37,13 @@ Triaje IA: <strong style="color:#57d9a3">{{ summary.ia_real }} reales</strong> �
 <script>
 function dispararTriaje(btn) {
   btn.disabled = true;
-  btn.textContent = 'Analizando… (dejalo correr, recarga para ver avances)';
+  btn.textContent = 'Triaje en marcha…';
   fetch('/ingestas/scraping/calidad/triaje/')
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (d.ok) {
         btn.textContent = 'Triaje en marcha: ' + d.pendientes + ' propiedades';
+        location.reload();
       } else {
         btn.textContent = 'Error: ' + (d.error || 'sin permiso');
         btn.disabled = false;
@@ -45,5 +54,7 @@ function dispararTriaje(btn) {
       btn.disabled = false;
     });
 }
+{% if summary.ia_sin_revisar %}// Mientras haya pendientes, refrescar solo para ver el avance en vivo.
+setTimeout(function(){ location.reload(); }, 15000);{% endif %}
 </script>
 {% endblock %}

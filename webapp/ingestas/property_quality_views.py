@@ -133,6 +133,9 @@ def dashboard(request):
                'ia_ruido': sum(1 for r in rows if r['ia_veredicto'] == 'ruido'),
                'ia_dudoso': sum(1 for r in rows if r['ia_veredicto'] == 'dudoso'),
                'ia_sin_revisar': sum(1 for r in rows if r['alertas'] and not r['ia_veredicto'])}
+    # Barra de progreso del triaje: cuantas sospechosas ya tienen veredicto.
+    summary['triaje_total'] = summary['con_alertas']
+    summary['triaje_revisados'] = summary['con_alertas'] - summary['ia_sin_revisar']
     state = request.GET.get('estado', 'alertas')
     if state == 'alertas':
         rows = [r for r in rows if r['alertas']]
