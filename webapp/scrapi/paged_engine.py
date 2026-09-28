@@ -176,8 +176,11 @@ async def enrich(portal, source, page, raw):
         # conservan el posting id numérico en la URL final. Solo es un redirect
         # real cuando la ficha solicitada ya no aparece (home, buscador, error).
         rid = stable_id(raw)
+        # Adondevivir redirige a la URL canonica cambiando el prefijo del slug
+        # ("vecllcna-" -> "vecllcin-") conservando el ID: es la misma ficha, no un
+        # fallo. Urbania ya usaba este criterio.
         same_ficha = bool(
-            portal == 'urbania'
+            portal in ('urbania', 'adondevivir')
             and rid
             and rid.isdigit()
             and len(rid) >= 6
