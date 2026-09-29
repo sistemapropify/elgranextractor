@@ -21,8 +21,8 @@
     document.querySelector('[data-tab="Terreno"]').hidden=!house&&!land;
     const mode=$('cmp-marker-mode');mode.options[0].textContent=house||land?'Suelo / m²':'Oferta / m² construido';mode.options[1].disabled=!house;if(!house&&mode.value==='improvements')mode.value='land';
     const propertyLayer=document.querySelector('[name=map_layer][value=property]'),landLayer=document.querySelector('[name=map_layer][value=land]'),propertyReferenceLayer=document.querySelector('[name=map_layer][value=property_reference]'),otherReferenceLayer=document.querySelector('[name=map_layer][value=other_reference]');
-    // Mostrar toda la evidencia por defecto; las capas sirven para ocultar, no para perder registros.
-    propertyLayer.checked=!land;landLayer.checked=house||land;propertyReferenceLayer.checked=house;otherReferenceLayer.checked=house||land;
+    // Al cambiar el tipo, empezar con una sola capa: los comparables del inmueble analizado.
+    propertyLayer.checked=!land;landLayer.checked=land;propertyReferenceLayer.checked=false;otherReferenceLayer.checked=false;
     propertyLayer.closest('label').hidden=land;propertyReferenceLayer.closest('label').hidden=land;
     landLayer.closest('label').hidden=!house&&!land;otherReferenceLayer.closest('label').hidden=!house&&!land;
     $('cmp-property-layer-label').textContent=house?'Casas comparables':type+'s comparables';
