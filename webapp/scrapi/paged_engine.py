@@ -203,6 +203,10 @@ async def guarded_navigation(page, portal):
         try:
             if response.request.resource_type == 'document' and response.frame == page.main_frame:
                 page._scraping_document_status = response.status
+                # Diagnostic identifiers only: never persist Cookie/Authorization.
+                headers = response.headers
+                page._scraping_access_headers = {key: headers.get(key) for key in
+                    ('cf-ray', 'cf-mitigated', 'server') if headers.get(key)}
         except Exception:
             pass
     page.on('response', response_received)
@@ -272,6 +276,8 @@ async def prepare_detail(portal, source, page, raw, emit, *, store_images=False)
                        transient=transient_failure(exc), retry_in_seconds=delay,
                        message=f'{type(exc).__name__}: {exc or "se agotó el tiempo de respuesta"}')
             if delay is None:
+                if portal == 'adondevivir' and portal_blocked(exc):
+                    raise ScrapingInterrupted(f'portal.paused: {portal} mantiene un bloqueo de acceso; cola conservada') from exc
                 if portal == 'properati' and portal_blocked(exc):
                     raise RuntimeError('portal.paused: Properati mantiene un bloqueo de acceso; cola conservada') from exc
                 raise
@@ -528,9 +534,16 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
             if portal in ('adondevivir', 'properati', 'urbania'):
                 context = await browser.new_context()
                 page, detail_page = await context.new_page(), await context.new_page()
-                if portal == 'properati' and manual_verification:
-                    from .manual_verification import resolve
+                if portal in ('properati', 'adondevivir') and manual_verification:
+                    if portal == 'adondevivir':
+                        from .browser_verification import resolve
+                    else:
+                        from .manual_verification import resolve
                     async def verify(target):
+                        await emit(event='verification.context',
+                            message=f'{portal}: verificando el acceso en la misma sesión del navegador',
+                            http_status=getattr(target, '_scraping_document_status', None),
+                            access_headers=getattr(target, '_scraping_access_headers', {}))
                         return await resolve(target, manual_verification, emit)
                     page._manual_verification = verify
                     detail_page._manual_verification = verify
@@ -539,10 +552,9 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
             await guarded_navigation(page, portal)
             await guarded_navigation(detail_page, portal)
             await page.set_viewport_size({'width': 1440, 'height': 1000})
-            # Warm-up solo si vamos a abrir fichas de detalle: comparte cookies
-            # con el listado, pero un deep-link "frío" se detecta como tráfico
-            # sospechoso. En modo "solo listado" la pestaña de detalle no se usa.
-            if not listing_only:
+            # Adondevivir opens the requested listing first: do not leave a
+            # competing challenge running in a second tab of the same session.
+            if not listing_only and portal != 'adondevivir':
                 try:
                     _warm = urlsplit(validate_url(portal, source_url))
                     await detail_page.goto(f'{_warm.scheme}://{_warm.netloc}/',

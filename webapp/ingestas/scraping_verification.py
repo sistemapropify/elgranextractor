@@ -28,15 +28,22 @@ def public_state(job):
     if item is None:
         return None
     return {'id': str(item.pk), 'expires_at': item.expires_at.isoformat(),
-            'screenshot': item.screenshot}
+            'screenshot': item.screenshot, 'portal': item.run.portal,
+            'mode': 'browser' if item.run.portal == 'adondevivir' else 'answer'}
 
 
 @transaction.atomic
 def submit_answer(job_id, challenge_id, answer):
-    if not valid_answer(answer):
-        raise ValueError('Escribe únicamente el resultado numérico que ves en la imagen.')
     job = ScrapingJob.objects.select_for_update().get(pk=job_id)
-    updated = active_for_job(job).filter(pk=challenge_id, state='waiting').update(
+    item = active_for_job(job).filter(pk=challenge_id, state='waiting').select_related('run').first()
+    if item is None:
+        raise ValueError('La verificación venció, ya fue respondida o el trabajo cambió. Actualiza el estado.')
+    if item.run.portal == 'adondevivir':
+        from scrapi.browser_verification import parse_action
+        parse_action(answer)
+    elif item.run.portal != 'properati' or not valid_answer(answer):
+        raise ValueError('Escribe únicamente el resultado numérico que ves en la imagen.')
+    updated = active_for_job(job).filter(pk=item.pk, state='waiting').update(
         answer=answer, state='submitted')
     if not updated:
         raise ValueError('La verificación venció, ya fue respondida o el trabajo cambió. Actualiza el estado.')
@@ -51,8 +58,8 @@ def mailbox(run_id, execution_token):
             return
         with transaction.atomic():
             run = lock_run(run_id, execution_token)
-            if run.portal != 'properati':
-                raise ValueError('Verificación manual disponible solo para Properati.')
+            if run.portal not in ('properati', 'adondevivir'):
+                raise ValueError('Este portal no admite verificación manual.')
             query = ScrapingVerification.objects.filter(run_id=run_id, execution_token=execution_token)
             if action == 'open':
                 ScrapingVerification.objects.filter(run=run).exclude(state='closed').update(

@@ -463,6 +463,11 @@ async def esperar_cloudflare(page, timeout=30):
     if ok:
         print(f"   Cloudflare resuelto! Titulo: {titulo}")
         return True
+    verify = getattr(page, '_manual_verification', None)
+    if verify:
+        # Preserve the exact browser/IP/page being verified; a reload can
+        # replace the challenge that the human is currently responding to.
+        return await verify(page)
     print("   [WARN] Challenge no resuelto pasivamente; recargando una vez...")
     try:
         await page.reload(wait_until='domcontentloaded', timeout=20000)

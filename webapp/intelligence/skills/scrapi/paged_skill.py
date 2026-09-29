@@ -30,7 +30,7 @@ def execute_paged_skill(skill, portal, runner, saver, params, context=None):
             batch_callback=save,
             resume_state=params.get('resume_state'),
         )
-        if portal == 'properati' and run_id and context.get('execution_token'):
+        if portal in ('properati', 'adondevivir') and run_id and context.get('execution_token'):
             from ingestas.scraping_verification import mailbox
             runner_kwargs['manual_verification'] = mailbox(run_id, context['execution_token'])
         # El modo "solo listado" solo se propaga a runners que lo soporten;

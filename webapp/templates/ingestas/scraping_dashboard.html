@@ -550,13 +550,14 @@
         </div>
         <section id="verificationPanel" hidden style="padding:16px;background:#fff5d6;color:#252525;" aria-labelledby="verificationHeading">
             <h3 id="verificationHeading">Properati necesita tu verificación</h3>
-            <p>Resuelve el ejercicio de la imagen. Tu respuesta se enviará al navegador que está extrayendo las propiedades.</p>
+            <p id="verificationInstructions">Resuelve el ejercicio de la imagen. Tu respuesta se enviará al navegador que está extrayendo las propiedades.</p>
             <img id="verificationImage" alt="Verificación solicitada por Properati" style="display:block;max-width:100%;max-height:480px;margin:8px auto;">
             <form id="verificationForm">
                 <label for="verificationAnswer">Tu respuesta</label>
                 <input id="verificationAnswer" inputmode="numeric" autocomplete="off" maxlength="13" required pattern="-?[0-9]{1,12}">
                 <button id="verificationSubmit" type="submit">Enviar respuesta</button>
             </form>
+            <button id="verificationRefresh" type="button" hidden>Actualizar pantalla</button>
             <p id="verificationMessage" role="status" aria-live="polite"></p>
         </section>
         <div class="terminal-body" id="terminalBody">
@@ -657,6 +658,10 @@ let eventSource = null;
 let tableRequest = null;
 let verificationId = null;
 let verificationLoading = false;
+let verificationMode = 'answer';
+let verificationSending = false;
+let verificationPendingId = null;
+let verificationRenderedId = null;
 
 async function loadVerification(jobId) {
     if (verificationLoading || jobId !== currentJobId) return;
@@ -673,14 +678,32 @@ async function loadVerification(jobId) {
         panel.hidden = !item;
         if (!item) {
             verificationId = null;
+            verificationRenderedId = null;
+            verificationPendingId = null;
             document.getElementById('verificationImage').removeAttribute('src');
             return;
         }
-        document.getElementById('verificationSubmit').disabled = false;
+        verificationMode = item.mode || 'answer';
+        const browserMode = verificationMode === 'browser';
+        document.getElementById('verificationHeading').textContent = browserMode ? 'Adondevivir necesita tu verificación' : 'Properati necesita tu verificación';
+        document.getElementById('verificationInstructions').textContent = browserMode
+            ? 'Esta es la pantalla del navegador de producción. Haz clic sobre la casilla o los controles que indique el portal. Actualizar pantalla obtiene una imagen nueva sin recargar la página. Si solo muestra un bloqueo sin controles, el portal no permite resolverlo aquí.'
+            : 'Resuelve el ejercicio de la imagen. Tu respuesta se enviará al navegador que está extrayendo las propiedades.';
+        document.getElementById('verificationForm').hidden = browserMode;
+        document.getElementById('verificationRefresh').hidden = !browserMode;
+        document.getElementById('verificationImage').style.cursor = browserMode ? 'crosshair' : 'default';
+        document.getElementById('verificationImage').style.maxHeight = browserMode ? 'none' : '480px';
+        document.getElementById('verificationImage').alt = browserMode ? 'Pantalla de verificación de Adondevivir' : 'Verificación de Properati';
+        document.getElementById('verificationSubmit').disabled = verificationSending;
+        document.getElementById('verificationRefresh').disabled = verificationSending || verificationPendingId === item.id;
         if (verificationId !== item.id) {
             verificationId = item.id;
+            if (verificationPendingId !== item.id) verificationPendingId = null;
             document.getElementById('verificationAnswer').value = '';
-            document.getElementById('verificationImage').src = 'data:image/png;base64,' + item.screenshot;
+            verificationRenderedId = null;
+            const image = document.getElementById('verificationImage');
+            image.onload = () => { if (verificationId === item.id) verificationRenderedId = item.id; };
+            image.src = 'data:image/png;base64,' + item.screenshot;
             document.getElementById('verificationMessage').textContent = 'Disponible hasta ' + new Date(item.expires_at).toLocaleTimeString() + '. Si vence, las fichas pendientes se conservan.';
             document.getElementById('verificationSubmit').disabled = false;
         }
@@ -717,6 +740,41 @@ document.getElementById('verificationForm').addEventListener('submit', async fun
         button.disabled = false;
     }
 });
+
+async function sendBrowserVerification(action) {
+    if (verificationMode !== 'browser' || !verificationId || !currentJobId || verificationSending || verificationPendingId === verificationId) return;
+    const jobId = currentJobId, challengeId = verificationId;
+    const message = document.getElementById('verificationMessage');
+    const form = new FormData();
+    form.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    form.append('verification_id', challengeId);
+    form.append('answer', action);
+    verificationSending = true;
+    document.getElementById('verificationRefresh').disabled = true;
+    try {
+        const response = await fetch(`/ingestas/scraping/verificacion/${jobId}/`, {method:'POST', body:form, signal:AbortSignal.timeout(10000)});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'No se pudo enviar la acción.');
+        if (jobId !== currentJobId) return;
+        verificationPendingId = challengeId;
+        message.textContent = 'Acción enviada al navegador de Adondevivir. Esperando la nueva pantalla…';
+        setTimeout(() => loadVerification(jobId), 1500);
+    } catch (error) {
+        message.textContent = error.message;
+        loadVerification(jobId);
+    } finally {
+        verificationSending = false;
+        document.getElementById('verificationRefresh').disabled = verificationPendingId === verificationId;
+    }
+}
+document.getElementById('verificationImage').addEventListener('click', function(event) {
+    if (!this.complete || !this.naturalWidth || verificationRenderedId !== verificationId) return;
+    const box = this.getBoundingClientRect();
+    const x = Math.floor((event.clientX-box.left)*this.naturalWidth/box.width);
+    const y = Math.floor((event.clientY-box.top)*this.naturalHeight/box.height);
+    sendBrowserVerification(`c:${x}:${y}`);
+});
+document.getElementById('verificationRefresh').addEventListener('click', () => sendBrowserVerification('refresh'));
 
 // ── URLs de listado por portal ──
 function recogerUrls() {

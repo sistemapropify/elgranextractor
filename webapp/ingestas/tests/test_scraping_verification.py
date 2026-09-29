@@ -10,6 +10,7 @@ from django.middleware.csrf import CsrfViewMiddleware
 from django.template.loader import get_template
 from ingestas.views import ScrapingVerificationView
 from ingestas.scraping_verification import active_for_job, valid_answer
+from ingestas.scraping_verification import submit_answer
 
 
 class VerificationAccessTests(SimpleTestCase):
@@ -70,6 +71,34 @@ class VerificationAccessTests(SimpleTestCase):
         self.assertTrue(valid_answer('-12'))
         for answer in ('', '1e100', '1;click()', '9' * 20):
             self.assertFalse(valid_answer(answer))
+
+    def test_adondevivir_action_validated_against_actual_portal(self):
+        item = SimpleNamespace(pk='challenge', run=SimpleNamespace(portal='adondevivir'))
+        query = Mock()
+        query.filter.return_value.select_related.return_value.first.return_value = item
+        query.filter.return_value.update.return_value = 1
+        with patch('ingestas.scraping_verification.ScrapingJob'), \
+             patch('ingestas.scraping_verification.active_for_job', return_value=query):
+            submit_answer.__wrapped__(1, 'challenge', 'c:100:200')
+            query.filter.return_value.update.assert_called_once_with(answer='c:100:200', state='submitted')
+            with self.assertRaises(ValueError): submit_answer.__wrapped__(1, 'challenge', 'c:1440:20')
+
+    def test_click_cannot_be_sent_to_properati(self):
+        item = SimpleNamespace(pk='challenge', run=SimpleNamespace(portal='properati'))
+        query = Mock()
+        query.filter.return_value.select_related.return_value.first.return_value = item
+        with patch('ingestas.scraping_verification.ScrapingJob'), \
+             patch('ingestas.scraping_verification.active_for_job', return_value=query):
+            with self.assertRaises(ValueError): submit_answer.__wrapped__(1, 'challenge', 'c:100:200')
+            query.filter.return_value.update.assert_not_called()
+
+    def test_missing_or_consumed_challenge_rejects_click(self):
+        query = Mock()
+        query.filter.return_value.select_related.return_value.first.return_value = None
+        with patch('ingestas.scraping_verification.ScrapingJob'), \
+             patch('ingestas.scraping_verification.active_for_job', return_value=query):
+            with self.assertRaises(ValueError): submit_answer.__wrapped__(1, 'challenge', 'c:100:200')
+            query.filter.return_value.update.assert_not_called()
 
     def test_template_compiles(self):
         self.assertIsNotNone(get_template('ingestas/scraping_dashboard.html'))
