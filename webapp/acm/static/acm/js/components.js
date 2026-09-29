@@ -50,9 +50,9 @@
     if(result?.land_radius>p.radius)circles.push(new google.maps.Circle({map,center,radius:result.land_radius,strokeColor:'#e8b455',strokeWeight:2,fillOpacity:0}));
   }
   function clearResult(message){
-    if(aiController)aiController.abort();aiExplanation=null;
-    $('cmp-ai-generate').disabled=true;$('cmp-ai-status').textContent='Vuelve a calcular para explicar la selección vigente.';
-    $('cmp-simple').textContent='Vuelve a calcular para obtener una explicación vigente.';
+    if(aiController)aiController.abort();aiController=null;aiExplanation=null;
+    $('cmp-ai-panel').hidden=true;$('cmp-ai-status').textContent='';
+    $('cmp-simple').textContent='';
     $('cmp-scenario').hidden=true;
     result=null;clearMap();drawCircles();$('cmp-export').disabled=true;$('cmp-word').disabled=true;$('cmp-save').disabled=true;$('cmp-save').textContent='Guardar en historial';
     $('cmp-new').innerHTML='<h2>Valoración por componentes</h2><p class="cmp-muted">'+escape(message)+'</p>';
@@ -212,43 +212,33 @@
   function openDetail(id){detailId=id;renderDetail();if(!$('cmp-detail').open)$('cmp-detail').showModal();}
   function selection(){return {token:snapshot.token,excluded:[...excluded],...(snapshot.params.weight_reference?{target_areas:{land:snapshot.params.land,built:snapshot.params.built}}:{})};}
   function renderSimple(){
-    const host=$('cmp-simple');host.hidden=!$('cmp-simple-toggle').checked;
-    $('cmp-ai-controls').hidden=host.hidden;
-    if(aiExplanation){host.textContent=aiExplanation;return;}
-    if(!result?.new){host.textContent='Primero busca y calcula.';return;}
-    const n=result.new,used=result.breakdown.filter(d=>d.usable).sort((a,b)=>(b.similarity_weight||0)-(a.similarity_weight||0));
-    if(result.model!=='components'){host.textContent='El resultado es '+money(n.total)+'. Se tomó el valor central por m² de '+(result.model==='land'?'terreno':'construcción')+' entre los comparables seleccionados y se aplicó a tu superficie.\n\n'+result.messages.join(' ');return;}
-    const top=used[0],row=top&&snapshot.records.find(r=>r.id===top.id);
-    host.textContent='El resultado es '+money(n.total)+': '+money(n.land_value)+' corresponden al terreno y '+money(n.built_value)+' a construcción y mejoras.\n\n'+
-      (row?'La mayor influencia es '+row.source.toUpperCase()+' · '+row.code+', con '+decimals(top.similarity_weight)+'% del peso. Su anuncio parte de '+money(row.price)+', se ajusta '+money(top.land_adjustment)+' por terreno y '+money(top.built_adjustment)+' por construcción, y sugiere '+money(top.target_estimate)+' para tu inmueble.\n\n':'')+
-      'Se combinan los precios ajustados de '+used.length+' casa(s). El peso mostrado es el que realmente se aplica.\n\n'+
-      (snapshot.params.weight_reference?'En este escenario se conservaron muestra y pesos; solo cambiaron los metrajes. ':'')+
-      'Son precios de oferta. Antigüedad, acabados y habitaciones no tienen un ajuste económico propio en este método. '+result.messages.filter(m=>!m.startsWith('Se ajusta')).join(' ');
+    const host=$('cmp-simple');host.hidden=!aiExplanation;
+    host.textContent=aiExplanation||'';
   }
-  $('cmp-simple-toggle').addEventListener('change',renderSimple);
-  $('cmp-ai-generate').addEventListener('click',async()=>{
+  async function explainAutomatically(){
     if(!snapshot||!result?.new)return;
-    const key=JSON.stringify(selection()),seq=sequence,button=$('cmp-ai-generate');
-    const current=new AbortController();aiController=current;button.disabled=true;
+    const key=JSON.stringify(selection()),seq=sequence;
+    const current=new AbortController();aiController=current;
     const timer=setTimeout(()=>current.abort(),140000);
-    $('cmp-ai-status').textContent='Preparando una explicación sencilla…';
+    $('cmp-ai-panel').hidden=false;$('cmp-ai-status').textContent='Analizando resultado…';
     try{
       const response=await fetch($('cmp-ai-panel').dataset.url,{method:'POST',credentials:'same-origin',signal:current.signal,
         headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:key});
       if(!response.headers.get('content-type')?.includes('application/json'))throw Error('El servidor no devolvió datos. Revisa tu sesión.');
       const body=await response.json();if(!response.ok)throw Error(body.error||'No se pudo generar la explicación.');
-      if(seq!==sequence||!snapshot||key!==JSON.stringify(selection()))return;
-      aiExplanation=body.explanation;renderSimple();$('cmp-ai-status').textContent='Explicación con IA del cálculo actual. Revisa sus conclusiones.';
-    }catch(error){if(seq===sequence)$('cmp-ai-status').textContent=error.name==='AbortError'?'La explicación se canceló o tardó demasiado. El cálculo se conserva.':error.message;}
-    finally{clearTimeout(timer);if(aiController===current){aiController=null;button.disabled=!result?.new;}}
-  });
+      if(aiController!==current||seq!==sequence||!snapshot||key!==JSON.stringify(selection()))return;
+      aiExplanation=body.explanation;renderSimple();$('cmp-ai-status').textContent='';
+    }catch(error){if(aiController===current&&seq===sequence)$('cmp-ai-status').textContent=error.name==='AbortError'?'La explicación tardó demasiado. El cálculo se conserva.':error.message;}
+    finally{clearTimeout(timer);if(aiController===current)aiController=null;}
+  }
   function render(){
-    if(aiController)aiController.abort();aiExplanation=null;
-    $('cmp-ai-generate').disabled=!result.new;$('cmp-ai-status').textContent='Resumen del cálculo disponible. Pulsa Generar explicación para consultar a la IA.';
+    if(aiController)aiController.abort();aiController=null;aiExplanation=null;
+    $('cmp-ai-panel').hidden=!result.new;$('cmp-ai-status').textContent='';
     result.breakdown.forEach(d=>{const row=snapshot.records.find(r=>r.id===d.id);if(row)for(const key of ['land_similarity','built_similarity','distance_similarity','overall_similarity'])if(d[key]!=null)row[key]=d[key];});
     renderSummary();renderCalculationExplanation();renderCards();renderMap();renderDetail();renderSimple();$('cmp-export').disabled=false;$('cmp-word').disabled=!result.new;$('cmp-save').disabled=!result.new;
     $('cmp-scenario').hidden=result.model!=='components'||!result.new;
     $('cmp-scenario-land').value=snapshot.params.land;$('cmp-scenario-built').value=snapshot.params.built;
+    explainAutomatically();
   }
   $('cmp-scenario-apply').addEventListener('click',async()=>{
     if(!snapshot||result?.model!=='components')return;
