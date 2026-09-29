@@ -51,7 +51,8 @@ def page(request):
         'google_maps_api_key':getattr(settings,'GOOGLE_MAPS_API_KEY',None) or 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',
     })
     response['Cache-Control'] = 'no-store'
-    response['X-ACM-Model'] = 'componentes-1'
+    from .components_engine import VERSION
+    response['X-ACM-Model'] = VERSION
     return response
 
 
@@ -163,7 +164,7 @@ def search(request):
 def recalculate(request):
     try:
         state,excluded=_signed_selection(request)
-        return JsonResponse({'result':calculate(state['records'],state['params'],excluded)})
+        return JsonResponse({'result':calculate(state['records'],state['params'],excluded),'params':state['params']})
     except signing.SignatureExpired:
         return JsonResponse({'error':'La búsqueda venció (30 minutos). Busca nuevamente para actualizar los datos.'},status=409)
     except (signing.BadSignature,ValueError,TypeError,KeyError,AttributeError):
@@ -178,12 +179,46 @@ def _signed_selection(request):
     ids={r['id'] for r in state['records']}
     if not isinstance(excluded,list) or len(excluded)>4000 or any(not isinstance(i,str) or i not in ids for i in excluded):
         raise ValueError('selection')
+    target=data.get('target_areas')
+    if target is not None:
+        if state['params'].get('property_type','Casa')!='Casa' or not isinstance(target,dict):
+            raise ValueError('scenario')
+        p=state['params']
+        p['weight_reference']={key:p[key] for key in ('land','built','radius')}
+        for key in ('land','built'):
+            area=positive(target.get(key))
+            if area is None or area>1000000:raise ValueError('scenario areas')
+            p[key]=area
     return state,excluded
 
 
 def _persist_history(user, params, records, result, excluded):
     from .components_history import persist_component_history
     return persist_component_history(user,params,records,result,excluded)
+
+
+@require_POST
+@csrf_protect
+@authenticated
+def explain_ai(request):
+    try:
+        state,excluded=_signed_selection(request)
+        result=calculate(state['records'],state['params'],excluded)
+        if not result.get('new'):
+            return JsonResponse({'error':'Primero completa un cálculo ACM.'},status=400)
+        from .components_ai import explain_result, ExplanationBusy
+        try:
+            text=explain_result(user_key(request),state['params'],state['records'],result,excluded,state.get('warnings',[]))
+        except ExplanationBusy:
+            return JsonResponse({'error':'Hay una explicación en curso. Espera antes de reintentar.'},status=429)
+        return JsonResponse({'explanation':text,'total':result['new']['total']})
+    except signing.SignatureExpired:
+        return JsonResponse({'error':'La búsqueda venció. Busca nuevamente.'},status=409)
+    except (signing.BadSignature,ValueError,TypeError,KeyError,AttributeError):
+        return JsonResponse({'error':'Búsqueda o selección inválida.'},status=400)
+    except Exception:
+        logger.exception('ACM: no se pudo generar explicación IA')
+        return JsonResponse({'error':'La IA no pudo responder. Tu cálculo se conserva; puedes reintentar.'},status=503)
 
 
 @require_POST

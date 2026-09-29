@@ -18,6 +18,8 @@
     return {status:detail.usable ? 'house' : 'review', landUnit:detail.land_unit,
       landValue:detail.land_value, remainder:detail.remainder, builtUnit:detail.built_unit,
       targetEstimate:detail.target_estimate,
+      landAdjustment:detail.land_adjustment, builtAdjustment:detail.built_adjustment,
+      weightedContribution:detail.weighted_contribution,
       recommended:!!detail.recommended, similarityWeight:detail.similarity_weight,
       landSimilarity:detail.land_similarity, builtSimilarity:detail.built_similarity,
       distanceSimilarity:detail.distance_similarity, overallSimilarity:detail.overall_similarity,

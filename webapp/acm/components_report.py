@@ -137,7 +137,7 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
             result_rows = [('Valor del terreno objetivo', _money(new['land_value'])),
                            ('Valor de construcción y mejoras', _money(new['built_value'])),
                            ('Estimación total', _money(new['total'])),
-                           ('Rango central orientativo', f'{_money(new["range_low"])} a {_money(new["range_high"])}')]
+                           ('Rango de comparables ajustados' if result.get('built_unit_method')=='weighted_adjusted_prices' else 'Rango central orientativo', f'{_money(new["range_low"])} a {_money(new["range_high"])}')]
         else:
             result_rows = [('Valor unitario usado', _unit(new['unit'])),
                            ('Estimación total', _money(new['total'])),
@@ -172,7 +172,7 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
         house_ids = sorted(
             (row_id for row_id in result.get('house_ids', [])
              if row_id in by_id and row_id in breakdown and row_id not in excluded),
-            key=lambda row_id: (-_component_similarity(breakdown[row_id]),
+            key=lambda row_id: (-(breakdown[row_id].get('similarity_weight') or 0), -_component_similarity(breakdown[row_id]),
                                 -(breakdown[row_id].get('overall_similarity') or 0),
                                 str(row_id)))
         for row_id in house_ids:
@@ -188,7 +188,15 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
             table(('Portal','Código','Precio','Terreno','Valor suelo','Remanente','Construido','Sim. terreno','Sim. construcción','Remanente por m²','Valor sugerido','Usada'), house_rows,
                   (.5,.7,.75,.6,.75,.75,.65,.65,.75,.9,.8,.4))
             if built_units:
-                if result.get('built_unit_method') == 'closest_built_similarity':
+                if result.get('built_unit_method') == 'weighted_adjusted_prices':
+                    doc.add_paragraph('Se ajusta cada precio anunciado por la diferencia de terreno y construcción. Se suman los precios ajustados multiplicados por su peso. La similitud combina 45% terreno, 45% construcción y 10% distancia; el peso es la similitud al cuadrado, normalizada para sumar 100%. Es una regla inicial del método, no una calibración estadística de mercado.')
+                    table(('Comparable','Ajuste terreno','Ajuste construcción','Precio ajustado','Peso aplicado','Aporte al resultado'),[
+                        (d['id'],_money(d.get('land_adjustment')),_money(d.get('built_adjustment')),
+                         _money(d['target_estimate']),f"{_number(d['similarity_weight'],2)}%",_money(d['weighted_contribution']))
+                        for d in sorted(breakdown.values(),key=lambda d:-(d.get('similarity_weight') or 0)) if d['usable']])
+                    if params.get('weight_reference'):
+                        doc.add_paragraph('Escenario con la misma muestra y los mismos pesos de la búsqueda inicial; solo cambian las superficies objetivo.')
+                elif result.get('built_unit_method') == 'closest_built_similarity':
                     chosen_id = result.get('built_reference_id')
                     chosen = by_id.get(chosen_id, {})
                     chosen_detail = breakdown.get(chosen_id, {})

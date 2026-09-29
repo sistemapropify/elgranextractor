@@ -62,7 +62,7 @@ def persist_component_history(user, params, records, result, excluded=()):
         'precio_min_m2': _decimal(min(units) if units else 0),
         'precio_max_m2': _decimal(max(units) if units else 0),
         'precio_promedio_m2': _decimal(sum(units) / len(units) if units else 0),
-        'precio_promedio_ponderado_m2': _decimal(unit_mid),
+        'precio_promedio_ponderado_m2': _decimal(result['new'].get('built_unit',result['new'].get('unit',unit_mid))),
         'valor_comercial': _decimal(total), 'precio_venta_sugerido': _decimal(total),
         'valor_realizacion': _decimal(total), 'num_comparables': len(selected_records),
         'propiedades_json': selected_records, 'parametros_json': params,

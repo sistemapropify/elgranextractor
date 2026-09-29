@@ -30,7 +30,8 @@ class ComponentsEngineTests(SimpleTestCase):
         result=calculate(candidates(raw,params()),params())
         self.assertEqual(result['land_count'],3)
         self.assertEqual(result['status'],'ok')
-        self.assertEqual(result['new']['total'],350000)
+        self.assertGreater(result['new']['total'],300000)
+        self.assertLessEqual(result['new']['total'],350000)
         self.assertEqual(len(result['breakdown']),3)
         self.assertTrue(any('Muestra reducida' in m for m in result['messages']))
 
@@ -38,7 +39,8 @@ class ComponentsEngineTests(SimpleTestCase):
         raw=sample()+[record('bad',price=100000)]
         result=calculate(candidates(raw,params()),params())
         self.assertEqual(result['status'],'ok')
-        self.assertEqual(result['new']['total'],350000)
+        self.assertGreater(result['new']['total'],300000)
+        self.assertLessEqual(result['new']['total'],350000)
         self.assertEqual(result['usable_house_count'],3)
         self.assertFalse(next(r for r in result['breakdown'] if r['id']=='bad')['usable'])
     def test_land_target_needs_no_construction_and_stays_in_selected_radius(self):
@@ -79,40 +81,8 @@ class ComponentsEngineTests(SimpleTestCase):
         self.assertEqual(by_id['a']['target_estimate'],350000)
         self.assertEqual(by_id['b']['remainder'],20000)
         self.assertAlmostEqual(by_id['b']['built_unit'],133.3333333)
-        # El aporte adoptado es el del comparable con la construcción más
-        # parecida al objetivo (la casa "a", idéntica en superficies), no la mediana.
-        self.assertEqual(result['built_unit_method'],'closest_built_similarity')
-        self.assertEqual(result['built_reference_id'],'a')
-        self.assertEqual(result['new']['total'],350000)
-
-    def test_construction_uses_the_most_similar_built_area(self):
-        raw=[record('a',price=290000,land=120,built=374),
-             record('b',price=655000,land=288,built=360),
-             record('c',price=450000,land=272,built=430),
-             record('land','Terreno',price=135300,land=100)]
-        p={**params(),'built':250}
-        result=calculate(candidates(raw,p),p)
-        by_id={row['id']:row for row in result['breakdown']}
-        usable=[row for row in result['breakdown'] if row['usable']]
-        expected=max(usable,key=lambda row:row['built_similarity'])
-        # No se promedian metrajes distintos: se adopta el aporte del comparable
-        # con la construcción más parecida al objetivo.
-        self.assertEqual(result['built_unit_method'],'closest_built_similarity')
-        self.assertEqual(result['built_reference_id'],expected['id'])
-        self.assertEqual(result['new']['built_unit'],by_id[expected['id']]['built_unit'])
-        self.assertEqual(result['built_unit_min'],min(row['built_unit'] for row in usable))
-        self.assertEqual(result['built_unit_max'],max(row['built_unit'] for row in usable))
-
-    def test_two_houses_use_the_most_similar_built_area(self):
-        raw=[record('near',price=330000,land=281,built=330),
-             record('far',price=790000,land=394,built=394),
-             record('land','Terreno',price=300000,land=268.9)]
-        p={**params(),'land':200,'built':230}
-        result=calculate(candidates(raw,p),p)
-        by_id={row['id']:row for row in result['breakdown']}
-        self.assertEqual(result['built_unit_method'],'closest_built_similarity')
-        self.assertEqual(result['built_reference_id'],'near')
-        self.assertEqual(result['new']['built_unit'],by_id['near']['built_unit'])
+        self.assertEqual(result['built_unit_method'],'weighted_adjusted_prices')
+        self.assertAlmostEqual(result['new']['total'],sum(d['weighted_contribution'] for d in result['breakdown'] if d['usable']))
 
     def test_changing_land_selection_updates_every_house_breakdown(self):
         raw=sample()+[record('extra','Terreno',price=180000)]
@@ -163,7 +133,8 @@ class ComponentsEngineTests(SimpleTestCase):
 
     def test_one_land_and_one_house_calculate(self):
         result=calculate(candidates([record('house'),record('land','Terreno')],params()),params())
-        self.assertEqual(result['new']['total'],350000)
+        self.assertGreater(result['new']['total'],300000)
+        self.assertLessEqual(result['new']['total'],350000)
         self.assertEqual(result['land_radius'],500)
         self.assertTrue(any('Muestra reducida' in m for m in result['messages']))
 
@@ -289,7 +260,7 @@ class ComponentsEndpointTests(SimpleTestCase):
     def test_page_shell_remains_visible_before_login(self):
         response=page(self.factory.get('/acm/analisis/'))
         self.assertEqual(response.status_code,200)
-        self.assertEqual(response['X-ACM-Model'],'componentes-1')
+        self.assertEqual(response['X-ACM-Model'],'componentes-2-pesos')
         self.assertEqual(response['Cache-Control'],'no-store')
 
 

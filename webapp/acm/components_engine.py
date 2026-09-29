@@ -2,7 +2,7 @@
 import math
 from statistics import median
 
-VERSION = 'componentes-1'
+VERSION = 'componentes-2-pesos'
 MIN_LANDS = 1
 MIN_HOUSES = 1
 SOURCES = ('propify', 'remax', 'properati', 'adondevivir', 'urbania', 'facebook_marketplace')
@@ -202,9 +202,11 @@ def calculate(records, p, excluded=()):
     if len(residuals)<MIN_HOUSES:
         result['messages'].append('Se calculó el suelo y el desglose disponible, pero no hay casas seleccionadas con remanente positivo para estimar construcción y mejoras.')
         return result
+    # Scenario comparisons keep the original evidence and weighting reference.
+    weight_params={**p, **p.get('weight_reference', {})}
     weight_rows=[]
     for row,built_value in usable_rows:
-        similarity=_similarity_metrics(row,p)['overall_similarity']/100
+        similarity=_similarity_metrics(row,weight_params)['overall_similarity']/100
         weight=max(.01,similarity)**2
         weight_rows.append((row,built_value,weight))
     weight_total=sum(item[2] for item in weight_rows)
@@ -214,25 +216,25 @@ def calculate(records, p, excluded=()):
     residuals.sort()
     built_unit_min=residuals[0]
     built_unit_max=residuals[-1]
-    # El aporte unitario se toma del comparable con la superficie construida más
-    # parecida al objetivo. Promediar metrajes muy distintos (mediana) daba
-    # valores bajos frente a comparables de construcción similar.
-    chosen_row,built_unit,chosen_similarity=max(
-        ((row,built_value,_similarity_metrics(row,p)['built_similarity'])
-         for row,built_value in usable_rows),
-        key=lambda item:(item[2],-_comparability_gap(item[0],p)),
-    )
-    built_unit_method='closest_built_similarity'
+    # This is exactly the weighted average of the adjusted comparable prices:
+    # price_i + (target_land-land_i)*soil + (target_built-built_i)*improvements_i.
+    built_unit=sum(built_value*weight for _,built_value,weight in weight_rows)/weight_total
+    chosen_row,_,_=max(weight_rows,key=lambda item:(item[2],item[0]['id']))
+    built_unit_method='weighted_adjusted_prices'
     built_reference_id=chosen_row['id']
     for row,built_value,weight in weight_rows:
         detail=next(item for item in result['breakdown'] if item['id']==row['id'])
         detail['similarity_weight']=100*weight/weight_total if weight_total else 0
+        detail['land_adjustment']=(p['land']-row['land'])*unit
+        detail['built_adjustment']=(p['built']-row['built'])*built_value
+        detail['weighted_contribution']=detail['target_estimate']*weight/weight_total
         detail['recommended']=row['id']==built_reference_id
     result['messages'].append(
-        f'El aporte de construcción y mejoras se toma del comparable con la '
-        f'superficie construida más parecida al objetivo '
-        f'({_unit_message(built_unit)}; similitud de construcción '
-        f'{chosen_similarity:.1f}%). Las demás casas quedan como referencia.'
+        'Se ajusta el precio de cada casa por la diferencia de terreno y construcción. '
+        'El resultado es el promedio de esos precios ajustados con los pesos mostrados. '
+        'Peso: similitud total al cuadrado, normalizada al 100%; '
+        'la similitud combina 45% terreno, 45% construcción y 10% distancia. '
+        'Son reglas iniciales del método, pendientes de calibración con evidencia de mercado.'
     )
     result.update(built_unit_min=built_unit_min, built_unit_max=built_unit_max,
                   built_unit_dispersion=(built_unit_max-built_unit_min)/(built_unit or 1))
@@ -250,8 +252,8 @@ def calculate(records, p, excluded=()):
     result.update(status='ok',built_unit_method=built_unit_method,built_reference_id=built_reference_id,
         recommended_ids=[built_reference_id],
         new={'total':total,'land_value':land_value,'built_value':p['built']*built_unit,
-        'built_unit':built_unit, 'range_low':estimates[int((len(estimates)-1)*.25)],
-        'range_high':estimates[math.ceil((len(estimates)-1)*.75)],
+        'built_unit':built_unit, 'range_low':estimates[0],
+        'range_high':estimates[-1],
         'delta':total-result['old']['total'], 'delta_pct':100*(total/result['old']['total']-1)})
     return result
 

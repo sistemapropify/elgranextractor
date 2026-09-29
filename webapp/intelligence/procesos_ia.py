@@ -44,6 +44,12 @@ MODELO_VISION = 'qwen-vl-max'
 # clave → datos del proceso. `caller_apps` = valores exactos del log;
 # `prefijos` = coincidencias por comienzo.
 PROCESOS_IA = {
+    'explicacion_acm': {
+        'modulo': 'Explicación del ACM',
+        'que_hace': 'Explica el cálculo y sus límites cuando el agente lo solicita.',
+        'proveedor': 'deepseek', 'modelo': MODELO_TEXTO,
+        'archivo': 'acm/components_ai.py', 'caller_apps': ['acm.explanation'],
+    },
     'calidad_scraping': {
         'modulo': 'Calidad de propiedades scrapeadas',
         'que_hace': 'Revisa alertas y datos de propiedades; incluye cada intento y reintento de IA.',
@@ -272,6 +278,7 @@ CLAVE_POR_DEFECTO = 'sin_clasificar'
 
 # Orden en el que se muestran los procesos (más negocio primero).
 ORDEN_PROCESOS = [
+    'explicacion_acm',
     'calidad_scraping',
     'seleccion_herramientas',
     'analisis_leads',

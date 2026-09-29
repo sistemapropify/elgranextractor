@@ -51,6 +51,17 @@
         <aside id="cmp-old"><span>Cálculo anterior</span><strong>—</strong><small>Mismas casas completas seleccionadas. Precio/m² construido ponderado por distancia.</small></aside>
       </section>
       <p class="cmp-note">Estimación de <strong>precios de oferta</strong>, no de ventas cerradas. El remanente incluye construcción y mejoras; no representa un coste de obra verificado. Si falta precio USD, conversión referencial S/3,44 por dólar.</p>
+      <details id="cmp-scenario" class="cmp-panel" hidden><summary>Comparar otros metrajes con la misma muestra</summary>
+        <p>Se conservan las casas, los terrenos y los pesos de la búsqueda inicial. Solo cambian las superficies objetivo. Para cambiar ubicación, fuentes o radio, usa Buscar y calcular.</p>
+        <div class="cmp-fields"><label>Terreno (m²)<input id="cmp-scenario-land" type="number" min="0.01" max="1000000" step="any"></label><label>Construcción (m²)<input id="cmp-scenario-built" type="number" min="0.01" max="1000000" step="any"></label></div>
+        <button id="cmp-scenario-apply" type="button">Ajustar con los mismos comparables</button>
+      </details>
+      <section class="cmp-panel" id="cmp-ai-panel" data-url="{% url 'acm:componentes_explicar' %}"><label><input id="cmp-simple-toggle" type="checkbox"> Explicar resultado con IA · prueba</label>
+        <div id="cmp-ai-controls" hidden><p>DeepSeek explicará los datos numéricos del cálculo. Cada explicación nueva registra consumo de IA. No modifica el precio.</p>
+        <button id="cmp-ai-generate" type="button" disabled>Generar explicación</button><p id="cmp-ai-status" role="status">Primero busca y calcula.</p></div>
+        <div id="cmp-simple" hidden role="status" style="white-space:pre-line"></div>
+        <p class="cmp-muted">Puedes contrastar la explicación con las operaciones y pesos de las tarjetas. La IA puede equivocarse.</p>
+      </section>
       <div class="cmp-toolbar"><strong id="cmp-counts">Sin comparables</strong><div class="cmp-downloads"><button id="cmp-save" class="cmp-save" type="button" disabled>Guardar en historial</button><button id="cmp-word" type="button" disabled>Descargar informe Word</button><button id="cmp-export" type="button" disabled>Descargar datos JSON</button></div></div>
       <nav class="cmp-tabs" aria-label="Grupos de comparables"><button data-tab="Casa" aria-pressed="true">Comparables usados <span id="cmp-house-count"></span></button><button data-tab="Terreno" aria-pressed="false">Terrenos usados <span id="cmp-land-count"></span></button><button data-tab="reference" aria-pressed="false">Solo referencia <span id="cmp-ref-count"></span></button></nav>
       <div id="cmp-cards"><p class="cmp-muted">Aquí aparecerán Propify y los portales seleccionados.</p></div>
@@ -66,7 +77,7 @@
 {% endblock %}
 {% block extra_scripts %}
 {{ block.super }}
-<script src="{% static 'acm/js/components-presentation.js' %}?v=6"></script>
-<script src="{% static 'acm/js/components.js' %}?v=13"></script>
+<script src="{% static 'acm/js/components-presentation.js' %}?v=7"></script>
+<script src="{% static 'acm/js/components.js' %}?v=14"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}

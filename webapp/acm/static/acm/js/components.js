@@ -2,6 +2,7 @@
   'use strict';
   const $ = id => document.getElementById(id), form = $('cmp-form'), presentation = window.ACMComponentsPresentation;
   let snapshot=null, result=null, excluded=new Set(), tab='Casa', map=null, pin=null, circles=[], markers=[], sequence=0, controller=null, detailId=null;
+  let aiController=null, aiExplanation=null;
   const money=n=>n==null?'—':new Intl.NumberFormat('es-PE',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
   const decimals=n=>n==null?'Sin informar':new Intl.NumberFormat('es-PE',{maximumFractionDigits:2}).format(n);
   const formatDate=value=>{if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?String(value):date.toLocaleString('es-PE',{dateStyle:'short',timeStyle:'short'});};
@@ -49,6 +50,10 @@
     if(result?.land_radius>p.radius)circles.push(new google.maps.Circle({map,center,radius:result.land_radius,strokeColor:'#e8b455',strokeWeight:2,fillOpacity:0}));
   }
   function clearResult(message){
+    if(aiController)aiController.abort();aiExplanation=null;
+    $('cmp-ai-generate').disabled=true;$('cmp-ai-status').textContent='Vuelve a calcular para explicar la selección vigente.';
+    $('cmp-simple').textContent='Vuelve a calcular para obtener una explicación vigente.';
+    $('cmp-scenario').hidden=true;
     result=null;clearMap();drawCircles();$('cmp-export').disabled=true;$('cmp-word').disabled=true;$('cmp-save').disabled=true;$('cmp-save').textContent='Guardar en historial';
     $('cmp-new').innerHTML='<h2>Valoración por componentes</h2><p class="cmp-muted">'+escape(message)+'</p>';
     $('cmp-old').innerHTML='<span>Cálculo anterior</span><strong>—</strong>';
@@ -124,7 +129,7 @@
     const usedHouses=Number.isFinite(r.usable_house_count)?r.usable_house_count:0;
     $('cmp-new').innerHTML='<h2>Valoración por componentes</h2><p class="cmp-muted">'+r.land_count+' terrenos usados · '+usedHouses+' casas usadas · suelo hasta '+r.land_radius+' m</p>'+
       (validSoil?'<div class="cmp-line"><span>Suelo de la microzona</span><strong>'+money(r.land_unit)+'/m²</strong></div>':'')+
-      (n?'<div class="cmp-line"><span>Terreno objetivo</span><strong>'+money(n.land_value)+'</strong></div><div class="cmp-line"><span>Construcción y mejoras</span><strong>'+money(n.built_value)+'</strong></div><div class="cmp-total">'+money(n.total)+'</div><p class="cmp-muted">Aporte de mejoras: '+money(n.built_unit)+'/m² construido.<br>Rango central orientativo: '+money(n.range_low)+' – '+money(n.range_high)+'.</p><div class="cmp-difference">Frente al anterior: '+(n.delta>=0?'+':'')+money(n.delta)+' ('+(n.delta_pct>=0?'+':'')+decimals(n.delta_pct)+'%)</div>':'<p class="cmp-warning">'+r.messages.map(escape).join('<br>')+'</p>');
+      (n?'<div class="cmp-line"><span>Terreno objetivo</span><strong>'+money(n.land_value)+'</strong></div><div class="cmp-line"><span>Construcción y mejoras</span><strong>'+money(n.built_value)+'</strong></div><div class="cmp-total">'+money(n.total)+'</div><p class="cmp-muted">Aporte de mejoras: '+money(n.built_unit)+'/m² construido.<br>Rango de comparables ajustados: '+money(n.range_low)+' – '+money(n.range_high)+'.</p><div class="cmp-difference">Frente al anterior: '+(n.delta>=0?'+':'')+money(n.delta)+' ('+(n.delta_pct>=0?'+':'')+decimals(n.delta_pct)+'%)</div>':'<p class="cmp-warning">'+r.messages.map(escape).join('<br>')+'</p>');
     $('cmp-old').innerHTML='<span>Cálculo anterior</span><strong>'+money(r.old?.total)+'</strong><small>'+(r.old?money(r.old.unit)+'/m² construido<br>':'')+'Mismas casas seleccionadas. Solo comparación; no alimenta el nuevo valor.</small>';
   }
   function medianExplanation(values){
@@ -150,10 +155,12 @@
     if(lands.length)html+=calculationTable(['Portal','Código','Operación'],lands.map(row=>[escape(row.source.toUpperCase()),escape(row.code),money(row.price)+' ÷ '+decimals(row.land)+' m² = <strong>'+money(row.price/row.land)+'/m²</strong>']))+'<p>'+escape(medianExplanation(landUnits))+' Se adopta <strong>'+money(r.land_unit)+'/m²</strong> para el suelo.</p>';
     else html+='<p>No hubo terrenos aptos; el proceso no puede separar suelo y construcción.</p>';
     html+='<h3>2. Separamos suelo y construcción en cada casa</h3><p>Precio de la casa − (área de terreno × valor del suelo) = remanente. Luego: remanente ÷ área construida = aporte por m² construido.</p>';
-    if(details.length){const ordered=[...details].sort((a,b)=>componentSimilarity(b.detail)-componentSimilarity(a.detail)||(b.detail.overall_similarity||0)-(a.detail.overall_similarity||0)||String(a.detail.id).localeCompare(String(b.detail.id)));const isRecommended=item=>!!item.detail.recommended||item.detail.id===r.built_reference_id;const chosen=ordered.find(isRecommended);if(chosen)html+='<p class="cmp-calc-recommended-header"><span class="cmp-recommended">Recomendada</span> '+escape(chosen.record.source.toUpperCase()+' · '+chosen.record.code)+': es el comparable que aporta construcción y mejoras al objetivo.</p>';html+=calculationTable(['Casa','Cálculo del remanente','Sim. terreno','Sim. construcción','Aporte por m²','Valor sugerido para el objetivo'],ordered.map(({record,detail})=>[escape(record.source.toUpperCase()+' · '+record.code),money(record.price)+' − ('+decimals(record.land)+' × '+money(r.land_unit)+') = '+money(detail.remainder),decimals(detail.land_similarity)+'%',decimals(detail.built_similarity)+'%',money(detail.built_unit)+'/m²',detail.usable?money(detail.target_estimate):'No participa · solo referencia']),ordered.map(item=>isRecommended(item)?'cmp-calc-row-recommended':''));}
+    if(details.length){const ordered=[...details].sort((a,b)=>(b.detail.similarity_weight||0)-(a.detail.similarity_weight||0)||componentSimilarity(b.detail)-componentSimilarity(a.detail)||(b.detail.overall_similarity||0)-(a.detail.overall_similarity||0)||String(a.detail.id).localeCompare(String(b.detail.id)));const isRecommended=item=>!!item.detail.recommended||item.detail.id===r.built_reference_id;const chosen=ordered.find(isRecommended);if(chosen)html+='<p class="cmp-calc-recommended-header"><span class="cmp-recommended">Recomendada</span> '+escape(chosen.record.source.toUpperCase()+' · '+chosen.record.code)+': es el comparable con mayor peso aplicado; las demás casas aptas también intervienen.</p>';html+=calculationTable(['Casa','Cálculo del remanente','Sim. terreno','Sim. construcción','Aporte por m²','Valor sugerido para el objetivo'],ordered.map(({record,detail})=>[escape(record.source.toUpperCase()+' · '+record.code),money(record.price)+' − ('+decimals(record.land)+' × '+money(r.land_unit)+') = '+money(detail.remainder),decimals(detail.land_similarity)+'%',decimals(detail.built_similarity)+'%',money(detail.built_unit)+'/m²',detail.usable?money(detail.target_estimate):'No participa · solo referencia']),ordered.map(item=>isRecommended(item)?'cmp-calc-row-recommended':''));}
     if(usable.length){
       const selected=usable.find(item=>item.detail.id===r.built_reference_id);
-      html+='<p>'+(r.built_unit_method==='closest_built_similarity'&&selected
+      html+='<p>'+(r.built_unit_method==='weighted_adjusted_prices'
+        ?'Se ajusta cada anuncio al terreno y construcción objetivo. El resultado suma precio ajustado × peso aplicado. La similitud considera 45% terreno, 45% construcción y 10% distancia; los pesos son la similitud al cuadrado, normalizada al 100%. Son reglas iniciales pendientes de calibración.'
+        :r.built_unit_method==='closest_built_similarity'&&selected
         ?'El aporte de construcción y mejoras se toma del comparable con la superficie construida más parecida al objetivo: <strong>'+escape(selected.record.source.toUpperCase()+' · '+selected.record.code)+'</strong>, con '+money(selected.detail.built_unit)+'/m² ('+decimals(selected.detail.built_similarity)+'% de similitud de construcción). Promediar metrajes muy distintos daba valores más bajos; las demás casas quedan como referencia.'
         :r.built_unit_method==='closest_comparable'&&selected
         ?'Solo hay dos casas y sus aportes están muy dispersos. Se usa el comparable más parecido a las superficies y la ubicación: <strong>'+escape(selected.record.source.toUpperCase()+' · '+selected.record.code)+'</strong>, con '+money(selected.detail.built_unit)+'/m². La otra casa permanece como referencia y no se promedian los extremos.'
@@ -161,6 +168,7 @@
         ?'Los aportes están muy dispersos. Se usa una mediana ponderada por similitud: las casas con terreno, construcción y ubicación más parecidos tienen mayor peso.'
         :escape(medianExplanation(usable.map(item=>item.detail.built_unit))+' Este valor central es el aporte unitario aplicado al objetivo.'))+'</p>';
     }
+    if(r.built_unit_method==='weighted_adjusted_prices')html+=calculationTable(['Comparable','Precio anunciado','Ajuste terreno','Ajuste construcción','Precio ajustado','Peso aplicado','Aporte al resultado'],[...usable].sort((a,b)=>b.detail.similarity_weight-a.detail.similarity_weight).map(({record,detail})=>[escape(record.source+' · '+record.code),money(record.price),money(detail.land_adjustment),money(detail.built_adjustment),money(detail.target_estimate),decimals(detail.similarity_weight)+'%',money(detail.weighted_contribution)]));
     html+='<h3>3. Aplicamos ambos componentes al inmueble objetivo</h3>';
     if(r.new)html+='<p>Suelo: '+decimals(p.land)+' m² × '+money(r.land_unit)+'/m² = <strong>'+money(r.new.land_value)+'</strong>.</p><p>Construcción y mejoras: '+decimals(p.built)+' m² × '+money(r.new.built_unit)+'/m² = <strong>'+money(r.new.built_value)+'</strong>.</p><p>Resultado: '+money(r.new.land_value)+' + '+money(r.new.built_value)+' = <strong>'+money(r.new.total)+'</strong>.</p><p>Las casas usadas sugieren valores individuales entre <strong>'+money(r.new.range_low)+'</strong> y <strong>'+money(r.new.range_high)+'</strong> para el inmueble objetivo.</p>';
     else html+='<p>No se completó este paso porque faltó un componente válido.</p>';
@@ -178,7 +186,7 @@
     if(v.status==='area')return '<section class="cmp-breakdown"><h3>'+escape(r.kind)+' · comparable por superficie construida</h3><div class="cmp-breakdown-grid"><div><span>Oferta por m² construido</span><strong>'+money(v.offerUnit)+'/m²</strong></div><div><span>Aplicada al área objetivo</span><strong>'+money(v.adjustedTotal)+'</strong></div></div><p class="cmp-equation">Se compara con inmuebles del mismo tipo; no se presenta como valor de suelo independiente.</p></section>';
     if(v.status==='land')return '<section class="cmp-breakdown"><h3>Terreno · referencia del suelo</h3><div class="cmp-breakdown-grid"><div><span>Oferta por m² de terreno</span><strong>'+money(v.offerUnit)+'/m²</strong></div><div><span>Uso en este análisis</span><small>'+(v.selected?'Incluido en la mediana del suelo':'Fuera del radio requerido; no participa')+'</small></div></div></section>';
     if(!['house','review'].includes(v.status))return '<p class="cmp-issues">'+escape(v.reason)+'</p>';
-    return '<section class="cmp-breakdown '+(v.status==='review'?'review':'')+'"><h3>Valor atribuido por este anuncio '+(v.recommended?'<span class="cmp-recommended">Recomendada · '+decimals(v.similarityWeight)+'% de peso</span>':'')+'</h3><div class="cmp-breakdown-grid"><div><span>Valor del terreno</span><strong>'+money(v.landValue)+'</strong><small>'+money(v.landUnit)+'/m² de suelo</small></div><div><span>Construcción y mejoras</span><strong>'+money(v.remainder)+'</strong><small>'+money(v.builtUnit)+'/m² construido</small></div><div><span>Valor que sugiere para el inmueble objetivo</span><strong>'+(v.status==='review'?'No participa':money(v.targetEstimate))+'</strong><small>'+(v.status==='review'?'Remanente no positivo · solo referencia':decimals(snapshot.params.land)+' m² terreno + '+decimals(snapshot.params.built)+' m² construidos')+'</small></div></div><div class="cmp-similarity"><span>Similitud con el objetivo</span><span>Terreno <strong>'+decimals(v.landSimilarity)+'%</strong></span><span>Construcción <strong>'+decimals(v.builtSimilarity)+'%</strong></span><span>Distancia <strong>'+decimals(v.distanceSimilarity)+'%</strong></span><span>Total <strong>'+decimals(v.overallSimilarity)+'%</strong></span><span>Peso relativo <strong>'+decimals(v.similarityWeight)+'%</strong></span></div><p class="cmp-equation">'+money(r.price)+' − ('+decimals(r.land)+' m² × '+money(v.landUnit)+'/m²) = '+money(v.remainder)+' en construcción y mejoras.</p>'+(v.reason?'<p class="cmp-issues">'+escape(v.reason)+'</p>':'')+'</section>';
+    return '<section class="cmp-breakdown '+(v.status==='review'?'review':'')+'"><h3>Valor atribuido por este anuncio '+(v.recommended?'<span class="cmp-recommended">Recomendada · '+decimals(v.similarityWeight)+'% de peso</span>':'')+'</h3><div class="cmp-breakdown-grid"><div><span>Valor del terreno</span><strong>'+money(v.landValue)+'</strong><small>'+money(v.landUnit)+'/m² de suelo</small></div><div><span>Construcción y mejoras</span><strong>'+money(v.remainder)+'</strong><small>'+money(v.builtUnit)+'/m² construido</small></div><div><span>Valor que sugiere para el inmueble objetivo</span><strong>'+(v.status==='review'?'No participa':money(v.targetEstimate))+'</strong><small>'+(v.status==='review'?'Remanente no positivo · solo referencia':decimals(snapshot.params.land)+' m² terreno + '+decimals(snapshot.params.built)+' m² construidos')+'</small></div></div><div class="cmp-similarity"><span>Similitud con el objetivo</span><span>Terreno <strong>'+decimals(v.landSimilarity)+'%</strong></span><span>Construcción <strong>'+decimals(v.builtSimilarity)+'%</strong></span><span>Distancia <strong>'+decimals(v.distanceSimilarity)+'%</strong></span><span>Total <strong>'+decimals(v.overallSimilarity)+'%</strong></span><span>Peso aplicado <strong>'+decimals(v.similarityWeight)+'%</strong></span></div><p class="cmp-equation">'+money(r.price)+' − ('+decimals(r.land)+' m² × '+money(v.landUnit)+'/m²) = '+money(v.remainder)+' en construcción y mejoras.</p>'+(v.landAdjustment!=null?'<p class="cmp-equation">Precio '+money(r.price)+' + ajuste terreno ('+money(v.landAdjustment)+') + ajuste construcción ('+money(v.builtAdjustment)+') = <strong>'+money(v.targetEstimate)+'</strong>. Peso aplicado: '+decimals(v.similarityWeight)+'%; aporta '+money(v.weightedContribution)+' al resultado.</p>':'')+(v.reason?'<p class="cmp-issues">'+escape(v.reason)+'</p>':'')+'</section>';
   }
   function badge(r){const v=value(r);const text={area:'Incluida en el análisis',house:'Incluida en el análisis',review:'Requiere revisión',land:v.selected?'Terreno incluido':'Terreno de referencia',reference:'Solo referencia',excluded:'Desmarcada',pending:'Cálculo pendiente'};return '<span class="cmp-badge '+(['house','land','area'].includes(v.status)?'':'ref')+'">'+text[v.status]+'</span>';}
   function fixImages(container){container.querySelectorAll('img').forEach(img=>img.addEventListener('error',()=>{const empty=document.createElement('div');empty.className='cmp-photo-empty';empty.textContent='Sin foto';img.replaceWith(empty);},{once:true}));}
@@ -202,7 +210,57 @@
     fixImages($('cmp-detail-content'));
   }
   function openDetail(id){detailId=id;renderDetail();if(!$('cmp-detail').open)$('cmp-detail').showModal();}
-  function render(){renderSummary();renderCalculationExplanation();renderCards();renderMap();renderDetail();$('cmp-export').disabled=false;$('cmp-word').disabled=!result.new;$('cmp-save').disabled=!result.new;}
+  function selection(){return {token:snapshot.token,excluded:[...excluded],...(snapshot.params.weight_reference?{target_areas:{land:snapshot.params.land,built:snapshot.params.built}}:{})};}
+  function renderSimple(){
+    const host=$('cmp-simple');host.hidden=!$('cmp-simple-toggle').checked;
+    $('cmp-ai-controls').hidden=host.hidden;
+    if(aiExplanation){host.textContent=aiExplanation;return;}
+    if(!result?.new){host.textContent='Primero busca y calcula.';return;}
+    const n=result.new,used=result.breakdown.filter(d=>d.usable).sort((a,b)=>(b.similarity_weight||0)-(a.similarity_weight||0));
+    if(result.model!=='components'){host.textContent='El resultado es '+money(n.total)+'. Se tomó el valor central por m² de '+(result.model==='land'?'terreno':'construcción')+' entre los comparables seleccionados y se aplicó a tu superficie.\n\n'+result.messages.join(' ');return;}
+    const top=used[0],row=top&&snapshot.records.find(r=>r.id===top.id);
+    host.textContent='El resultado es '+money(n.total)+': '+money(n.land_value)+' corresponden al terreno y '+money(n.built_value)+' a construcción y mejoras.\n\n'+
+      (row?'La mayor influencia es '+row.source.toUpperCase()+' · '+row.code+', con '+decimals(top.similarity_weight)+'% del peso. Su anuncio parte de '+money(row.price)+', se ajusta '+money(top.land_adjustment)+' por terreno y '+money(top.built_adjustment)+' por construcción, y sugiere '+money(top.target_estimate)+' para tu inmueble.\n\n':'')+
+      'Se combinan los precios ajustados de '+used.length+' casa(s). El peso mostrado es el que realmente se aplica.\n\n'+
+      (snapshot.params.weight_reference?'En este escenario se conservaron muestra y pesos; solo cambiaron los metrajes. ':'')+
+      'Son precios de oferta. Antigüedad, acabados y habitaciones no tienen un ajuste económico propio en este método. '+result.messages.filter(m=>!m.startsWith('Se ajusta')).join(' ');
+  }
+  $('cmp-simple-toggle').addEventListener('change',renderSimple);
+  $('cmp-ai-generate').addEventListener('click',async()=>{
+    if(!snapshot||!result?.new)return;
+    const key=JSON.stringify(selection()),seq=sequence,button=$('cmp-ai-generate');
+    const current=new AbortController();aiController=current;button.disabled=true;
+    const timer=setTimeout(()=>current.abort(),140000);
+    $('cmp-ai-status').textContent='Preparando una explicación sencilla…';
+    try{
+      const response=await fetch($('cmp-ai-panel').dataset.url,{method:'POST',credentials:'same-origin',signal:current.signal,
+        headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:key});
+      if(!response.headers.get('content-type')?.includes('application/json'))throw Error('El servidor no devolvió datos. Revisa tu sesión.');
+      const body=await response.json();if(!response.ok)throw Error(body.error||'No se pudo generar la explicación.');
+      if(seq!==sequence||!snapshot||key!==JSON.stringify(selection()))return;
+      aiExplanation=body.explanation;renderSimple();$('cmp-ai-status').textContent='Explicación con IA del cálculo actual. Revisa sus conclusiones.';
+    }catch(error){if(seq===sequence)$('cmp-ai-status').textContent=error.name==='AbortError'?'La explicación se canceló o tardó demasiado. El cálculo se conserva.':error.message;}
+    finally{clearTimeout(timer);if(aiController===current){aiController=null;button.disabled=!result?.new;}}
+  });
+  function render(){
+    if(aiController)aiController.abort();aiExplanation=null;
+    $('cmp-ai-generate').disabled=!result.new;$('cmp-ai-status').textContent='Resumen del cálculo disponible. Pulsa Generar explicación para consultar a la IA.';
+    result.breakdown.forEach(d=>{const row=snapshot.records.find(r=>r.id===d.id);if(row)for(const key of ['land_similarity','built_similarity','distance_similarity','overall_similarity'])if(d[key]!=null)row[key]=d[key];});
+    renderSummary();renderCalculationExplanation();renderCards();renderMap();renderDetail();renderSimple();$('cmp-export').disabled=false;$('cmp-word').disabled=!result.new;$('cmp-save').disabled=!result.new;
+    $('cmp-scenario').hidden=result.model!=='components'||!result.new;
+    $('cmp-scenario-land').value=snapshot.params.land;$('cmp-scenario-built').value=snapshot.params.built;
+  }
+  $('cmp-scenario-apply').addEventListener('click',async()=>{
+    if(!snapshot||result?.model!=='components')return;
+    const land=Number($('cmp-scenario-land').value),built=Number($('cmp-scenario-built').value);
+    if(!(land>0&&built>0&&land<=1000000&&built<=1000000)){$('cmp-status').textContent='Completa ambas superficies con valores positivos.';return;}
+    const payload={...selection(),target_areas:{land,built}},seq=++sequence;
+    clearResult('Ajustando superficies con la misma muestra…');
+    try{const data=await post('calcular',payload);if(seq!==sequence)return;
+      snapshot.params=data.params;result=data.result;form.elements.land.value=land;form.elements.built.value=built;render();
+      $('cmp-status').textContent='Escenario actualizado: misma muestra y pesos de la búsqueda inicial. Al cambiar la selección manual cambian las referencias.';
+    }catch(error){if(seq===sequence)$('cmp-status').textContent=error.message;}
+  });
   form.addEventListener('submit',async e=>{
     e.preventDefault();const p=input();if(!p.sources.length){$('cmp-status').textContent='Selecciona al menos una fuente.';return;}
     const seq=++sequence;snapshot=null;excluded.clear();if($('cmp-detail').open)$('cmp-detail').close();clearResult('Buscando comparables…');$('cmp-search').disabled=true;$('cmp-status').textContent='Buscando comparables del tipo seleccionado…';
@@ -224,7 +282,7 @@
   $('cmp-cards').addEventListener('change',async e=>{
     const id=e.target.dataset.include;if(!id||!snapshot)return;e.target.checked?excluded.delete(id):excluded.add(id);const seq=++sequence;
     clearResult('Actualizando selección…');$('cmp-status').textContent='Recalculando suelo y construcción de cada casa…';
-    try{const data=await post('calcular',{token:snapshot.token,excluded:[...excluded]});if(seq!==sequence)return;result=data.result;render();$('cmp-status').textContent='Mapa, propiedades y valoración actualizados con tu selección.';}
+    try{const data=await post('calcular',selection());if(seq!==sequence)return;result=data.result;snapshot.params=data.params;render();$('cmp-status').textContent='Mapa, propiedades y valoración actualizados con tu selección.';}
     catch(error){if(seq===sequence){clearResult('No se pudo aplicar la selección. Busca nuevamente.');$('cmp-status').textContent=error.message;}}
   });
   $('cmp-export').addEventListener('click',()=>{
@@ -233,12 +291,12 @@
   });
   $('cmp-save').addEventListener('click',async()=>{
     if(!snapshot||!result||!result.new)return;const button=$('cmp-save');button.disabled=true;$('cmp-status').textContent='Guardando análisis y selección en el historial…';
-    try{const data=await post('guardar',{token:snapshot.token,excluded:[...excluded]});button.textContent='Guardado · '+data.code;$('cmp-status').textContent=data.created?'Análisis guardado en el historial.':'Este mismo análisis ya estaba guardado en el historial.';}
+    try{const data=await post('guardar',selection());button.textContent='Guardado · '+data.code;$('cmp-status').textContent=data.created?'Análisis guardado en el historial.':'Este mismo análisis ya estaba guardado en el historial.';}
     catch(error){$('cmp-status').textContent=error.message;button.disabled=false;}
   });
   $('cmp-word').addEventListener('click',async()=>{
     if(!snapshot||!result)return;const button=$('cmp-word');button.disabled=true;$('cmp-status').textContent='Generando informe Word con las operaciones del análisis…';
-    try{const response=await fetch(form.dataset.reportUrl,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:JSON.stringify({token:snapshot.token,excluded:[...excluded]})});
+    try{const response=await fetch(form.dataset.reportUrl,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:JSON.stringify(selection())});
       if(!response.ok){let body={};try{body=await response.json();}catch(e){}throw Error(body.error||'No se pudo generar el informe Word.');}
       const code=response.headers.get('X-ACM-History-Code')||'';const url=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=url;a.download=(code||'informe-acm')+'.docx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('cmp-save').textContent=code?'Guardado · '+code:'Guardado en historial';$('cmp-save').disabled=true;$('cmp-status').textContent='Informe Word descargado y análisis guardado en el historial.';
     }catch(error){$('cmp-status').textContent=error.message;}finally{button.disabled=false;}
