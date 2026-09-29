@@ -2,7 +2,7 @@
 import math
 from statistics import median
 
-VERSION = 'componentes-3-referencia-unica'
+VERSION = 'componentes-4-proximidad'
 MIN_LANDS = 1
 MIN_HOUSES = 1
 SOURCES = ('propify', 'remax', 'properati', 'adondevivir', 'urbania', 'facebook_marketplace')
@@ -118,7 +118,9 @@ def candidates(records, p):
         if row['lat'] is None or row['lng'] is None or not -90<=row['lat']<=90 or not -180<=row['lng']<=180:
             continue
         row['distance'] = round(distance(p['lat'],p['lng'],row['lat'],row['lng']),2)
-        if row['distance'] > (p['max_radius'] if target=='Casa' and row['kind']=='Terreno' else p['radius']): continue
+        # Use the same evidence pool for deduplication and land validation at
+        # every display radius. Filter visible houses only after these checks.
+        if row['distance'] > (p['max_radius'] if target=='Casa' else p['radius']): continue
         # La similitud se calcula para cada registro, incluidos los que quedan
         # como referencia, para que el agente pueda encontrarlos en el mapa y
         # decidir con evidencia si conviene incluirlos.
@@ -144,7 +146,8 @@ def candidates(records, p):
                 and distance(row['lat'],row['lng'],house['lat'],house['lng'])<30):
                 row['issues'].append('Posible casa anunciada también como terreno')
                 break
-    return sorted(result,key=lambda r:(r['kind'],r['distance'],r['id']))
+    return sorted((r for r in result if r['kind']=='Terreno' or r['distance']<=p['radius']),
+                  key=lambda r:(r['kind'],r['distance'],r['id']))
 
 
 def old_estimate(houses, built):
@@ -162,7 +165,8 @@ def calculate(records, p, excluded=()):
     excluded=set(excluded)
     houses=[r for r in records if r['kind']=='Casa' and not r['issues'] and r['id'] not in excluded]
     eligible_lands=[r for r in records if r['kind']=='Terreno' and not r['issues'] and r['id'] not in excluded]
-    radius=p['radius']
+    # The soil microzone must not expand just because the map radius expands.
+    radius=min(500,p['max_radius'])
     while radius < p['max_radius'] and not any(r['distance']<=radius for r in eligible_lands):
         radius=min(radius+500,p['max_radius'])
     lands=[r for r in eligible_lands if r['distance']<=radius]
@@ -204,11 +208,12 @@ def calculate(records, p, excluded=()):
         return result
     # Scenario comparisons keep the original evidence and weighting reference.
     weight_params={**p, **p.get('weight_reference', {})}
-    # Rank both areas equally; distance only resolves an equal area match.
+    # Among suitable houses, keep the nearest reference as the map expands.
     chosen_row,built_unit=min(usable_rows,key=lambda item:(
+        item[0].get('distance') or 0,
         abs(item[0]['land']-weight_params['land'])/weight_params['land']+
         abs(item[0]['built']-weight_params['built'])/weight_params['built'],
-        item[0].get('distance') or 0,item[0]['id']))
+        item[0]['id']))
     reference_ids=p.get('reference_ids') or [chosen_row['id']]
     allowed={row['id'] for row,_ in usable_rows}
     if not isinstance(reference_ids,list) or not 1<=len(reference_ids)<=3 or len(set(reference_ids))!=len(reference_ids) or any(i not in allowed for i in reference_ids):
@@ -234,9 +239,10 @@ def calculate(records, p, excluded=()):
     result['usable_house_count']=len(reference_ids)
     result['old']=old_estimate(selected_rows,p['built'])
     result['messages'].append(
-        'Solo se usa la casa apta más parecida en terreno y construcción, '
-        'comparando las diferencias porcentuales de ambas superficies por igual. '
-        'La distancia solo desempata. Las demás casas no intervienen en el precio final.'
+        'Se usa la casa apta más próxima. Las superficies sirven para comprobar '
+        'comparabilidad y desempatar. El suelo se busca desde 500 m y se amplía '
+        'solo si no hay terrenos aptos, independientemente del radio del mapa. '
+        'Las demás casas no intervienen salvo que aceptes otra propuesta.'
     )
     if p.get('reference_ids'):
         result['messages'][-1]=f'Se usan {len(reference_ids)} casas de la propuesta aceptada. Se promedian únicamente sus precios ajustados a tus metrajes; las demás quedan como referencia.'

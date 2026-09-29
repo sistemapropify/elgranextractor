@@ -106,8 +106,12 @@ def explain_result(user,params,records,result,excluded,warnings):
 
 PROPOSAL_RULES='''Propón entre una y tres casas como referencia para valorar el objetivo.
 Devuelve JSON: {"ids": ["id real"], "justificacion": "texto breve"}.
-Prioriza semejanza conjunta de terreno y construcción; compara también la distancia
-y la coherencia de los precios ajustados que ya calculó el sistema. No elijas más casas
+Compara semejanza conjunta de terreno y construcción, distancia y coherencia de
+los precios ajustados que ya calculó el sistema.
+La referencia actual prioriza proximidad entre casas aptas. Justifica expresamente
+si propones reemplazar una casa cercana por otra más lejana; una mínima mejora de
+similitud por sí sola no basta. Tu propuesta no sustituye el cálculo sin aceptación.
+No elijas más casas
 solo por aumentar la muestra. Una discrepancia de precios no se resuelve inventando motivos.
 Solo selecciona IDs de candidatos. Los demás registros son evidencia para contraste.
 No inventes antigüedad, calidad, ubicación, acabados ni datos ausentes. No calcules otro precio.

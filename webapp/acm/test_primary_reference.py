@@ -33,13 +33,40 @@ class PrimaryReferenceTests(SimpleTestCase):
         self.assertEqual(details['other']['weighted_contribution'],0)
         self.assertEqual(second['new']['total'],details['chosen']['target_estimate'])
 
-    def test_area_match_beats_nearer_location_and_exclusion_reselects(self):
+    def test_nearest_suitable_house_wins_and_exclusion_reselects(self):
         p=params()
         raw=[record('area',lat=-16.402),record('near',land=160,built=215),
              record('soil','Terreno',price=150000)]
         rows=candidates(raw,p)
-        self.assertEqual(calculate(rows,p)['built_reference_id'],'area')
-        self.assertEqual(calculate(rows,p,['area'])['built_reference_id'],'near')
+        self.assertEqual(calculate(rows,p)['built_reference_id'],'near')
+        self.assertEqual(calculate(rows,p,['near'])['built_reference_id'],'area')
+
+    def test_user_case_is_stable_at_400_700_1000_and_2000_meters(self):
+        raw=[record('1195596',price=370000,land=123.61,built=170.19,lat=-16.400144),
+             record('1188357',price=520000,land=105.15,built=131.5,lat=-16.40705),
+             record('soil-a','Terreno',price=245400,land=184,lat=-16.402),
+             record('soil-b','Terreno',price=202913,land=150,lat=-16.4025),
+             record('soil-far','Terreno',price=100000,land=150,lat=-16.406)]
+        results=[]
+        for radius in (400,700,1000,2000):
+            p={**params(),'land':130,'built':140,'radius':radius}
+            result=calculate(candidates(raw,p),p)
+            results.append(result)
+            self.assertEqual(result['built_reference_id'],'1195596')
+            self.assertEqual(result['land_ids'],['soil-a','soil-b'])
+            self.assertEqual(result['land_radius'],500)
+            self.assertEqual(round(result['new']['total']),342402)
+        self.assertTrue(all(r['new']==results[0]['new'] for r in results))
+
+    def test_empty_soil_zone_expands_independently_of_map_radius(self):
+        raw=[record('near'),record('soil','Terreno',price=150000,lat=-16.407)]
+        results=[]
+        for radius in (400,1000,2000):
+            p={**params(),'radius':radius}
+            result=calculate(candidates(raw,p),p)
+            results.append(result['new']['total'])
+            self.assertEqual(result['land_radius'],1000)
+        self.assertEqual(len(set(results)),1)
 
     def test_equal_surface_match_uses_distance_then_stable_id(self):
         p=params()

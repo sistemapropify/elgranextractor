@@ -47,7 +47,7 @@
     if(!pin)pin=new google.maps.Marker({map,position:center,title:'Inmueble objetivo',draggable:true});else pin.setPosition(center);
     if(!pin.cmpListener){pin.addListener('dragend',e=>setLocation(e.latLng.lat(),e.latLng.lng()));pin.cmpListener=true;}
     circles.push(new google.maps.Circle({map,center,radius:p.radius,strokeColor:'#4597ec',strokeWeight:2,fillColor:'#4597ec',fillOpacity:.08}));
-    if(result?.land_radius>p.radius)circles.push(new google.maps.Circle({map,center,radius:result.land_radius,strokeColor:'#e8b455',strokeWeight:2,fillOpacity:0}));
+    if(result?.land_radius&&result.land_radius!==p.radius)circles.push(new google.maps.Circle({map,center,radius:result.land_radius,strokeColor:'#e8b455',strokeWeight:2,fillOpacity:0}));
   }
   function clearResult(message){
     if(aiController)aiController.abort();aiController=null;aiExplanation=null;

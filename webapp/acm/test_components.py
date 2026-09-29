@@ -260,7 +260,7 @@ class ComponentsEndpointTests(SimpleTestCase):
     def test_page_shell_remains_visible_before_login(self):
         response=page(self.factory.get('/acm/analisis/'))
         self.assertEqual(response.status_code,200)
-        self.assertEqual(response['X-ACM-Model'],'componentes-3-referencia-unica')
+        self.assertEqual(response['X-ACM-Model'],'componentes-4-proximidad')
         self.assertEqual(response['Cache-Control'],'no-store')
 
 

@@ -27,7 +27,7 @@
         <div class="cmp-fields"><label>Latitud<input name="lat" type="number" step="any" min="-90" max="90" value="-16.3989" required></label>
         <label>Longitud<input name="lng" type="number" step="any" min="-180" max="180" value="-71.535" required></label></div>
         <label id="cmp-expansion-field">Ampliación máxima de suelo para casas<select name="max_radius"><option value="2000">Hasta 2.000 m</option><option value="3000">Hasta 3.000 m</option><option value="5000">Hasta 5.000 m</option></select></label>
-        <p class="cmp-muted">Casas: la búsqueda de terrenos de referencia se amplía de 500 en 500 m cuando no encuentra ninguno. Los comparables permanecen en el radio elegido. Habitaciones, baños y piso son informativos: no excluyen comparables ni modifican el valor mientras no exista un ajuste económico validado para esas diferencias.</p>
+        <p class="cmp-muted">Casas: se prioriza la casa apta más próxima. El suelo se busca desde 500 m, independientemente del radio del mapa; se amplía de 500 en 500 m solo si no hay terrenos aptos. Habitaciones, baños y piso son informativos.</p>
         </details>
       </form>
       <section class="cmp-panel cmp-map-panel">
@@ -77,6 +77,6 @@
 {% block extra_scripts %}
 {{ block.super }}
 <script src="{% static 'acm/js/components-presentation.js' %}?v=8"></script>
-<script src="{% static 'acm/js/components.js' %}?v=17"></script>
+<script src="{% static 'acm/js/components.js' %}?v=18"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}
