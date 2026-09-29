@@ -20,6 +20,8 @@
 <script>
 (function(){
 const modal=document.getElementById('scraped-editor'), form=document.getElementById('scraped-edit-form'), status=document.getElementById('scraped-edit-status');
+// Editing is closed explicitly with the visible buttons, not browser dismissal.
+modal.addEventListener('cancel',function(event){event.preventDefault();});
 let endpoint=null, version=null, saving=false, sequence=0;
 const publication=document.getElementById('scraped-publication'), missingPublication=document.getElementById('scraped-publication-missing');
 function alertItem(text,color,weight){

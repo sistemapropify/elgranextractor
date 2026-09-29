@@ -38,15 +38,24 @@ Triaje IA: <strong style="color:#57d9a3">{{ summary.ia_real }} reales</strong> Â
 let qualityRefreshTimer = null;
 function scheduleQualityRefresh(delay = 15000) {
   clearTimeout(qualityRefreshTimer);
-  qualityRefreshTimer = setTimeout(function () {
-    const editor = document.getElementById('scraped-editor');
-    // Never replace the document (and unsaved form) while the editor is open.
-    // A background timer may run as soon as the publication tab is closed.
-    if ((editor && editor.open) || document.hidden) {
+  qualityRefreshTimer = setTimeout(async function () {
+    if (document.hidden) {
       scheduleQualityRefresh();
       return;
     }
-    location.reload();
+    try {
+      const response = await fetch(location.href, {credentials:'same-origin', cache:'no-store'});
+      if (!response.ok || response.redirected) return;
+      const updated = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const summary = updated.querySelector('.quality-summary');
+      const current = document.querySelector('.quality-summary');
+      // Only replace the progress summary, never the editor, filters or document.
+      if (summary && current) current.replaceWith(summary);
+    } catch (error) {
+      console.warn('No se pudo actualizar el progreso del triaje. Se reintentarÃ¡.');
+    } finally {
+      scheduleQualityRefresh();
+    }
   }, delay);
 }
 function dispararTriaje(btn) {
