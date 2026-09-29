@@ -135,6 +135,9 @@
     return 'Ordenados: '+formatted+'. Se promedian los dos centrales: ('+money(left)+' + '+money(right)+') ÷ 2 = '+money((left+right)/2)+'/m².';
   }
   function calculationTable(headers,rows){return '<div class="cmp-calc-scroll"><table class="cmp-calc-table"><thead><tr>'+headers.map(h=>'<th>'+escape(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(value=>'<td>'+value+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';}
+  // Parecido de una casa con el inmueble objetivo: suma de las similitudes de
+  // terreno y de construccion, que son las dos columnas que ve el usuario.
+  function componentSimilarity(detail){return (detail.land_similarity||0)+(detail.built_similarity||0);}
   function renderCalculationExplanation(){
     const host=$('cmp-calculation-explanation'),r=result,p=snapshot.params;
     if(r.model!=='components'){
@@ -147,7 +150,7 @@
     if(lands.length)html+=calculationTable(['Portal','Código','Operación'],lands.map(row=>[escape(row.source.toUpperCase()),escape(row.code),money(row.price)+' ÷ '+decimals(row.land)+' m² = <strong>'+money(row.price/row.land)+'/m²</strong>']))+'<p>'+escape(medianExplanation(landUnits))+' Se adopta <strong>'+money(r.land_unit)+'/m²</strong> para el suelo.</p>';
     else html+='<p>No hubo terrenos aptos; el proceso no puede separar suelo y construcción.</p>';
     html+='<h3>2. Separamos suelo y construcción en cada casa</h3><p>Precio de la casa − (área de terreno × valor del suelo) = remanente. Luego: remanente ÷ área construida = aporte por m² construido.</p>';
-    if(details.length)html+=calculationTable(['Casa','Cálculo del remanente','Sim. terreno','Sim. construcción','Aporte por m²','Valor sugerido para el objetivo'],details.map(({record,detail})=>[escape(record.source.toUpperCase()+' · '+record.code),money(record.price)+' − ('+decimals(record.land)+' × '+money(r.land_unit)+') = '+money(detail.remainder),decimals(detail.land_similarity)+'%',decimals(detail.built_similarity)+'%',money(detail.built_unit)+'/m²',detail.usable?money(detail.target_estimate):'No participa · solo referencia']));
+    if(details.length){const ordered=[...details].sort((a,b)=>componentSimilarity(b.detail)-componentSimilarity(a.detail)||(b.detail.overall_similarity||0)-(a.detail.overall_similarity||0)||String(a.detail.id).localeCompare(String(b.detail.id)));html+=calculationTable(['Casa','Cálculo del remanente','Sim. terreno','Sim. construcción','Aporte por m²','Valor sugerido para el objetivo'],ordered.map(({record,detail})=>[escape(record.source.toUpperCase()+' · '+record.code),money(record.price)+' − ('+decimals(record.land)+' × '+money(r.land_unit)+') = '+money(detail.remainder),decimals(detail.land_similarity)+'%',decimals(detail.built_similarity)+'%',money(detail.built_unit)+'/m²',detail.usable?money(detail.target_estimate):'No participa · solo referencia']));}
     if(usable.length){
       const selected=usable.find(item=>item.detail.id===r.built_reference_id);
       html+='<p>'+(r.built_unit_method==='closest_built_similarity'&&selected
