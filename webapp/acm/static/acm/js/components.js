@@ -128,6 +128,7 @@
   function visibleRows(){return snapshot?.records||[];}
   const value=r=>presentation.property(r,result,excluded);
   const mapGroup=r=>presentation.group(r,value(r));
+  const comparableRows=()=>visibleRows().filter(r=>mapGroup(r)==='property');
   function similarityOrder(rows){return [...rows].sort((a,b)=>{
     const av=value(a),bv=value(b);
     const aWeight=av.similarityWeight==null?(a.overall_similarity==null?-1:a.overall_similarity):av.similarityWeight;
@@ -201,7 +202,7 @@
           '<p>'+(usable.length===1?'Se usa una casa como referencia.':'Se promedian los precios ajustados de las casas de la propuesta aceptada.')+' Las demás quedan visibles para comparar y no intervienen.</p>'+
           '<p>Suelo: '+money(r.land_unit)+'/m², obtenido de '+lands.length+' terrenos de referencia. Construcción: '+money(detail.built_unit)+'/m², obtenido de esta casa después de descontar su terreno.</p>'+
           calculationTable(['Casa usada','Precio anunciado','Ajuste terreno','Ajuste construcción','Precio ajustado'],usable.map(item=>[escape(item.record.source.toUpperCase()+' · '+item.record.code),money(item.record.price),money(item.detail.land_adjustment),money(item.detail.built_adjustment),money(item.detail.target_estimate)]))+'<p>Valoración final: <strong>'+money(r.new.total)+'</strong>.</p>'+
-          '<h3>Comparación con las demás casas</h3>'+calculationTable(['Casa','Terreno','Construcción','Sim. terreno','Sim. construcción','Uso'],similarityOrder(visibleRows().filter(row=>row.kind==='Casa')).map(row=>[escape(row.source.toUpperCase()+' · '+row.code),decimals(row.land)+' m²',decimals(row.built)+' m²',decimals(row.land_similarity)+'%',decimals(row.built_similarity)+'%',value(row).recommended?'Usada para valorar':escape(value(row).reason||'Solo referencia') ]));
+          '<h3>Comparación de las casas comparables</h3>'+calculationTable(['Casa','Precio anunciado','Terreno','Construcción','Sim. terreno','Sim. construcción','Uso'],similarityOrder(comparableRows()).map(row=>[escape(row.source.toUpperCase()+' · '+row.code),money(row.price),decimals(row.land)+' m²',decimals(row.built)+' m²',decimals(row.land_similarity)+'%',decimals(row.built_similarity)+'%',value(row).recommended?'Usada para valorar':'Comparable no usado' ]));
         return;
       }
     }
@@ -250,7 +251,7 @@
   function badge(r){const v=value(r);const text={area:'Incluida en el análisis',house:'Incluida en el análisis',review:'Requiere revisión',land:v.selected?'Terreno incluido':'Terreno de referencia',reference:'Solo referencia',excluded:'Desmarcada',pending:'Cálculo pendiente'};return '<span class="cmp-badge '+(['house','land','area'].includes(v.status)?'':'ref')+'">'+text[v.status]+'</span>';}
   function fixImages(container){container.querySelectorAll('img').forEach(img=>img.addEventListener('error',()=>{const empty=document.createElement('div');empty.className='cmp-photo-empty';empty.textContent='Sin foto';img.replaceWith(empty);},{once:true}));}
   function renderCards(){
-    const rows=visibleRows(),houses=rows.filter(r=>mapGroup(r)==='property'),lands=rows.filter(r=>mapGroup(r)==='land'),refs=rows.filter(r=>!['property','land'].includes(mapGroup(r)));
+    const rows=visibleRows(),houses=comparableRows(),lands=rows.filter(r=>mapGroup(r)==='land'),refs=rows.filter(r=>!['property','land'].includes(mapGroup(r)));
     $('cmp-house-count').textContent=houses.length;$('cmp-land-count').textContent=lands.length;$('cmp-ref-count').textContent=refs.length;
     const propertyType=snapshot.params.property_type,found=rows.filter(r=>r.kind===propertyType).length;
     const used=result?.built_unit_method==='primary_area_reference'?result.usable_house_count:houses.length;
