@@ -50,7 +50,7 @@ class WeightedAdjustmentTests(SimpleTestCase):
         p,rows=fixture();r=calculate(rows,p)
         doc=Document(BytesIO(build_acm_docx(p,rows,r)))
         text=' '.join(p.text for p in doc.paragraphs)+' '.join(c.text for t in doc.tables for row in t.rows for c in row.cells)
-        self.assertIn('Peso aplicado',text)
+        self.assertIn('Casa usada',text)
         self.assertIn('Ajuste terreno',text)
         self.assertNotIn('Las demás casas quedan como referencia',text)
 

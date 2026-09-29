@@ -2,7 +2,7 @@
 import math
 from statistics import median
 
-VERSION = 'componentes-2-pesos'
+VERSION = 'componentes-3-referencia-unica'
 MIN_LANDS = 1
 MIN_HOUSES = 1
 SOURCES = ('propify', 'remax', 'properati', 'adondevivir', 'urbania', 'facebook_marketplace')
@@ -204,38 +204,42 @@ def calculate(records, p, excluded=()):
         return result
     # Scenario comparisons keep the original evidence and weighting reference.
     weight_params={**p, **p.get('weight_reference', {})}
-    weight_rows=[]
-    for row,built_value in usable_rows:
-        similarity=_similarity_metrics(row,weight_params)['overall_similarity']/100
-        weight=max(.01,similarity)**2
-        weight_rows.append((row,built_value,weight))
-    weight_total=sum(item[2] for item in weight_rows)
-    weight_rows.sort(key=lambda item:item[0]['id'])
-    if len(residuals)<3:
-        result['messages'].append(f'Muestra reducida: aporte de construcción estimado con {len(residuals)} casa(s). Resultado orientativo.')
+    # Rank both areas equally; distance only resolves an equal area match.
+    chosen_row,built_unit=min(usable_rows,key=lambda item:(
+        abs(item[0]['land']-weight_params['land'])/weight_params['land']+
+        abs(item[0]['built']-weight_params['built'])/weight_params['built'],
+        item[0].get('distance') or 0,item[0]['id']))
+    reference_ids=p.get('reference_ids') or [chosen_row['id']]
+    allowed={row['id'] for row,_ in usable_rows}
+    if not isinstance(reference_ids,list) or not 1<=len(reference_ids)<=3 or len(set(reference_ids))!=len(reference_ids) or any(i not in allowed for i in reference_ids):
+        reference_ids=[chosen_row['id']]
+    selected_rows=[row for row,_ in usable_rows if row['id'] in reference_ids]
+    built_unit=sum(value for row,value in usable_rows if row['id'] in reference_ids)/len(reference_ids)
+    weight_rows=[(row,value,1/len(reference_ids) if row['id'] in reference_ids else 0)
+                 for row,value in usable_rows]
     residuals.sort()
     built_unit_min=residuals[0]
     built_unit_max=residuals[-1]
-    # This is exactly the weighted average of the adjusted comparable prices:
-    # price_i + (target_land-land_i)*soil + (target_built-built_i)*improvements_i.
-    built_unit=sum(built_value*weight for _,built_value,weight in weight_rows)/weight_total
-    chosen_row,_,_=max(weight_rows,key=lambda item:(item[2],item[0]['id']))
-    built_unit_method='weighted_adjusted_prices'
-    built_reference_id=chosen_row['id']
+    built_unit_method='primary_area_reference'
+    built_reference_id=reference_ids[0]
     for row,built_value,weight in weight_rows:
         detail=next(item for item in result['breakdown'] if item['id']==row['id'])
-        detail['similarity_weight']=100*weight/weight_total if weight_total else 0
+        detail['similarity_weight']=100*weight
         detail['land_adjustment']=(p['land']-row['land'])*unit
         detail['built_adjustment']=(p['built']-row['built'])*built_value
-        detail['weighted_contribution']=detail['target_estimate']*weight/weight_total
-        detail['recommended']=row['id']==built_reference_id
+        detail['weighted_contribution']=detail['target_estimate']*weight
+        detail['recommended']=row['id'] in reference_ids
+        detail['reference_only']=not detail['recommended']
+        detail['usable']=detail['recommended']
+    result['usable_house_count']=len(reference_ids)
+    result['old']=old_estimate(selected_rows,p['built'])
     result['messages'].append(
-        'Se ajusta el precio de cada casa por la diferencia de terreno y construcción. '
-        'El resultado es el promedio de esos precios ajustados con los pesos mostrados. '
-        'Peso: similitud total al cuadrado, normalizada al 100%; '
-        'la similitud combina 45% terreno, 45% construcción y 10% distancia. '
-        'Son reglas iniciales del método, pendientes de calibración con evidencia de mercado.'
+        'Solo se usa la casa apta más parecida en terreno y construcción, '
+        'comparando las diferencias porcentuales de ambas superficies por igual. '
+        'La distancia solo desempata. Las demás casas no intervienen en el precio final.'
     )
+    if p.get('reference_ids'):
+        result['messages'][-1]=f'Se usan {len(reference_ids)} casas de la propuesta aceptada. Se promedian únicamente sus precios ajustados a tus metrajes; las demás quedan como referencia.'
     result.update(built_unit_min=built_unit_min, built_unit_max=built_unit_max,
                   built_unit_dispersion=(built_unit_max-built_unit_min)/(built_unit or 1))
     dispersion_ratio=built_unit_max/built_unit_min if built_unit_min > 0 else float('inf')
@@ -248,9 +252,9 @@ def calculate(records, p, excluded=()):
     land_value=p['land']*unit
     total=land_value+p['built']*built_unit
     # Spread of adjusted comparables, not a calibrated confidence interval.
-    estimates=sorted(land_value+p['built']*r for r in residuals)
+    estimates=sorted(d['target_estimate'] for d in result['breakdown'] if d['usable'])
     result.update(status='ok',built_unit_method=built_unit_method,built_reference_id=built_reference_id,
-        recommended_ids=[built_reference_id],
+        recommended_ids=reference_ids,
         new={'total':total,'land_value':land_value,'built_value':p['built']*built_unit,
         'built_unit':built_unit, 'range_low':estimates[0],
         'range_high':estimates[-1],
@@ -277,7 +281,7 @@ def _similarity_metrics(row,p):
     radius=max(p.get('radius') or 1,1)
     distance=max(0,100*(1-min((row.get('distance') or 0)/radius,1)))
     return {'land_similarity':round(land,1),'built_similarity':round(built,1),
-            'distance_similarity':round(distance,1),'overall_similarity':round(land*.45+built*.45+distance*.10,1)}
+            'distance_similarity':round(distance,1),'overall_similarity':round((land+built)/2,1)}
 
 
 def calculate_same_type(records,p,excluded=()):

@@ -15,15 +15,16 @@
     const detail = result.breakdown.find(row => row.id === record.id);
     if (!detail) return {status:'pending', reason:result.messages.join(' ') || 'Referencia de suelo pendiente'};
     if (detail.method === 'built') return {status:'area', offerUnit:detail.offer_unit, adjustedTotal:detail.adjusted_total};
-    return {status:detail.usable ? 'house' : 'review', landUnit:detail.land_unit,
+    return {status:detail.reference_only ? 'reference' : detail.usable ? 'house' : 'review', landUnit:detail.land_unit,
       landValue:detail.land_value, remainder:detail.remainder, builtUnit:detail.built_unit,
       targetEstimate:detail.target_estimate,
       landAdjustment:detail.land_adjustment, builtAdjustment:detail.built_adjustment,
       weightedContribution:detail.weighted_contribution,
       recommended:!!detail.recommended, similarityWeight:detail.similarity_weight,
+      referenceOnly:!!detail.reference_only,
       landSimilarity:detail.land_similarity, builtSimilarity:detail.built_similarity,
       distanceSimilarity:detail.distance_similarity, overallSimilarity:detail.overall_similarity,
-      reason:detail.usable ? '' : 'Remanente no positivo: revisar precio, áreas o referencia de suelo'};
+      reason:detail.reference_only ? (result.recommended_ids?.length>1?'Solo referencia: fuera del grupo propuesto y aceptado; no interviene en el precio final':'Solo referencia: no es la casa elegida; compara sus superficies y similitudes con la marcada en verde') : detail.usable ? '' : 'Remanente no positivo: revisar precio, áreas o referencia de suelo'};
   }
   function precision(record) {
     if (record.precision === 'exacta') return {short:'Exa', label:'Ubicación exacta', kind:'exact'};
@@ -45,6 +46,7 @@
     return precision(record).short + ' · ' + markerValue(record, value, mode) + similarity;
   }
   function group(record, value) {
+    if (value.referenceOnly) return 'property';
     if (value.status === 'land' && value.selected) return 'land';
     if (value.status === 'house' || value.status === 'area') return 'property';
     return record.kind === 'Terreno' ? 'other_reference' : 'property_reference';

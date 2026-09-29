@@ -206,8 +206,20 @@ def explain_ai(request):
         result=calculate(state['records'],state['params'],excluded)
         if not result.get('new'):
             return JsonResponse({'error':'Primero completa un cálculo ACM.'},status=400)
-        from .components_ai import explain_result, ExplanationBusy
+        from .components_ai import explain_result, propose_result, ExplanationBusy
         try:
+            if result['model']=='components':
+                proposal=propose_result(user_key(request),state['params'],state['records'],result,excluded)
+                proposed_params={**state['params'],'reference_ids':proposal['ids'],
+                                 'proposal_explanation':proposal['explanation']}
+                proposed_result=calculate(state['records'],proposed_params,excluded)
+                new_state={**state,'params':proposed_params}
+                token=signing.dumps(new_state,salt=SALT,compress=True)
+                by_id={row['id']:row for row in state['records']}
+                return JsonResponse({'explanation':proposal['explanation'],'total':result['new']['total'],
+                    'proposal':{'ids':proposal['ids'],'token':token,'params':proposed_params,
+                        'result':proposed_result,'omitted':proposal['omitted'],
+                        'labels':[by_id[i]['source'].upper()+' · '+by_id[i]['code'] for i in proposal['ids']]}})
             text=explain_result(user_key(request),state['params'],state['records'],result,excluded,state.get('warnings',[]))
         except ExplanationBusy:
             return JsonResponse({'error':'Hay una explicación en curso. Espera antes de reintentar.'},status=429)

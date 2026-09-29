@@ -41,7 +41,7 @@ class ComponentsEngineTests(SimpleTestCase):
         self.assertEqual(result['status'],'ok')
         self.assertGreater(result['new']['total'],300000)
         self.assertLessEqual(result['new']['total'],350000)
-        self.assertEqual(result['usable_house_count'],3)
+        self.assertEqual(result['usable_house_count'],1)
         self.assertFalse(next(r for r in result['breakdown'] if r['id']=='bad')['usable'])
     def test_land_target_needs_no_construction_and_stays_in_selected_radius(self):
         p=parameters({**params(),'property_type':'Terreno','built':0})
@@ -81,7 +81,7 @@ class ComponentsEngineTests(SimpleTestCase):
         self.assertEqual(by_id['a']['target_estimate'],350000)
         self.assertEqual(by_id['b']['remainder'],20000)
         self.assertAlmostEqual(by_id['b']['built_unit'],133.3333333)
-        self.assertEqual(result['built_unit_method'],'weighted_adjusted_prices')
+        self.assertEqual(result['built_unit_method'],'primary_area_reference')
         self.assertAlmostEqual(result['new']['total'],sum(d['weighted_contribution'] for d in result['breakdown'] if d['usable']))
 
     def test_changing_land_selection_updates_every_house_breakdown(self):
@@ -111,7 +111,7 @@ class ComponentsEngineTests(SimpleTestCase):
         self.assertIn('Falta área de terreno',bad['issues'])
         result=calculate(rows,params())
         self.assertNotIn('incomplete',result['house_ids'])
-        self.assertEqual(result['old']['houses'],3)
+        self.assertEqual(result['old']['houses'],1)
 
     def test_expand_lands_only_in_500m_steps(self):
         raw=[record('near')]+[record(f'l{i}','Terreno',lat=-16.406-i*.0001) for i in range(5)]+[record('far',lat=-16.406)]
@@ -260,7 +260,7 @@ class ComponentsEndpointTests(SimpleTestCase):
     def test_page_shell_remains_visible_before_login(self):
         response=page(self.factory.get('/acm/analisis/'))
         self.assertEqual(response.status_code,200)
-        self.assertEqual(response['X-ACM-Model'],'componentes-2-pesos')
+        self.assertEqual(response['X-ACM-Model'],'componentes-3-referencia-unica')
         self.assertEqual(response['Cache-Control'],'no-store')
 
 

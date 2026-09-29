@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}ACM · Suelo y construcción{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=10">
+<link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=11">
 {% endblock %}
 {% block content %}
 <main class="components-acm">
@@ -59,9 +59,10 @@
       <section class="cmp-panel" id="cmp-ai-panel" data-url="{% url 'acm:componentes_explicar' %}" hidden><h2>Explicación del resultado</h2>
         <p id="cmp-ai-status" role="status"></p>
         <div id="cmp-simple" hidden role="status" style="white-space:pre-line"></div>
+        <div id="cmp-proposal" hidden><p id="cmp-proposal-summary"></p><button id="cmp-proposal-apply" type="button">Usar estas casas</button></div>
       </section>
       <div class="cmp-toolbar"><strong id="cmp-counts">Sin comparables</strong><div class="cmp-downloads"><button id="cmp-save" class="cmp-save" type="button" disabled>Guardar en historial</button><button id="cmp-word" type="button" disabled>Descargar informe Word</button><button id="cmp-export" type="button" disabled>Descargar datos JSON</button></div></div>
-      <nav class="cmp-tabs" aria-label="Grupos de comparables"><button data-tab="Casa" aria-pressed="true">Comparables usados <span id="cmp-house-count"></span></button><button data-tab="Terreno" aria-pressed="false">Terrenos usados <span id="cmp-land-count"></span></button><button data-tab="reference" aria-pressed="false">Solo referencia <span id="cmp-ref-count"></span></button></nav>
+      <nav class="cmp-tabs" aria-label="Grupos de comparables"><button data-tab="Casa" aria-pressed="true">Comparables <span id="cmp-house-count"></span></button><button data-tab="Terreno" aria-pressed="false">Terrenos usados <span id="cmp-land-count"></span></button><button data-tab="reference" aria-pressed="false">Solo referencia <span id="cmp-ref-count"></span></button></nav>
       <div id="cmp-cards"><p class="cmp-muted">Aquí aparecerán Propify y los portales seleccionados.</p></div>
       <details class="cmp-panel" open><summary>Cómo se calculó este resultado</summary><div id="cmp-calculation-explanation"><p>Busca comparables para ver aquí las operaciones con sus valores reales.</p></div></details>
     </section>
@@ -75,7 +76,7 @@
 {% endblock %}
 {% block extra_scripts %}
 {{ block.super }}
-<script src="{% static 'acm/js/components-presentation.js' %}?v=7"></script>
-<script src="{% static 'acm/js/components.js' %}?v=16"></script>
+<script src="{% static 'acm/js/components-presentation.js' %}?v=8"></script>
+<script src="{% static 'acm/js/components.js' %}?v=17"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}

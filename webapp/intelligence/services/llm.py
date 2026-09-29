@@ -94,7 +94,8 @@ class LLMService:
         caller_app: str = "",
         endpoint: str = "",
         response_format: Optional[Dict[str, str]] = None,
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        thinking: Optional[bool] = None
     ) -> Tuple[bool, str, Optional[Dict]]:
         """
         Llama a la API de DeepSeek.
@@ -185,6 +186,8 @@ class LLMService:
         # completo y válido.
         if response_format:
             payload["response_format"] = response_format
+        if thinking is not None:
+            payload["thinking"] = {"type": "enabled" if thinking else "disabled"}
         if stream:
             payload["stream_options"] = {"include_usage": True}
         

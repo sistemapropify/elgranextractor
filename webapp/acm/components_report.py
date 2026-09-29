@@ -188,7 +188,14 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
             table(('Portal','Código','Precio','Terreno','Valor suelo','Remanente','Construido','Sim. terreno','Sim. construcción','Remanente por m²','Valor sugerido','Usada'), house_rows,
                   (.5,.7,.75,.6,.75,.75,.65,.65,.75,.9,.8,.4))
             if built_units:
-                if result.get('built_unit_method') == 'weighted_adjusted_prices':
+                if result.get('built_unit_method') == 'primary_area_reference':
+                    if params.get('proposal_explanation'):
+                        doc.add_paragraph('Justificación de la propuesta aceptada: '+params['proposal_explanation'])
+                    doc.add_paragraph('Solo las casas marcadas como usadas intervienen. Si se aceptó una propuesta de varias casas, se promedian sus precios ajustados; las demás permanecen como referencia.')
+                    table(('Casa usada','Precio anunciado','Ajuste terreno','Ajuste construcción','Precio ajustado'),[
+                        (d['id'],_money(d['price']),_money(d['land_adjustment']),_money(d['built_adjustment']),_money(d['target_estimate']))
+                        for d in breakdown.values() if d['usable']])
+                elif result.get('built_unit_method') == 'weighted_adjusted_prices':
                     doc.add_paragraph('Se ajusta cada precio anunciado por la diferencia de terreno y construcción. Se suman los precios ajustados multiplicados por su peso. La similitud combina 45% terreno, 45% construcción y 10% distancia; el peso es la similitud al cuadrado, normalizada para sumar 100%. Es una regla inicial del método, no una calibración estadística de mercado.')
                     table(('Comparable','Ajuste terreno','Ajuste construcción','Precio ajustado','Peso aplicado','Aporte al resultado'),[
                         (d['id'],_money(d.get('land_adjustment')),_money(d.get('built_adjustment')),
@@ -251,7 +258,8 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
         if new: doc.add_paragraph(f'{_number(params[area_key],2)} m² × {_unit(new["unit"])} = {_money(new["total"])}.')
 
     heading('Registros que no participaron')
-    reference = [row for row in records if row['id'] not in set(result.get('land_ids', [])) | set(result.get('house_ids', [])) or row['id'] in excluded]
+    used_house_ids = [d['id'] for d in result['breakdown'] if d['usable']] if result.get('model')=='components' else result.get('house_ids', [])
+    reference = [row for row in records if row['id'] not in set(result.get('land_ids', [])) | set(used_house_ids) or row['id'] in excluded]
     reasons = {}
     for row in reference:
         row_reasons = ['Desmarcada manualmente'] if row['id'] in excluded else (row.get('issues') or ['Fuera del grupo finalmente utilizado'])

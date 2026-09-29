@@ -42,7 +42,7 @@ class ExplanationTests(SimpleTestCase):
         request._dont_enforce_csrf_checks=True
         return request
 
-    @patch('acm.components_ai.explain_result',return_value='explicación')
+    @patch('acm.components_ai.propose_result',return_value={'ids':['a'],'explanation':'explicación','omitted':0})
     @patch('acm.components_views.load_records')
     def test_explanation_recalculates_signed_selection_instead_of_client_price(self,load,explain):
         load.return_value=(self.rows,[])
@@ -50,6 +50,12 @@ class ExplanationTests(SimpleTestCase):
         response=explain_ai(self.request({'token':token,'result':{'total':1},'target_areas':{'land':220,'built':270}}))
         self.assertEqual(response.status_code,200)
         self.assertGreater(json.loads(response.content)['total'],220000)
+        proposal=json.loads(response.content)['proposal']
+        from acm.components_views import recalculate
+        applied=recalculate(self.request({'token':proposal['token']}))
+        self.assertEqual(applied.status_code,200)
+        self.assertEqual(json.loads(applied.content)['result']['recommended_ids'],['a'])
+        self.assertEqual(recalculate(self.request({'token':proposal['token']},user=2)).status_code,400)
         self.assertEqual(explain.call_args.args[1]['land'],220)
         self.assertEqual(explain_ai(self.request({'token':token},user=2)).status_code,400)
         self.assertEqual(explain_ai(self.request({'token':token},user=None)).status_code,401)
