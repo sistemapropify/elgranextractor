@@ -18,6 +18,15 @@ def _unit(value):
     return 'Sin dato' if value is None else f'USD {float(value):,.0f}/m²'
 
 
+def _component_similarity(detail):
+    """Parecido de una casa con el objetivo: similitudes de terreno y construcción.
+
+    Espeja el orden de la pantalla (components.js) para que el informe y la
+    página listen las casas en la misma secuencia.
+    """
+    return (detail.get('land_similarity') or 0) + (detail.get('built_similarity') or 0)
+
+
 def _median_text(values):
     values = sorted(float(value) for value in values)
     if not values:
@@ -159,8 +168,14 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
         breakdown = {row['id']: row for row in result.get('breakdown', [])}
         house_rows = []
         built_units = []
-        for row_id in result.get('house_ids', []):
-            if row_id not in by_id or row_id not in breakdown or row_id in excluded: continue
+        # Mismo orden que la pantalla: de mayor a menor parecido (terreno + construcción).
+        house_ids = sorted(
+            (row_id for row_id in result.get('house_ids', [])
+             if row_id in by_id and row_id in breakdown and row_id not in excluded),
+            key=lambda row_id: (-_component_similarity(breakdown[row_id]),
+                                -(breakdown[row_id].get('overall_similarity') or 0),
+                                str(row_id)))
+        for row_id in house_ids:
             row, detail = by_id[row_id], breakdown[row_id]
             if detail['usable']: built_units.append(detail['built_unit'])
             house_rows.append((row['source'].upper(), row.get('code') or row['id'], _money(row['price']),
