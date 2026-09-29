@@ -3,6 +3,8 @@
   const $ = id => document.getElementById(id), form = $('cmp-form'), presentation = window.ACMComponentsPresentation;
   let snapshot=null, result=null, excluded=new Set(), tab='Casa', map=null, pin=null, circles=[], markers=[], sequence=0, controller=null, detailId=null;
   let aiController=null, aiExplanation=null, aiProposal=null;
+  const locatedIds=new Set();
+  let pulseMarkers=[],pulseTimer=null;
   const money=n=>n==null?'—':new Intl.NumberFormat('es-PE',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
   const decimals=n=>n==null?'Sin informar':new Intl.NumberFormat('es-PE',{maximumFractionDigits:2}).format(n);
   const formatDate=value=>{if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?String(value):date.toLocaleString('es-PE',{dateStyle:'short',timeStyle:'short'});};
@@ -40,7 +42,42 @@
       const body=await response.json();if(!response.ok)throw Error(body.error||'No se pudo completar la consulta.');return body;
     }catch(e){if(e.name==='AbortError')throw Error('La consulta se canceló o superó 45 segundos. Puedes reintentar.');throw e;}finally{clearTimeout(timer);}
   }
-  function clearMap(){markers.forEach(m=>m.setMap(null));markers=[];}
+  function clearMap(){
+    clearInterval(pulseTimer);pulseTimer=null;
+    pulseMarkers.forEach(m=>m.setMap(null));pulseMarkers=[];
+    markers.forEach(m=>m.setMap(null));markers=[];
+  }
+  function pulseIcon(phase){return {path:google.maps.SymbolPath.CIRCLE,scale:15+phase*17,fillColor:'#00e5ff',fillOpacity:.18*(1-phase),strokeColor:'#00e5ff',strokeOpacity:1-phase*.8,strokeWeight:3};}
+  function startMapPulses(){
+    if(!pulseMarkers.length||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+    const started=Date.now();
+    pulseTimer=setInterval(()=>{
+      if(document.hidden)return;
+      const icon=pulseIcon(((Date.now()-started)%1400)/1400);
+      pulseMarkers.forEach(marker=>marker.setIcon(icon));
+    },80);
+  }
+  function locateProperty(id){
+    const row=visibleRows().find(r=>String(r.id)===id);
+    if(!row)return;
+    if(!map||!result){$('cmp-status').textContent='Espera a que el mapa y el análisis estén disponibles.';return;}
+    const active=!locatedIds.has(id);
+    if(active){
+      locatedIds.add(id);
+      const layer=Array.from(document.querySelectorAll('[name=map_layer]')).find(el=>el.value===mapGroup(row));
+      if(layer)layer.checked=true;
+    }else locatedIds.delete(id);
+    renderMap();
+    document.querySelectorAll('[data-locate]').forEach(button=>{
+      const selected=locatedIds.has(button.dataset.locate);
+      button.setAttribute('aria-pressed',String(selected));
+      button.textContent=selected?'Dejar de palpitar en el mapa':'Buscar propiedad en el mapa';
+    });
+    if(active){
+      map.panTo({lat:row.lat,lng:row.lng});
+      $('cmp-map').scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'center'});
+    }
+  }
   function drawCircles(){
     if(!map)return;circles.forEach(c=>c.setMap(null));circles=[];
     const p=snapshot?.params||input(),center={lat:p.lat,lng:p.lng};if(!Number.isFinite(center.lat)||!Number.isFinite(center.lng))return;
@@ -63,7 +100,7 @@
     if(snapshot){renderCards();renderDetail();}else{$('cmp-cards').innerHTML='<p class="cmp-muted">Busca comparables para aplicar el análisis.</p>';$('cmp-counts').textContent='Sin comparables';['house','land','ref'].forEach(k=>$('cmp-'+k+'-count').textContent='');}
   }
   function invalidate(){
-    sequence++;if(controller)controller.abort();snapshot=null;excluded.clear();if($('cmp-detail').open)$('cmp-detail').close();
+    sequence++;if(controller)controller.abort();snapshot=null;excluded.clear();locatedIds.clear();if($('cmp-detail').open)$('cmp-detail').close();
     clearResult('Parámetros modificados: vuelve a buscar.');$('cmp-warnings').replaceChildren();$('cmp-status').textContent='Listo para una nueva búsqueda.';$('cmp-search').disabled=false;
   }
   function setLocation(lat,lng){form.elements.lat.value=lat.toFixed(7);form.elements.lng.value=lng.toFixed(7);invalidate();if(map)map.panTo({lat,lng});}
@@ -109,7 +146,12 @@
       const icon=icons[r.source]?{url:'/static/requerimientos/data/'+icons[r.source],scaledSize:new google.maps.Size(32,40),anchor:new google.maps.Point(16,40),labelOrigin:new google.maps.Point(16,52)}:{path:google.maps.SymbolPath.CIRCLE,scale:7,fillColor:r.kind==='Terreno'?'#d6a548':'#3789dd',fillOpacity:1,strokeColor:'#ffffff',strokeWeight:1,labelOrigin:new google.maps.Point(0,3)};
       const marker=new google.maps.Marker({map,position:{lat:r.lat,lng:r.lng},title:r.title+' · '+presentation.precision(r).label+' · '+label,opacity:dim?.55:1,zIndex:1000+Math.round((r.overall_similarity||0)*10),icon,label:{text:label,fontSize:'10px',fontWeight:'600',className:'cmp-pin-label'}});
       marker.addListener('click',()=>openDetail(r.id));markers.push(marker);
+      if(locatedIds.has(String(r.id))){
+        marker.setOpacity(1);marker.setZIndex(100000);
+        pulseMarkers.push(new google.maps.Marker({map,position:{lat:r.lat,lng:r.lng},icon:pulseIcon(0),clickable:false,zIndex:99999}));
+      }
     });
+    startMapPulses();
     $('cmp-map-count').textContent=rows.length+' visibles de '+visibleRows().length;
   }
   function renderSummary(){
@@ -212,7 +254,7 @@
     $('cmp-map-count').textContent=rows.length+' propiedades';
     document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));
     const selected=tab==='reference'?refs:tab==='Casa'?houses:lands;
-    $('cmp-cards').innerHTML=similarityOrder(selected).map(r=>'<article class="cmp-card'+(value(r).recommended?' cmp-card-used':'')+'" data-record="'+escape(r.id)+'">'+(value(r).recommended?'<div class="cmp-used-label">Propiedad usada para valorar</div>':'')+heading(r,true)+areas(r)+features(r)+breakdown(r)+'<div class="cmp-card-footer">'+badge(r)+'<button type="button" data-detail="'+escape(r.id)+'">Ver detalle ↗</button></div></article>').join('')||'<p class="cmp-muted">No hay registros en este grupo.</p>';
+    $('cmp-cards').innerHTML=similarityOrder(selected).map(r=>'<article class="cmp-card'+(value(r).recommended?' cmp-card-used':'')+'" data-record="'+escape(r.id)+'">'+(value(r).recommended?'<div class="cmp-used-label">Propiedad usada para valorar</div>':'')+heading(r,true)+areas(r)+features(r)+breakdown(r)+'<div class="cmp-card-footer">'+badge(r)+'<button type="button" data-detail="'+escape(r.id)+'">Ver detalle ↗</button></div><button type="button" class="cmp-locate" data-locate="'+escape(r.id)+'" aria-pressed="'+locatedIds.has(String(r.id))+'">'+(locatedIds.has(String(r.id))?'Dejar de palpitar en el mapa':'Buscar propiedad en el mapa')+'</button></article>').join('')||'<p class="cmp-muted">No hay registros en este grupo.</p>';
     fixImages($('cmp-cards'));
   }
   function renderDetail(){
@@ -277,7 +319,7 @@
   });
   form.addEventListener('submit',async e=>{
     e.preventDefault();const p=input();if(!p.sources.length){$('cmp-status').textContent='Selecciona al menos una fuente.';return;}
-    const seq=++sequence;snapshot=null;excluded.clear();if($('cmp-detail').open)$('cmp-detail').close();clearResult('Buscando comparables…');$('cmp-search').disabled=true;$('cmp-status').textContent='Buscando comparables del tipo seleccionado…';
+    const seq=++sequence;snapshot=null;excluded.clear();locatedIds.clear();if($('cmp-detail').open)$('cmp-detail').close();clearResult('Buscando comparables…');$('cmp-search').disabled=true;$('cmp-status').textContent='Buscando comparables del tipo seleccionado…';
     try{const data=await post('buscar',p);if(seq!==sequence)return;snapshot=data;result=data.result;tab=p.property_type==='Terreno'?'Terreno':'Casa';render();$('cmp-status').textContent='Análisis actualizado. Desmarca comparables para recalcular el mapa, las tarjetas y el resultado.';}
     catch(error){if(seq===sequence){snapshot=null;clearResult('La búsqueda no terminó. Reintenta.');$('cmp-status').textContent=error.message;}}
     finally{if(seq===sequence)$('cmp-search').disabled=false;}
@@ -288,7 +330,7 @@
   document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{tab=button.dataset.tab;if(snapshot)renderCards();}));
   $('cmp-marker-mode').addEventListener('change',renderMap);
   document.querySelectorAll('[name=map_layer]').forEach(input=>input.addEventListener('change',renderMap));
-  $('cmp-cards').addEventListener('click',e=>{const button=e.target.closest('[data-detail]');if(button)openDetail(button.dataset.detail);});
+  $('cmp-cards').addEventListener('click',e=>{const locate=e.target.closest('[data-locate]');if(locate){locateProperty(locate.dataset.locate);return;}const button=e.target.closest('[data-detail]');if(button)openDetail(button.dataset.detail);});
   $('cmp-detail-close').addEventListener('click',()=>$('cmp-detail').close());
   $('cmp-detail-content').addEventListener('click',e=>{const button=e.target.closest('[data-edit-record]');if(button&&typeof window.openScrapedEditor==='function')window.openScrapedEditor(button.dataset.editRecord);});
   $('cmp-detail').addEventListener('close',()=>{detailId=null;});
