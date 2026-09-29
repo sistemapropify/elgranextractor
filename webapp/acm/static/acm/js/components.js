@@ -232,7 +232,11 @@
   function precisionBadge(r){const p=presentation.precision(r);return '<span class="cmp-precision '+p.kind+'">'+escape(p.label)+'</span>';}
   function publicationBadge(r){const labels={activa:'Activa',posible_retirada:'Posible retirada',retirada:'Retirada',sin_verificar:'Sin verificar'};const state=labels[r.state]||'Sin verificar';const misses=r.consecutive_absences?' · '+r.consecutive_absences+' ausencia(s)':'';return '<span class="cmp-publication-state state-'+escape(r.state||'sin_verificar')+'">Publicación: '+escape(state+misses)+'</span>';}
   function similarityBlock(r){const overall=r.overall_similarity;if(overall==null)return '';const v=value(r);const weight=v.similarityWeight==null?'':'<span>Peso en cálculo '+decimals(v.similarityWeight)+'%</span>';return '<div class="cmp-similarity cmp-similarity-visible"><strong>Similitud con tu inmueble: '+decimals(overall)+'%</strong><span>Terreno '+decimals(r.land_similarity)+'%</span><span>Construcción '+decimals(r.built_similarity)+'%</span><span>Distancia '+decimals(r.distance_similarity)+'%</span>'+weight+'</div>';}
-  function heading(r,selection){return '<div class="cmp-card-top">'+photo(r)+'<div class="cmp-card-main"><div class="cmp-card-sub">'+escape(r.source.toUpperCase())+' · '+escape(r.code)+' · '+Math.round(r.distance)+' m</div><div class="cmp-card-title">'+escape(r.title)+'</div><div class="cmp-card-price">'+money(r.price)+' <small>anunciado</small></div><div class="cmp-card-sub">'+escape(r.kind)+' · '+escape(r.district||'Sin distrito')+'</div>'+precisionBadge(r)+' '+publicationBadge(r)+similarityBlock(r)+'</div>'+(selection&&!r.issues.length?'<label><input type="checkbox" data-include="'+escape(r.id)+'" '+(!excluded.has(r.id)?'checked':'')+' aria-label="Incluir '+escape(r.code)+'"> Incluir</label>':'')+'</div>';}
+  function suggestedBadge(r){
+    if(!aiProposal?.ids.some(id=>String(id)===String(r.id)))return '';
+    return '<div class="cmp-ai-suggested">Sugerida por la IA · '+(value(r).recommended?'ya usada en el cálculo actual':'pendiente de aplicar')+'</div>';
+  }
+  function heading(r,selection){return suggestedBadge(r)+'<div class="cmp-card-top">'+photo(r)+'<div class="cmp-card-main"><div class="cmp-card-sub">'+escape(r.source.toUpperCase())+' · '+escape(r.code)+' · '+Math.round(r.distance)+' m</div><div class="cmp-card-title">'+escape(r.title)+'</div><div class="cmp-card-price">'+money(r.price)+' <small>anunciado</small></div><div class="cmp-card-sub">'+escape(r.kind)+' · '+escape(r.district||'Sin distrito')+'</div>'+precisionBadge(r)+' '+publicationBadge(r)+similarityBlock(r)+'</div>'+(selection&&!r.issues.length?'<label><input type="checkbox" data-include="'+escape(r.id)+'" '+(!excluded.has(r.id)?'checked':'')+' aria-label="Incluir '+escape(r.code)+'"> Incluir</label>':'')+'</div>';}
   function areas(r){return '<div class="cmp-card-areas"><span>Área de terreno<strong>'+decimals(r.land)+(r.land?' m²':'')+'</strong></span><span>Área construida<strong>'+decimals(r.built)+(r.built?' m²':'')+'</strong></span></div>';}
   function features(r){return r.kind==='Terreno'?'':'<p class="cmp-card-sub">Habitaciones: '+decimals(r.rooms)+' · Baños: '+decimals(r.baths)+(r.kind!=='Casa'?' · Piso: '+decimals(r.floor):'')+'</p>';}
   function breakdown(r){
@@ -269,8 +273,20 @@
   function selection(){return {token:snapshot.token,excluded:[...excluded],...(snapshot.params.weight_reference?{target_areas:{land:snapshot.params.land,built:snapshot.params.built}}:{})};}
   function renderSimple(){
     const host=$('cmp-simple');host.hidden=!aiExplanation;
+    $('cmp-ai-title').textContent=aiProposal?'Propuesta de la IA · pendiente de aplicar':'Explicación del resultado';
     host.textContent=aiExplanation||'';
   }
+  function renderProposal(){
+    $('cmp-proposal').hidden=!aiProposal;
+    if(!aiProposal)return;
+    const rows=aiProposal.ids.map(id=>visibleRows().find(row=>String(row.id)===String(id))).filter(Boolean);
+    $('cmp-proposal-summary').innerHTML='<p><strong>Resultado actual: '+money(result.new.total)+'. Con la propuesta: '+money(aiProposal.result.new.total)+'.</strong><br>La propuesta cambiará el cálculo al pulsar «Usar estas casas».</p>'+rows.map(row=>'<div class="cmp-ai-proposal-row"><strong>'+money(row.price)+' anunciado · '+escape(row.source.toUpperCase())+' · '+escape(row.district||row.title)+'</strong><span>Terreno '+decimals(row.land)+' m² · Construcción '+decimals(row.built)+' m² · '+Math.round(row.distance)+' m de distancia</span><span>'+(value(row).recommended?'Ya usada en el cálculo actual':'Solo referencia en el cálculo actual')+'</span><button type="button" data-proposal-detail="'+escape(row.id)+'">Ver esta propiedad</button></div>').join('');
+    renderCards();renderDetail();
+  }
+  $('cmp-proposal').addEventListener('click',event=>{
+    const button=event.target.closest('[data-proposal-detail]');
+    if(button){const row=visibleRows().find(r=>String(r.id)===button.dataset.proposalDetail);if(row)openDetail(row.id);}
+  });
   async function explainAutomatically(){
     if(!snapshot||!result?.new)return;
     const key=JSON.stringify(selection()),seq=sequence;
@@ -284,8 +300,7 @@
       const body=await response.json();if(!response.ok)throw Error(body.error||'No se pudo generar la explicación.');
       if(aiController!==current||seq!==sequence||!snapshot||key!==JSON.stringify(selection()))return;
       aiExplanation=body.explanation;aiProposal=body.proposal||null;renderSimple();$('cmp-ai-status').textContent='';
-      $('cmp-proposal').hidden=!aiProposal;
-      if(aiProposal)$('cmp-proposal-summary').textContent='Propuesta: '+aiProposal.labels.join(' · ')+'. Estimación al usar estas casas: '+money(aiProposal.result.new.total)+'.'+(aiProposal.omitted?' Se evaluaron las 30 candidatas más similares.':'');
+      renderProposal();
     }catch(error){if(aiController===current&&seq===sequence)$('cmp-ai-status').textContent=error.name==='AbortError'?'La explicación tardó demasiado. El cálculo se conserva.':error.message;}
     finally{clearTimeout(timer);if(aiController===current)aiController=null;}
   }
