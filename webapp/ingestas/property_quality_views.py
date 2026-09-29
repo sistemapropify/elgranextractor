@@ -6,6 +6,7 @@ from django import forms
 from django.utils import timezone
 from django.core.paginator import Paginator
 from django.db import transaction
+from django.db.models import Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -64,6 +65,32 @@ def snapshot(obj, revision):
 def version(data):
     return hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()
 
+def alertas_para(obj, revision, revision_ia):
+    """Reproduce, para un solo registro, las alertas del dashboard.
+
+    La comparacion de atipicos de la tabla se calcula contra el grupo
+    comparable del distrito; por eso no basta con analizar la fila sola.
+    """
+    district = (obj.distrito or '').strip()
+    scope = Q(distrito__iexact=district)
+    if not district:
+        scope |= Q(distrito__isnull=True)
+    rows = list(PropiedadesCompetencia.objects.filter(scope).values(*DATA_FIELDS))
+    revisions = {r.propiedad_id: r for r in
+                 RevisionPropiedadScraping.objects.filter(propiedad_id__in=[r['id'] for r in rows])}
+    for row in rows:
+        rev = revisions.get(row['id'])
+        row['excluida'] = bool(rev and rev.excluida)
+        row['motivo'] = rev.motivo if rev else ''
+    current = next((r for r in analyze(rows) if r['id'] == obj.pk), None)
+    return {
+        'alertas': (current or {}).get('alertas') or [],
+        'quality_status': (current or {}).get('quality_status'),
+        'ia_veredicto': revision_ia.veredicto if revision_ia else None,
+        'ia_motivo': revision_ia.motivo if revision_ia else '',
+        'ia_correccion': revision_ia.correccion if revision_ia else {},
+    }
+
 class PropertyEditor(APIView):
     authentication_classes = [PrometeoSessionAuthentication, SessionAuthentication]
     permission_classes = [IsAuthenticated]
@@ -72,9 +99,11 @@ class PropertyEditor(APIView):
         try:
             obj = get_object_or_404(PropiedadesCompetencia, pk=pk)
             revision = RevisionPropiedadScraping.objects.filter(propiedad=obj).first() or RevisionPropiedadScraping(propiedad=obj)
+            revision_ia = RevisionIAAlerta.objects.filter(propiedad=obj).first()
             data = snapshot(obj, revision)
             return Response({'html': PropertyForm(instance=obj).as_p(), 'record': data,
-                             'version': version(data), 'can_edit': allowed(request.user)})
+                             'version': version(data), 'can_edit': allowed(request.user),
+                             'alertas': alertas_para(obj, revision, revision_ia)})
         except Http404:
             raise
         except Exception as exc:
