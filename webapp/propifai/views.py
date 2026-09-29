@@ -14,13 +14,26 @@ from zoneinfo import ZoneInfo
 
 from django.utils import timezone
 
-from .models import Event, PropifaiProperty
+from .models import Event, EventType, PropifaiProperty
 from .mapeo_ubicaciones import (
     obtener_nombre_departamento,
     obtener_nombre_provincia,
     obtener_nombre_distrito,
     DEPARTAMENTOS, PROVINCIAS, DISTRITOS
 )
+
+
+# El tipo de evento que marca una venta. Se resuelve por nombre en vez de por id
+# fijo: el id puede cambiar si alguien reordena los tipos en la base.
+_TIPOS_EVENTO = {}
+
+
+def _id_tipo_evento(nombre):
+    if nombre not in _TIPOS_EVENTO:
+        _TIPOS_EVENTO[nombre] = (EventType.objects
+                                 .filter(name=nombre)
+                                 .values_list('id', flat=True).first())
+    return _TIPOS_EVENTO[nombre]
 
 
 def _annotate_event_metrics(queryset):
@@ -35,6 +48,11 @@ def _annotate_event_metrics(queryset):
         first=Min("start_time"),
         last=Max("start_time"),
     )
+    # La venta se registra como evento de tipo Cierre, con fecha. Es la unica
+    # fecha de venta que guarda la base: property solo tiene created_at y
+    # updated_at, y updated_at se mueve con cualquier edicion.
+    cierres = events.filter(event_type_id=_id_tipo_evento('Cierre'))
+    cierre_grouped = cierres.values("property_id").annotate(last=Max("start_time"))
     return queryset.annotate(
         total_eventos=Coalesce(
             Subquery(grouped.values("total")[:1]),
@@ -43,6 +61,7 @@ def _annotate_event_metrics(queryset):
         ),
         primera_visita=Subquery(grouped.values("first")[:1]),
         ultima_visita=Subquery(grouped.values("last")[:1]),
+        fecha_cierre=Subquery(cierre_grouped.values("last")[:1]),
         tiene_lead=Exists(events.filter(lead_id__isnull=False)),
         tiene_propuesta=Exists(events.filter(proposal_id__isnull=False)),
     )
@@ -525,11 +544,27 @@ def dashboard_calidad_cartera(request):
     mes_param = request.GET.get('mes', '').strip()
     ingresos_mensuales = _serie_ingresos_mensual(propiedades, mes_param)
 
+    # Cuantas se vendieron en el mes. La venta se mide por la fecha del evento de
+    # Cierre, no por la fecha en que la propiedad entro a cartera.
+    vendidas_activo = request.GET.get('vendidas', '').strip() == '1'
+    vendidas_mes = _annotate_event_metrics(PropifaiProperty.objects.all()).filter(
+        fecha_cierre__gte=ingresos_mensuales['inicio_mes'],
+        fecha_cierre__lt=ingresos_mensuales['fin_mes'],
+    ).count()
+
     # El mes seleccionado es un filtro global: afecta KPIs, tabla, chips y cartera.
-    propiedades = propiedades.filter(
-        created_at__gte=ingresos_mensuales['inicio_mes'],
-        created_at__lt=ingresos_mensuales['fin_mes'],
-    )
+    if vendidas_activo:
+        # Una casa creada en febrero puede venderse en septiembre: acotar por
+        # created_at la dejaria fuera, asi que aqui manda la fecha de cierre.
+        propiedades = propiedades.filter(
+            fecha_cierre__gte=ingresos_mensuales['inicio_mes'],
+            fecha_cierre__lt=ingresos_mensuales['fin_mes'],
+        ).order_by('-fecha_cierre')
+    else:
+        propiedades = propiedades.filter(
+            created_at__gte=ingresos_mensuales['inicio_mes'],
+            created_at__lt=ingresos_mensuales['fin_mes'],
+        )
 
     # Cartera: propio (is_propify_portfolio=True) vs agente externo (False).
     origen_filtro = request.GET.get('origen', '').strip()
@@ -1089,6 +1124,23 @@ def dashboard_calidad_cartera(request):
         del params_sin_estado['estado']
     query_sin_estado = params_sin_estado.urlencode()
 
+    # Enlace del chip "Vendidas en el mes": conserva el resto de filtros (incluido
+    # el mes) y no arrastra el estado ni duplica el propio parametro.
+    params_vendidas = request.GET.copy()
+    for clave in ('estado', 'vendidas'):
+        if clave in params_vendidas:
+            del params_vendidas[clave]
+    params_vendidas['vendidas'] = '1'
+    query_vendidas = params_vendidas.urlencode()
+
+    # "Todos" tiene que soltar tambien el filtro de vendidas; si no, el chip
+    # seguiria dentro de la vista de vendidas.
+    params_todos = request.GET.copy()
+    for clave in ('estado', 'vendidas'):
+        if clave in params_todos:
+            del params_todos[clave]
+    query_todos = params_todos.urlencode()
+
     context = {
         'propiedades': propiedades_con_score,
         'properties': propiedades_con_score,  # alias para el template
@@ -1113,6 +1165,11 @@ def dashboard_calidad_cartera(request):
         'filtro_agente_actual': agente_filtro,
         # Query string sin estado para filtros rápidos
         'query_sin_estado': query_sin_estado,
+        # Vendidas del mes (por fecha del evento de Cierre, no de alta en cartera)
+        'vendidas_activo': vendidas_activo,
+        'vendidas_mes': vendidas_mes,
+        'query_vendidas': query_vendidas,
+        'query_todos': query_todos,
         # Serie de ingresos mensuales (selector de mes + gráfico día a día)
         'ingresos_mensuales': ingresos_mensuales,
         # Filtro y conteos de cartera (propio vs agente externo)
