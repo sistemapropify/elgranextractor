@@ -1,0 +1,220 @@
+{% load l10n %}<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Propifai · Monitoreo del negocio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1120;--surface:#172033;--surface-elev:#1e293b;--border:#263449;--text:#f8fafc;--text-2:#94a3b8;--text-3:#64748b;--blue:#3b82f6;--blue-light:#60a5fa;--green:#22c55e;--amber:#f59e0b;--red:#ef4444;--cyan:#06b6d4;--radius:10px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+.topbar{height:54px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 22px;background:rgba(17,24,39,.88);position:sticky;top:0;z-index:60}
+.topbar h1{font-size:15px;font-weight:700}
+.topbar .sub{color:var(--text-3);font-size:12px;margin-left:10px}
+.wrap{padding:22px;display:flex;flex-direction:column;gap:18px;max-width:1400px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.card .lbl{color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.card .val{font-size:26px;font-weight:700;margin-top:6px}
+.card .hint{color:var(--text-3);font-size:11px;margin-top:4px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.panel h2{font-size:13px;font-weight:600;margin-bottom:14px;color:var(--text)}
+.panel h2 span{color:var(--text-3);font-weight:400;margin-left:6px;font-size:12px}
+.chart{display:flex;align-items:flex-end;gap:2px;height:152px;padding-top:18px}
+.col{flex:1;min-width:2px;height:100%;position:relative;display:flex;flex-direction:column;justify-content:flex-end}
+.col .bar{width:100%;background:var(--blue);border-radius:2px 2px 0 0;opacity:.85;min-height:2px;transition:opacity .1s}
+.col .bar:hover{opacity:1;background:var(--blue-light)}
+.col .val{position:absolute;left:50%;transform:translateX(-50%);font-size:8px;font-weight:700;color:var(--text-2);line-height:1;white-space:nowrap}
+.col .val.cero{color:var(--text-3);opacity:.55}
+.eje-x{margin-top:6px;border-top:1px solid var(--border);padding-top:5px}
+.ticks{position:relative;height:11px}
+.ticks span{position:absolute;transform:translateX(-50%);color:var(--text-3);font-size:8px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:-.5px}
+.meses{position:relative;height:14px;margin-top:1px}
+.meses span{position:absolute;text-align:center;color:var(--text-2);font-size:10px;text-transform:uppercase;letter-spacing:.06em;border-left:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;color:var(--text-3);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:7px 8px;border-bottom:1px solid var(--border)}
+td{padding:7px 8px;border-bottom:1px solid rgba(38,52,73,.5)}
+.funnel{display:flex;flex-direction:column;gap:8px}
+.frow{display:flex;align-items:center;gap:12px;cursor:pointer;padding:5px 8px;margin:0 -8px;border-radius:7px;transition:background .12s}
+.frow:hover{background:var(--surface-elev)}
+.frow.abierto{background:var(--surface-elev);outline:1px solid var(--border)}
+.frow .fname{width:150px;color:var(--text-2);font-size:12px;display:flex;align-items:center;gap:6px}
+.frow .fname::before{content:'▸';color:var(--text-3);font-size:10px;transition:transform .15s}
+.frow.abierto .fname::before{transform:rotate(90deg)}
+.fbar{flex:1;height:24px;background:var(--surface-elev);border-radius:5px;overflow:hidden;position:relative}
+.fbar i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--cyan));border-radius:5px}
+.frow .fnum{width:118px;display:flex;justify-content:flex-end;align-items:baseline;gap:9px;font-weight:600}
+.frow .fnum .fpct{font-size:11px;font-weight:600;color:var(--text-3);min-width:34px;text-align:right}
+.lista{margin-top:12px;border-top:1px solid var(--border);padding-top:10px}
+.lista .cab{display:flex;justify-content:space-between;align-items:center;color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.lista .scroll{max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:7px}
+.lista table{margin:0}
+.lista td,.lista th{padding:6px 9px}
+.lista tbody tr:hover{background:var(--surface-elev)}
+
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;background:var(--surface-elev);color:var(--text-2)}
+.off{background:#2a1a1a;border:1px solid #5b2b2b;color:#f0a0a0;padding:16px;border-radius:var(--radius)}
+.off b{color:#ffb4b4}
+.botonera{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px}
+.fila-botones{display:flex;flex-wrap:wrap;gap:6px}
+.fila-botones+.fila-botones{margin-top:9px;padding-top:9px;border-top:1px dashed var(--border)}
+.fila-botones .etq{color:var(--text-3);font-size:10px;text-transform:uppercase;letter-spacing:.05em;align-self:center;margin-right:4px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;border:1px solid var(--border);background:var(--surface-elev);color:var(--text-2);font-size:12px;text-decoration:none;transition:.12s}
+.btn:hover{border-color:var(--blue);color:var(--text)}
+.btn.activo{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.btn .n{font-family:'JetBrains Mono',monospace;font-size:10px;background:rgba(255,255,255,.12);border-radius:10px;padding:1px 6px}
+.btn.activo .n{background:rgba(255,255,255,.25)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="topbar"><div style="display:flex;align-items:baseline"><h1>Monitoreo del negocio</h1><span class="sub">Propify · solo lectura</span></div></div>
+<div class="wrap">
+
+{% if not disponible %}
+  <div class="off"><b>No se pudo consultar la base de Propify.</b><br>
+  <span class="mono" style="font-size:11px">{{ detalle }}</span><br><br>
+  Si dice que la IP no está permitida, hay que agregarla al firewall de <span class="mono">janis-server</span> en Azure.</div>
+{% else %}
+
+  <div class="botonera">
+    <div class="fila-botones">
+      <span class="etq">Área</span>
+      <a class="btn {% if not area_id %}activo{% endif %}" href="?">Todas <span class="n">{{ resumen.total }}</span></a>
+      {% for a in areas %}<a class="btn {% if area_id == a.id %}activo{% endif %}" href="?area={{ a.id }}">{{ a.nombre }} <span class="n">{{ a.usuarios }}</span></a>{% endfor %}
+      <a class="btn {% if area_id == 'sin' %}activo{% endif %}" href="?area=sin">Sin rol <span class="n">{{ sin_rol }}</span></a>
+    </div>
+    {% if roles %}
+    <div class="fila-botones">
+      <span class="etq">Rol</span>
+      <a class="btn {% if not rol_id %}activo{% endif %}" href="?area={{ area_id }}">Todos <span class="n">{{ resumen.total }}</span></a>
+      {% for r in roles %}<a class="btn {% if rol_id == r.id %}activo{% endif %}" href="?area={{ area_id }}&rol={{ r.id }}">{{ r.nombre }} <span class="n">{{ r.usuarios }}</span></a>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="lbl">Registros hoy</div><div class="val mono">{{ pulso.hoy }}</div>
+      <div class="hint">ayer: {{ pulso.ayer }}</div></div>
+    <div class="card"><div class="lbl">Últimos 7 días</div><div class="val mono">{{ pulso.semana }}</div>
+      <div class="hint">promedio {{ pulso.semana|floatformat:0 }} en la semana</div></div>
+    <div class="card"><div class="lbl">Usuarios totales</div><div class="val mono">{{ resumen.total }}</div>
+      <div class="hint">desde el 2026-01-08</div></div>
+    <div class="card"><div class="lbl">Activos</div><div class="val mono">{{ resumen.activos }}</div>
+      <div class="hint">{{ resumen.staff }} con rol de staff</div></div>
+  </div>
+
+  <div class="panel">
+    <h2>Altas por día <span>últimos 60 días</span></h2>
+    <div class="chart">
+      {% for d in por_dia %}<div class="col" title="{{ d.dia }}: {{ d.total }}"><span class="val{% if not d.total %} cero{% endif %}" style="bottom:calc({% widthratio d.total max_dia 100 %}% + 2px)">{{ d.total }}</span><div class="bar" style="height:{% widthratio d.total max_dia 100 %}%"></div></div>{% endfor %}
+    </div>
+    <div class="eje-x">
+      <div class="ticks">{% for t in eje.ticks %}<span style="left:{{ t.izq|unlocalize }}%;color:{% if forloop.counter|divisibleby:2 %}#ff7a1a{% else %}#eaff00{% endif %}">{{ t.texto }}</span>{% endfor %}</div>
+      <div class="meses">{% for m in eje.meses %}<span style="left:{{ m.izq|unlocalize }}%;width:{{ m.ancho|unlocalize }}%">{{ m.etiqueta }}</span>{% endfor %}</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>Embudo de usuarios <span>clic en una fila para ver quiénes son</span></h2>
+      <div class="funnel">
+        {% with t=resumen.total %}
+        <div class="frow" data-grupo="registrados" data-nombre="Registrados"><span class="fname">Registrados</span><span class="fbar"><i style="width:100%"></i></span><span class="fnum mono">{{ t }}<span class="fpct">100%</span></span></div>
+        <div class="frow" data-grupo="ingresaron" data-nombre="Han ingresado"><span class="fname">Han ingresado</span><span class="fbar"><i style="width:{% widthratio resumen.ingresaron t 100 %}%"></i></span><span class="fnum mono">{{ resumen.ingresaron }}<span class="fpct">{% widthratio resumen.ingresaron t 100 %}%</span></span></div>
+        <div class="frow" data-grupo="publicaron" data-nombre="Publicaron una propiedad"><span class="fname">Publicaron una propiedad</span><span class="fbar"><i style="width:{% widthratio resumen.publicaron t 100 %}%"></i></span><span class="fnum mono">{{ resumen.publicaron }}<span class="fpct">{% widthratio resumen.publicaron t 100 %}%</span></span></div>
+        {% endwith %}
+      </div>
+      <div class="lista" id="lista-usuarios" hidden data-area="{{ area_id|default_if_none:'' }}" data-rol="{{ rol_id|default_if_none:'' }}">
+        <div class="cab"><span id="lista-titulo">Usuarios</span><span id="lista-total"></span></div>
+        <div class="scroll"><table>
+          <thead><tr><th>Usuario</th><th>Email</th><th>Alta</th><th>Último ingreso</th></tr></thead>
+          <tbody id="lista-cuerpo"></tbody>
+        </table></div>
+      </div>
+      <p style="color:var(--text-3);font-size:11px;margin-top:12px">«Registrado» no es lo mismo que «usuario real»: el embudo muestra cuántos llegan a usar el sistema.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Altas por mes <span>últimos 12 meses</span></h2>
+      <table><thead><tr><th>Mes</th><th>Altas</th></tr></thead><tbody>
+        {% for m in por_mes %}<tr><td class="mono">{{ m.mes }}</td><td class="mono">{{ m.total }}</td></tr>{% endfor %}
+      </tbody></table>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>Por estado</h2>
+      <table><thead><tr><th>Estado</th><th>Usuarios</th></tr></thead><tbody>
+        {% for e in estados %}<tr><td><span class="pill">{{ e.estado }}</span></td><td class="mono">{{ e.total }}</td></tr>{% empty %}<tr><td colspan="2">Sin datos.</td></tr>{% endfor %}
+      </tbody></table>
+    </div>
+
+    <div class="panel">
+      <h2>Últimos registros</h2>
+      <table><thead><tr><th>Fecha</th><th>Nombre</th><th>Usuario</th><th>Estado</th></tr></thead><tbody>
+        {% for u in ultimos %}<tr>
+          <td class="mono">{{ u.dia }}</td>
+          <td>{{ u.nombre }}<br><span style="color:var(--text-2)">{{ u.apellido }}</span></td>
+          <td>{{ u.usuario }}{% if u.verificado %} <span class="pill" style="color:var(--green)">✓</span>{% endif %}<br><span style="color:var(--text-3);font-size:11px">{{ u.email }}</span></td>
+          <td>{% if u.activo %}<span style="color:var(--green)">activo</span>{% else %}<span style="color:var(--text-3)">inactivo</span>{% endif %}</td>
+        </tr>{% empty %}<tr><td colspan="4">Sin datos.</td></tr>{% endfor %}
+      </tbody></table>
+    </div>
+  </div>
+
+{% endif %}
+</div>
+<script>
+(function () {
+  var abierto = null;
+  function esc(v) {
+    var d = document.createElement('div');
+    d.textContent = (v === null || v === undefined) ? '' : v;
+    return d.innerHTML;
+  }
+  function fila(u) {
+    var ingreso = u.ingreso ? esc(u.ingreso) : '<span style="color:var(--text-3)">nunca</span>';
+    var quien = [u.rol, u.area].filter(Boolean).join(' · ');
+    return '<tr><td>' + esc(u.usuario)
+      + (u.nombre ? '<br><span style="color:var(--text-3);font-size:11px">' + esc(u.nombre) + '</span>' : '')
+      + '<br><span style="color:var(--text-3);font-size:10px">' + esc(quien || 'sin rol') + '</span>'
+      + '</td><td>' + esc(u.email) + '</td>'
+      + '<td class="mono">' + esc(u.dia) + '</td>'
+      + '<td class="mono">' + ingreso + '</td></tr>';
+  }
+  document.querySelectorAll('.frow').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var caja = document.getElementById('lista-usuarios');
+      var cuerpo = document.getElementById('lista-cuerpo');
+      if (abierto === el) {                 // segundo clic: se cierra
+        el.classList.remove('abierto'); caja.hidden = true; abierto = null; return;
+      }
+      if (abierto) abierto.classList.remove('abierto');
+      abierto = el; el.classList.add('abierto'); caja.hidden = false;
+      document.getElementById('lista-titulo').textContent = el.dataset.nombre;
+      document.getElementById('lista-total').textContent = 'cargando…';
+      cuerpo.innerHTML = '<tr><td colspan="4">Cargando…</td></tr>';
+      var extra = '';
+      if (caja.dataset.area) extra += '&area=' + encodeURIComponent(caja.dataset.area);
+      if (caja.dataset.rol) extra += '&rol=' + encodeURIComponent(caja.dataset.rol);
+      fetch('/monitoreo/usuarios/?grupo=' + encodeURIComponent(el.dataset.grupo) + extra)
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.error) { cuerpo.innerHTML = '<tr><td colspan="4">' + esc(d.error) + '</td></tr>'; return; }
+          cuerpo.innerHTML = d.usuarios.length ? d.usuarios.map(fila).join('')
+                                               : '<tr><td colspan="4">Sin resultados.</td></tr>';
+          document.getElementById('lista-total').textContent = d.total + ' usuario(s)';
+        })
+        .catch(function () { cuerpo.innerHTML = '<tr><td colspan="4">No se pudo cargar.</td></tr>'; });
+    });
+  });
+})();
+</script>
+</body>
+</html>

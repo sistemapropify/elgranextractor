@@ -143,6 +143,9 @@ path('canvas/', include('canvas.urls')),
 # Puente n8n - endpoints aislados para conectar leads de WhatsApp al chat existente
 path('api/n8n/', include('n8n_bridge.urls')),
 
+# Monitoreo del negocio Propify (solo lectura sobre dbpropify_be)
+path('monitor/', include('monitor.urls')),
+
 # Redirect: /inmobiliarias/ → /agentes/inmobiliarias/ (acceso directo amigable)
 path('inmobiliarias/', RedirectView.as_view(url='/agentes/inmobiliarias/', permanent=True)),
 ]

@@ -120,6 +120,7 @@ INSTALLED_APPS = [
     'canvas',   # PropFlow Visual Canvas — lienzos interactivos
     'n8n_bridge',  # Puente de endpoints para conectar n8n/WhatsApp al chat existente
     'property_traceability',  # Flujo y métricas locales sobre propiedades externas
+    'monitor',  # Monitoreo del negocio Propify (registros de usuarios, leads), solo lectura
 ]
 
 MIDDLEWARE = [
