@@ -35,6 +35,20 @@ Triaje IA: <strong style="color:#57d9a3">{{ summary.ia_real }} reales</strong> �
 <p>{% if page.has_previous %}<a href="?{{ params }}&page={{ page.previous_page_number }}">Anterior</a>{% endif %} Página {{ page.number }} de {{ page.paginator.num_pages }} {% if page.has_next %}<a href="?{{ params }}&page={{ page.next_page_number }}">Siguiente</a>{% endif %}</p></div>
 {% include 'ingestas/property_editor.html' %}
 <script>
+let qualityRefreshTimer = null;
+function scheduleQualityRefresh(delay = 15000) {
+  clearTimeout(qualityRefreshTimer);
+  qualityRefreshTimer = setTimeout(function () {
+    const editor = document.getElementById('scraped-editor');
+    // Never replace the document (and unsaved form) while the editor is open.
+    // A background timer may run as soon as the publication tab is closed.
+    if ((editor && editor.open) || document.hidden) {
+      scheduleQualityRefresh();
+      return;
+    }
+    location.reload();
+  }, delay);
+}
 function dispararTriaje(btn) {
   btn.disabled = true;
   btn.textContent = 'Triaje en marcha…';
@@ -43,7 +57,7 @@ function dispararTriaje(btn) {
     .then(function (d) {
       if (d.ok) {
         btn.textContent = 'Triaje en marcha: ' + d.pendientes + ' propiedades';
-        location.reload();
+        scheduleQualityRefresh(0);
       } else {
         btn.textContent = 'Error: ' + (d.error || 'sin permiso');
         btn.disabled = false;
@@ -54,7 +68,7 @@ function dispararTriaje(btn) {
       btn.disabled = false;
     });
 }
-{% if summary.ia_sin_revisar %}// Mientras haya pendientes, refrescar solo para ver el avance en vivo.
-setTimeout(function(){ location.reload(); }, 15000);{% endif %}
+{% if summary.ia_sin_revisar %}// El triaje se actualiza sin interrumpir la edición.
+scheduleQualityRefresh();{% endif %}
 </script>
 {% endblock %}
