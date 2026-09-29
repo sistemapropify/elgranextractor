@@ -44,6 +44,20 @@ MODELO_VISION = 'qwen-vl-max'
 # clave → datos del proceso. `caller_apps` = valores exactos del log;
 # `prefijos` = coincidencias por comienzo.
 PROCESOS_IA = {
+    'calidad_scraping': {
+        'modulo': 'Calidad de propiedades scrapeadas',
+        'que_hace': 'Revisa alertas y datos de propiedades; incluye cada intento y reintento de IA.',
+        'proveedor': 'deepseek', 'modelo': MODELO_TEXTO,
+        'archivo': 'ingestas/calidad_ia.py',
+        'caller_apps': ['ingestas.calidad_ia', 'ingestas'],
+    },
+    'seleccion_herramientas': {
+        'modulo': 'Selección de herramientas del asistente',
+        'que_hace': 'Decide qué herramienta debe atender la consulta.',
+        'proveedor': 'deepseek', 'modelo': MODELO_TEXTO,
+        'archivo': 'intelligence/services/llm.py',
+        'caller_apps': ['intelligence.tools'],
+    },
     'analisis_leads': {
         'modulo': 'Análisis de leads',
         'que_hace': (
@@ -258,6 +272,8 @@ CLAVE_POR_DEFECTO = 'sin_clasificar'
 
 # Orden en el que se muestran los procesos (más negocio primero).
 ORDEN_PROCESOS = [
+    'calidad_scraping',
+    'seleccion_herramientas',
     'analisis_leads',
     'analisis_leads_masivo',
     'respondedor_leads',

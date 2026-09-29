@@ -4717,7 +4717,11 @@ def ai_consumption_dashboard(request):
         for prefijo in info_proceso.get('prefijos', ()):
             condicion |= Q(caller_app__startswith=prefijo)
         if proceso_filter == 'sin_clasificar':
-            condicion |= Q(caller_app='') | Q(caller_app__isnull=True)
+            # Incluir también nombres desconocidos, no solo nombres vacíos.
+            condicion = Q(pk__in=[])
+            for caller, endpoint in logs_del_dia.order_by().values_list('caller_app', 'endpoint').distinct():
+                if normalizar_proceso(caller, endpoint)[0] == 'sin_clasificar':
+                    condicion |= Q(caller_app=caller, endpoint=endpoint)
         logs_del_dia = logs_del_dia.filter(condicion)
 
     # Aplicar filtro por caller_app si se especificó
@@ -4922,6 +4926,7 @@ def ai_consumption_dashboard(request):
     chart_labels = [h['hora_label'] for h in horas_data]
     chart_llamadas = [h['llamadas'] for h in horas_data]
     chart_tokens = [h['tokens'] for h in horas_data]
+    chart_costos = [h['costo'] for h in horas_data]
     
     # Datos para gráfico de caller_app (top 5)
     caller_chart_labels = [c['caller_app'][:25] for c in caller_stats[:5]]
@@ -4954,6 +4959,8 @@ def ai_consumption_dashboard(request):
         'chart_labels': json.dumps(chart_labels),
         'chart_llamadas': json.dumps(chart_llamadas),
         'chart_tokens': json.dumps(chart_tokens),
+        'chart_costos': json.dumps(chart_costos),
+        'llamadas_sin_medicion': logs_del_dia.filter(total_tokens=0).count(),
         'caller_chart_labels': json.dumps(caller_chart_labels),
         'caller_chart_llamadas': json.dumps(caller_chart_llamadas),
         'caller_chart_tokens': json.dumps(caller_chart_tokens),

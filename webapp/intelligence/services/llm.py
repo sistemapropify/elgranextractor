@@ -185,6 +185,8 @@ class LLMService:
         # completo y válido.
         if response_format:
             payload["response_format"] = response_format
+        if stream:
+            payload["stream_options"] = {"include_usage": True}
         
         start_time = time.time()
         
@@ -220,21 +222,12 @@ class LLMService:
                         logger.warning(f"No se pudo registrar consumo IA: {log_err}")
                     return False, f"Error API: {response.status_code}", None
                 
-                # Registrar consumo exitoso (sin datos de tokens porque streaming no los devuelve)
-                try:
-                    AIConsumptionLog.registrar_llamada(
-                        model_name=cls.DEEPSEEK_MODEL,
-                        endpoint=endpoint or 'stream',
-                        caller_app=caller_app,
-                        duration_ms=duration_ms,
-                        success=True,
-                        status_code=response.status_code,
-                    )
-                except Exception as log_err:
-                    logger.warning(f"No se pudo registrar consumo IA: {log_err}")
-                
                 # Devolvemos el response para que el llamador pueda procesar el streaming
-                return True, "OK", {"stream_response": response}
+                return True, "OK", {
+                    "stream_response": response,
+                    "metering": {"caller_app": caller_app, "endpoint": endpoint or 'stream',
+                                 "started": start_time},
+                }
             
             else:
                 # Modo normal (no streaming). timeout amplio: con max_tokens
@@ -432,6 +425,9 @@ class LLMService:
         }
         
         headers = cls._get_headers()
+        usage = {}
+        status_code = None
+        api_success = False
         
         try:
             logger.info(f"[LLM.Tools] Llamando a DeepSeek con {len(tools)} herramientas")
@@ -441,6 +437,7 @@ class LLMService:
                 json=payload,
                 timeout=15,
             )
+            status_code = response.status_code
             
             elapsed = (time.time() - start) * 1000
             logger.info(f"[LLM.Tools] Respuesta recibida en {elapsed:.0f}ms, status={response.status_code}")
@@ -453,6 +450,8 @@ class LLMService:
                 )
             
             data = response.json()
+            usage = data.get("usage") or {}
+            api_success = True
             choices = data.get("choices", [])
             if not choices:
                 return ToolCallResult(
@@ -513,6 +512,20 @@ class LLMService:
                 success=False, tool_calls=[],
                 error_message=str(e),
             )
+        finally:
+            try:
+                AIConsumptionLog.registrar_llamada(
+                    model_name=cls.DEEPSEEK_MODEL,
+                    caller_app='intelligence.tools', endpoint='call_with_tools',
+                    prompt_tokens=usage.get('prompt_tokens', 0),
+                    completion_tokens=usage.get('completion_tokens', 0),
+                    total_tokens=usage.get('total_tokens', 0),
+                    duration_ms=int((time.time() - start) * 1000),
+                    success=api_success, status_code=status_code,
+                    error_message='' if usage else 'Proveedor no devolvió medición de tokens',
+                )
+            except Exception as log_err:
+                logger.warning(f"No se pudo registrar consumo IA de herramientas: {log_err}")
     
     @classmethod
     def _build_rag_context(
@@ -1223,6 +1236,9 @@ INSTRUCCIONES:
             })
             return
         
+        usage = {}
+        stream_completed = False
+        metering = api_response.get('metering', {})
         try:
             # Procesar cada línea del stream
             for line in stream_response.iter_lines():
@@ -1239,6 +1255,8 @@ INSTRUCCIONES:
                         
                         try:
                             data = json.loads(data_str)
+                            if data.get('usage'):
+                                usage = data['usage']
                             
                             # Extraer contenido del chunk
                             choices = data.get("choices", [])
@@ -1256,6 +1274,7 @@ INSTRUCCIONES:
                             # Ignorar líneas que no son JSON válido
                             continue
             
+            stream_completed = True
             # Señal de finalización
             yield json.dumps({
                 "type": "complete",
@@ -1267,6 +1286,22 @@ INSTRUCCIONES:
                 "error": f"Error procesando stream: {str(e)}",
                 "type": "error"
             })
+        finally:
+            stream_response.close()
+            try:
+                AIConsumptionLog.registrar_llamada(
+                    model_name=cls.DEEPSEEK_MODEL,
+                    caller_app=metering.get('caller_app', 'intelligence.services'),
+                    endpoint=metering.get('endpoint', 'stream'),
+                    prompt_tokens=usage.get('prompt_tokens', 0),
+                    completion_tokens=usage.get('completion_tokens', 0),
+                    total_tokens=usage.get('total_tokens', 0),
+                    duration_ms=int((time.time() - metering.get('started', time.time())) * 1000),
+                    success=stream_completed, status_code=stream_response.status_code,
+                    error_message='' if usage else 'Stream sin medición final de tokens; costo desconocido',
+                )
+            except Exception as log_err:
+                logger.warning(f"No se pudo registrar consumo IA del stream: {log_err}")
     
     @classmethod
     def test_connection(cls) -> Tuple[bool, str]:

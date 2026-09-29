@@ -65,6 +65,8 @@ def _preguntar(prompt: str) -> tuple[dict | None, str]:
             messages=[{'role': 'user', 'content': prompt}],
             system_prompt=_SISTEMA,
             max_tokens=1200,
+            caller_app='ingestas.calidad_ia',
+            endpoint='triage_alertas_propiedad',
         )
         crudo = (resp or {}).get('content', '') or '' if ok else ''
         if not crudo.strip():
