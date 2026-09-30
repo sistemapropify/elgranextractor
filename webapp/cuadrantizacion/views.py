@@ -112,6 +112,19 @@ class ZonaValorViewSet(viewsets.ModelViewSet):
             zona.area_total,
             getattr(getattr(self.request, 'current_user', None), 'username', None),
         )
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        previous = serializer.instance.coordenadas
+        zona = serializer.save()
+        if previous != zona.coordenadas:
+            zona.area_total = calcular_area_poligono(zona.coordenadas or [])
+            zona.save(update_fields=['area_total', 'fecha_actualizacion'])
+        logger.info(
+            'Zona de valor actualizada: id=%s nivel=%s vertices=%s area_m2=%s usuario=%s',
+            zona.id, zona.nivel, len(zona.coordenadas or []), zona.area_total,
+            getattr(getattr(self.request, 'current_user', None), 'username', None),
+        )
     
     @action(detail=True, methods=['get'])
     def estadisticas(self, request, pk=None):

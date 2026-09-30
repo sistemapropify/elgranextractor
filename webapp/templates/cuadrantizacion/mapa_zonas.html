@@ -1016,7 +1016,8 @@ window.onGoogleMapsLoaded = function() {
                     <input type="text" id="zone-name" class="form-control" placeholder="Ej: Cayma alta">
                 </div>
 
-                <button class="btn-success btn-block" id="save-zone">Guardar zona</button>
+                <button class="btn-success btn-block" id="save-zone">Guardar nueva zona</button>
+                <button class="btn btn-block" type="button" id="new-zone" style="margin-top:8px">Nueva zona</button>
 
                 <label class="property-layer-toggle" for="toggle-propify-properties">
                     <input type="checkbox" id="toggle-propify-properties" checked>
@@ -1103,7 +1104,7 @@ window.onGoogleMapsLoaded = function() {
                 <div id="zone-info-content"></div>
                 <div class="btn-group">
                     <button class="btn btn-warning btn-sm" id="edit-zone-btn">Editar</button>
-                    <button class="btn btn-danger btn-sm" id="delete-zone-btn">Eliminar</button>
+                    <button class="btn btn-danger btn-sm" id="delete-zone-btn">Cancelar edición</button>
                     <button class="btn btn-sm" id="close-zone-info" style="border-color: var(--border-color);">Cerrar</button>
                 </div>
             </div>
@@ -1208,6 +1209,7 @@ let drawingManager = null;
 let renderedZoneOverlays = [];
 let selectedShape = null;
 let currentZoneData = null;
+let editingZoneId = null;
 let markers = [];
 let zones = [];
 let allZones = [];
@@ -1539,6 +1541,7 @@ function installPolygonTool(mapInstance) {
             return false;
         }
 
+        var previousShape = selectedShape;
         var shape = new google.maps.Polygon({ map: mapInstance, paths: state.path.slice() });
         quit();
         shape.setOptions({
@@ -1550,6 +1553,8 @@ function installPolygonTool(mapInstance) {
             draggable: true
         });
         shape.type = 'polygon';
+        shape.zoneId = editingZoneId || null;
+        if (previousShape && previousShape !== shape) previousShape.setMap(null);
         google.maps.event.clearListeners(shape, 'click');
         google.maps.event.addListener(shape, 'click', function() { selectShape(shape); });
         selectedShape = shape;
@@ -1592,14 +1597,20 @@ function installPolygonTool(mapInstance) {
 
 function selectShape(shape) {
     if (selectedShape && selectedShape !== shape) {
+        if (!selectedShape.zoneId) selectedShape.setMap(null);
         selectedShape.setOptions({
             fillColor: ZONE_COLORS.fill,
             strokeColor: ZONE_COLORS.default,
-            strokeWeight: 2
+            strokeWeight: 2,
+            editable: false,
+            draggable: false
         });
     }
 
     selectedShape = shape;
+    var zone = shape.zoneId ? allZones.find(function(item) { return String(item.id) === String(shape.zoneId); }) : null;
+    if (zone) populateZoneForm(zone);
+    else if (!editingZoneId) document.getElementById('save-zone').textContent = 'Guardar nueva zona';
     shape.setOptions({
         fillColor: ZONE_COLORS.fillSelected,
         strokeColor: ZONE_COLORS.selected,
@@ -1608,6 +1619,26 @@ function selectShape(shape) {
 
     updateZoneDataFromShape(shape);
     showZoneInfo(shape);
+}
+
+function populateZoneForm(zone) {
+    editingZoneId = zone.id;
+    document.getElementById('zone-name').value = zone.nombre_zona || '';
+    document.getElementById('zone-level').value = zone.nivel;
+    document.getElementById('save-zone').textContent = 'Actualizar zona #' + zone.id;
+    loadZoneParents(zone.parent);
+}
+
+function clearZoneEditor() {
+    selectedShape = null;
+    currentZoneData = null;
+    editingZoneId = null;
+    document.getElementById('zone-name').value = '';
+    document.getElementById('zone-level').value = 'distrito';
+    document.getElementById('save-zone').textContent = 'Guardar nueva zona';
+    document.getElementById('zone-info-panel').style.display = 'none';
+    loadZoneParents();
+    loadZones();
 }
 
 function updateZoneDataFromShape(shape) {
@@ -1652,6 +1683,8 @@ function showZoneInfo(shape) {
     var content = document.getElementById('zone-info-content');
     if (!panel || !content) return;
 
+    var zone = shape.zoneId ? allZones.find(function(item) { return String(item.id) === String(shape.zoneId); }) : null;
+    document.getElementById('zone-info-title').textContent = zone ? zone.nombre_zona + ' · #' + zone.id : 'Nueva zona';
     var coords = getShapeCoordinates(shape);
     var coordsText = '';
 
@@ -1689,31 +1722,30 @@ function setupInfoPanel() {
             selectedShape.setEditable(true);
             selectedShape.setDraggable(true);
             showAlert('Modo edicion activado. Arrastra los vertices para modificar la forma.', 'info');
+        } else if (editingZoneId) {
+            showAlert('Esta zona no tiene polígono. Usa Polígono para dibujar sus coordenadas y luego pulsa Actualizar.', 'info');
         } else {
             showAlert('Selecciona una zona primero.', 'warning');
         }
     });
 
     document.getElementById('delete-zone-btn').addEventListener('click', function() {
-        if (selectedShape) {
-            if (confirm('Estas seguro de eliminar esta zona del mapa?')) {
-                selectedShape.setMap(null);
-                selectedShape = null;
-                document.getElementById('zone-info-panel').style.display = 'none';
-                currentZoneData = null;
-                showAlert('Zona eliminada del mapa.', 'success');
-            }
-        } else {
-            showAlert('Selecciona una zona primero.', 'warning');
-        }
+        clearZoneEditor();
+        showAlert('Edición descartada; la zona guardada no cambió.', 'info');
     });
 }
 
 function setupSaveZone() {
+    document.getElementById('new-zone').addEventListener('click', clearZoneEditor);
     document.getElementById('save-zone').addEventListener('click', function() {
         var name = document.getElementById('zone-name').value.trim();
         var level = document.getElementById('zone-level').value;
-        var parentId = document.getElementById('zone-parent').value;
+        var parentSelect = document.getElementById('zone-parent');
+        if (level !== 'pais' && parentSelect.disabled) {
+            showAlert('Espera a que se carguen las zonas padre.', 'warning');
+            return;
+        }
+        var parentId = parentSelect.value;
 
         if (!name) {
             showAlert('Por favor ingresa un nombre para la zona.', 'warning');
@@ -1722,7 +1754,7 @@ function setupSaveZone() {
 
         if (window.__polyTool && window.__polyTool.isActive() && !window.__polyTool.finish()) return;
         if (selectedShape) updateZoneDataFromShape(selectedShape);
-        if (!currentZoneData) {
+        if (!currentZoneData && !editingZoneId) {
             showAlert('Primero dibuja una forma en el mapa.', 'warning');
             return;
         }
@@ -1731,15 +1763,20 @@ function setupSaveZone() {
             nombre_zona: name,
             nivel: level,
             parent: parentId || null,
-            coordenadas: currentZoneData.coordinates.map(function(point) { return [point.lat, point.lng]; })
         };
+        if (currentZoneData) {
+            data.coordenadas = currentZoneData.coordinates.map(function(point) { return [point.lat, point.lng]; });
+        }
+
+        var zoneId = editingZoneId;
+        var endpoint = zoneId ? '/cuadrantizacion/zonas/' + zoneId + '/' : '/cuadrantizacion/zonas/';
 
         showLoading(true);
         var saveButton = document.getElementById('save-zone');
         saveButton.disabled = true;
 
-        fetch('/cuadrantizacion/zonas/', {
-            method: 'POST',
+        fetch(endpoint, {
+            method: zoneId ? 'PATCH' : 'POST',
             credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
@@ -1757,14 +1794,12 @@ function setupSaveZone() {
             return parseJsonResponse(response);
         })
         .then(function(result) {
-            showAlert('Zona "' + name + '" guardada exitosamente.', 'success');
-            document.getElementById('zone-name').value = '';
-            if (selectedShape) selectedShape.setMap(null);
+            showAlert('Zona "' + name + '" ' + (zoneId ? 'actualizada' : 'creada') + ' (#' + result.id + ').', 'success');
             selectedShape = null;
             currentZoneData = null;
-            loadZones();
+            editingZoneId = result.id;
+            loadZones(result.id);
             loadDistricts();
-            loadZoneParents();
         })
         .catch(function(error) {
             showAlert('Error: ' + error.message, 'error');
@@ -2452,8 +2487,8 @@ function loadPropifyProperties() {
         });
 }
 
-function loadZones() {
-    fetch('/cuadrantizacion/zonas/')
+function loadZones(selectZoneId) {
+    return fetch('/cuadrantizacion/zonas/')
         .then(function(response) { return response.json(); })
         .then(function(data) {
             // La API devuelve un array plano directamente
@@ -2462,6 +2497,10 @@ function loadZones() {
             renderExistingZones(allZones);
             document.getElementById('total-zones-badge').textContent = allZones.length;
             document.getElementById('zones-count-badge').textContent = allZones.length;
+            if (selectZoneId) {
+                var zone = allZones.find(function(item) { return String(item.id) === String(selectZoneId); });
+                if (zone) selectExistingZone(zone);
+            }
         })
         .catch(function(error) {
             console.error('Error loading zones:', error);
@@ -2502,6 +2541,7 @@ function renderExistingZones(zones) {
             try {
                 var coords = typeof zone.coordenadas === 'string' ?
                     JSON.parse(zone.coordenadas) : zone.coordenadas;
+                if (!Array.isArray(coords) || coords.length < 3) return;
 
                 // Las coordenadas vienen como [[lat, lng], [lat, lng], ...]
                 var path = coords.map(function(c) {
@@ -2521,6 +2561,7 @@ function renderExistingZones(zones) {
                     zoneId: zone.id,
                     clickable: true
                 });
+                polygon.zoneId = zone.id;
 
                 // Calcular centro del polígono para la etiqueta
                 var bounds = new google.maps.LatLngBounds();
@@ -2577,6 +2618,7 @@ function renderExistingZones(zones) {
 }
 
 function flyToZone(zone) {
+    selectExistingZone(zone);
     if (zone.coordenadas || zone.geom) {
         try {
             var coords = typeof zone.coordenadas === 'string' ?
@@ -2595,6 +2637,20 @@ function flyToZone(zone) {
         } catch(e) {
             console.warn('Error flying to zone:', e);
         }
+    }
+}
+
+function selectExistingZone(zone) {
+    var polygon = renderedZoneOverlays.find(function(overlay) { return String(overlay.zoneId) === String(zone.id); });
+    if (polygon) {
+        selectShape(polygon);
+    } else {
+        selectedShape = null;
+        currentZoneData = null;
+        populateZoneForm(zone);
+        document.getElementById('zone-info-title').textContent = zone.nombre_zona + ' · #' + zone.id;
+        document.getElementById('zone-info-content').textContent = 'Sin polígono. Dibuja uno nuevo para actualizar esta zona.';
+        document.getElementById('zone-info-panel').style.display = 'block';
     }
 }
 
