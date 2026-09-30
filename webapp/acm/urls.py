@@ -4,7 +4,10 @@ from .components_routes import urlpatterns as component_routes
 
 app_name = 'acm'
 
+from ingestas.ml_candidate_views import dashboard as ml_control
+
 urlpatterns = [
+    path('control/', ml_control, name='control_datos'),
     path('', views.acm_dashboard, name='acm_dashboard'),
     path('analisis-clasico/', views.acm_view, name='acm_analisis_clasico'),
     path('analisis-pruebas-clasico/', views.acm_pruebas_view, name='acm_analisis_pruebas_clasico'),

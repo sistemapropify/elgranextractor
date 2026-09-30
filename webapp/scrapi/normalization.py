@@ -2,6 +2,7 @@
 import math
 import re
 import unicodedata
+from datetime import datetime
 from numbers import Number
 from urllib.parse import urlsplit
 
@@ -87,6 +88,66 @@ def listing_operation(raw):
     return operation(raw.get('_source_url'))
 
 
+def construction_age(raw, extracted_at=None):
+    """Use explicit age/build-year evidence; never infer age from marketing dates."""
+    raw = raw if isinstance(raw, dict) else {}
+    structured = []
+    for key in ('Antiguedad', 'antiguedad', 'Antigüedad', 'antiguedad_anios'):
+        value = raw.get(key)
+        match = re.fullmatch(r'\s*(\d{1,3})\s*(?:años?|years?)?\s*', str(value or ''), re.I)
+        if value == 0:
+            match = re.fullmatch(r'(\d+)', '0')
+        if match and int(match.group(1)) <= 150:
+            structured.append((int(match.group(1)), key, str(value)))
+    parts = [raw.get(key) for key in ('Descripcion', 'descripcion', 'description',
+             'Caracteristicas', 'caracteristicas', 'Caracteristicas Extra', 'visible_text_excerpt')]
+    normalized = plain(' '.join(str(v) for v in parts if v))
+    building_text = normalized + ' ' + plain(raw.get('tipo_inmueble') or raw.get('Tipo') or '')
+    has_building = bool(re.search(r'\b(?:casas?|viviendas?|departamentos?|edificios?|locales?|oficinas?|construid[oa]s?|construccion|edificad[oa]s?)\b', building_text))
+    ages = set()
+    if has_building:
+        for pattern in (r'\bantiguedad\s*[:=]?\s*(\d{1,3})\s*anos\b', r'\b(\d{1,3})\s*anos\s+de\s+antiguedad\b'):
+            ages.update(int(m.group(1)) for m in re.finditer(pattern, normalized))
+    years = set()
+    for pattern in (r'\bano\s+(?:de\s+)?(?:construccion|edificacion)\s*[:=\-]?\s*(19\d{2}|20\d{2})\b',
+                    r'\b(?:construid[oa]|edificad[oa])\s+en\s+(19\d{2}|20\d{2})\b',
+                    r'\bano\s+en\s+que\s+fue\s+construid[oa]\s*[:=\-]?\s*(19\d{2}|20\d{2})\b'):
+        years.update(int(m.group(1)) for m in re.finditer(pattern, normalized))
+    evidence = {'source': 'description_age', 'values': sorted(ages), 'construction_years': sorted(years)}
+    reference_year = None
+    if years:
+        try:
+            reference_year = extracted_at.year if isinstance(extracted_at, datetime) else datetime.fromisoformat(str(extracted_at).replace('Z', '+00:00')).year
+        except (ValueError, TypeError):
+            evidence['reason'] = 'invalid_extraction_date'
+        if reference_year:
+            evidence['reference_year'] = reference_year
+            ages.update(reference_year - year for year in years)
+    all_ages = ages | {age for age, _, _ in structured}
+    if len(all_ages) > 1 or len(years) > 1:
+        evidence['reason'] = 'conflicting_age_values'
+        evidence['values'] = sorted(all_ages)
+    elif all_ages and not 0 <= next(iter(all_ages)) <= 150:
+        evidence['reason'] = 'age_out_of_range'
+    if structured:
+        age, key, value = structured[0]
+        evidence.update(source='portal_age_field', label=key, value=value)
+        # Conflicts stay visible but description evidence never rewrites a portal field.
+        if len({a for a, _, _ in structured}) > 1:
+            return None, evidence
+        return age, evidence
+    if evidence.get('reason'):
+        return None, evidence
+    if not ages:
+        return None, None
+    age = next(iter(ages))
+    evidence['source'] = 'description_construction_year' if years else 'description_age'
+    evidence['years'] = age
+    if years:
+        evidence['year'] = next(iter(years))
+    return age, evidence
+
+
 def urbania_row(prop, stamp):
     feats = str(prop.get('Caracteristicas') or '')
     # Área de terreno y construida, cada una por su lado (campos del portal y,
@@ -107,6 +168,7 @@ def urbania_row(prop, stamp):
         except ValueError:
             pass
     title = str(prop.get('Titulo') or '').strip()
+    age, age_evidence = construction_age(prop, stamp)
     row = {
         'fuente': 'urbania', 'id_origen': str(prop.get('ID') or '').strip(),
         'fecha_extraccion': stamp, 'titulo': title or None,
@@ -124,8 +186,12 @@ def urbania_row(prop, stamp):
         'latitud': lat, 'longitud': lng, 'descripcion': prop.get('Descripcion') or None,
         'url': prop.get('URL Propiedad') or prop.get('URL') or prop.get('url'),
         'imagen_url': prop.get('Imagen URL') or None, 'datos_crudos': dict(prop),
+        'antiguedad_anios': age,
     }
-    return validate_row(row)
+    result = validate_row(row)
+    if age_evidence:
+        result['datos_crudos']['_age_evidence'] = age_evidence
+    return result
 
 
 def validate_row(row):

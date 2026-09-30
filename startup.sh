@@ -219,6 +219,20 @@ if [ "$SCRAPING_EXECUTION_MODE" = "watchdog" ]; then
     echo "  Watchdog log: $SCRAPING_WATCHDOG_LOG"
 fi
 
+# Candidate evaluation is independent of scraping and web requests. SQL keeps the cursor.
+if [ "${ML_CANDIDATES_ENABLED:-1}" = "1" ]; then
+    (
+        set +e
+        cd "$APP_ROOT/webapp"
+        while true; do
+            echo "[$(date -u)] Starting ML candidate evaluator..."
+            python manage.py ml_candidates_worker
+            echo "[$(date -u)] Candidate evaluator stopped; restarting in 10s."
+            sleep 10
+        done
+    ) >> /home/LogFiles/ml-candidates.log 2>&1 &
+fi
+
 # Analysis and shadow jobs survive web-worker recycling through the SQL queue.
 export DURABLE_EXECUTION_MODE="${DURABLE_EXECUTION_MODE:-external}"
 if [ "$DURABLE_EXECUTION_MODE" = "external" ] && [ "${DURABLE_WORKER_ENABLED:-1}" = "1" ]; then

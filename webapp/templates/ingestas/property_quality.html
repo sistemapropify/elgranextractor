@@ -4,6 +4,8 @@
 .quality-page{padding:18px;color:#e6edf3;font:13px/1.5 system-ui}.quality-page h1{font-size:21px;margin:0 0 10px}.quality-page a{color:#82c5ff}.quality-page form{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:14px 0}.quality-page label{font-size:11px}.quality-page input,.quality-page select{display:block;background:#0d1117;color:#e6edf3;border:1px solid #44515f;padding:7px;border-radius:5px}.quality-page button{padding:7px 10px;background:#263b4b;color:#fff;border:1px solid #52718b;border-radius:6px;cursor:pointer}.quality-page table{border-collapse:collapse;width:100%;font-size:12px}.quality-page td,.quality-page th{padding:10px;text-align:left;border-bottom:1px solid #354151;vertical-align:top}.quality-page th{background:#1a2735}.quality-page td:nth-child(5){color:#f4d093;min-width:230px}.quality-page .quality-summary{padding:12px;background:#192b30;border:1px solid #355e63;border-radius:8px}.quality-page .quality-explain{color:#aebdcb;font-size:12px;max-width:1100px}
 </style>{% endblock %}
 {% block content %}
+{% if ml_mode %}{% include 'ingestas/ml_candidates_panel.html' %}{% else %}
+<nav style="padding:12px 18px"><a href="/acm/control/">Mercado y ACM</a> · <a href="/ingestas/scraping/calidad/">Calidad y correcciones</a> · <a href="?tab=entrenamiento">Candidatas para entrenamiento</a></nav>
 <div class="quality-page"><h1>Calidad de propiedades scrapeadas</h1>
 <div class="quality-summary">Evaluadas: <strong>{{ summary.total }}</strong> · Con alertas: <strong>{{ summary.con_alertas }}</strong> · Correctas: <strong style="color:#57d9a3">{{ summary.correctas }}</strong> · Excluidas del ACM: <strong>{{ summary.excluidas }}</strong><br>
 Triaje IA: <strong style="color:#57d9a3">{{ summary.ia_real }} reales</strong> · <strong style="color:#f4d093">{{ summary.ia_dudoso }} dudosas</strong> · <strong style="color:#aebdcb">{{ summary.ia_ruido }} ruido</strong> · <strong>{{ summary.ia_sin_revisar }} sin revisar</strong>
@@ -80,4 +82,5 @@ function dispararTriaje(btn) {
 {% if summary.ia_sin_revisar %}// El triaje se actualiza sin interrumpir la edición.
 scheduleQualityRefresh();{% endif %}
 </script>
+{% endif %}
 {% endblock %}

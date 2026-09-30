@@ -839,3 +839,42 @@ class RevisionIAAlerta(models.Model):
         db_table = 'calidad_revision_ia'
         constraints = [models.UniqueConstraint(fields=['propiedad'],
                                                name='calidad_revision_ia_uq')]
+
+
+class MLObservation(models.Model):
+    """Immutable input snapshot; evaluation is derived under a recorded rule version."""
+    propiedad = models.ForeignKey(PropiedadesCompetencia, on_delete=models.PROTECT, related_name='ml_observations')
+    sequence = models.PositiveIntegerField()
+    content_hash = models.CharField(max_length=64)
+    snapshot = models.JSONField()
+    changes = models.JSONField(default=dict)
+    origin = models.CharField(max_length=40, default='save')
+    job_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    status = models.CharField(max_length=16, default='pending', db_index=True)
+    rule_version = models.CharField(max_length=40)
+    reasons = models.JSONField(default=list)
+    notes = models.JSONField(default=list)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    evaluated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['propiedad', 'sequence'], name='ml_obs_property_sequence')]
+        indexes = [models.Index(fields=['status', 'id'], name='ml_obs_pending_idx')]
+
+
+class MLCandidate(models.Model):
+    """Latest admission state; admission never means that training has happened."""
+    propiedad = models.OneToOneField(PropiedadesCompetencia, on_delete=models.PROTECT, related_name='ml_candidate')
+    latest = models.ForeignKey(MLObservation, on_delete=models.PROTECT, related_name='+')
+    status = models.CharField(max_length=16, default='pending', db_index=True)
+    evaluated_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class MLPipelineState(models.Model):
+    """Resumable reconciliation cursor and a visible worker heartbeat."""
+    key = models.CharField(max_length=40, primary_key=True)
+    cursor = models.BigIntegerField(default=0)
+    sweep_finished_at = models.DateTimeField(null=True, blank=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)

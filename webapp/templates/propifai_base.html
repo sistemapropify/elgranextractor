@@ -657,10 +657,12 @@
                 <div class="nav-item has-submenu {% if '/acm/' in request.path %}active{% endif %}">
                     <a href="#" class="nav-link submenu-toggle">
                         <span class="nav-icon">&#x1F4D0;</span>
-                        <span>ACM</span>
+                        <span>Mercado y ACM</span>
                         <span class="submenu-arrow">&#x25BC;</span>
                     </a>
                     <div class="submenu-items">
+                        <a href="/acm/control/" class="submenu-item"><span class="submenu-icon">&#x1F4CA;</span><span>Control de datos y ML</span></a>
+                        <a href="/ingestas/scraping/calidad/?tab=entrenamiento" class="submenu-item"><span class="submenu-icon">&#x1F50E;</span><span>Candidatas ML</span></a>
                         <a href="/acm/" class="submenu-item {% if request.path == '/acm/' %}active{% endif %}">
                             <span class="submenu-icon">&#x1F3E0;</span>
                             <span>Dashboard</span>

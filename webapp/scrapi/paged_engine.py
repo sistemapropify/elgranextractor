@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 from .contracts import Discovery, ScrapeRows, ScrapingInterrupted
-from .normalization import number, operation, property_type, urbania_row, validate_row, listing_operation
+from .normalization import number, operation, property_type, urbania_row, validate_row, listing_operation, construction_age
 from .source_config import page_url, validate_url
 from .retry_policy import portal_blocked, retry_delay, transient_failure, wait_for_retry
 
@@ -120,6 +120,18 @@ def normalize(portal, source, raw):
     row = source.estandarizar(mapped, stamp)
     row['fuente'] = portal
     row['datos_crudos'] = dict(raw)
+    inferred_age, age_evidence = construction_age(raw, row.get('fecha_extraccion') or stamp)
+    if row.get('antiguedad_anios') is None and inferred_age is not None:
+        row['antiguedad_anios'] = inferred_age
+    elif row.get('antiguedad_anios') is not None and inferred_age is not None:
+        try:
+            if int(row['antiguedad_anios']) != inferred_age:
+                age_evidence = {**(age_evidence or {}), 'reason': 'conflicts_with_portal_age_field',
+                                'portal_age': row['antiguedad_anios']}
+        except (TypeError, ValueError):
+            pass
+    if age_evidence:
+        row['datos_crudos']['_age_evidence'] = age_evidence
     text = ' '.join(str(raw.get(k) or '') for k in ('tipo', 'Tipo', 'Titulo', 'titulo'))
     kind = property_type(text)
     row['tipo_inmueble'] = kind

@@ -3,7 +3,10 @@ from . import views, property_quality_views
 
 app_name = 'ingestas'
 
+from . import ml_candidate_views
+
 urlpatterns = [
+    path('scraping/registros/<int:pk>/candidatura/', ml_candidate_views.history, name='candidatura_historial'),
     path('scraping/calidad/', property_quality_views.dashboard, name='scraping_calidad'),
     path('scraping/calidad/triaje/', property_quality_views.disparar_triage, name='scraping_calidad_triaje'),
     path('scraping/registros/<int:pk>/editar/', property_quality_views.PropertyEditor.as_view(), name='scraping_registro_editar'),

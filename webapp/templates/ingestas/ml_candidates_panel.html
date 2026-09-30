@@ -1,0 +1,57 @@
+<style>
+.ml-nav{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 16px}.ml-nav a{padding:8px 12px;border:1px solid #3c536c;border-radius:6px;text-decoration:none}.ml-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px}.ml-stat{padding:14px;background:#172839;border:1px solid #354151;border-radius:8px}.ml-stat b{display:block;font-size:25px}.ml-status-eligible{color:#61e6b1}.ml-status-review,.ml-status-error{color:#ffbb81}.ml-reason{max-width:400px}.ml-history{background:#152333;color:#eee;border:1px solid #627890;border-radius:12px;width:min(850px,90vw);max-height:85vh}.ml-history::backdrop{background:#0009}.ml-history header{display:flex;justify-content:space-between;gap:16px;align-items:center}.ml-history article{padding:12px 0;border-bottom:1px solid #405366}.ml-history p{overflow-wrap:anywhere}.ml-table td:nth-child(5){min-width:0!important;color:inherit!important}.ml-muted{color:#aebdcb}
+</style>
+<div class="quality-page">
+<h1>Mercado y ACM · Control de datos</h1>
+<nav class="ml-nav"><a href="/ingestas/scraping/dashboard/">Scraping</a><a href="/ingestas/scraping/calidad/">Calidad y correcciones</a><a href="/ingestas/scraping/calidad/?tab=entrenamiento" aria-current="page">Candidatas ML</a><a href="/cuadrantizacion/mapa/">Mapa</a><a href="/acm/analisis/">Valorar con ACM</a><a href="/acm/historial/">Historial ACM</a></nav>
+{% if not ml_ready %}<div class="quality-summary">La migración del control ML está pendiente. El ACM y la calidad existente siguen disponibles.</div>
+{% else %}
+<div class="ml-stats"><div class="ml-stat">Registros fuente<b>{{ ml_summary.total }}</b></div>
+{% for s in ml_summary.statuses %}<div class="ml-stat ml-status-{{ s.status }}">{{ s.label }}<b data-ml-count="{{ s.status }}">{{ s.count }}</b></div>{% endfor %}
+<div class="ml-stat">Por incorporar al seguimiento<b id="ml-untracked">{{ ml_summary.untracked }}</b></div></div>
+<p class="quality-explain">Conteos de registros únicos, una vez por estado. Una candidata preliminar tiene los campos requeridos por estas reglas; falta validar identidad entre portales y microzona antes de entrenar. Las ubicaciones aproximadas permanecen como referencia. Una propiedad sin cambios no suma otra versión.</p>
+<div class="quality-summary"><strong>Modelo ML: aún no entrenado.</strong> No hay todavía métricas de error o mejora del modelo. El ACM actual mantiene su algoritmo y recibe las correcciones de los registros.<br>
+Proceso: <strong id="ml-worker">{% if ml_summary.worker_active %}activo{% else %}sin señal reciente{% endif %}</strong> · Versiones pendientes: <span id="ml-queue">{{ ml_summary.queue }}</span> · Última señal: {{ ml_summary.heartbeat|date:'d/m/Y H:i:s'|default:'Sin señal' }}<br>Último barrido completo: {{ ml_summary.last_sweep|date:'d/m/Y H:i'|default:'Pendiente' }} · Regla {{ rule_version }}.
+<span id="ml-update" aria-live="polite"></span></div>
+<form method="get"><input type="hidden" name="tab" value="entrenamiento">
+<label>Portal<select name="portal"><option value="">Todos</option>{% for p in portals %}<option {% if filters.portal == p %}selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+<label>Tipo<select name="tipo"><option value="">Todos</option>{% for k,v in types %}<option value="{{ k }}" {% if filters.tipo == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+<label>Distrito<input name="distrito" value="{{ filters.distrito }}"></label>
+<label>Estado<select name="estado"><option value="">Todos</option>{% for k,v in ml_labels %}<option value="{{ k }}" {% if filters.estado == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+<label>Precisión<select name="precision"><option value="">Todas</option><option value="exacta" {% if filters.precision == 'exacta' %}selected{% endif %}>Exacta declarada</option><option value="aproximada" {% if filters.precision == 'aproximada' %}selected{% endif %}>Aproximada</option><option value="desconocida" {% if filters.precision == 'desconocida' %}selected{% endif %}>Desconocida</option></select></label>
+<label>Trabajo de origen<input name="trabajo" inputmode="numeric" value="{{ filters.trabajo }}" size="8"></label>
+<label>Versiones<select name="cambio"><option value="">Todas</option><option value="new" {% if filters.cambio == 'new' %}selected{% endif %}>Primera versión</option><option value="updated" {% if filters.cambio == 'updated' %}selected{% endif %}>Con cambios</option></select></label>
+<button>Actualizar lista</button><button name="exportar" value="csv">Descargar CSV</button></form>
+<p><strong>{{ ml_page.paginator.count }} registros con estos filtros.</strong> El trabajo corresponde al último avistamiento vinculado a esta versión; una edición manual no significa una nueva extracción.</p>
+<div style="overflow:auto"><table class="ml-table"><thead><tr><th>Registro y versión</th><th>Propiedad</th><th>Precio USD / superficies</th><th>Ubicación / antigüedad</th><th>Estado y motivos</th><th>Acciones</th></tr></thead><tbody>
+{% for c in ml_page %}<tr><td>#{{ c.propiedad_id }}<br>{{ c.latest.snapshot.fuente }} · {{ c.latest.snapshot.id_origen }}<br><small>Versión {{ c.latest.sequence }} · {{ c.latest.created_at|date:'d/m/Y H:i' }}<br>{{ c.latest.origin }} · trabajo {{ c.latest.job_id|default_if_none:'—' }}</small></td>
+<td>{{ c.latest.snapshot.tipo_inmueble }} · {{ c.latest.snapshot.tipo_operacion }}<br>{{ c.latest.snapshot.titulo|default:''|truncatechars:100 }}<br>{{ c.latest.snapshot.distrito|default:'Sin distrito' }}</td>
+<td>USD {{ c.latest.snapshot.precio_usd|default_if_none:'—' }}<br>Terreno: {{ c.latest.snapshot.area_terreno|default_if_none:'—' }} m²<br>Construcción: {{ c.latest.snapshot.area_construida|default_if_none:'—' }} m²</td>
+<td>{{ c.latest.snapshot.precision_ubicacion }}<br>{{ c.latest.snapshot.latitud|default_if_none:'—' }}, {{ c.latest.snapshot.longitud|default_if_none:'—' }}<br>Antigüedad: {{ c.latest.snapshot.antiguedad_anios|default_if_none:'Sin dato' }}<br>{{ c.latest.snapshot.estado_publicacion }}</td>
+<td class="ml-reason"><strong class="ml-status-{{ c.status }}">{{ c.status_label }}</strong>{% for r in c.latest.reasons %}<div>{{ r.message }}</div>{% endfor %}{% if c.status == 'eligible' %}<div>Superficies requeridas, precio USD positivo y coordenada exacta declarada.</div>{% endif %}<details><summary>Observaciones y regla</summary>{{ c.latest.rule_version }}{% for n in c.latest.notes %}<p class="ml-muted">{{ n }}</p>{% endfor %}</details></td>
+<td><button type="button" onclick="openScrapedEditor({{ c.propiedad_id }})">Ver / editar registro</button><br><button type="button" onclick="showMLHistory({{ c.propiedad_id }})">Historial de cambios</button></td></tr>
+{% empty %}<tr><td colspan="6">Sin registros para estos filtros. Si el primer barrido está pendiente, aparecerán a medida que avance.</td></tr>{% endfor %}</tbody></table></div>
+<p>{% if ml_page.has_previous %}<a href="?{{ params }}&page={{ ml_page.previous_page_number }}">Anterior</a>{% endif %} · Página {{ ml_page.number }} de {{ ml_page.paginator.num_pages }} · {% if ml_page.has_next %}<a href="?{{ params }}&page={{ ml_page.next_page_number }}">Siguiente</a>{% endif %}</p>
+{% endif %}</div>
+{% if ml_ready %}
+{% include 'ingestas/property_editor.html' %}
+<dialog id="ml-history" class="ml-history"><header><h2 id="ml-history-title">Historial</h2><button type="button" onclick="document.getElementById('ml-history').close()" style="font-size:18px;padding:10px">Cerrar ×</button></header><div id="ml-history-body"></div></dialog>
+<script>
+async function showMLHistory(id,page=1){
+ const dialog=document.getElementById('ml-history'), body=document.getElementById('ml-history-body');
+ document.getElementById('ml-history-title').textContent='Registro #'+id+' · Historial';body.textContent='Cargando…';if(!dialog.open)dialog.showModal();
+ try{const res=await fetch('/ingestas/scraping/registros/'+id+'/candidatura/?page='+page,{credentials:'same-origin'});if(!res.ok)throw Error('No se pudo cargar el historial.');const data=await res.json();body.replaceChildren();
+ for(const v of data.versions){const article=document.createElement('article');const title=document.createElement('strong');title.textContent='Versión '+v.sequence+' · '+v.status+' · '+new Date(v.created).toLocaleString();article.append(title);
+ const add=text=>{const p=document.createElement('p');p.textContent=text;article.append(p);};
+ add(v.rule+' · '+v.origin+' · Trabajo '+(v.job??'sin vínculo'));
+ if(v.sequence===1)add('Primera observación guardada para seguimiento.');
+ for(const [field,change] of Object.entries(v.changes)){add(field+': '+(change.before??'vacío')+' → '+(change.after??'vacío'));}
+ for(const r of v.reasons)add(r.message);
+ if(v.evidence?.age)add('Evidencia de antigüedad: '+JSON.stringify(v.evidence.age));body.append(article);}
+ for(const [label,next] of [['Anteriores',page+1],['Más recientes',page-1]]){if(next<1||next>data.pages)continue;const b=document.createElement('button');b.textContent=label;b.onclick=()=>showMLHistory(id,next);body.append(b);}
+ }catch(e){body.textContent=e.message;}
+}
+let mlVersionCount={{ ml_summary.versions }}, mlQueueCount={{ ml_summary.queue }};
+setInterval(async()=>{if(document.hidden)return;try{const url=new URL(location.href);url.searchParams.set('format','summary');const res=await fetch(url,{credentials:'same-origin'});if(!res.ok)throw Error();const s=await res.json();for(const item of s.statuses){const el=document.querySelector('[data-ml-count="'+item.status+'"]');if(el)el.textContent=item.count;}document.getElementById('ml-untracked').textContent=s.untracked;document.getElementById('ml-queue').textContent=s.queue;document.getElementById('ml-worker').textContent=s.worker_active?'activo':'sin señal reciente';if(s.versions!==mlVersionCount || s.queue!==mlQueueCount)document.getElementById('ml-update').textContent=' Hay nuevos cambios. Actualiza la lista cuando termines de editar.';}catch(e){document.getElementById('ml-update').textContent=' No se pudo actualizar el estado del proceso.';}},30000);
+</script>
+{% endif %}

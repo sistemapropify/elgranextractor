@@ -148,6 +148,9 @@ class PropertyEditor(APIView):
 
 @ensure_csrf_cookie
 def dashboard(request):
+    if request.GET.get('tab') == 'entrenamiento':
+        from .ml_candidate_views import dashboard as candidates_dashboard
+        return candidates_dashboard(request)
     user = user_for(request)
     if not user or not getattr(user, 'is_authenticated', False) or not getattr(user, 'is_active', False):
         return HttpResponse('Inicia sesión para consultar la calidad.', status=401)

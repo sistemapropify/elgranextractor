@@ -25,7 +25,7 @@ from bs4 import BeautifulSoup
 
 from captura.azure_storage import upload_bytes
 from scrapi.camoufox_launcher import camoufox_kwargs, is_headless_server
-from scrapi.normalization import operation, number, validate_row
+from scrapi.normalization import operation, number, validate_row, construction_age
 from scrapi.contracts import Discovery, ScrapeRows, ScrapingInterrupted
 from scrapi.source_config import validate_url
 
@@ -388,6 +388,9 @@ def standardize(item: dict[str, Any], extraction_date: str | None = None) -> dic
     bedrooms_match = re.search(r"(\d+)\s*(?:dormitorios?|habitaciones?)\b", searchable, re.I)
     bathrooms_match = re.search(r"(\d+)\s*baños?\b", searchable, re.I)
     reported_price = price.get("quality") == "reported"
+    age, age_evidence = construction_age(raw, extraction_date)
+    if age_evidence:
+        raw['_age_evidence'] = age_evidence
     return {
         "fuente": "facebook_marketplace",
         "id_origen": str(item.get("id") or ""),
@@ -416,7 +419,7 @@ def standardize(item: dict[str, Any], extraction_date: str | None = None) -> dic
         "amenities": None,
         "url": item.get("url"),
         "imagen_url": item.get("blob_image_url") or item.get("image_url"),
-        "antiguedad_anios": None,
+        "antiguedad_anios": age,
         "agencia_agente": item.get("seller_name"),
         "datos_crudos": raw,
     }

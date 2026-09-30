@@ -47,7 +47,7 @@ jobs:
           test "$ready" = 1
           docker run --rm --network scraping-test --entrypoint python \
             -e SCRAPING_TEST_SQL=1 -e SCRAPING_DB_PASSWORD="$db_password" \
-            scraping-worker:test manage.py test ingestas.tests.test_scraping_integrity ingestas.tests.test_publication_lifecycle ingestas.tests.test_scraping_recovery \
+            scraping-worker:test manage.py test ingestas.tests.test_scraping_integrity ingestas.tests.test_publication_lifecycle ingestas.tests.test_scraping_recovery ingestas.tests.test_ml_candidates \
             --settings=ingestas.scraping_test_settings --noinput
           docker run --rm --network scraping-test --entrypoint python \
             -e SCRAPING_TEST_SQL=1 -e SCRAPING_DB_PASSWORD="$db_password" \
