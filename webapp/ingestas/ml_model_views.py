@@ -6,11 +6,12 @@ from datetime import datetime, timedelta
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.db.models import F, Q
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
 from .ml_candidate_views import authorized
-from .ml_context import load_zones
+from .ml_context import LOCATION_RULE_VERSION, current_catalog_hash, load_zones
 from .ml_dataset import schema_ready
 from .ml_pricing import TYPES, VERSION, predict
 from .ml_training import active_run, publish
@@ -56,6 +57,19 @@ def dashboard(request):
     if not authorized(request):
         return JsonResponse({'error': 'Inicia sesión.'}, status=401)
     ready = schema_ready()
+    if ready and request.GET.get('format') == 'progress':
+        from .models import MLCandidate
+        catalog_hash = current_catalog_hash()
+        pending = MLCandidate.objects.filter(
+            Q(context__isnull=True) | ~Q(context__observation_id=F('latest_id')) |
+            ~Q(context__catalog_hash=catalog_hash) | ~Q(context__rule_version=LOCATION_RULE_VERSION)
+        ).count()
+        total = MLCandidate.objects.count()
+        eligible = MLCandidate.objects.filter(status='eligible').count()
+        state = MLPipelineState.objects.filter(pk='ml-reconciliation-request').first()
+        return JsonResponse({'total': total, 'evaluated': max(0, total - pending), 'pending': pending,
+                             'eligible': eligible, 'percent': round(100 * (total - pending) / total, 1) if total else 0,
+                             'requested_at': (state.payload or {}).get('requested_at') if state else None})
     dataset = MLDatasetSnapshot.objects.order_by('-pk').first() if ready else None
     runs = list(MLTrainingRun.objects.select_related('dataset').order_by('-pk')[:30]) if ready else []
     active = {kind: active_run(kind) for kind in TYPES} if ready else {}
@@ -63,6 +77,18 @@ def dashboard(request):
     publications = {}
     contributions = []
     reconciliation = MLPipelineState.objects.filter(pk='ml-reconciliation-request').first() if ready else None
+    progress = None
+    if ready:
+        from .models import MLCandidate
+        catalog_hash = current_catalog_hash()
+        pending = MLCandidate.objects.filter(
+            Q(context__isnull=True) | ~Q(context__observation_id=F('latest_id')) |
+            ~Q(context__catalog_hash=catalog_hash) | ~Q(context__rule_version=LOCATION_RULE_VERSION)
+        ).count()
+        total = MLCandidate.objects.count()
+        progress = {'total': total, 'evaluated': max(0, total - pending), 'pending': pending,
+                    'eligible': MLCandidate.objects.filter(status='eligible').count(),
+                    'percent': round(100 * (total - pending) / total, 1) if total else 0}
     if ready:
         contribution_state = MLPipelineState.objects.filter(pk='model-contribution').first()
         contributions = list((contribution_state.payload or {}).get('history') or [])[-10:][::-1] if contribution_state else []
@@ -82,7 +108,7 @@ def dashboard(request):
         run.is_active_version = run.pk in active_ids
     response = render(request, 'ingestas/ml_models.html', {
         'ready': ready, 'dataset': dataset, 'runs': runs, 'cards': cards,
-        'contributions': contributions, 'reconciliation': reconciliation,
+        'contributions': contributions, 'reconciliation': reconciliation, 'progress': progress,
         'can_manage': _admin(request)})
     response['Cache-Control'] = 'private, no-store'
     return response

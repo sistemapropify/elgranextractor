@@ -12,8 +12,9 @@
 {% if dataset %}<p>Versión {{ dataset.id }} · {{ dataset.created_at|date:'d/m/Y H:i' }} · {{ dataset.included }} de {{ dataset.total }} ofertas aptas · {{ dataset.coverage.microzones }} subzonas con ofertas · {{ dataset.coverage.without_subzone|default:0 }} ofertas exactas fuera de subzonas dibujadas.</p><a href="/ingestas/scraping/ml/conjuntos/{{ dataset.id }}/exportar.csv">Descargar registros y motivos</a>
 {% else %}<p>El primer conjunto aparecerá al completar la conciliación de scraper, identidad y microzonas.</p>{% endif %}
 {% if dataset.coverage.by_parent_zone %}<details><summary>Cobertura por zona padre y distrito</summary><p>Solo cuentan anuncios asignados por polígono a una subzona. Las coordenadas exactas fuera de las subzonas quedan separadas.</p><h3>Zonas padre</h3><ul>{% for name, count in dataset.coverage.by_parent_zone.items %}<li>{{ name }}: {{ count }}</li>{% endfor %}</ul><h3>Distritos padre</h3><ul>{% for name, count in dataset.coverage.by_parent_district.items %}<li>{{ name }}: {{ count }}</li>{% endfor %}</ul></details>{% endif %}
-{% if can_manage %}<form method="post" action="{% url 'acm:modelos_reevaluar' %}" style="margin-top:16px">{% csrf_token %}<button type="submit">Reevaluar propiedades y actualizar subzonas</button></form><p><small>Solicita un barrido reanudable con las subzonas actuales. No modifica ni borra las versiones anteriores; el worker creará una nueva versión solo si encuentra cambios.</small></p>{% endif %}
+{% if can_manage %}<form id="ml-reconcile-form" method="post" action="{% url 'acm:modelos_reevaluar' %}" style="margin-top:16px">{% csrf_token %}<button id="ml-reconcile-button" type="submit" {% if reconciliation and progress.pending %}disabled{% endif %}>{% if reconciliation and progress.pending %}Reevaluación en curso…{% else %}Reevaluar propiedades y actualizar subzonas{% endif %}</button> <span id="ml-reconcile-status" aria-live="polite"></span></form><p><small>Solicita un barrido reanudable con las subzonas actuales. No modifica ni borra las versiones anteriores; el worker creará una nueva versión solo si encuentra cambios.</small></p>{% endif %}
 {% if reconciliation %}<p><strong>Reevaluación solicitada:</strong> {{ reconciliation.payload.requested_at|default:'registrada' }} · por {{ reconciliation.payload.requested_by|default:'administración' }}. El resultado aparece cuando el worker termine.</p>{% endif %}
+{% if progress %}<div id="ml-progress" style="margin-top:14px;padding:12px;background:#10202d;border:1px solid #3c536c;border-radius:8px"><strong>Avance de reevaluación espacial</strong><p><span id="ml-progress-text">{{ progress.evaluated }} de {{ progress.total }} evaluadas · {{ progress.pending }} pendientes · {{ progress.eligible }} candidatas preliminares</span></p><progress id="ml-progress-bar" max="100" value="{{ progress.percent }}" style="width:100%"></progress><small>Se actualiza automáticamente mientras el worker procesa las subzonas.</small></div>{% endif %}
 </section>
 <section style="padding:16px;background:#172839;border-radius:10px;margin:16px 0">
 <h2>Qué aportaron los nuevos anuncios</h2>
@@ -45,5 +46,11 @@
 </tbody></table></div></section>
 <p>El semáforo se calcula solo con ofertas nuevas que el modelo no conocía. Gris significa muestra insuficiente; rojo requiere al menos diez casos y una degradación material frente a la evaluación temporal. El tiempo de CPU se guarda por entrenamiento; no se atribuye un coste en dólares sin factura.</p>
 {% endif %}
+<script>
+(function(){const text=document.getElementById('ml-progress-text'),bar=document.getElementById('ml-progress-bar');if(!text||!bar)return;
+async function refresh(){try{const u=new URL(location.href);u.searchParams.set('format','progress');const r=await fetch(u,{credentials:'same-origin'});if(!r.ok)return;const p=await r.json();text.textContent=`${p.evaluated} de ${p.total} evaluadas · ${p.pending} pendientes · ${p.eligible} candidatas preliminares`;bar.value=p.percent;}catch(e){}}
+setInterval(refresh,15000);})();
+(function(){const form=document.getElementById('ml-reconcile-form'),button=document.getElementById('ml-reconcile-button'),status=document.getElementById('ml-reconcile-status');if(!form||!button)return;form.addEventListener('submit',function(){button.disabled=true;button.textContent='Solicitud enviada…';if(status)status.textContent='El worker comenzará la reevaluación; esta página se actualizará.';});})();
+</script>
 </main>
 {% endblock %}
