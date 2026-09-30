@@ -867,6 +867,7 @@ class MLCandidate(models.Model):
     """Latest admission state; admission never means that training has happened."""
     propiedad = models.OneToOneField(PropiedadesCompetencia, on_delete=models.PROTECT, related_name='ml_candidate')
     latest = models.ForeignKey(MLObservation, on_delete=models.PROTECT, related_name='+')
+    context = models.ForeignKey('MLSpatialAssessment', on_delete=models.PROTECT, null=True, blank=True, related_name='+')
     status = models.CharField(max_length=16, default='pending', db_index=True)
     evaluated_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -875,6 +876,65 @@ class MLCandidate(models.Model):
 class MLPipelineState(models.Model):
     """Resumable reconciliation cursor and a visible worker heartbeat."""
     key = models.CharField(max_length=40, primary_key=True)
+    payload = models.JSONField(default=dict)
     cursor = models.BigIntegerField(default=0)
     sweep_finished_at = models.DateTimeField(null=True, blank=True)
     heartbeat_at = models.DateTimeField(null=True, blank=True)
+
+
+class MLZoneVersion(models.Model):
+    """Immutable copy, independent of live polygon deletion or later edits."""
+    zone_key = models.BigIntegerField(db_index=True)
+    sequence = models.PositiveIntegerField()
+    content_hash = models.CharField(max_length=64)
+    snapshot = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['zone_key', 'sequence'], name='ml_zone_sequence_uq')]
+
+
+class MLSpatialAssessment(models.Model):
+    observation = models.ForeignKey(MLObservation, on_delete=models.PROTECT, related_name='spatial_assessments')
+    catalog_hash = models.CharField(max_length=64)
+    rule_version = models.CharField(max_length=40)
+    state = models.CharField(max_length=32, db_index=True)
+    zone_version = models.ForeignKey(MLZoneVersion, on_delete=models.PROTECT, null=True, blank=True, related_name='+')
+    matching_versions = models.JSONField(default=list)
+    evidence = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['observation', 'catalog_hash', 'rule_version'], name='ml_spatial_version_uq')]
+
+
+class MLIdentityPair(models.Model):
+    """Reviewable links; never merge or delete the original advertisements."""
+    left = models.ForeignKey(PropiedadesCompetencia, on_delete=models.PROTECT, related_name='ml_identity_left')
+    right = models.ForeignKey(PropiedadesCompetencia, on_delete=models.PROTECT, related_name='ml_identity_right')
+    left_observation = models.ForeignKey(MLObservation, on_delete=models.PROTECT, related_name='+')
+    right_observation = models.ForeignKey(MLObservation, on_delete=models.PROTECT, related_name='+')
+    left_signature = models.CharField(max_length=64)
+    right_signature = models.CharField(max_length=64)
+    rule_version = models.CharField(max_length=40)
+    status = models.CharField(max_length=16, default='possible', db_index=True)
+    score = models.PositiveSmallIntegerField(default=0)
+    evidence = models.JSONField(default=list)
+    active = models.BooleanField(default=True, db_index=True)
+    decision_stale = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['left', 'right'], name='ml_identity_pair_uq'),
+                       models.CheckConstraint(check=models.Q(left__lt=models.F('right')), name='ml_identity_pair_order')]
+
+
+class MLIdentityDecision(models.Model):
+    pair = models.ForeignKey(MLIdentityPair, on_delete=models.PROTECT, related_name='decisions')
+    decision = models.CharField(max_length=16)
+    reason = models.TextField()
+    actor = models.CharField(max_length=200)
+    left_observation = models.ForeignKey(MLObservation, on_delete=models.PROTECT, related_name='+')
+    right_observation = models.ForeignKey(MLObservation, on_delete=models.PROTECT, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)

@@ -35,6 +35,7 @@ def digest(snapshot):
     material['manual_reason'] = snapshot.get('manual_reason') or ''
     material['normalizer_issues'] = snapshot.get('normalizer_issues') or []
     material['age_conflict'] = snapshot.get('age_conflict')
+    material['location_evidence'] = (snapshot.get('evidence') or {}).get('location')
     return hashlib.sha256(json.dumps(material, sort_keys=True, ensure_ascii=False,
                                      separators=(',', ':'), default=str).encode()).hexdigest()
 
@@ -103,5 +104,5 @@ def evaluate(row):
         notes.append('La presencia actual del anuncio no está confirmada.')
     priorities = ('excluded', 'reference', 'review')
     status = next((s for s in priorities if any(r['severity'] == s for r in reasons)), 'eligible')
-    notes.append('Identidad entre portales y microzona pendientes de validación; aún no utilizada en un modelo.')
+    notes.append('La identidad y microzona se consultan en Contexto y duplicados; esta evaluación todavía no implica uso en un modelo.')
     return dict(status=status, reasons=reasons, notes=notes, rule_version=RULE_VERSION)

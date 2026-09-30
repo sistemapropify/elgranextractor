@@ -6,6 +6,8 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import close_old_connections, connection
 from ingestas.ml_candidates import process_pending, reconcile_chunk, schema_ready
 
+from ingestas.ml_context import process_spatial, process_identity
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,14 +49,20 @@ class Command(BaseCommand):
                     retried = True
                 progress = reconcile_chunk(batch, force=options['reconcile'])
                 result = process_pending(batch)
+                context = process_spatial(batch)
+                identity = process_identity() if not MLObservation.objects.filter(status='pending').exists() else {}
                 for key in totals:
                     totals[key] += progress.get(key, 0) + result.get(key, 0)
-                self.stdout.write(json.dumps({'event': 'ml.pipeline.progress', **progress, **result}))
+                self.stdout.write(json.dumps({'event': 'ml.pipeline.progress', **progress, **result, **context, **identity}))
                 if options['once'] and (not options['reconcile'] or progress['complete']):
                     while options['reconcile'] and MLObservation.objects.filter(status='pending').exists():
                         drained = process_pending(batch)
                         for key in drained:
                             totals[key] += drained[key]
+                    if options['reconcile']:
+                        while process_spatial(batch)['spatial_pending']:
+                            pass
+                        self.stdout.write(json.dumps({'event': 'ml.identity.finished', **process_identity(force=True)}))
                     remaining_errors = MLCandidate.objects.filter(status='error').count()
                     self.stdout.write(json.dumps({'event': 'ml.pipeline.finished', **totals,
                         'pending_versions': MLObservation.objects.filter(status='pending').count(),

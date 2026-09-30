@@ -19,6 +19,8 @@ def schema_ready():
     from .models import MLObservation, MLCandidate, MLPipelineState
     tables = set(connection.introspection.table_names())
     ok = all(m._meta.db_table in tables for m in (MLObservation, MLCandidate, MLPipelineState))
+    from .ml_context import schema_ready as context_schema_ready
+    ok = ok and context_schema_ready()
     _schema_cache = (now, ok)
     return ok
 
@@ -49,7 +51,10 @@ def input_snapshot(obj, revision=None):
                 fecha_extraccion=json_value(obj.fecha_extraccion),
                 normalizer_issues=raw.get('_quality_issues') or [],
                 age_conflict=age_evidence.get('reason') if isinstance(age_evidence, dict) and not age_confirmed else None,
-                evidence={'age': age_evidence, 'normalizer': raw.get('_normalizer_version')},
+                evidence={'age': age_evidence, 'normalizer': raw.get('_normalizer_version'),
+                          'location': raw.get('_location_evidence') or {
+                              'status': 'not_preserved', 'declared_precision': obj.precision_ubicacion,
+                              'coordinates_accuracy': raw.get('coordinates_accuracy')}},
                 first_seen=json_value(obj.primera_vez_vista), last_seen=json_value(obj.ultima_vez_vista))
     return snap
 
@@ -68,14 +73,14 @@ def capture(property_id, origin='save'):
     if previous and previous.content_hash == fingerprint and previous.rule_version == RULE_VERSION:
         return previous, False
     changes = {k: {'before': previous.snapshot.get(k), 'after': snap.get(k)}
-               for k in FIELDS + ('manual_excluded', 'manual_reason', 'age_conflict', 'normalizer_issues')
+               for k in FIELDS + ('manual_excluded', 'manual_reason', 'age_conflict', 'normalizer_issues', 'evidence')
                if previous and previous.snapshot.get(k) != snap.get(k)}
     run = obj.ultima_ejecucion_vista if obj.ultima_ejecucion_vista_id else None
     observation = MLObservation.objects.create(propiedad=obj, sequence=previous.sequence + 1 if previous else 1,
         content_hash=fingerprint, snapshot=snap, changes=changes, origin=origin[:40],
         job_id=run.job_id if run else None, rule_version=RULE_VERSION)
     MLCandidate.objects.update_or_create(propiedad=obj, defaults={'latest': observation,
-                                         'status': 'pending', 'evaluated_at': None})
+                                         'status': 'pending', 'evaluated_at': None, 'context': None})
     logger.info('ml.candidate.queued record=%s version=%s job=%s', property_id, observation.sequence, observation.job_id)
     return observation, True
 

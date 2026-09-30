@@ -4,8 +4,11 @@ from . import views, property_quality_views
 app_name = 'ingestas'
 
 from . import ml_candidate_views
+from . import ml_context_views
 
 urlpatterns = [
+    path('scraping/ml/mapa/', ml_context_views.map_data, name='ml_context_map'),
+    path('scraping/ml/coincidencias/<int:pk>/decidir/', ml_context_views.decide, name='ml_identity_decide'),
     path('scraping/registros/<int:pk>/candidatura/', ml_candidate_views.history, name='candidatura_historial'),
     path('scraping/calidad/', property_quality_views.dashboard, name='scraping_calidad'),
     path('scraping/calidad/triaje/', property_quality_views.disparar_triage, name='scraping_calidad_triaje'),

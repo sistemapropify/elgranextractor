@@ -22,7 +22,7 @@
 const modal=document.getElementById('scraped-editor'), form=document.getElementById('scraped-edit-form'), status=document.getElementById('scraped-edit-status');
 // Editing is closed explicitly with the visible buttons, not browser dismissal.
 modal.addEventListener('cancel',function(event){event.preventDefault();});
-let endpoint=null, version=null, saving=false, sequence=0;
+let endpoint=null, version=null, saving=false, sequence=0, activeRecordId=null;
 const publication=document.getElementById('scraped-publication'), missingPublication=document.getElementById('scraped-publication-missing');
 function alertItem(text,color,weight){
  const el=document.createElement('div');el.className='alerta-item';el.textContent=text;
@@ -48,6 +48,7 @@ function setPublication(raw){
 async function read(response){let body;try{body=await response.json();}catch(e){throw Error('El servidor no devolvió JSON. Comprueba tu sesión y vuelve a intentar.');}if(!response.ok)throw Error(body.error+(body.fields?' '+JSON.stringify(body.fields):''));return body;}
 window.openScrapedEditor=async function(id){
  if(saving)return;
+ const numericId=Number(id); activeRecordId=Number.isSafeInteger(numericId)&&numericId>0?numericId:null;
  const seq=++sequence;version=null;
  setPublication(null);document.getElementById('scraped-record').textContent='';
  endpoint='/ingestas/scraping/registros/'+encodeURIComponent(id)+'/editar/';
@@ -67,9 +68,12 @@ window.openScrapedEditor=async function(id){
 };
 form.addEventListener('submit',async function(event){event.preventDefault();if(saving)return;saving=true;
  const button=form.querySelector('[type=submit]');button.disabled=true;status.textContent='Guardando…';
+ const savedRecordId=activeRecordId;
  const data=new FormData(form);data.set('version',version);data.set('excluida',form.elements.excluida.checked?'true':'false');data.set('correcta',form.elements.correcta.checked?'true':'false');
  try{await read(await fetch(endpoint,{method:'POST',credentials:'same-origin',headers:{'X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:data}));
- modal.close(); if(typeof loadPropifyProperties==='function'){document.getElementById('propify-floating-card').hidden=true;loadPropifyProperties();}else{location.reload();}
+ modal.close();
+ if(savedRecordId!==null)window.dispatchEvent(new CustomEvent('scraped-property-saved',{detail:{id:savedRecordId}}));
+ if(typeof loadPropifyProperties==='function'){document.getElementById('propify-floating-card').hidden=true;loadPropifyProperties();}else{location.reload();}
  }catch(error){status.textContent=error.message;}finally{saving=false;button.disabled=false;}
 });
 })();

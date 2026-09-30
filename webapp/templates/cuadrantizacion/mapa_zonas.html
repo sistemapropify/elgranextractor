@@ -1146,6 +1146,21 @@ window.onGoogleMapsLoaded = function() {
             </div>
         </div>
 
+        <div class="map-panel" id="ml-context-layers">
+            <div class="map-panel-header">Contexto ML</div>
+            <div class="map-panel-body">
+                <div class="portal-checkboxes" aria-label="Capas de contexto ML">
+                    <label class="portal-checkbox"><input type="checkbox" name="ml-map-layer" value="eligible"><span style="color:#61e6b1">●</span> Candidatas</label>
+                    <label class="portal-checkbox"><input type="checkbox" name="ml-map-layer" value="reference"><span style="color:#aebdcb">●</span> Referencias</label>
+                    <label class="portal-checkbox"><input type="checkbox" name="ml-map-layer" value="review"><span style="color:#ffbb81">●</span> Por revisar</label>
+                    <label class="portal-checkbox"><input type="checkbox" name="ml-map-layer" value="duplicates"><span style="color:#ba9cff">●</span> Posibles duplicados</label>
+                </div>
+                <p id="ml-map-status" class="map-quality-help" role="status" aria-live="polite">Marca una capa para consultar el área visible.</p>
+                <p class="map-quality-help">Exa: exacta declarada por la fuente. Apx: aproximada. No certifican ubicación catastral. Los posibles duplicados requieren revisión.</p>
+                <a href="/ingestas/scraping/calidad/?tab=contexto" class="config-btn">Revisar identidad y microzonas ↗</a>
+            </div>
+        </div>
+
         <div class="map-panel">
             <div class="map-panel-header">
                 Lista de zonas
@@ -1181,6 +1196,7 @@ window.onGoogleMapsLoaded = function() {
 
 {% block extra_scripts %}
 {{ block.super }}
+<script src="{% static 'js/ml-map-context.js' %}"></script>
 <script>
 // ============================================================
 // CUADRANTIZACIÓN MAPA — JavaScript
@@ -1399,6 +1415,14 @@ function initMap() {
     });
 
     showLoading(false);
+    // Optional context must not interrupt polygon saving or the original portals.
+    try {
+        if (typeof setupMLContextLayer === 'function') setupMLContextLayer(map);
+    } catch (error) {
+        console.error('ml.map.initialization.failed', error);
+        var mlStatus = document.getElementById('ml-map-status');
+        if (mlStatus) mlStatus.textContent = 'No se pudo iniciar la capa ML. El mapa y las zonas siguen disponibles.';
+    }
 }
 
 // ============================================================

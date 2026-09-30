@@ -45,12 +45,7 @@ class PropertyForm(forms.ModelForm):
             self.add_error('latitud', 'Completa ambas coordenadas o deja ambas vacías.')
         return data
 
-def user_for(request):
-    return getattr(request, 'current_user', None) or getattr(request, 'user', None)
-
-def allowed(user):
-    return bool(user and getattr(user, 'is_active', False) and
-                (getattr(user, 'is_staff', False) or user.has_perm('ingestas.change_propiedadescompetencia')))
+from .property_access import user_for, allowed
 
 def value(v):
     return str(v) if isinstance(v, Decimal) or hasattr(v, 'isoformat') else v
@@ -148,6 +143,9 @@ class PropertyEditor(APIView):
 
 @ensure_csrf_cookie
 def dashboard(request):
+    if request.GET.get('tab') == 'contexto':
+        from .ml_context_views import dashboard as context_dashboard
+        return context_dashboard(request)
     if request.GET.get('tab') == 'entrenamiento':
         from .ml_candidate_views import dashboard as candidates_dashboard
         return candidates_dashboard(request)
