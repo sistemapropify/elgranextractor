@@ -3,6 +3,7 @@ import math
 import re
 import unicodedata
 from numbers import Number
+from urllib.parse import urlsplit
 
 from .areas import calcular_areas
 
@@ -64,6 +65,28 @@ def operation(text):
     return None
 
 
+def listing_operation(raw):
+    """A detail URL/type overrides the search page, which can contain recommendations."""
+    for key in ('Operacion', 'operacion', 'tipo_operacion'):
+        result = operation(raw.get(key))
+        if result:
+            return result
+    detail_url = raw.get('URL Propiedad') or raw.get('url') or raw.get('URL') or ''
+    path = urlsplit(str(detail_url)).path
+    if re.search(r'/alcl', path):
+        return 'Alquiler'
+    if re.search(r'/vecl', path):
+        return 'Venta'
+    result = operation(path)
+    if result:
+        return result
+    for key in ('Tipo', 'tipo', 'Titulo', 'titulo'):
+        result = operation(raw.get(key))
+        if result:
+            return result
+    return operation(raw.get('_source_url'))
+
+
 def urbania_row(prop, stamp):
     feats = str(prop.get('Caracteristicas') or '')
     # Área de terreno y construida, cada una por su lado (campos del portal y,
@@ -88,7 +111,7 @@ def urbania_row(prop, stamp):
         'fuente': 'urbania', 'id_origen': str(prop.get('ID') or '').strip(),
         'fecha_extraccion': stamp, 'titulo': title or None,
         'tipo_inmueble': property_type(f'{prop.get("Tipo", "")} {title}'),
-        'tipo_operacion': operation(f'{prop.get("Operacion", "")} {title} {prop.get("_source_url", "")}'),
+        'tipo_operacion': listing_operation(prop),
         **prices(prop.get('Precio')),
         'area_m2': detalle_areas['area_m2'],
         'area_terreno': detalle_areas['area_terreno'],
@@ -121,7 +144,7 @@ def validate_row(row):
             issues.append('coordinates')
             row['latitud'] = row['longitud'] = None
     raw = dict(row.get('datos_crudos') or {})
-    raw['_normalizer_version'] = '2'
+    raw['_normalizer_version'] = '3'
     if issues:
         raw['_quality_issues'] = issues
     row['datos_crudos'] = raw

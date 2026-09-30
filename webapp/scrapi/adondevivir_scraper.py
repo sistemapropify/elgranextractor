@@ -11,7 +11,8 @@ from datetime import datetime
 from urllib.request import Request, urlopen
 from camoufox.async_api import AsyncCamoufox
 from scrapi.camoufox_launcher import camoufox_kwargs
-from scrapi.areas import calcular_areas
+from scrapi.areas import calcular_areas, parsear_area, extraer_areas_de_texto
+from scrapi.area_evidence import NUMBER, text as area_text
 from captura.azure_storage import upload_bytes
 
 # Forzar UTF-8 en salida estandar (Windows cp1252 no puede con emojis)
@@ -342,6 +343,14 @@ def mapear_a_formato_remax(prop):
     # Area: adondevivir tiene area (construida) y area_total (terreno)
     area_raw = prop.get("area") or ""
     area_total_raw = prop.get("area_total") or ""
+    # A listing card's unlabelled area is not proof of built area. Explicit
+    # description measurements can recover old cards with lost decimals.
+    described = extraer_areas_de_texto(prop.get('descripcion') or prop.get('titulo') or '')
+    labels = prop.get('_detail_area_labels') or {}
+    if labels.get('total') is None:
+        area_raw = described['area_construida'] or ''
+    if labels.get('covered') is None:
+        area_total_raw = described['area_terreno'] or area_total_raw
 
     # Dormitorios, banos, estacionamientos
     dorm = prop.get("dormitorios") or ""
@@ -701,14 +710,11 @@ def area_etiquetada(texto, etiqueta):
     """
     if not texto:
         return None
-    patron = rf'(\d[\d.,]*)\s*m(?:2|²|\xb2)\s*{etiqueta}\b'
-    m = re.search(patron, texto, re.IGNORECASE)
+    patron = rf'(?<![\w.,])({NUMBER})\s*m2\s*{re.escape(etiqueta)}\b'
+    m = re.search(patron, area_text(texto), re.IGNORECASE)
     if not m:
         return None
-    try:
-        return float(m.group(1).replace(',', ''))
-    except ValueError:
-        return None
+    return parsear_area(m.group(1))
 
 
 def subir_imagen_a_blob(imagen_url, prop):

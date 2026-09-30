@@ -24,6 +24,7 @@ import math
 import re
 import unicodedata
 from numbers import Number
+from .area_evidence import numeric_area, description_areas, MEASURE, text as measurement_text
 
 # ── Etiquetas ──────────────────────────────────────────────────────────────
 # Se buscan sobre el texto YA normalizado (minúsculas, sin tildes y con '²'→'2').
@@ -103,37 +104,7 @@ def parsear_area(valor) -> float | None:
     Acepta ``120``, ``"120 m2"``, ``"185 m²"``, ``"1.200,50"``, ``"1,200.50"``.
     Un ``0`` se considera "sin dato" (los portales lo usan como vacío).
     """
-    if valor is None:
-        return None
-    if isinstance(valor, Number):
-        numero = float(valor)
-        return numero if math.isfinite(numero) and numero > 0 else None
-
-    texto = normalizar_texto(valor)
-    coincidencia = re.search(r'(\d[\d.,]*)', texto)
-    if not coincidencia:
-        return None
-
-    crudo = coincidencia.group(1)
-    if ',' in crudo and '.' in crudo:
-        # Formato español (1.200,50) o inglés (1,200.50): el último separador manda.
-        decimal = ',' if crudo.rfind(',') > crudo.rfind('.') else '.'
-        miles = '.' if decimal == ',' else ','
-        crudo = crudo.replace(miles, '').replace(decimal, '.')
-    elif ',' in crudo:
-        entero, _, decimales = crudo.partition(',')
-        # '1,200' con 3 dígitos es separador de miles, no decimal.
-        crudo = f'{entero}{decimales}' if len(decimales) == 3 else f'{entero}.{decimales}'
-    elif '.' in crudo:
-        entero, _, decimales = crudo.partition('.')
-        # '5.795 m2' → 5795 (punto seguido de 3 dígitos = miles).
-        if len(decimales) == 3 and entero.isdigit():
-            crudo = f'{entero}{decimales}'
-    try:
-        numero = float(crudo)
-    except ValueError:
-        return None
-    return numero if math.isfinite(numero) and numero > 0 else None
+    return numeric_area(valor)
 
 
 def _numero_junto_a_etiqueta(texto_normalizado: str, etiqueta: str, ventana: int) -> float | None:
@@ -191,16 +162,7 @@ def extraer_areas_de_texto(texto) -> dict:
     ("128 m2 totales" / "90 m2 construidos"). Si el texto trae un único ``m²`` sin
     ninguna pista no se asume que sea la construcción.
     """
-    normalizado = normalizar_texto(texto)
-    if not normalizado.strip():
-        return {'area_terreno': None, 'area_construida': None}
-    terreno = extraer_area_etiquetada(normalizado, ETIQUETAS_TERRENO)
-    if terreno is None:
-        terreno = _numero_antes_de_sufijo(normalizado, SUFIJOS_TERRENO)
-    construida = extraer_area_etiquetada(normalizado, ETIQUETAS_CONSTRUIDA)
-    if construida is None:
-        construida = _numero_antes_de_sufijo(normalizado, SUFIJOS_CONSTRUIDA)
-    return {'area_terreno': terreno, 'area_construida': construida}
+    return description_areas(texto)
 
 
 def extraer_area_generica(texto) -> float | None:
@@ -210,11 +172,11 @@ def extraer_area_generica(texto) -> float | None:
     debe quedarse sin superficie por no declarar cuál es. Un rango
     ("60 a 120 m²") no se resuelve a un extremo.
     """
-    normalizado = normalizar_texto(texto)
+    normalizado = measurement_text(texto)
     if not normalizado.strip() or re.search(PATRON_RANGO_AREAS, normalizado):
         return None
-    coincidencia = re.search(PATRON_METROS, normalizado)
-    return parsear_area(coincidencia.group(1)) if coincidencia else None
+    coincidencia = MEASURE.search(normalizado)
+    return parsear_area(coincidencia.group()) if coincidencia else None
 
 
 def _primer_campo(prop: dict, campos) -> float | None:

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 from .contracts import Discovery, ScrapeRows, ScrapingInterrupted
-from .normalization import number, operation, property_type, urbania_row, validate_row
+from .normalization import number, operation, property_type, urbania_row, validate_row, listing_operation
 from .source_config import page_url, validate_url
 from .retry_policy import portal_blocked, retry_delay, transient_failure, wait_for_retry
 
@@ -123,7 +123,7 @@ def normalize(portal, source, raw):
     text = ' '.join(str(raw.get(k) or '') for k in ('tipo', 'Tipo', 'Titulo', 'titulo'))
     kind = property_type(text)
     row['tipo_inmueble'] = kind
-    row['tipo_operacion'] = operation(text + ' ' + str(raw.get('_source_url') or ''))
+    row['tipo_operacion'] = listing_operation(raw)
     if portal != 'remax':
         row['precio_soles'] = number(mapped.get('Precio S/.'))
         row['precio_usd'] = number(mapped.get('Precio USD'))
@@ -156,15 +156,13 @@ async def enrich(portal, source, page, raw):
             raw['tipo'] = kind
         if image:
             raw['imagen_url'] = image
-        # Adondevivir rotula las dos superficies en la ficha: "N m2 cub." y
-        # "N m2 tot.". En este portal "cub." es el area de TERRENO y "tot." el
-        # area CONSTRUIDA. Los campos destino no se renombran: se llenan los que
-        # ya existen ('area' alimenta Area Construida y 'area_total' alimenta
-        # Area Terreno) con la cifra que corresponde a cada uno.
+        # Keep this portal's existing mapping while retaining the original
+        # labels for audit; changing their meaning requires detail evidence.
+        raw['_detail_area_labels'] = {'total': area_total_ficha, 'covered': area_cubierta_ficha}
         if area_total_ficha is not None:
-            raw['area'] = area_total_ficha            # "tot." -> Area Construida
+            raw['area'] = area_total_ficha
         if area_cubierta_ficha is not None:
-            raw['area_total'] = area_cubierta_ficha   # "cub." -> Area Terreno
+            raw['area_total'] = area_cubierta_ficha
     else:
         await source.extraer_detalle(page, raw)
     validate_url(portal, page.url)
