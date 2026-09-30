@@ -190,6 +190,7 @@ def metrics(cases):
             'mape_pct': round(100 * sum(pct) / len(pct), 2),
             'bias_pct': round(100 * sum(error / case['price'] for error, case in zip(errors, cases)) / len(errors), 2),
             'within_10_pct': round(100 * sum(x <= .10 for x in pct) / len(pct), 1),
+            'within_15_pct': round(100 * sum(x <= .15 for x in pct) / len(pct), 1),
             'within_20_pct': round(100 * sum(x <= .20 for x in pct) / len(pct), 1),
             'p80_error_pct': round(100 * ordered[min(len(ordered)-1, math.ceil(.8*len(ordered))-1)], 2)}
 

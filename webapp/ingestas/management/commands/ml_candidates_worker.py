@@ -23,7 +23,7 @@ class Command(BaseCommand):
         parser.add_argument('--batch-size', type=int, default=50)
 
     def handle(self, *args, **options):
-        from ingestas.models import MLObservation, MLCandidate, MLDatasetSnapshot
+        from ingestas.models import MLObservation, MLCandidate, MLDatasetSnapshot, MLPipelineState
         if connection.vendor == 'microsoft':
             db_options = connection.settings_dict.setdefault('OPTIONS', {})
             db_options.setdefault('query_timeout', 60)
@@ -54,7 +54,9 @@ class Command(BaseCommand):
                 context = process_spatial(batch)
                 identity = process_identity() if not MLObservation.objects.filter(status='pending').exists() and not context.get('spatial_pending') else {}
                 dataset = freeze_dataset() if not MLObservation.objects.filter(status='pending').exists() and not context.get('spatial_pending') else {'dataset_skipped': 'pipeline_pending'}
-                monitoring = monitor_dataset(MLDatasetSnapshot.objects.get(pk=dataset['dataset_created'])) if dataset.get('dataset_created') else []
+                initial_monitor = dataset.get('dataset_id') and not MLPipelineState.objects.filter(pk='model-contribution').exists()
+                monitored_id = dataset.get('dataset_created') or (dataset.get('dataset_id') if initial_monitor else None)
+                monitoring = monitor_dataset(MLDatasetSnapshot.objects.get(pk=monitored_id)) if monitored_id else []
                 training = process_queue() if dataset_schema_ready() else {"training_queue": "schema_pending"}
                 for key in totals:
                     totals[key] += progress.get(key, 0) + result.get(key, 0)
