@@ -320,6 +320,7 @@
     renderSummary();renderCalculationExplanation();renderCards();renderMap();renderDetail();renderSimple();$('cmp-export').disabled=false;$('cmp-word').disabled=!result.new;$('cmp-save').disabled=!result.new;
     $('cmp-scenario').hidden=result.model!=='components'||!result.new;
     $('cmp-scenario-land').value=snapshot.params.land;$('cmp-scenario-built').value=snapshot.params.built;
+    document.dispatchEvent(new CustomEvent('acm:result',{detail:{available:!!result.new}}));
     if(askAI)explainAutomatically();
   }
   $('cmp-scenario-apply').addEventListener('click',async()=>{

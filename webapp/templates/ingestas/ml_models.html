@@ -1,0 +1,33 @@
+{% extends 'propifai_base.html' %}
+{% block title %}Modelos de valoración · Mercado y ACM{% endblock %}
+{% block content %}
+<main style="max-width:1280px;margin:24px auto;padding:0 18px;color:#e9f0f6">
+<h1>Modelos de valoración</h1>
+<p>Aprenden de precios <strong>anunciados</strong> de venta. Las métricas comparan el estimado con anuncios posteriores o de microzonas reservadas; no representan precios de cierre.</p>
+<nav style="display:flex;gap:16px;flex-wrap:wrap;margin:16px 0"><a href="/acm/control/">Control de datos</a><a href="/ingestas/scraping/calidad/?tab=entrenamiento">Propiedades candidatas</a><a href="/acm/analisis/">Valorar con ACM</a></nav>
+{% if not ready %}<p>La migración de los conjuntos de datos sigue pendiente.</p>
+{% else %}
+<section style="padding:16px;background:#172839;border-radius:10px;margin:16px 0">
+<h2>Conjunto actual</h2>
+{% if dataset %}<p>Versión {{ dataset.id }} · {{ dataset.created_at|date:'d/m/Y H:i' }} · {{ dataset.included }} de {{ dataset.total }} ofertas aptas · {{ dataset.coverage.microzones }} microzonas.</p><a href="/ingestas/scraping/ml/conjuntos/{{ dataset.id }}/exportar.csv">Descargar registros y motivos</a>
+{% else %}<p>El primer conjunto aparecerá al completar la conciliación de scraper, identidad y microzonas.</p>{% endif %}
+</section>
+<section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px">
+{% for card in cards %}<article style="padding:16px;background:#172839;border:1px solid #3c536c;border-radius:10px">
+<h2>{{ card.kind }}</h2>
+{% if card.run %}<p>Publicado: versión {{ card.run.id }} · {{ card.run.eligible_count }} ofertas · {{ card.run.algorithm }}</p>
+<p>Evaluación: {{ card.run.metrics.reliability }}. Error temporal: {% if card.run.metrics.temporal.available %}{{ card.run.metrics.temporal.mape_pct }}% en {{ card.run.metrics.temporal.count }} casos{% else %}sin muestra{% endif %}. Error espacial: {% if card.run.metrics.spatial.available %}{{ card.run.metrics.spatial.mape_pct }}% en {{ card.run.metrics.spatial.count }} casos{% else %}sin muestra{% endif %}.</p>
+{% else %}<p>Sin modelo publicado.</p>{% endif %}
+{% if card.monitoring %}<h3>Ofertas nuevas</h3><ul>{% for item in card.monitoring %}<li>{{ item.at|slice:':10' }} · {{ item.light }} · {{ item.new_count }} nuevas · {% if item.metrics.available %}error {{ item.metrics.mape_pct }}%{% else %}sin casos evaluables{% endif %}. {{ item.reason }}</li>{% endfor %}</ul>{% endif %}
+{% if can_manage and dataset %}<form method="post" action="{% url 'acm:modelos_entrenar' %}">{% csrf_token %}<input type="hidden" name="property_type" value="{{ card.kind }}"><button type="submit">Entrenar {{ card.kind }} con versión {{ dataset.id }}</button></form>{% endif %}
+</article>{% endfor %}
+</section>
+<section style="padding:16px;background:#172839;border-radius:10px;margin:18px 0"><h2>Entrenamientos</h2>
+<div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th>Versión</th><th>Tipo y conjunto</th><th>Estado</th><th>Evaluación temporal</th><th>Evaluación espacial</th><th>Acción</th></tr></thead><tbody>
+{% for run in runs %}<tr style="border-top:1px solid #3c536c"><td>#{{ run.id }}<br>{{ run.created_at|date:'d/m/Y H:i' }}</td><td>{{ run.property_type }} · conjunto {{ run.dataset_id }}<br>{{ run.algorithm }} · {{ run.eligible_count }} anuncios</td><td>{{ run.status }}<br>{% if run.error %}{{ run.error }}{% endif %}{% if run.metrics.reliability %}{{ run.metrics.reliability }}{% endif %}</td><td>{% if run.metrics.temporal.available %}{{ run.metrics.temporal.mae_usd }} USD MAE · {{ run.metrics.temporal.mape_pct }}% en {{ run.metrics.temporal.count }}{% else %}sin muestra independiente{% endif %}</td><td>{% if run.metrics.spatial.available %}{{ run.metrics.spatial.mae_usd }} USD MAE · {{ run.metrics.spatial.mape_pct }}% en {{ run.metrics.spatial.count }}{% else %}sin muestra independiente{% endif %}</td><td>{% if can_manage and run.status == 'completed' %}<form method="post" action="{% url 'acm:modelos_publicar' run.id %}">{% csrf_token %}<input name="reason" maxlength="500" placeholder="Motivo de publicación o restauración" aria-label="Motivo"><button type="submit">Publicar o restaurar</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6">Todavía no hay entrenamientos. Al solicitar uno, el worker lo ejecuta fuera de la página; vuelve a cargar para ver el resultado.</td></tr>{% endfor %}
+</tbody></table></div></section>
+<p>El semáforo se calcula solo con ofertas nuevas que el modelo no conocía. Gris significa muestra insuficiente; rojo requiere al menos diez casos y una degradación material frente a la evaluación temporal. El tiempo de CPU se guarda por entrenamiento; no se atribuye un coste en dólares sin factura.</p>
+{% endif %}
+</main>
+{% endblock %}

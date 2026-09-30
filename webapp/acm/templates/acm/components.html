@@ -7,7 +7,7 @@
 {% block content %}
 <main class="components-acm">
   <header class="cmp-header"><div><h1>Análisis comparativo <span>Venta{% if test_mode %} · Pruebas{% endif %}</span></h1><p id="cmp-method-label">Casa: valor del suelo + aporte de construcción y mejoras</p></div>
-    <a href="{% url 'acm:acm_analisis_clasico' %}">ACM clásico ↗</a></header>
+    <div><a href="{% url 'acm:modelos_dashboard' %}">Modelos ML ↗</a> · <a href="{% url 'acm:acm_analisis_clasico' %}">ACM clásico ↗</a></div></header>
   <div class="cmp-layout">
     <section class="cmp-map-column">
       <form id="cmp-form" class="cmp-panel" data-search-url="{% url 'acm:componentes_buscar' %}" data-calculate-url="{% url 'acm:componentes_calcular' %}" data-report-url="{% url 'acm:componentes_informe_word' %}" data-save-url="{% url 'acm:componentes_guardar' %}">{% csrf_token %}
@@ -50,6 +50,7 @@
         <div id="cmp-new"><h2>Resultado nuevo</h2><p class="cmp-muted">Pendiente de búsqueda</p></div>
         <aside id="cmp-old"><span>Cálculo anterior</span><strong>—</strong><small>Mismas casas completas seleccionadas. Precio/m² construido ponderado por distancia.</small></aside>
       </section>
+      <section class="cmp-panel" id="cmp-ml-preview" data-url="{% url 'acm:modelo_estimacion' %}" hidden><h2>Estimación del modelo ML</h2><p id="cmp-ml-status"></p><p id="cmp-ml-result"></p><a href="{% url 'acm:modelos_dashboard' %}">Ver evaluación y versión del modelo</a></section>
       <p class="cmp-note">Estimación de <strong>precios de oferta</strong>, no de ventas cerradas. El remanente incluye construcción y mejoras; no representa un coste de obra verificado. Si falta precio USD, conversión referencial S/3,44 por dólar.</p>
       <details id="cmp-scenario" class="cmp-panel" hidden><summary>Comparar otros metrajes con la misma muestra</summary>
         <p>Se conservan las casas, los terrenos y los pesos de la búsqueda inicial. Solo cambian las superficies objetivo. Para cambiar ubicación, fuentes o radio, usa Buscar y calcular.</p>
@@ -77,6 +78,7 @@
 {% block extra_scripts %}
 {{ block.super }}
 <script src="{% static 'acm/js/components-presentation.js' %}?v=8"></script>
-<script src="{% static 'acm/js/components.js' %}?v=21"></script>
+<script src="{% static 'acm/js/components.js' %}?v=22"></script>
+<script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}

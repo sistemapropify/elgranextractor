@@ -5,9 +5,14 @@ from .components_routes import urlpatterns as component_routes
 app_name = 'acm'
 
 from ingestas.ml_candidate_views import dashboard as ml_control
+from ingestas import ml_model_views
 
 urlpatterns = [
     path('control/', ml_control, name='control_datos'),
+    path('modelos/', ml_model_views.dashboard, name='modelos_dashboard'),
+    path('modelos/entrenar/', ml_model_views.queue_training, name='modelos_entrenar'),
+    path('modelos/<int:pk>/publicar/', ml_model_views.publish_run, name='modelos_publicar'),
+    path('modelos/estimar/', ml_model_views.estimate, name='modelo_estimacion'),
     path('', views.acm_dashboard, name='acm_dashboard'),
     path('analisis-clasico/', views.acm_view, name='acm_analisis_clasico'),
     path('analisis-pruebas-clasico/', views.acm_pruebas_view, name='acm_analisis_pruebas_clasico'),

@@ -3,7 +3,7 @@
 </style>
 <div class="quality-page">
 <h1>Mercado y ACM · Control de datos</h1>
-<nav class="ml-nav"><a href="/ingestas/scraping/dashboard/">Scraping</a><a href="/ingestas/scraping/calidad/">Calidad y correcciones</a><a href="/ingestas/scraping/calidad/?tab=entrenamiento" aria-current="page">Candidatas ML</a><a href="/cuadrantizacion/mapa/">Mapa</a><a href="/acm/analisis/">Valorar con ACM</a><a href="/acm/historial/">Historial ACM</a><a href="/ingestas/scraping/calidad/?tab=contexto">Contexto y duplicados</a></nav>
+<nav class="ml-nav"><a href="/ingestas/scraping/dashboard/">Scraping</a><a href="/ingestas/scraping/calidad/">Calidad y correcciones</a><a href="/ingestas/scraping/calidad/?tab=entrenamiento" aria-current="page">Candidatas ML</a><a href="/cuadrantizacion/mapa/">Mapa</a><a href="/acm/analisis/">Valorar con ACM</a><a href="/acm/modelos/">Modelos y desempeño</a><a href="/acm/historial/">Historial ACM</a><a href="/ingestas/scraping/calidad/?tab=contexto">Contexto y duplicados</a></nav>
 {% if not ml_ready %}<div class="quality-summary">La migración del control ML está pendiente. El ACM y la calidad existente siguen disponibles.</div>
 {% else %}
 <div class="ml-stats"><div class="ml-stat">Registros fuente<b>{{ ml_summary.total }}</b></div>
