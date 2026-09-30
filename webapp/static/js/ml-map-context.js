@@ -34,7 +34,7 @@
 
     function card(feature) {
         var box = node('div');
-        box.style.cssText = 'max-width:290px;color:#162333;font:13px/1.45 system-ui;overflow-wrap:anywhere';
+        box.className = 'ml-map-card';
         box.appendChild(node('strong', '#' + feature.id + ' · ' + (feature.fuente || 'Sin portal') + ' · ' + (feature.code || 'Sin código')));
         var title = node('p', feature.title || 'Sin título');
         title.style.margin = '6px 0';
@@ -137,8 +137,8 @@
             sequence += 1;
             if (controller) controller.abort();
             controller = null;
-            clear();
             if (!selected().length) {
+                clear();
                 status.textContent = emptyMessage;
                 return;
             }
@@ -181,6 +181,9 @@
                 features = features.filter(function(feature) {
                     return /^[1-9]\d*$/.test(String(feature.id)) && inside(feature, viewport);
                 }).slice(0, 300);
+                // Replace the previous viewport only after a valid response arrives;
+                // this prevents the layer from disappearing while the map is moving.
+                clear();
                 features.forEach(function(feature) {
                     var color = selection.indexOf('duplicates') !== -1 && numeric(feature.duplicate_count) > 0 ?
                         colors.duplicates : (colors[feature.status] || colors.review);
@@ -204,7 +207,6 @@
                         ' Límite de 300: acerca el mapa para ver el detalle.' : '');
             } catch (error) {
                 if (current !== sequence || error.name === 'AbortError') return;
-                clear();
                 status.textContent = error.message || 'No se pudo cargar el contexto ML.';
             } finally {
                 if (current === sequence) controller = null;
