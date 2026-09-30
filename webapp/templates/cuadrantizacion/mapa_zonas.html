@@ -1338,6 +1338,8 @@ function parseJsonResponse(response) {
 
 function initMap() {
     if (mapInitializationStarted) return;
+    if (typeof google === 'undefined' || !google.maps) return;
+    initializePropifyPriceLabelOverlayPrototype();
     mapInitializationStarted = true;
 
     // Coordenadas de Arequipa
@@ -2262,27 +2264,32 @@ function PropifyPriceLabelOverlay(position, html) {
     this.html = html;
     this.div = null;
 }
-PropifyPriceLabelOverlay.prototype = new google.maps.OverlayView();
-PropifyPriceLabelOverlay.prototype.onAdd = function() {
-    var div = document.createElement('div');
-    div.className = 'propify-price-overlay';
-    div.innerHTML = this.html;
-    this.div = div;
-    this.getPanes().overlayLayer.appendChild(div);
-};
-PropifyPriceLabelOverlay.prototype.draw = function() {
-    if (!this.div) return;
-    var projection = this.getProjection();
-    if (!projection) return;
-    var point = projection.fromLatLngToDivPixel(this.position);
-    if (!point) return;
-    this.div.style.left = point.x + 'px';
-    this.div.style.top = (point.y + 6) + 'px';
-};
-PropifyPriceLabelOverlay.prototype.onRemove = function() {
-    if (this.div && this.div.parentNode) this.div.parentNode.removeChild(this.div);
-    this.div = null;
-};
+function initializePropifyPriceLabelOverlayPrototype() {
+    // El SDK se carga de forma asíncrona: crear el prototipo solo cuando esté listo.
+    if (PropifyPriceLabelOverlay.prototype instanceof google.maps.OverlayView) return;
+    PropifyPriceLabelOverlay.prototype = new google.maps.OverlayView();
+    PropifyPriceLabelOverlay.prototype.constructor = PropifyPriceLabelOverlay;
+    PropifyPriceLabelOverlay.prototype.onAdd = function() {
+        var div = document.createElement('div');
+        div.className = 'propify-price-overlay';
+        div.innerHTML = this.html;
+        this.div = div;
+        this.getPanes().overlayLayer.appendChild(div);
+    };
+    PropifyPriceLabelOverlay.prototype.draw = function() {
+        if (!this.div) return;
+        var projection = this.getProjection();
+        if (!projection) return;
+        var point = projection.fromLatLngToDivPixel(this.position);
+        if (!point) return;
+        this.div.style.left = point.x + 'px';
+        this.div.style.top = (point.y + 6) + 'px';
+    };
+    PropifyPriceLabelOverlay.prototype.onRemove = function() {
+        if (this.div && this.div.parentNode) this.div.parentNode.removeChild(this.div);
+        this.div = null;
+    };
+}
 
 function renderPropifyPropertyMarkers() {
     clearPropifyPropertyMarkers();
