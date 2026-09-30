@@ -11,6 +11,8 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET
 from .ml_candidates import schema_ready
 from .ml_eligibility import LABELS, RULE_VERSION
+from .ml_context import GEO_LABELS, LOCATION_RULE_VERSION, current_catalog_hash
+from .ml_dataset import CRITERIA_VERSION
 from .models import MLCandidate, MLDatasetEntry, MLDatasetSnapshot, MLObservation, MLPipelineState, MLTrainingRun, PropiedadesCompetencia
 
 
@@ -74,8 +76,10 @@ def dataset_analysis(dataset):
 
 
 def filtered(request, dataset, view):
-    query = MLCandidate.objects.select_related('latest')
-    if view != 'todas':
+    query = MLCandidate.objects.select_related('latest', 'context', 'context__zone_version')
+    if view == 'preliminares':
+        query = query.filter(status='eligible')
+    elif view != 'todas':
         if dataset is None:
             query = query.none()
         else:
@@ -122,9 +126,13 @@ def dashboard(request):
     dataset_state = ml_dataset_summary()
     dataset = MLDatasetSnapshot.objects.filter(pk=dataset_state['id']).first() if dataset_state['ready'] else None
     analysis = dataset_analysis(dataset)
-    view = request.GET.get('vista', 'incluidas')
-    if view not in ('incluidas', 'excluidas', 'pendientes', 'todas'):
-        view = 'incluidas'
+    dataset_stale = bool(dataset and (dataset.criteria_version != CRITERIA_VERSION or
+                                      dataset.spatial_rule_version != LOCATION_RULE_VERSION or
+                                      dataset.catalog_hash != current_catalog_hash()))
+    default_view = 'preliminares'
+    view = request.GET.get('vista', default_view)
+    if view not in ('preliminares', 'incluidas', 'excluidas', 'pendientes', 'todas'):
+        view = default_view
     query = filtered(request, dataset, view)
     if request.GET.get('exportar') == 'csv':
         response = HttpResponse(content_type='text/csv; charset=utf-8')
@@ -148,9 +156,17 @@ def dashboard(request):
             dataset=dataset, candidate_id__in=[c.pk for c in page]
         )
     } if dataset else {}
+    catalog_hash = current_catalog_hash()
     for c in page:
         c.status_label = LABELS.get(c.status, c.status)
         c.dataset_entry = entries_by_candidate.get(c.pk)
+        context = c.context if c.context_id else None
+        c.spatial_current = bool(context and context.observation_id == c.latest_id and
+                                 context.rule_version == LOCATION_RULE_VERSION and
+                                 context.catalog_hash == catalog_hash)
+        c.spatial_label = GEO_LABELS.get(context.state, context.state) if c.spatial_current else 'Ubicación pendiente de reevaluar'
+        c.subzone_name = (context.zone_version.snapshot.get('nombre_zona')
+                          if c.spatial_current and context.zone_version_id else None)
     params = request.GET.copy()
     params.pop('page', None)
     params.pop('exportar', None)
@@ -158,6 +174,7 @@ def dashboard(request):
     params['vista'] = view
     return render(request, 'ingestas/property_quality.html', dict(
         ml_mode=True, ml_ready=True, ml_summary=summary(), ml_dataset=dataset_state, ml_analysis=analysis,
+        ml_dataset_stale=dataset_stale,
         ml_page=page, ml_labels=LABELS.items(),
         filters=request.GET, selected_view=view, params=params.urlencode(), rule_version=RULE_VERSION,
         portals=PropiedadesCompetencia.objects.order_by('fuente').values_list('fuente', flat=True).distinct(),
