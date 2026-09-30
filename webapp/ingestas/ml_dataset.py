@@ -12,10 +12,10 @@ from django.db.models import F, Q
 from django.utils import timezone
 
 from .identity_rules import RULE_VERSION as IDENTITY_RULE_VERSION
-from .ml_context import LOCATION_RULE_VERSION, current_catalog_hash, fingerprint
+from .ml_context import LOCATION_RULE_VERSION, current_catalog_hash, fingerprint, load_zones
 
 logger = logging.getLogger(__name__)
-CRITERIA_VERSION = 'offer-exact-microzone-v1'
+CRITERIA_VERSION = 'offer-exact-location-v2'
 _schema_cache = (0, False)
 
 
@@ -88,6 +88,7 @@ class _Components:
 
 def _classified_entries(candidates, catalog_hash):
     from .models import MLIdentityPair
+    zone_lookup = {str(zone['id']): zone for zone in load_zones()}
     ids = [c.propiedad_id for c in candidates]
     by_id = {c.propiedad_id: c for c in candidates}
     groups = _Components(ids)
@@ -165,8 +166,8 @@ def _classified_entries(candidates, catalog_hash):
             reason_code, reason = 'operation.not_sale', 'El corte de valoración usa ofertas de venta; alquiler y operación mixta se conservan como referencia.'
         elif not current_geo:
             reason_code, reason = 'location.context_pending', 'Precisa reevaluación espacial con el catálogo y registro actuales.'
-        elif context.state != 'exact_zone' or not context.zone_version_id:
-            reason_code, reason = 'location.no_microzone', 'Solo se incluye ubicación exacta declarada asignada a microzona.'
+        elif context.state not in ('exact_zone', 'exact_unzoned'):
+            reason_code, reason = 'location.not_usable', 'Solo se incluye ubicación exacta declarada con contexto espacial válido.'
         else:
             required = ('area_terreno', 'area_construida') if snapshot.get('tipo_inmueble') == 'Casa' else (
                 ('area_terreno',) if snapshot.get('tipo_inmueble') == 'Terreno' else ('area_construida',))
@@ -175,7 +176,10 @@ def _classified_entries(candidates, catalog_hash):
             if price is None or price <= 0 or any(value is None or value <= 0 for value in values.values()):
                 reason_code, reason = 'features.incomplete', 'El precio en USD y las superficies requeridas deben ser positivos.'
             else:
-                include, reason_code, reason = True, 'included.offer', 'Oferta activa, superficies válidas e identidad y microzona vigentes.'
+                include, reason_code = True, 'included.offer'
+                reason = ('Oferta activa, superficies válidas, identidad vigente y ubicación exacta declarada.'
+                          if context.state == 'exact_unzoned' else
+                          'Oferta activa, superficies válidas, identidad y microzona vigentes.')
         reason_counts[reason_code] += 1
         features = {key: snapshot.get(key) for key in (
             'fuente', 'id_origen', 'url', 'tipo_inmueble', 'tipo_operacion', 'precio_usd',
@@ -186,6 +190,18 @@ def _classified_entries(candidates, catalog_hash):
             features.update(zone_id=version.zone_key if version else None,
                             zone_version=version.sequence if version else None,
                             zone_name=(version.snapshot.get('nombre_zona') or version.snapshot.get('codigo')) if version else '')
+            if version:
+                ancestor_id = version.snapshot.get('parent_id')
+                visited = {str(version.zone_key)}
+                while ancestor_id is not None and str(ancestor_id) not in visited:
+                    visited.add(str(ancestor_id))
+                    ancestor = zone_lookup.get(str(ancestor_id))
+                    if not ancestor:
+                        break
+                    if ancestor.get('nivel') in ('zona', 'distrito'):
+                        features['parent_' + ancestor['nivel'] + '_id'] = ancestor['id']
+                        features['parent_' + ancestor['nivel'] + '_name'] = ancestor.get('nombre_zona') or ancestor.get('codigo') or str(ancestor['id'])
+                    ancestor_id = ancestor.get('parent_id')
         rows.append({'candidate': candidate, 'observation': obs,
             'spatial_assessment': context if current_geo else None,
             'included': include, 'reason_code': reason_code, 'reason': reason,
@@ -248,6 +264,11 @@ def freeze_dataset(force=False):
                                         for row in rows if row['included'])),
                 'by_portal': dict(Counter(row['features'].get('fuente') or 'Sin portal'
                                           for row in rows if row['included'])),
+                'by_parent_zone': dict(Counter(row['features'].get('parent_zona_name')
+                                               for row in rows if row['included'] and row['features'].get('parent_zona_name'))),
+                'by_parent_district': dict(Counter(row['features'].get('parent_distrito_name')
+                                                   for row in rows if row['included'] and row['features'].get('parent_distrito_name'))),
+                'without_subzone': sum(1 for row in rows if row['included'] and not row['features'].get('zone_id')),
                 'microzones': len({row['features'].get('zone_id') for row in rows
                                    if row['included'] and row['features'].get('zone_id') is not None})}
     dataset = MLDatasetSnapshot.objects.create(criteria_version=CRITERIA_VERSION,

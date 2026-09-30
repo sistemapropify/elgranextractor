@@ -71,6 +71,7 @@ def dashboard(request):
             published = MLPipelineState.objects.filter(pk='model-active:' + kind).first()
             publications[kind] = list((published.payload or {}).get('history') or [])[-10:][::-1] if published else []
     cards = [{'kind': kind, 'run': active.get(kind), 'monitoring': monitoring.get(kind, [])[:10],
+              'sample': (dataset.coverage or {}).get('by_type', {}).get(kind, 0) if dataset else 0,
               'latest_monitor': monitoring.get(kind, [None])[0] if monitoring.get(kind) else None,
               'windows': [_window_summary(monitoring.get(kind, []), active[kind].pk, days)
                           for days in (7, 30, 90)] if active.get(kind) else [],
@@ -98,7 +99,10 @@ def queue_training(request):
         return JsonResponse({'error': 'Tipo de propiedad inválido.'}, status=400)
     dataset = MLDatasetSnapshot.objects.order_by('-pk').first()
     if not dataset or not dataset.included:
-        return JsonResponse({'error': 'Todavía no hay un conjunto congelado con ofertas aptas.'}, status=409)
+        return JsonResponse({'error': 'El último conjunto contiene 0 ofertas aptas. Las coordenadas exactas se están reevaluando con la regla de subzonas; vuelve a cargar cuando aparezca un nuevo corte.'}, status=409)
+    sample = (dataset.coverage or {}).get('by_type', {}).get(kind, 0)
+    if sample < 20:
+        return JsonResponse({'error': f'El conjunto #{dataset.pk} tiene {sample} ofertas de {kind}; se necesitan al menos 20 de ese tipo para entrenar.'}, status=409)
     existing = MLTrainingRun.objects.filter(dataset=dataset, property_type=kind,
                                             status__in=['queued', 'running']).order_by('-pk').first()
     if not existing:
@@ -157,8 +161,8 @@ def estimate(request):
     if not run:
         return JsonResponse({'available': False, 'message': 'No hay un modelo publicado para este tipo.'})
     geo = assess_location({'latitud': lat, 'longitud': lng, 'precision_ubicacion': 'exacta'}, load_zones())
-    if geo['status'] != 'exact_zone':
-        return JsonResponse({'available': False, 'message': 'El punto no pertenece a una microzona exacta evaluable.'})
+    if geo['status'] not in ('exact_zone', 'exact_unzoned'):
+        return JsonResponse({'available': False, 'message': 'El punto no tiene una ubicación exacta evaluable.'})
     target = {'features': {'area_terreno': land, 'area_construida': built, 'antiguedad_anios': age,
                            'latitud': lat, 'longitud': lng, 'zone_id': geo['selected_zone_id']}}
     value, evidence = predict(run.configuration['artifact'], target)
@@ -170,7 +174,9 @@ def estimate(request):
     return JsonResponse({'available': True, 'price_usd': round(value),
                          'range_usd': [round(value * (1-spread)), round(value * (1+spread))] if spread else None,
                          'run_id': run.pk, 'dataset_id': run.dataset_id,
-                         'quality': run.metrics.get('reliability', 'exploratorio'),
+                         'quality': 'exploratorio' if geo['status'] == 'exact_unzoned' else run.metrics.get('reliability', 'exploratorio'),
                          'sample': run.eligible_count, 'algorithm': run.algorithm,
                          'evidence': evidence, 'target': 'precio anunciado de venta USD',
-                         'warning': 'Estimación experimental de ofertas; la ubicación fue indicada por el usuario.'})
+                         'warning': ('Estimación experimental de ofertas. Punto exacto indicado por el usuario, fuera de subzonas dibujadas; revisar comparables cercanos y límites de mercado.'
+                                     if geo['status'] == 'exact_unzoned' else
+                                     'Estimación experimental de ofertas; la ubicación fue indicada por el usuario.')})

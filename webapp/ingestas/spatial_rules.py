@@ -1,7 +1,7 @@
 """Conservative spatial admission over immutable ZonaValor snapshots.
 
 Coordinates follow the project's internal ``[[latitude, longitude], ...]``
-format, not GeoJSON. Only zona/subzona/cuadrante can be a selected microzone.
+format, not GeoJSON. Only subzona is a selected microzone for the current model.
 An exact coordinate is a portal declaration, never cadastral certification.
 
 This is planar point-in-polygon for local polygons, without holes. Rings which
@@ -17,10 +17,10 @@ from functools import lru_cache
 import math
 
 
-SPATIAL_RULE_VERSION = 'spatial-geometry-v1'
+SPATIAL_RULE_VERSION = 'spatial-subzona-v2'
 EPS = 1e-9
 LEVELS = ('pais', 'departamento', 'provincia', 'distrito', 'zona', 'subzona', 'cuadrante')
-MICRO_LEVELS = frozenset(LEVELS[4:])
+MICRO_LEVELS = frozenset(('subzona',))
 
 
 def _number(value):
@@ -199,11 +199,11 @@ def _sort_zone(zone):
 def assess_location(row, zones):
     """Return status, selected_zone_id, matching_zone_ids and reason evidence.
 
-    ``matching_zone_ids`` contains valid microzone rings which contain or touch
+    ``matching_zone_ids`` contains valid subzona rings which contain or touch
     the coordinate, also for approximate coordinates (reference only). District
-    and broader polygons cannot become a selected microzone. Unbounded corrupt
-    microzones block exact assignment conservatively; bounded corrupt rings only
-    block points in their extent. Inactive zones are ignored.
+    and broader polygons cannot become a selected microzone. Empty subzone
+    placeholders carry no spatial extent and cannot block the entire catalog;
+    corrupt bounded rings still block points in their extent. Inactive zones are ignored.
 
     Top-level ``zona`` may be a standalone legacy root. More specific nodes need
     their immediate parent. Existing parent links must all resolve, be active,
@@ -257,7 +257,10 @@ def assess_location(row, zones):
         by_id[key] = zone
         compiled.append(zone)
         if level not in LEVELS or level in MICRO_LEVELS and error:
-            if bounds is None or _in_bounds(point, bounds):
+            if level in MICRO_LEVELS and error in ('missing_polygon', 'too_few_vertices') and bounds is None:
+                note('zone.placeholder_without_polygon',
+                     'Zona sin polígono utilizable: no cubre ningún punto y queda pendiente de dibujo.', [zone['id']])
+            elif bounds is None or _in_bounds(point, bounds):
                 invalid.append((zone['id'], error or 'unknown_zone_level'))
     compiled.sort(key=_sort_zone)
     matching, boundary = [], []
@@ -321,8 +324,8 @@ def assess_location(row, zones):
     previous_id = selected['id']
     for ancestor in chain[1:]:
         if ancestor['error']:
-            if ancestor['level'] not in MICRO_LEVELS and ancestor['error'] in ('missing_polygon', 'too_few_vertices') and not ancestor['ring']:
-                note('zone.administrative_geometry_absent', 'Ancestro administrativo sin polígono: no se toma como microzona.', [ancestor['id']])
+            if ancestor['error'] in ('missing_polygon', 'too_few_vertices') and not ancestor['ring']:
+                note('zone.ancestor_geometry_absent', 'Ancestro sin polígono: jerarquía nominal conservada, contención no verificable.', [ancestor['id']])
                 continue
             note('zone.invalid_ancestor', 'La geometría de un ancestro es inválida: ' + ancestor['error'] + '.', [ancestor['id']])
             return result('invalid_zone', matching)

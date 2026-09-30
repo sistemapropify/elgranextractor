@@ -18,8 +18,8 @@
 {{ ml_dataset.included }} de {{ ml_dataset.total }} anuncios incluidos para revisión y evaluación ·
 {{ ml_dataset.newly_included }} incorporados desde el corte anterior ·
 {{ ml_dataset.removed_from_previous }} dejaron de cumplir los criterios.</p>
-<p>Son anuncios activos, con precio de oferta en USD, superficies requeridas y ubicación exacta declarada dentro de una microzona vigente. Los anuncios repetidos revisados cuentan una vez. El archivo conserva el motivo por registro.</p>
-<p><strong>Aporte del corte:</strong> {{ ml_dataset.coverage.microzones }} microzonas ·
+<p>Son anuncios activos, con precio de oferta en USD, superficies requeridas y ubicación exacta declarada. Las subzonas válidas se asignan por polígono; los puntos exactos fuera de una subzona dibujada quedan identificados aparte y requieren cautela espacial. Las ubicaciones aproximadas no entran. Los anuncios repetidos revisados cuentan una vez.</p>
+<p><strong>Aporte del corte:</strong> {{ ml_dataset.coverage.microzones }} subzonas con ofertas · {{ ml_dataset.coverage.without_subzone|default:0 }} ofertas exactas sin subzona ·
 {% for property_type, count in ml_dataset.coverage.by_type.items %}{{ property_type }}: {{ count }}{% if not forloop.last %}, {% endif %}{% empty %}sin tipos incluidos{% endfor %} · Portales:
 {% for portal, count in ml_dataset.coverage.by_portal.items %}{{ portal }}: {{ count }}{% if not forloop.last %}, {% endif %}{% empty %}sin portales incluidos{% endfor %}.</p>
 <a href="/ingestas/scraping/ml/conjuntos/{{ ml_dataset.id }}/exportar.csv">Descargar este corte CSV</a>
