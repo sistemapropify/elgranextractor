@@ -64,7 +64,10 @@ def dashboard(request):
             return JsonResponse({'ready': False}, status=503)
         return render(request, 'ingestas/property_quality.html', {'ml_mode': True, 'ml_ready': False}, status=503)
     if request.GET.get('format') == 'summary':
-        return JsonResponse({'ready': True, **summary()})
+        from .ml_dataset import dashboard_state
+        return JsonResponse({'ready': True, **summary(), 'dataset': dashboard_state()})
+    from .ml_dataset import dashboard_state as ml_dataset_summary
+    dataset_state = ml_dataset_summary()
     query = filtered(request)
     if request.GET.get('exportar') == 'csv':
         response = HttpResponse(content_type='text/csv; charset=utf-8')
@@ -90,7 +93,7 @@ def dashboard(request):
     params.pop('exportar', None)
     params['tab'] = 'entrenamiento'
     return render(request, 'ingestas/property_quality.html', dict(
-        ml_mode=True, ml_ready=True, ml_summary=summary(), ml_page=page, ml_labels=LABELS.items(),
+        ml_mode=True, ml_ready=True, ml_summary=summary(), ml_dataset=dataset_state, ml_page=page, ml_labels=LABELS.items(),
         filters=request.GET, params=params.urlencode(), rule_version=RULE_VERSION,
         portals=PropiedadesCompetencia.objects.order_by('fuente').values_list('fuente', flat=True).distinct(),
         types=PropiedadesCompetencia.TIPO_INMUEBLE_CHOICES))

@@ -5,8 +5,10 @@ app_name = 'ingestas'
 
 from . import ml_candidate_views
 from . import ml_context_views
+from .ml_dataset_views import dataset_export as dataset_export_view
 
 urlpatterns = [
+    path('scraping/ml/conjuntos/<int:pk>/exportar.csv', dataset_export_view, name='ml_dataset_export'),
     path('scraping/ml/mapa/', ml_context_views.map_data, name='ml_context_map'),
     path('scraping/ml/coincidencias/<int:pk>/decidir/', ml_context_views.decide, name='ml_identity_decide'),
     path('scraping/registros/<int:pk>/candidatura/', ml_candidate_views.history, name='candidatura_historial'),

@@ -7,6 +7,7 @@ from django.db import close_old_connections, connection
 from ingestas.ml_candidates import process_pending, reconcile_chunk, schema_ready
 
 from ingestas.ml_context import process_spatial, process_identity
+from ingestas.ml_dataset import freeze_dataset
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +51,11 @@ class Command(BaseCommand):
                 progress = reconcile_chunk(batch, force=options['reconcile'])
                 result = process_pending(batch)
                 context = process_spatial(batch)
-                identity = process_identity() if not MLObservation.objects.filter(status='pending').exists() else {}
+                identity = process_identity() if not MLObservation.objects.filter(status='pending').exists() and not context.get('spatial_pending') else {}
+                dataset = freeze_dataset() if not MLObservation.objects.filter(status='pending').exists() and not context.get('spatial_pending') else {'dataset_skipped': 'pipeline_pending'}
                 for key in totals:
                     totals[key] += progress.get(key, 0) + result.get(key, 0)
-                self.stdout.write(json.dumps({'event': 'ml.pipeline.progress', **progress, **result, **context, **identity}))
+                self.stdout.write(json.dumps({'event': 'ml.pipeline.progress', **progress, **result, **context, **identity, **dataset}))
                 if options['once'] and (not options['reconcile'] or progress['complete']):
                     while options['reconcile'] and MLObservation.objects.filter(status='pending').exists():
                         drained = process_pending(batch)
@@ -63,6 +65,8 @@ class Command(BaseCommand):
                         while process_spatial(batch)['spatial_pending']:
                             pass
                         self.stdout.write(json.dumps({'event': 'ml.identity.finished', **process_identity(force=True)}))
+                        dataset_done = freeze_dataset(force=True)
+                        self.stdout.write(json.dumps({'event': 'ml.dataset.finished', **dataset_done}))
                     remaining_errors = MLCandidate.objects.filter(status='error').count()
                     self.stdout.write(json.dumps({'event': 'ml.pipeline.finished', **totals,
                         'pending_versions': MLObservation.objects.filter(status='pending').count(),

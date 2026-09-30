@@ -10,6 +10,29 @@
 {% for s in ml_summary.statuses %}<div class="ml-stat ml-status-{{ s.status }}">{{ s.label }}<b data-ml-count="{{ s.status }}">{{ s.count }}</b></div>{% endfor %}
 <div class="ml-stat">Por incorporar al seguimiento<b id="ml-untracked">{{ ml_summary.untracked }}</b></div></div>
 <p class="quality-explain">Conteos de registros únicos, una vez por estado. Una candidata preliminar tiene los campos requeridos por estas reglas; falta validar identidad entre portales y microzona antes de entrenar. Las ubicaciones aproximadas permanecen como referencia. Una propiedad sin cambios no suma otra versión.</p>
+<section id="ml-dataset-current" class="quality-summary" style="margin:14px 0">
+<strong>Conjunto de entrenamiento por ofertas</strong>
+{% if ml_dataset.ready %}
+<p>Versión <strong>{{ ml_dataset.id }}</strong> · Corte {{ ml_dataset.created_at|date:'d/m/Y H:i' }} ·
+{{ ml_dataset.included }} de {{ ml_dataset.total }} anuncios incluidos para revisión y evaluación ·
+{{ ml_dataset.newly_included }} incorporados desde el corte anterior ·
+{{ ml_dataset.removed_from_previous }} dejaron de cumplir los criterios.</p>
+<p>Son anuncios activos, con precio de oferta en USD, superficies requeridas y ubicación exacta declarada dentro de una microzona vigente. Los anuncios repetidos revisados cuentan una vez. El archivo conserva el motivo por registro.</p>
+<p><strong>Aporte del corte:</strong> {{ ml_dataset.coverage.microzones }} microzonas ·
+{% for property_type, count in ml_dataset.coverage.by_type.items %}{{ property_type }}: {{ count }}{% if not forloop.last %}, {% endif %}{% empty %}sin tipos incluidos{% endfor %} · Portales:
+{% for portal, count in ml_dataset.coverage.by_portal.items %}{{ portal }}: {{ count }}{% if not forloop.last %}, {% endif %}{% empty %}sin portales incluidos{% endfor %}.</p>
+<a href="/ingestas/scraping/ml/conjuntos/{{ ml_dataset.id }}/exportar.csv">Descargar este corte CSV</a>
+{% if ml_dataset.history|length > 1 %}<details><summary>Ver los últimos cortes guardados</summary>
+<ul>{% for item in ml_dataset.history %}{% if item.id != ml_dataset.id %}<li>Versión {{ item.id }} · {{ item.created_at|date:'d/m/Y H:i' }} · {{ item.included }}/{{ item.total }} incluidos · +{{ item.newly_included }} · −{{ item.removed_from_previous }} · <a href="/ingestas/scraping/ml/conjuntos/{{ item.id }}/exportar.csv">Descargar CSV</a></li>{% endif %}{% endfor %}</ul></details>{% endif %}
+{% else %}
+<p>{{ ml_dataset.message|default:'El primer corte se preparará al terminar la conciliación, cuando ubicación y duplicados estén revisados.' }}</p>
+{% endif %}
+<p><small>Esto mide ofertas publicadas, no transacciones cerradas; el conjunto no equivale a un modelo entrenado.</small></p>
+</section>
+
+
+
+
 <div class="quality-summary"><strong>Modelo ML: aún no entrenado.</strong> No hay todavía métricas de error o mejora del modelo. El ACM actual mantiene su algoritmo y recibe las correcciones de los registros.<br>
 Proceso: <strong id="ml-worker">{% if ml_summary.worker_active %}activo{% else %}sin señal reciente{% endif %}</strong> · Versiones pendientes: <span id="ml-queue">{{ ml_summary.queue }}</span> · Última señal: {{ ml_summary.heartbeat|date:'d/m/Y H:i:s'|default:'Sin señal' }}<br>Último barrido completo: {{ ml_summary.last_sweep|date:'d/m/Y H:i'|default:'Pendiente' }} · Regla {{ rule_version }}.
 <span id="ml-update" aria-live="polite"></span></div>

@@ -938,3 +938,57 @@ class MLIdentityDecision(models.Model):
     left_observation = models.ForeignKey(MLObservation, on_delete=models.PROTECT, related_name='+')
     right_observation = models.ForeignKey(MLObservation, on_delete=models.PROTECT, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class MLDatasetSnapshot(models.Model):
+    """Immutable, reproducible cut of current offers and their admission reasons."""
+    criteria_version = models.CharField(max_length=40)
+    spatial_rule_version = models.CharField(max_length=40)
+    identity_rule_version = models.CharField(max_length=40)
+    catalog_hash = models.CharField(max_length=64)
+    input_hash = models.CharField(max_length=64, db_index=True)
+    status = models.CharField(max_length=16, default='ready')
+    total = models.PositiveIntegerField(default=0)
+    included = models.PositiveIntegerField(default=0)
+    excluded_reasons = models.JSONField(default=dict)
+    coverage = models.JSONField(default=dict)
+    newly_included = models.PositiveIntegerField(default=0)
+    removed_from_previous = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class MLDatasetEntry(models.Model):
+    """One row per source announcement in one immutable dataset cut."""
+    dataset = models.ForeignKey(MLDatasetSnapshot, on_delete=models.PROTECT, related_name='entries')
+    candidate = models.ForeignKey(MLCandidate, on_delete=models.PROTECT, related_name='+')
+    observation = models.ForeignKey(MLObservation, on_delete=models.PROTECT, related_name='+')
+    spatial_assessment = models.ForeignKey(MLSpatialAssessment, on_delete=models.PROTECT,
+                                           null=True, blank=True, related_name='+')
+    included = models.BooleanField(default=False, db_index=True)
+    reason_code = models.CharField(max_length=48, db_index=True)
+    reason = models.CharField(max_length=300)
+    identity_group_hash = models.CharField(max_length=64, blank=True, default='')
+    features = models.JSONField(default=dict)
+    target_price_usd = models.DecimalField(max_digits=16, decimal_places=2, null=True, blank=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['dataset', 'candidate'], name='ml_dataset_entry_uq')]
+        indexes = [models.Index(fields=['dataset', 'included', 'id'], name='ml_dataset_train_idx')]
+
+
+class MLTrainingRun(models.Model):
+    """Recorded experiment. A completed run is not a published ACM model."""
+    dataset = models.ForeignKey(MLDatasetSnapshot, on_delete=models.PROTECT, related_name='training_runs')
+    property_type = models.CharField(max_length=32)
+    algorithm = models.CharField(max_length=64)
+    code_version = models.CharField(max_length=40)
+    configuration = models.JSONField(default=dict)
+    seed = models.PositiveIntegerField(default=42)
+    status = models.CharField(max_length=16, default='queued', db_index=True)
+    eligible_count = models.PositiveIntegerField(default=0)
+    metrics = models.JSONField(default=dict)
+    artifact_uri = models.CharField(max_length=1000, blank=True, default='')
+    artifact_sha256 = models.CharField(max_length=64, blank=True, default='')
+    error = models.TextField(blank=True, default='')
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
