@@ -11,6 +11,7 @@ urlpatterns = [
     path('control/', ml_control, name='control_datos'),
     path('modelos/', ml_model_views.dashboard, name='modelos_dashboard'),
     path('modelos/entrenar/', ml_model_views.queue_training, name='modelos_entrenar'),
+    path('modelos/reevaluar/', ml_model_views.request_reconciliation, name='modelos_reevaluar'),
     path('modelos/<int:pk>/publicar/', ml_model_views.publish_run, name='modelos_publicar'),
     path('modelos/estimar/', ml_model_views.estimate, name='modelo_estimacion'),
     path('', views.acm_dashboard, name='acm_dashboard'),

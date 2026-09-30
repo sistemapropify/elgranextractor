@@ -62,6 +62,7 @@ def dashboard(request):
     monitoring = {}
     publications = {}
     contributions = []
+    reconciliation = MLPipelineState.objects.filter(pk='ml-reconciliation-request').first() if ready else None
     if ready:
         contribution_state = MLPipelineState.objects.filter(pk='model-contribution').first()
         contributions = list((contribution_state.payload or {}).get('history') or [])[-10:][::-1] if contribution_state else []
@@ -81,10 +82,30 @@ def dashboard(request):
         run.is_active_version = run.pk in active_ids
     response = render(request, 'ingestas/ml_models.html', {
         'ready': ready, 'dataset': dataset, 'runs': runs, 'cards': cards,
-        'contributions': contributions,
+        'contributions': contributions, 'reconciliation': reconciliation,
         'can_manage': _admin(request)})
     response['Cache-Control'] = 'private, no-store'
     return response
+
+
+@require_POST
+@csrf_protect
+def request_reconciliation(request):
+    """Request a resumable spatial/identity sweep without changing a dataset."""
+    if not _admin(request):
+        return JsonResponse({'error': 'Solo un administrador puede solicitar la reevaluación.'}, status=403)
+    if not schema_ready():
+        return JsonResponse({'error': 'Migración de conjuntos pendiente.'}, status=503)
+    user = _user(request)
+    actor = str(getattr(user, 'username', '') or getattr(user, 'name', '') or user.pk)
+    state, _ = MLPipelineState.objects.get_or_create(key='ml-reconciliation-request')
+    payload = state.payload or {}
+    payload.update({'requested_at': timezone.now().isoformat(), 'requested_by': actor,
+                    'reason': 'Reevaluación manual con el catálogo actual de subzonas'})
+    state.payload = payload
+    state.heartbeat_at = timezone.now()
+    state.save(update_fields=['payload', 'heartbeat_at'])
+    return redirect('acm:modelos_dashboard')
 
 
 @require_POST
