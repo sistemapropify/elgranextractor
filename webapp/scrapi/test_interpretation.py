@@ -6,6 +6,18 @@ from scrapi.adondevivir_scraper import area_etiquetada, mapear_a_formato_remax
 
 
 class InterpretationTests(unittest.TestCase):
+    def test_complete_tokens_from_full_database_audit(self):
+        for description,land,built in [
+            ('Área terreno: 3,018.08 m². Área construida: 304 m²',3018.08,304),
+            ('Área terreno: 550. 56 m². Área construida: 342. 21 m²',550.56,342.21),
+            ('Área terreno: 1, 541. 58 m². Área construida: 2, 989. 17 m²',1541.58,2989.17),
+            ('Área Terreno: 165. 50 m²Área Construida: 270 m² totales. Piso 3: depósito de 90 m² techado',165.5,270),
+            ('Área Total terreno: 286.86 m² Construidos: 140 m²',286.86,140),
+            ('7619. 84 m² de terreno. 480. 80 m² de área construida',7619.84,480.8),
+        ]:
+            with self.subTest(description=description):
+                self.assertEqual(extraer_areas_de_texto(description),{'area_terreno':land,'area_construida':built})
+
     def test_real_split_decimals(self):
         for description, land, built in [
             ('Área de terreno: 283. 04 m². Área construida: 115 m²',283.04,115),

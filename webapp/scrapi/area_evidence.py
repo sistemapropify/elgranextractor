@@ -5,8 +5,12 @@ from .remax_areas import NUMBER, UNIT, parse_area, plain
 
 def text(value):
     value = plain(value)
-    # Portal typography: '283. 04 m²'. Only join when a unit follows.
-    return re.sub(r'(?<=\d)([.,])\s+(?=\d{1,3}\s*(?:m|ha|hectarea)\b|\d{1,3}\s*m\s*2)', r'\1', value)
+    # HTML text can concatenate the unit and the next field heading.
+    value = re.sub(r'(m\s*2)(?=[a-z])', r'\1 ', value)
+    # Normalize the WHOLE numeric token: 2, 989. 17 must become 2,989.17,
+    # never leave a prefix behind and salvage 989.17 as the surface.
+    return re.sub(rf'(?<![\w.,])\d+(?:[.,]\s*\d+)+(?=\s*(?:{UNIT})(?!\w))',
+                  lambda m: re.sub(r'\s+', '', m.group()), value)
 
 
 def numeric_area(value):
@@ -21,11 +25,11 @@ def numeric_area(value):
 MEASURE = re.compile(rf'(?<![\w.,])(?P<number>{NUMBER})\s*(?P<unit>{UNIT})(?!\w)')
 PREFIX = {
     'area_terreno': re.compile(r'(?:\barea\s+(?:total\s+)?(?:de(?:l)?\s+)?terreno|\bsuperficie\s+(?:de(?:l)?\s+)?terreno|\bterreno|\blote)\s*[:=]?\s*$'),
-    'area_construida': re.compile(r'(?:\barea\s+(?:total\s+)?(?:construida|techada|edificada|de\s+construccion)|\bsuperficie\s+(?:construida|techada)|\bconstruccion)\s*[:=]?\s*$'),
+    'area_construida': re.compile(r'(?:\barea\s+(?:total\s+)?(?:construida|techada|edificada|de\s+construccion)|\bsuperficie\s+(?:construida|techada)|\bconstruccion|\bconstruid[oa]s?)\s*[:=]?\s*$'),
 }
 SUFFIX = {
     'area_terreno': re.compile(r'^\s*(?:(?:de\s+)?terreno|totales?|tot\.?)(?!\w)'),
-    'area_construida': re.compile(r'^\s*(?:(?:de\s+)?construccion|construid[oa]s?|techad[oa]s?|cub(?:iert[oa]s?)?\.?)(?!\w)'),
+    'area_construida': re.compile(r'^\s*(?:(?:de\s+)?(?:area\s+)?construccion|(?:de\s+area\s+)?construid[oa]s?|techad[oa]s?|cub(?:iert[oa]s?)?\.?)(?!\w)'),
 }
 
 
@@ -48,6 +52,14 @@ def description_areas(value):
             continue
         for key in found:
             prefix, suffix = PREFIX[key].search(before), SUFFIX[key].search(after)
+            # "Terreno: 286 m² Construidos: 140 m²": Construidos labels
+            # the NEXT number, not the previous surface.
+            if suffix and re.match(rf'\s*[:=]\s*{NUMBER}', after[suffix.end():]):
+                suffix = None
+            # An explicit prefix takes precedence over a contradictory suffix,
+            # e.g. "Área construida: 270 m² totales" is not land.
+            if suffix and any(PREFIX[other].search(before) for other in PREFIX if other != key):
+                suffix = None
             if prefix or suffix:
                 found[key].append((2 if prefix else 1, area))
     result = {}
