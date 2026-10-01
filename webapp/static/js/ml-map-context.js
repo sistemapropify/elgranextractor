@@ -99,7 +99,18 @@
         box.appendChild(node('div', 'USD ' + numberText(feature.price_usd)));
         box.appendChild(node('div', 'Terreno: ' + numberText(feature.land_area, ' m²') +
             ' · Construcción: ' + numberText(feature.built_area, ' m²')));
-        box.appendChild(node('div', 'Antigüedad: ' + (numeric(feature.age) === null ? 'Sin dato' : numberText(feature.age, ' años'))));
+        // El precio por m² usa la misma área que la etiqueta del pin: en un
+        // departamento (y en oficina o local) sale del área construida, nunca
+        // del terreno.
+        var area = primaryArea(feature), priceUsd = numeric(feature.price_usd);
+        if (area && priceUsd !== null && priceUsd > 0) {
+            var areaName = area.label === 'AC' ? 'área construida' : 'área de terreno';
+            box.appendChild(node('div', 'Precio m² (' + areaName + '): ' + money(priceUsd / area.area)));
+        } else {
+            box.appendChild(node('div', 'Precio m²: Sin dato'));
+        }
+        var age = numeric(feature.age);
+        box.appendChild(node('div', 'Año: ' + (age === null ? 'Sin dato' : numberText(age, ''))));
         box.appendChild(node('div', 'Microzona: ' + (feature.zone_name || 'Sin asignación') +
             (feature.zone_version !== null && feature.zone_version !== undefined ? ' · v' + feature.zone_version : '')));
         box.appendChild(node('div', 'ML: ' + (feature.status_label || feature.status || 'Pendiente')));

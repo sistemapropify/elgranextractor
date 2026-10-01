@@ -171,7 +171,10 @@ async function run() {
     assert.equal(requests.length, 2, 'An idle event without a real viewport change does not refetch.');
     assert.equal(infoWindows[0].opened, true, 'The open card survives an idle refresh.');
     const card = infoWindows[0].content;
-    assert.ok(card.children.some(child => child.textContent === 'Antigüedad: 0 años'), 'Known zero age is not missing.');
+    assert.ok(card.children.some(child => child.textContent === 'Año: 0'), 'Known zero age is not missing.');
+    assert.ok(card.children.some(child =>
+        child.textContent === 'Precio m² (área de terreno): $ 1,000'),
+        'A house prices the square meter from its land area inside the card.');
     assert.ok(card.children.some(child => child.textContent.includes('Apx')));
     assert.ok(card.children.some(child => child.textContent.includes('v2')));
     const actions = card.children.at(-1).children;
@@ -283,6 +286,13 @@ async function run() {
     assert.equal(drawnMarkers()[0].mlFeature.id, 9);
     assert.deepEqual(drawnMarkers()[0].mlLabel.__div.children.map(line => line.textContent),
         ['AC: $ 667/m2', 'Año: 0'], 'A department uses the built area for the price per square meter.');
+    drawnMarkers()[0].events.click();
+    const departmentCard = infoWindows[0].content;
+    assert.ok(departmentCard.children.some(child =>
+        child.textContent === 'Precio m² (área construida): $ 667'),
+        'A department card takes the price per square meter from the built area, not from the land.');
+    assert.ok(departmentCard.children.some(child => child.textContent === 'Año: 0'),
+        'The department card shows the age as "Año:".');
     assert.match(status.textContent, /en el distrito Cerro Colorado/);
 
     // Varios tipos a la vez: Casa + Departamento.
