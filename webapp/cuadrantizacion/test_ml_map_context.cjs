@@ -159,7 +159,7 @@ async function run() {
     assert.equal(markerInstances[0].options.icon.fillColor, '#1f6feb', 'Casa uses its own colour.');
     assert.equal(markerInstances[0].options.icon.strokeColor, '#687787', 'The border keeps the ML layer colour.');
     assert.deepEqual(markerInstances[0].mlLabel.__div.children.map(line => line.textContent),
-        ['AT: $ 1,000/m2', 'Años: 0'], 'The pin shows price per square meter and age below it.');
+        ['AT: $ 1,000/m2', 'Año: 0'], 'A house shows its land price per square meter and age below the pin.');
     assert.match(status.textContent, /1 registro de Casa/);
     await respond(0, [feature(1)]);
     assert.equal(markerInstances.length, 1, 'A late superseded response cannot add markers.');
@@ -281,6 +281,8 @@ async function run() {
     ]);
     assert.equal(drawnMarkers().length, 1, 'Only the chosen type of the whole district is drawn.');
     assert.equal(drawnMarkers()[0].mlFeature.id, 9);
+    assert.deepEqual(drawnMarkers()[0].mlLabel.__div.children.map(line => line.textContent),
+        ['AC: $ 667/m2', 'Año: 0'], 'A department uses the built area for the price per square meter.');
     assert.match(status.textContent, /en el distrito Cerro Colorado/);
 
     // Varios tipos a la vez: Casa + Departamento.

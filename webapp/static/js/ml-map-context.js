@@ -29,18 +29,32 @@
         return amount === null ? '' : '$ ' + amount.toLocaleString('es-PE', {maximumFractionDigits: 0});
     }
 
-    // Dos líneas bajo el pin: precio por m² del terreno (o de la construcción
-    // si no hay terreno) y antigüedad.
+    // El área que manda según el tipo: terreno y casa por su terreno; el resto
+    // (departamento, oficina, local) por el área construida.
+    function primaryArea(feature) {
+        var land = numeric(feature.land_area), built = numeric(feature.built_area);
+        var type = String(feature.property_type || '').trim().toLowerCase();
+        var byLand = type === 'casa' || type === 'terreno';
+        var order = byLand ?
+            [['AT', land], ['AC', built]] : [['AC', built], ['AT', land]];
+        for (var index = 0; index < order.length; index += 1) {
+            if (order[index][1] !== null && order[index][1] > 0) {
+                return {label: order[index][0], area: order[index][1]};
+            }
+        }
+        return null;
+    }
+
+    // Dos líneas bajo el pin: precio por m² y antigüedad.
     function pinLabel(feature) {
         var rows = [];
         var price = numeric(feature.price_usd);
-        var land = numeric(feature.land_area), built = numeric(feature.built_area);
-        if (price !== null && price > 0) {
-            if (land !== null && land > 0) rows.push('AT: ' + money(price / land) + '/m2');
-            else if (built !== null && built > 0) rows.push('AC: ' + money(price / built) + '/m2');
+        var area = primaryArea(feature);
+        if (price !== null && price > 0 && area) {
+            rows.push(area.label + ': ' + money(price / area.area) + '/m2');
         }
         var age = numeric(feature.age);
-        if (age !== null) rows.push('Años: ' + age.toLocaleString('es-PE', {maximumFractionDigits: 1}));
+        if (age !== null) rows.push('Año: ' + age.toLocaleString('es-PE', {maximumFractionDigits: 1}));
         return rows;
     }
 
