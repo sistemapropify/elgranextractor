@@ -72,7 +72,7 @@ td{padding:7px 8px;border-bottom:1px solid rgba(38,52,73,.5)}
 </style>
 </head>
 <body>
-<div class="topbar"><div style="display:flex;align-items:baseline"><h1>Monitoreo del negocio</h1><span class="sub">Propify · solo lectura</span></div></div>
+<div class="topbar"><div style="display:flex;align-items:baseline"><h1>Monitoreo del negocio</h1><span class="sub">Propify · solo lectura</span></div><a class="btn" href="/">← Volver al panel</a></div>
 <div class="wrap">
 
 {% if not disponible %}
@@ -203,7 +203,7 @@ td{padding:7px 8px;border-bottom:1px solid rgba(38,52,73,.5)}
       var extra = '';
       if (caja.dataset.area) extra += '&area=' + encodeURIComponent(caja.dataset.area);
       if (caja.dataset.rol) extra += '&rol=' + encodeURIComponent(caja.dataset.rol);
-      fetch('/monitoreo/usuarios/?grupo=' + encodeURIComponent(el.dataset.grupo) + extra)
+      fetch('{% url "monitor:usuarios" %}?grupo=' + encodeURIComponent(el.dataset.grupo) + extra)
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (d.error) { cuerpo.innerHTML = '<tr><td colspan="4">' + esc(d.error) + '</td></tr>'; return; }
