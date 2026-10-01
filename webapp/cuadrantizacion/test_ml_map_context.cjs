@@ -254,7 +254,11 @@ async function run() {
     assert.deepEqual(activeTypes(), []);
     await respond(7, [feature(7, {status: 'eligible', property_type: 'Casa'}),
         feature(8, {status: 'eligible', property_type: 'Departamento'}),
-        feature(9, {status: 'eligible', property_type: 'Departamento', district: 'Cerro Colorado'})]);
+        feature(9, {status: 'eligible', property_type: 'Departamento', district: 'Cerro Colorado'})],
+        {districts: [
+            {nombre: 'Cayma', total: 2, tipos: {Casa: 1, Departamento: 1}},
+            {nombre: 'Cerro Colorado', total: 1, tipos: {Departamento: 1}},
+        ]});
     const drawnMarkers = () => markerInstances.filter(marker => marker.map === map);
     assert.equal(drawnMarkers().length, 0, 'Nothing is drawn until a type is chosen.');
     assert.match(status.textContent, /3 registros en el área visible/);
@@ -268,7 +272,8 @@ async function run() {
     assert.equal(drawnMarkers().length, 2);
     assert.ok(drawnMarkers().every(marker => marker.mlFeature.property_type === 'Departamento'));
     assert.deepEqual(districtSelect.children.filter(child => child.tag === 'option').map(option => option.value),
-        ['', 'Cayma', 'Cerro Colorado'], 'Districts come from the records of the chosen type.');
+        ['', '__todos__', 'Cayma', 'Cerro Colorado'],
+        'The district selector lists the whole catalogue of the chosen type, not only the visible area.');
     assert.equal(districtSelect.disabled, false);
 
     // El distrito es el alcance: se vuelve a consultar sin limitar al área visible.
@@ -281,7 +286,10 @@ async function run() {
     await respond(requests.length - 1, [
         feature(9, {status: 'eligible', property_type: 'Departamento', district: 'Cerro Colorado'}),
         feature(10, {status: 'eligible', property_type: 'Casa', district: 'Cerro Colorado'}),
-    ]);
+    ], {districts: [
+        {nombre: 'Cayma', total: 2, tipos: {Casa: 1, Departamento: 1}},
+        {nombre: 'Cerro Colorado', total: 2, tipos: {Casa: 1, Departamento: 1}},
+    ]});
     assert.equal(drawnMarkers().length, 1, 'Only the chosen type of the whole district is drawn.');
     assert.equal(drawnMarkers()[0].mlFeature.id, 9);
     assert.deepEqual(drawnMarkers()[0].mlLabel.__div.children.map(line => line.textContent),
@@ -304,6 +312,22 @@ async function run() {
         'Each property type uses its own colour.');
     pickType('Casa');
     assert.equal(drawnMarkers().length, 1, 'Removing one type keeps the other one drawn.');
+
+    // "Todos los distritos": el alcance es el inventario completo, no lo visible.
+    districtSelect.value = '__todos__';
+    districtSelect.listeners.change();
+    flushTimer(0);
+    const todosUrl = new URL(requests.at(-1).url, 'https://example.test');
+    assert.equal(todosUrl.searchParams.get('scope'), 'all',
+        'The "all districts" option asks the backend for the whole inventory.');
+    assert.equal(todosUrl.searchParams.get('district'), null);
+    await respond(requests.length - 1, [feature(9, {status: 'eligible', property_type: 'Departamento'}),
+        feature(10, {status: 'eligible', property_type: 'Departamento', lat: -12})],
+        {scope_total: 40, truncated: true});
+    assert.equal(drawnMarkers().length, 2, 'Every drawn record of the chosen type is kept, in or out of view.');
+    assert.match(status.textContent, /en todos los distritos/);
+    assert.match(status.textContent, /inventario completo tiene 40 registros/,
+        'A truncated inventory says how many records exist in total.');
 
     // Con distrito elegido el alcance ya no depende de lo que se ve.
     const requestsBeforePan = requests.length;

@@ -122,6 +122,7 @@ class ContextMapIntegrationTests(TestCase):
         self.factory = RequestFactory()
         ml_candidates._schema_cache = (0, False)
         ml_context._schema_cache = (0, False)
+        views._catalogo_cache.clear()
         self.catalog_patch = patch.object(ml_context, 'current_catalog_hash', return_value=CATALOG)
         self.catalog_patch.start()
         self.addCleanup(self.catalog_patch.stop)
@@ -204,6 +205,32 @@ class ContextMapIntegrationTests(TestCase):
         self.assertEqual(data['scope'], 'district')
         self.assertEqual(sorted(item['id'] for item in data['features']),
                          sorted([near.propiedad_id, far.propiedad_id]))
+
+    def test_all_districts_scope_ignores_the_visible_area(self):
+        near = self.make_candidate('all-near', distrito='Cayma')
+        far = self.make_candidate('all-far', distrito='Yanahuara', latitud=-13.5, longitud=-71.9)
+        self.make_candidate('all-reference', status='reference', distrito='Cayma')
+        data = self.map({'scope': 'all'})
+        self.assertEqual(data['scope'], 'all')
+        self.assertEqual(sorted(item['id'] for item in data['features']),
+                         sorted([near.propiedad_id, far.propiedad_id]))
+
+    def test_district_catalogue_covers_every_district_of_the_active_layers(self):
+        self.make_candidate('catalogue-casa', distrito='Cayma')
+        self.make_candidate('catalogue-departamento', tipo_inmueble='Departamento', distrito='Cerro Colorado')
+        self.make_candidate('catalogue-sin-distrito', tipo_inmueble='Oficina')
+        self.make_candidate('catalogue-reference', status='reference', distrito='Yanahuara')
+        catalogo = {item['nombre']: item for item in self.map()['districts']}
+        self.assertEqual(sorted(catalogo), ['Cayma', 'Cerro Colorado', 'Sin distrito'])
+        self.assertEqual(catalogo['Cayma'], {'nombre': 'Cayma', 'total': 1, 'tipos': {'Casa': 1}})
+        self.assertEqual(catalogo['Cerro Colorado']['tipos'], {'Departamento': 1})
+        self.assertEqual(catalogo['Sin distrito']['total'], 1)
+
+    def test_district_scope_groups_records_without_a_declared_district(self):
+        sin_distrito = self.make_candidate('sin-distrito')
+        self.make_candidate('otro-distrito', distrito='Yanahuara')
+        data = self.map({'district': 'Sin distrito'})
+        self.assertEqual([item['id'] for item in data['features']], [sin_distrito.propiedad_id])
 
     def test_current_context_shows_zone_version(self):
         candidate = self.make_candidate('zoned')

@@ -13,6 +13,10 @@
         'Sin tipo': '#8b949e', Otro: '#6e7781'
     };
     var TYPE_FALLBACK = ['#1f6feb', '#8957e5', '#2ea043', '#d29922', '#db61a2', '#39c5cf', '#e5534b'];
+    // Alcance "todos los distritos" del selector: no se limita al área visible.
+    var TODOS_LOS_DISTRITOS = '__todos__';
+    // Sobre este volumen las etiquetas de precio bajo cada pin ahogan al navegador.
+    var LIMITE_ETIQUETAS = 800;
 
     function typeColor(type) {
         var name = String(type || '').trim() || 'Sin tipo';
@@ -159,8 +163,9 @@
         var typeButtons = document.getElementById('ml-map-types');
         var districtSelect = document.getElementById('ml-map-district');
         var knownTypes = new Set();
-        // Zonas disponibles por tipo, para no perder una selección al mover el mapa.
-        var knownDistricts = {};
+        // Catálogo de distritos que manda el servidor: es el inventario completo,
+        // no solo los distritos que alcanzan a verse en el mapa.
+        var districtCatalog = [];
         // Se pueden tener uno o varios tipos a la vez.
         var selectedTypes = new Set();
         var selectedDistrict = '';
@@ -181,7 +186,7 @@
         var linkedLat = numeric(query.get('ml_lat')), linkedLng = numeric(query.get('ml_lng'));
         var linkedLocation = record && linkedLat !== null && linkedLng !== null &&
             linkedLat >= -19 && linkedLat <= 0 && linkedLng >= -82 && linkedLng <= -68;
-        var emptyMessage = 'Marca una capa para consultar el área visible.';
+        var emptyMessage = 'Marca una capa y elige un tipo de propiedad; el alcance puede ser el área visible o un distrito completo.';
         if (linkedLocation) {
             map.setCenter({lat: linkedLat, lng: linkedLng});
             map.setZoom(16);
@@ -281,8 +286,8 @@
             return overlay;
         }
 
-        function updateLabel(marker, feature) {
-            var rows = pinLabel(feature);
+        function updateLabel(marker, feature, etiquetas) {
+            var rows = etiquetas === false ? [] : pinLabel(feature);
             if (!rows.length) {
                 if (marker.mlLabel) { marker.mlLabel.setMap(null); marker.mlLabel = null; }
                 return;
@@ -307,6 +312,8 @@
         // layer steady while panning and keeps the card the user opened alive.
         function draw(features, key) {
             var visible = new Set();
+            // Con miles de pines las etiquetas de precio dejan el mapa inservible.
+            var etiquetas = features.length <= LIMITE_ETIQUETAS;
             features.forEach(function(feature) {
                 var id = String(feature.id);
                 visible.add(id);
@@ -331,7 +338,7 @@
                     markersById.set(id, marker);
                 }
                 marker.mlFeature = feature;
-                updateLabel(marker, feature);
+                updateLabel(marker, feature, etiquetas);
                 if (openFeatureId === id) info.setContent(card(feature));
             });
             markersById.forEach(function(marker, id) {
@@ -358,21 +365,6 @@
 
         function districtOf(feature) {
             return String(feature.district || '').trim() || 'Sin distrito';
-        }
-
-        function fillSelect(select, values, defaultLabel) {
-            if (!select) return;
-            select.innerHTML = '';
-            var all = node('option', defaultLabel);
-            all.value = '';
-            select.appendChild(all);
-            values.sort(function(left, right) {
-                return left.localeCompare(right, 'es', {sensitivity: 'base'});
-            }).forEach(function(value) {
-                var option = node('option', value);
-                option.value = value;
-                select.appendChild(option);
-            });
         }
 
         // Botones de tipo: se combinan los que se quieran (Casa + Terreno).
@@ -405,8 +397,6 @@
             features.forEach(function(feature) {
                 var type = propertyTypeOf(feature);
                 knownTypes.add(type);
-                if (!knownDistricts[type]) knownDistricts[type] = new Set();
-                knownDistricts[type].add(districtOf(feature));
             });
             // Mantener la elección del usuario mientras se recarga el alcance.
             selectedTypes.forEach(function(type) {
@@ -416,18 +406,49 @@
             refreshDistrictOptions();
         }
 
-        // Los distritos dependen de los tipos elegidos: se listan los que tienen
-        // registros de cualquiera de ellos en lo ya consultado.
+        // Distritos con registros de los tipos elegidos (o de todos, mientras no
+        // se elija ninguno), según el catálogo completo que manda el servidor.
+        function districtOptions() {
+            var totales = new Map();
+            districtCatalog.forEach(function(item) {
+                var tipos = item.tipos || {};
+                var total = 0;
+                Object.keys(tipos).forEach(function(tipo) {
+                    if (!selectedTypes.size || selectedTypes.has(tipo)) total += numeric(tipos[tipo]) || 0;
+                });
+                if (total > 0) totales.set(item.nombre, total);
+            });
+            return Array.from(totales.entries()).sort(function(left, right) {
+                return left[0].localeCompare(right[0], 'es', {sensitivity: 'base'});
+            });
+        }
+
+        // El alcance lo manda el filtro: área visible, un distrito completo o
+        // todo el inventario. El distrito ya no depende de lo que se vea.
         function refreshDistrictOptions() {
             if (!districtSelect) return;
-            var union = new Set();
-            selectedTypes.forEach(function(type) {
-                (knownDistricts[type] || new Set()).forEach(function(name) { union.add(name); });
+            var opciones = districtOptions();
+            districtSelect.innerHTML = '';
+            var area = node('option', 'Área visible (lo que se ve en el mapa)');
+            area.value = '';
+            districtSelect.appendChild(area);
+            var suma = opciones.reduce(function(acc, par) { return acc + par[1]; }, 0);
+            var todos = node('option', 'Todos los distritos (' + suma + ')');
+            todos.value = TODOS_LOS_DISTRITOS;
+            districtSelect.appendChild(todos);
+            opciones.forEach(function(par) {
+                var option = node('option', par[0] + ' · ' + par[1]);
+                option.value = par[0];
+                districtSelect.appendChild(option);
             });
-            var districts = Array.from(union);
-            fillSelect(districtSelect, districts, 'Todos los distritos');
-            districtSelect.disabled = !selectedTypes.size || !districts.length;
-            if (!selectedTypes.size || districts.indexOf(selectedDistrict) === -1) selectedDistrict = '';
+            districtSelect.disabled = !selectedTypes.size;
+            var disponibles = opciones.map(function(par) { return par[0]; });
+            // Solo se suelta la elección cuando el catálogo la descarta de verdad:
+            // una respuesta sin catálogo no debe devolver el mapa al área visible.
+            if (districtCatalog.length && selectedDistrict && selectedDistrict !== TODOS_LOS_DISTRITOS &&
+                disponibles.indexOf(selectedDistrict) === -1) {
+                selectedDistrict = '';
+            }
             districtSelect.value = selectedDistrict;
         }
 
@@ -436,9 +457,10 @@
             // Nada se dibuja hasta elegir un tipo: el mapa queda limpio y el
             // navegador no arma miles de pines que nadie pidió.
             if (!selectedTypes.size) return [];
+            // El distrito ya lo acotó el servidor (distrito completo o todo el
+            // inventario); aquí solo se filtra por tipo.
             return lastResult.features.filter(function(feature) {
-                return selectedTypes.has(propertyTypeOf(feature)) &&
-                    (!selectedDistrict || districtOf(feature) === selectedDistrict);
+                return selectedTypes.has(propertyTypeOf(feature));
             });
         }
 
@@ -510,13 +532,18 @@
                 .catch(function() { /* el aviso de guardado original se conserva */ });
         }
 
-        // Los filtros corren en el cliente: elegir tipo o distrito no vuelve a
-        // consultar el área ni reinicia la capa.
+        function scopeLabel() {
+            if (selectedDistrict === TODOS_LOS_DISTRITOS) return ' en todos los distritos';
+            return selectedDistrict ? ' en el distrito ' + selectedDistrict : ' en el área visible';
+        }
+
+        // Elegir tipo se resuelve en el cliente; el distrito cambia el alcance y
+        // obliga a consultar de nuevo (distrito completo o todo el inventario).
         function applyFilters() {
             if (!lastResult) return;
             var features = filteredFeatures();
             draw(features, lastResult.key);
-            var scope = selectedDistrict ? ' en el distrito ' + selectedDistrict : ' en el área visible';
+            var scope = scopeLabel();
             if (!selectedTypes.size) {
                 status.textContent = lastResult.features.length +
                     (lastResult.features.length === 1 ? ' registro' : ' registros') + scope +
@@ -526,9 +553,20 @@
             var label = features.length + (features.length === 1 ? ' registro de ' : ' registros de ') +
                 selectedTypeLabel() + scope + '.';
             var hidden = lastResult.features.length - features.length;
-            status.textContent = label +
-                (hidden > 0 ? ' ' + hidden + ' quedan fuera por el tipo elegido.' : '') +
-                (features.length > HEAVY_RENDER ? ' Son muchos pines: el mapa puede tardar en moverse.' : '');
+            var notas = '';
+            if (hidden > 0) notas += ' ' + hidden + ' quedan fuera por el tipo elegido.';
+            if (features.length > LIMITE_ETIQUETAS) {
+                notas += ' Por el volumen no se dibujan las etiquetas de precio: acota por distrito o tipo.';
+            }
+            if (features.length > HEAVY_RENDER) notas += ' Son muchos pines: el mapa puede tardar en moverse.';
+            if (lastResult.truncated) {
+                notas += ' El inventario completo tiene ' +
+                    (lastResult.scopeTotal === null ? 'más registros de los que se pueden dibujar'
+                        : lastResult.scopeTotal.toLocaleString('es-PE') + ' registros') +
+                    ' y se muestran los primeros ' + features.length.toLocaleString('es-PE') +
+                    ': elige un distrito para verlo entero.';
+            }
+            status.textContent = label + notas;
         }
 
         function schedule(delay, message, force) {
@@ -568,8 +606,9 @@
             // el distrito completo, así que mover el mapa no cambia la consulta.
             if (lastSuccess && lastSuccess.key === key &&
                 (district || sameBounds(lastSuccess.viewport, viewport))) return;
-            status.textContent = message || (district ?
-                'Consultando el distrito ' + district + '…' : 'Consultando contexto del área visible…');
+            status.textContent = message || (district === TODOS_LOS_DISTRITOS ?
+                'Consultando todos los distritos…' :
+                (district ? 'Consultando el distrito ' + district + '…' : 'Consultando contexto del área visible…'));
             controller = new AbortController();
             var timedOut = false;
             var timeoutId = setTimeout(function() {
@@ -579,7 +618,8 @@
             var params = new URLSearchParams();
             Object.keys(viewport).forEach(function(name) { params.set(name, String(viewport[name])); });
             params.set('layers', selection.join(','));
-            if (district) params.set('district', district);
+            if (district === TODOS_LOS_DISTRITOS) params.set('scope', 'all');
+            else if (district) params.set('district', district);
             if (record) params.set('record', record);
             try {
                 var response = await fetch(endpoint + '?' + params.toString(), {
@@ -605,7 +645,9 @@
                         (district ? true : inside(feature, viewport));
                 });
                 lastSuccess = {key: key, viewport: district ? null : viewport};
-                lastResult = {features: features, total: numeric(data.total), key: key};
+                lastResult = {features: features, total: numeric(data.total), key: key,
+                    truncated: Boolean(data.truncated), scopeTotal: numeric(data.scope_total)};
+                districtCatalog = Array.isArray(data.districts) ? data.districts : [];
                 refreshTypeOptions(features);
                 applyFilters();
                 if (savedRecordId !== null && savedRecordId !== undefined) {

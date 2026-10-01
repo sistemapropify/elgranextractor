@@ -1,5 +1,6 @@
 """Authenticated spatial context and human identity review; no training actions."""
 import json
+import time
 from collections import Counter
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlsplit
@@ -24,6 +25,11 @@ PAIR_LABELS = {'possible': 'Posible coincidencia', 'same': 'Misma propiedad, seg
                'different': 'Propiedades diferentes, según revisión'}
 _LAYER_STATES = {'eligible': ('eligible',), 'reference': ('reference',),
                  'review': ('review', 'pending', 'error', 'excluded')}
+# Los registros sin distrito declarado se agrupan en un distrito propio.
+SIN_DISTRITO = 'Sin distrito'
+# Alcance "todos los distritos": el navegador no dibuja bien un inventario sin
+# límite, así que se corta y la respuesta lo avisa (total y truncado).
+TOPE_TODOS = 3000
 
 
 def safe_publication(value):
@@ -65,6 +71,53 @@ def _district(params):
     if len(value) > 120:
         raise ValueError('El distrito indicado no es válido.')
     return value
+
+
+def _scope(params):
+    """Alcance pedido por el mapa: 'area' (por defecto), 'district' o 'all'."""
+    value = str(params.get('scope') or '').strip().lower()
+    return value if value in ('all', 'district') else ''
+
+
+def _district_q(district):
+    """Condición del distrito elegido, incluido el cajón de los que no declaran uno."""
+    if district == SIN_DISTRITO:
+        return Q(propiedad__distrito__isnull=True) | Q(propiedad__distrito='')
+    return Q(propiedad__distrito=district)
+
+
+# El catálogo de distritos cambia despacio (solo cuando entra o sale inventario
+# del seguimiento ML), así que se guarda unos minutos: mover el mapa no debe
+# repetir el agregado en cada consulta.
+CATALOGO_TTL = 120
+_catalogo_cache = {}
+
+
+def _district_catalog(selected, layers):
+    """Distritos del inventario ML con su total y su reparto por tipo.
+
+    Se calcula sobre las capas activas pero sin mirar el área visible: el
+    selector del mapa debe ofrecer todo lo que existe, no solo lo que está en
+    pantalla, para que elegir un distrito traiga el distrito completo.
+    """
+    clave = ','.join(sorted(layers))
+    guardado = _catalogo_cache.get(clave)
+    ahora = time.monotonic()
+    if guardado and ahora - guardado[0] < CATALOGO_TTL:
+        return guardado[1]
+    catalogo = {}
+    agrupado = (MLCandidate.objects.filter(selected)
+                .values('propiedad__distrito', 'propiedad__tipo_inmueble')
+                .annotate(n=Count('pk')))
+    for fila in agrupado:
+        nombre = str(fila['propiedad__distrito'] or '').strip() or SIN_DISTRITO
+        tipo = str(fila['propiedad__tipo_inmueble'] or '').strip() or 'Propiedad'
+        entrada = catalogo.setdefault(nombre, {'nombre': nombre, 'total': 0, 'tipos': {}})
+        entrada['total'] += fila['n']
+        entrada['tipos'][tipo] = entrada['tipos'].get(tipo, 0) + fila['n']
+    catalogo = sorted(catalogo.values(), key=lambda item: item['nombre'].lower())
+    _catalogo_cache[clave] = (ahora, catalogo)
+    return catalogo
 
 
 def _bbox(params):
@@ -190,12 +243,14 @@ def map_data(request):
     try:
         bounds, layers, record = _bbox(request.GET), _layers(request.GET), _record(request)
         district = _district(request.GET)
+        scope = _scope(request.GET)
     except ValueError as exc:
         return _json({'error': str(exc)}, 400)
     if not ml_context.schema_ready():
         return _json({'ready': False, 'error': 'Migración del contexto ML pendiente.'}, 503)
     if not layers:
-        return _json(dict(features=[], total=0, shown=0, ready=True))
+        return _json(dict(features=[], total=0, shown=0, districts=[], ready=True))
+    todos = scope == 'all'
     query = _candidates()
     if record:
         # Un registro puntual se busca en todo el ámbito: tras una corrección
@@ -203,7 +258,10 @@ def map_data(request):
         query = query.filter(propiedad_id=record)
     elif district:
         # El distrito es el alcance completo: no se limita a lo que se ve.
-        query = query.filter(propiedad__distrito=district)
+        query = query.filter(_district_q(district))
+    elif todos:
+        # "Todos los distritos": todo el inventario de las capas activas.
+        pass
     else:
         query = query.filter(propiedad__latitud__gte=bounds['south'],
             propiedad__latitud__lte=bounds['north'], propiedad__longitud__gte=bounds['west'],
@@ -215,21 +273,28 @@ def map_data(request):
         selected |= Q(propiedad_id__in=Subquery(pairs.values('left_id')))
         selected |= Q(propiedad_id__in=Subquery(pairs.values('right_id')))
     query = query.filter(selected).order_by('propiedad_id')
-    # Sin tope: la capa ML dibuja todos los registros del alcance elegido.
-    candidates = list(query)
+    # El selector de distrito se llena con el inventario completo, no con lo que
+    # alcance a verse en el mapa.
+    districts = _district_catalog(selected, layers)
+    # Sin tope por distrito o área visible; el inventario entero se corta para no
+    # colgar el navegador, y la respuesta dice cuántos quedaron fuera.
+    scope_total = query.count() if todos else None
+    candidates = list(query[:TOPE_TODOS]) if todos else list(query)
     counts = _duplicate_counts([c.propiedad_id for c in candidates])
     catalog_hash = ml_context.current_catalog_hash()
     prepared = [_feature(c, catalog_hash, counts[c.propiedad_id]) for c in candidates]
     # SQL bounds select live source rows; an uncaptured bulk edit can leave a
     # snapshot outside this viewport. Never move that historical snapshot's pin.
     located = [item for item in prepared if item['lat'] is not None and item['lng'] is not None]
-    features = located if record or district else [
+    features = located if record or district or todos else [
         item for item in located
         if bounds['south'] <= item['lat'] <= bounds['north']
         and bounds['west'] <= item['lng'] <= bounds['east']
     ]
     return _json(dict(features=features, total=len(features), shown=len(features),
-                      scope='district' if district else ('record' if record else 'area'), ready=True,
+                      scope='district' if district else ('all' if todos else ('record' if record else 'area')),
+                      districts=districts, scope_total=scope_total,
+                      truncated=bool(todos and scope_total and scope_total > len(prepared)), ready=True,
                       omitted_stale_coordinates=len(prepared) - len(features)))
 
 
