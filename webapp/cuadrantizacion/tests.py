@@ -102,6 +102,12 @@ class MapaZonasTemplateTests(SimpleTestCase):
         )
         self.assertIn("levelSelect.addEventListener('change'", self.source)
 
+    def test_property_filters_load_before_any_portal_is_selected(self):
+        self.assertIn('loadPropertyFilterOptions()', self.source)
+        self.assertIn("'?facets=1&sources=propify,remax,properati'", self.source)
+        self.assertIn('function applyPropertyFilterFacets(facets)', self.source)
+        self.assertIn('propertyFilterFacetsLoaded = true', self.source)
+
 
 class ZonaValorHierarchyValidationTests(SimpleTestCase):
     def test_zone_accepts_a_district_parent(self):
@@ -213,6 +219,41 @@ class AvailablePropifyPropertiesApiTests(SimpleTestCase):
 
         self.assertEqual(result, source + '?sv=temporary')
         signer.assert_called_once_with(source, expiry_minutes=120)
+
+    @patch('cuadrantizacion.views._available_property_facets')
+    def test_facets_request_returns_filter_options_without_markers(self, facets):
+        request = RequestFactory().get(
+            '/cuadrantizacion/propiedades-mapa-disponibles/',
+            {'facets': '1', 'sources': 'remax'},
+        )
+        facets.return_value = {
+            'operation': ['Alquiler', 'Venta'],
+            'type': ['Casa'],
+            'precision': ['Exacta'],
+            'district': ['Cayma'],
+        }
+
+        response = views.api_available_map_properties(request)
+        payload = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload['facets']['operation'], ['Alquiler', 'Venta'])
+        self.assertNotIn('properties', payload)
+        facets.assert_called_once_with({'remax'})
+
+    @patch('ingestas.models.PropiedadesCompetencia')
+    def test_scraped_facets_expose_normalized_filter_options(self, competencia):
+        competencia.objects.filter.return_value.values_list.return_value.iterator.return_value = [
+            ('Arrendamiento', 'Departamento', 'aproximada', 'Cayma'),
+            ('venta', 'Casa', 'exacta', ''),
+        ]
+
+        facets = views._available_property_facets(('remax',))
+
+        self.assertEqual(facets['operation'], ['Alquiler', 'Venta'])
+        self.assertEqual(facets['type'], ['Casa', 'Departamento'])
+        self.assertEqual(facets['precision'], ['Aproximada', 'Exacta'])
+        self.assertEqual(facets['district'], ['Cayma', 'Sin distrito'])
 
     @patch('cuadrantizacion.views.generate_read_sas_url')
     def test_external_image_url_is_not_modified(self, signer):

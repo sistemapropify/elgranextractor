@@ -1029,6 +1029,72 @@ def _available_scraped_properties(sources=('remax', 'properati'), include_inacti
     return properties
 
 
+def _unique_values(values):
+    return sorted(
+        {str(value).strip() for value in values if value is not None and str(value).strip()},
+        key=str.casefold,
+    )
+
+
+def _available_property_facets(requested_sources=('propify', 'remax', 'properati')):
+    """Filter options for the map, reading only lightweight columns.
+
+    The map loads each portal's pins on demand; this keeps the operation, type,
+    precision and district selectors populated before a portal is selected.
+    """
+    facets = {'precision': set(), 'operation': set(), 'type': set(), 'district': set()}
+
+    if 'propify' in requested_sources:
+        try:
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute("SELECT name FROM property_type")
+                facets['type'].update(_unique_values(row[0] for row in cursor.fetchall()))
+                cursor.execute("SELECT name FROM operation_type")
+                facets['operation'].update(
+                    _normalize_propify_operation(row[0])[0] for row in cursor.fetchall()
+                )
+                cursor.execute("SELECT name FROM district")
+                facets['district'].update(_unique_values(row[0] for row in cursor.fetchall()))
+            facets['precision'].add('Exacta')
+        except Exception:
+            logger.warning('No se pudieron leer las opciones de filtros Propify.', exc_info=True)
+
+    scraped_sources = tuple(
+        source for source in ('remax', 'properati') if source in requested_sources
+    )
+    if scraped_sources:
+        from ingestas.models import PropiedadesCompetencia
+
+        try:
+            rows = (
+                PropiedadesCompetencia.objects
+                .filter(
+                    fuente__in=scraped_sources,
+                    estado_publicacion='activa',
+                    latitud__isnull=False,
+                    longitud__isnull=False,
+                )
+                .values_list('tipo_operacion', 'tipo_inmueble', 'precision_ubicacion', 'distrito')
+                .iterator(chunk_size=500)
+            )
+            for operation_name, property_type, precision, district in rows:
+                facets['operation'].add(_normalize_propify_operation(operation_name)[0])
+                if property_type:
+                    facets['type'].add(str(property_type).strip())
+                facets['precision'].add({
+                    'exacta': 'Exacta',
+                    'aproximada': 'Aproximada',
+                    'desconocida': 'Desconocida',
+                }.get(str(precision or '').strip().casefold(), 'Desconocida'))
+                facets['district'].add(str(district or '').strip() or 'Sin distrito')
+        except Exception:
+            logger.warning(
+                'No se pudieron leer las opciones de filtros de los portales.', exc_info=True
+            )
+
+    return {name: _unique_values(values) for name, values in facets.items()}
+
+
 def api_available_map_properties(request):
     """Available Propify, Remax and Properati markers for the zoning map."""
     from .property_quality import annotate_map_quality
@@ -1038,6 +1104,11 @@ def api_available_map_properties(request):
         for source in request.GET.get('sources', 'propify,remax,properati').split(',')
         if source.strip().casefold() in {'propify', 'remax', 'properati'}
     }
+    if request.GET.get('facets') in {'1', 'true', 'yes'}:
+        return JsonResponse({
+            'facets': _available_property_facets(requested_sources),
+            'requested_sources': sorted(requested_sources),
+        })
     properties = []
     failed_sources = []
     loaders = []

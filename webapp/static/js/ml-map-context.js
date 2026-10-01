@@ -77,6 +77,11 @@
         return box;
     }
 
+    var MAX_MARKERS = 300;
+    // Google reports slightly different bounds on each idle event of the same
+    // viewport; a tiny tolerance avoids pointless refetches.
+    var BOUND_TOLERANCE = 0.000001;
+
     global.setupMLContextLayer = function(map) {
         if (instances.has(map)) return instances.get(map);
         var panel = document.getElementById('ml-context-layers');
@@ -84,11 +89,15 @@
         var checkboxes = Array.from(panel.querySelectorAll('input[name="ml-map-layer"]'));
         checkboxes.forEach(function(input) { input.checked = false; });
         var status = document.getElementById('ml-map-status');
-        var info = new google.maps.InfoWindow({maxWidth: 320});
-        var markers = [];
+        // disableAutoPan keeps opening a card from moving the map; a pan would
+        // fire 'idle', reload the viewport and close the card just opened.
+        var info = new google.maps.InfoWindow({maxWidth: 320, disableAutoPan: true});
+        var markersById = new Map();
+        var openFeatureId = null;
         var timer = null;
         var controller = null;
         var sequence = 0;
+        var lastSuccess = null;
         var query = new URLSearchParams(global.location.search);
         var record = query.get('ml_record');
         if (!/^[1-9]\d*$/.test(record || '')) record = null;
@@ -109,9 +118,15 @@
             }).map(function(input) { return input.value; });
         }
 
-        function clear() {
-            markers.forEach(function(marker) { marker.setMap(null); });
-            markers = [];
+        function selectionKey() {
+            return selected().join(',');
+        }
+
+        function clearMarkers() {
+            markersById.forEach(function(marker) { marker.setMap(null); });
+            markersById.clear();
+            openFeatureId = null;
+            lastSuccess = null;
             info.close();
         }
 
@@ -125,23 +140,93 @@
             return result;
         }
 
+        function sameBounds(left, right) {
+            if (!left || !right) return false;
+            return ['south', 'west', 'north', 'east'].every(function(key) {
+                return Math.abs(left[key] - right[key]) <= BOUND_TOLERANCE;
+            });
+        }
+
         function inside(feature, viewport) {
             var lat = numeric(feature.lat), lng = numeric(feature.lng);
             return lat !== null && lng !== null && lat >= viewport.south && lat <= viewport.north &&
                 lng >= viewport.west && lng <= viewport.east;
         }
 
-        function schedule(delay, message) {
+        function markerIcon(color) {
+            return {path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: color,
+                fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2};
+        }
+
+        function markerTitle(feature) {
+            return '#' + feature.id + ' · ' + (feature.fuente || '') + ' · ' +
+                (feature.status_label || feature.status || '');
+        }
+
+        function markerColor(feature, key) {
+            return key.indexOf('duplicates') !== -1 && numeric(feature.duplicate_count) > 0 ?
+                colors.duplicates : (colors[feature.status] || colors.review);
+        }
+
+        // Refresh only what changed. Reusing the surviving markers keeps the
+        // layer steady while panning and keeps the card the user opened alive.
+        function draw(features, key) {
+            var visible = new Set();
+            features.forEach(function(feature) {
+                var id = String(feature.id);
+                visible.add(id);
+                var marker = markersById.get(id);
+                if (marker) {
+                    marker.setPosition({lat: Number(feature.lat), lng: Number(feature.lng)});
+                    marker.setIcon(markerIcon(markerColor(feature, key)));
+                    marker.setTitle(markerTitle(feature));
+                } else {
+                    marker = new google.maps.Marker({
+                        map: map,
+                        position: {lat: Number(feature.lat), lng: Number(feature.lng)},
+                        title: markerTitle(feature),
+                        icon: markerIcon(markerColor(feature, key)),
+                        zIndex: 1500
+                    });
+                    marker.addListener('click', function() {
+                        openFeatureId = id;
+                        info.setContent(card(marker.mlFeature));
+                        info.open({map: map, anchor: marker, shouldFocus: false});
+                    });
+                    markersById.set(id, marker);
+                }
+                marker.mlFeature = feature;
+                if (openFeatureId === id) info.setContent(card(feature));
+            });
+            markersById.forEach(function(marker, id) {
+                if (visible.has(id)) return;
+                marker.setMap(null);
+                markersById.delete(id);
+                if (openFeatureId === id) {
+                    openFeatureId = null;
+                    info.close();
+                }
+            });
+        }
+
+        function schedule(delay, message, force) {
             if (timer !== null) clearTimeout(timer);
             timer = null;
             sequence += 1;
             if (controller) controller.abort();
             controller = null;
-            if (!selected().length) {
-                clear();
+            var key = selectionKey();
+            if (!key) {
+                clearMarkers();
                 status.textContent = emptyMessage;
                 return;
             }
+            // A saved record (or an explicit refresh) must requery even when the
+            // viewport and the layers did not change.
+            if (force) lastSuccess = null;
+            // Changing layers makes the current pins stale; drop them now
+            // instead of leaving a layer the user just turned off on screen.
+            if (lastSuccess && lastSuccess.key !== key) clearMarkers();
             status.textContent = message || 'Consultando contexto del área visible…';
             var current = sequence;
             timer = setTimeout(function() { timer = null; load(current); }, delay);
@@ -154,10 +239,14 @@
                 status.textContent = 'Acerca el mapa para consultar un área visible.';
                 return;
             }
+            var key = selection.join(',');
+            // 'idle' also fires when the map merely finished drawing; never
+            // requery a viewport that already answered with the same layers.
+            if (lastSuccess && lastSuccess.key === key && sameBounds(lastSuccess.viewport, viewport)) return;
             controller = new AbortController();
             var params = new URLSearchParams();
-            Object.keys(viewport).forEach(function(key) { params.set(key, String(viewport[key])); });
-            params.set('layers', selection.join(','));
+            Object.keys(viewport).forEach(function(name) { params.set(name, String(viewport[name])); });
+            params.set('layers', key);
             if (record) params.set('record', record);
             try {
                 var response = await fetch(endpoint + '?' + params.toString(), {
@@ -173,38 +262,18 @@
                 var data = await response.json();
                 if (current !== sequence) return;
                 var visibleNow = bounds();
-                if (!visibleNow || Object.keys(viewport).some(function(key) {
-                    return visibleNow[key] !== viewport[key];
-                })) return;
+                if (!visibleNow || !sameBounds(visibleNow, viewport)) return;
                 if (!data.ready) throw new Error('El contexto ML todavía no está disponible.');
                 var features = Array.isArray(data.features) ? data.features : [];
                 features = features.filter(function(feature) {
                     return /^[1-9]\d*$/.test(String(feature.id)) && inside(feature, viewport);
-                }).slice(0, 300);
-                // Replace the previous viewport only after a valid response arrives;
-                // this prevents the layer from disappearing while the map is moving.
-                clear();
-                features.forEach(function(feature) {
-                    var color = selection.indexOf('duplicates') !== -1 && numeric(feature.duplicate_count) > 0 ?
-                        colors.duplicates : (colors[feature.status] || colors.review);
-                    var marker = new google.maps.Marker({
-                        map: map,
-                        position: {lat: Number(feature.lat), lng: Number(feature.lng)},
-                        title: '#' + feature.id + ' · ' + (feature.fuente || '') + ' · ' + (feature.status_label || feature.status || ''),
-                        icon: {path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: color,
-                            fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2},
-                        zIndex: 1500
-                    });
-                    marker.addListener('click', function() {
-                        info.setContent(card(feature));
-                        info.open({map: map, anchor: marker, shouldFocus: false});
-                    });
-                    markers.push(marker);
-                });
+                }).slice(0, MAX_MARKERS);
+                draw(features, key);
+                lastSuccess = {key: key, viewport: viewport};
                 var total = numeric(data.total);
                 status.textContent = features.length + ' de ' + (total === null ? features.length : total) +
                     ' registros en el área visible.' + (data.truncated ?
-                        ' Límite de 300: acerca el mapa para ver el detalle.' : '');
+                        ' Límite de ' + MAX_MARKERS + ': acerca el mapa para ver el detalle.' : '');
             } catch (error) {
                 if (current !== sequence || error.name === 'AbortError') return;
                 status.textContent = error.message || 'No se pudo cargar el contexto ML.';
@@ -220,9 +289,13 @@
         global.addEventListener('scraped-property-saved', function(event) {
             var id = event.detail && event.detail.id;
             if (!Number.isSafeInteger(id) || id <= 0) return;
-            schedule(0, 'Registro guardado. Consultando contexto actualizado…');
+            // The saved record's card shows pre-save values; close it but keep
+            // the pins steady until the refreshed data arrives.
+            openFeatureId = null;
+            info.close();
+            schedule(0, 'Registro guardado. Consultando contexto actualizado…', true);
         });
-        var instance = {refresh: function() { schedule(350); }};
+        var instance = {refresh: function() { schedule(350, null, true); }};
         instances.set(map, instance);
         // No initial request; the user must explicitly select a layer.
         return instance;

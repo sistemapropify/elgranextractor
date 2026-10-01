@@ -1217,6 +1217,7 @@ let allZones = [];
 let propifyPropertyMarkers = [];
 let propifyPriceLabelOverlays = [];
 let propifyPropertiesLoaded = false;
+let propertyFilterFacetsLoaded = false;
 let propifyProperties = [];
 let propifyPropertiesRequest = null;
 let propertyAreaProjection = null;
@@ -1868,6 +1869,7 @@ function setupPropifyPropertyLayer() {
         if (filter) filter.addEventListener('change', renderPropifyPropertyMarkers);
     });
 
+    loadPropertyFilterOptions();
     if (toggle.checked) loadPropifyProperties();
 }
 
@@ -1932,6 +1934,49 @@ function populatePropifyFilter(select, values, defaultLabel) {
         select.appendChild(option);
     });
     if (unique.indexOf(current) !== -1) select.value = current;
+}
+
+// Los pines se cargan por portal bajo demanda, pero los filtros deben mostrar
+// las opciones disponibles desde el inicio. Este pedido liviano evita tener
+// que traer las propiedades completas solo para llenar venta/alquiler y tipo.
+function applyPropertyFilterFacets(facets) {
+    if (!facets) return;
+    populatePropifyFilter(
+        document.getElementById('propify-precision-filter'),
+        facets.precision || [],
+        'Todas las precisiones'
+    );
+    populatePropifyFilter(
+        document.getElementById('propify-operation-filter'),
+        facets.operation || [],
+        'Venta y alquiler'
+    );
+    populatePropifyFilter(
+        document.getElementById('propify-type-filter'),
+        facets.type || [],
+        'Todos los tipos'
+    );
+    populatePropifyFilter(
+        document.getElementById('propify-district-filter'),
+        facets.district || [],
+        'Todos los distritos'
+    );
+}
+
+function loadPropertyFilterOptions() {
+    return fetch(PROPIFY_PROPERTIES_ENDPOINT + '?facets=1&sources=propify,remax,properati', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Accept': 'application/json' }
+    })
+        .then(parseJsonResponse)
+        .then(function(data) {
+            propertyFilterFacetsLoaded = true;
+            applyPropertyFilterFacets(data.facets);
+        })
+        .catch(function(error) {
+            console.error('Error loading property filter options:', error);
+        });
 }
 
 function filteredPropifyProperties() {
@@ -2436,26 +2481,16 @@ function loadPropifyProperties() {
         .then(parseJsonResponse)
         .then(function(data) {
             propifyProperties = data.properties || [];
-            populatePropifyFilter(
-                document.getElementById('propify-precision-filter'),
-                propifyProperties.map(function(property) { return property.location_precision; }),
-                'Todas las precisiones'
-            );
-            populatePropifyFilter(
-                document.getElementById('propify-operation-filter'),
-                propifyProperties.map(function(property) { return property.operation_type; }),
-                'Venta y alquiler'
-            );
-            populatePropifyFilter(
-                document.getElementById('propify-type-filter'),
-                propifyProperties.map(function(property) { return property.property_type; }),
-                'Todos los tipos'
-            );
-            populatePropifyFilter(
-                document.getElementById('propify-district-filter'),
-                propifyProperties.map(function(property) { return property.district; }),
-                'Todos los distritos'
-            );
+            if (!propertyFilterFacetsLoaded) {
+                // Respaldo: si el pedido de opciones falló, se llenan con lo
+                // que trajo este portal para no dejar los filtros vacíos.
+                applyPropertyFilterFacets({
+                    precision: propifyProperties.map(function(property) { return property.location_precision; }),
+                    operation: propifyProperties.map(function(property) { return property.operation_type; }),
+                    type: propifyProperties.map(function(property) { return property.property_type; }),
+                    district: propifyProperties.map(function(property) { return property.district; })
+                });
+            }
             propifyPropertiesLoaded = true;
             renderPropifyPropertyMarkers();
             if (new URLSearchParams(location.search).get('quality') === 'alerts' && !window.qualityAlertsLocated) {

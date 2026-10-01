@@ -45,13 +45,16 @@ async function run() {
         setZoom(value) { this.zoom = value; },
     };
     const infoWindows = [];
-    function InfoWindow() { infoWindows.push(this); }
+    function InfoWindow(options) { this.options = options || {}; infoWindows.push(this); }
     InfoWindow.prototype.close = function() { this.opened = false; };
     InfoWindow.prototype.setContent = function(content) { this.content = content; };
     InfoWindow.prototype.open = function() { this.opened = true; };
     function Marker(options) { this.options = options; this.map = options.map; this.events = {}; markerInstances.push(this); }
     Marker.prototype.addListener = function(name, callback) { this.events[name] = callback; };
     Marker.prototype.setMap = function(value) { this.map = value; };
+    Marker.prototype.setPosition = function(value) { this.options.position = value; this.position = value; };
+    Marker.prototype.setIcon = function(value) { this.options.icon = value; };
+    Marker.prototype.setTitle = function(value) { this.options.title = value; };
     const context = vm.createContext({
         document: {
             getElementById: id => id === 'ml-context-layers' ? panel : status,
@@ -118,6 +121,12 @@ async function run() {
     await respond(0, [feature(1)]);
     assert.equal(markerInstances.length, 1, 'A late superseded response cannot add markers.');
     markerInstances[0].events.click();
+    assert.equal(infoWindows[0].options.disableAutoPan, true,
+        'Opening a card must not pan the map: that pan would reload the viewport and close the card.');
+    mapEvents.idle();
+    flushTimer(350);
+    assert.equal(requests.length, 2, 'An idle event without a real viewport change does not refetch.');
+    assert.equal(infoWindows[0].opened, true, 'The open card survives an idle refresh.');
     const card = infoWindows[0].content;
     assert.ok(card.children.some(child => child.textContent === 'Antigüedad: 0 años'), 'Known zero age is not missing.');
     assert.ok(card.children.some(child => child.textContent.includes('Apx')));
@@ -156,13 +165,15 @@ async function run() {
     assert.equal(infoWindows[0].opened, true);
     windowEvents['scraped-property-saved']({detail: {id: 'bad'}});
     assert.equal(timers.size, 0, 'Malformed save events are ignored.');
+    const steadyMarker = markerInstances.at(-1);
     windowEvents['scraped-property-saved']({detail: {id: 6}});
     assert.equal(infoWindows[0].opened, false, 'Saving closes the stale compact card.');
-    assert.equal(markerInstances.at(-1).map, null, 'Saving removes old markers before reloading.');
+    assert.equal(markerInstances.at(-1).map, map, 'Saving keeps the pins steady until the new data arrives.');
     assert.match(status.textContent, /Registro guardado/);
     flushTimer(0);
     await respond(4, [feature(6, {price_usd: 110000, geo_status: 'pending',
         geo_label: 'Contexto pendiente', zone_name: null, zone_version: null})]);
+    assert.equal(markerInstances.at(-1), steadyMarker, 'A refresh reuses the marker instead of redrawing the layer.');
     markerInstances.at(-1).events.click();
     assert.ok(infoWindows[0].content.children.some(child => child.textContent.includes('Contexto pendiente')),
         'The refreshed card displays the backend pending context without inferring a microzone.');
