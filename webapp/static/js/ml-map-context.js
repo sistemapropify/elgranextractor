@@ -99,6 +99,7 @@
         var selectedType = '';
         var selectedDistrict = '';
         var lastResult = null;
+        var savedRecordId = null;
         // disableAutoPan keeps opening a card from moving the map; a pan would
         // fire 'idle', reload the viewport and close the card just opened.
         var info = new google.maps.InfoWindow({maxWidth: 320, disableAutoPan: true});
@@ -281,6 +282,77 @@
             });
         }
 
+        // Capa a la que pertenece un registro según su evaluación vigente.
+        function layerOf(feature) {
+            if (feature.status === 'eligible') return 'eligible';
+            if (feature.status === 'reference') return 'reference';
+            return 'review';
+        }
+
+        function layerLabel(layer) {
+            return {eligible: 'Candidatas', reference: 'Referencias', review: 'Por revisar'}[layer] || layer;
+        }
+
+        // Al corregir, el registro cambia de estado y de tipo: puede quedar fuera
+        // de la capa activa o de los filtros. Se busca por su id con todas las
+        // capas y se ajusta la vista para que el usuario lo vuelva a ver.
+        function reattachSavedRecord(id) {
+            var viewport = bounds();
+            if (!viewport || !id) return Promise.resolve();
+            var params = new URLSearchParams();
+            Object.keys(viewport).forEach(function(name) { params.set(name, String(viewport[name])); });
+            params.set('layers', layers.join(','));
+            params.set('record', String(id));
+            return fetch(endpoint + '?' + params.toString(), {
+                credentials: 'same-origin', cache: 'no-store', headers: {'Accept': 'application/json'}
+            })
+                .then(function(response) { return response.ok ? response.json() : null; })
+                .then(function(data) {
+                    var feature = data && Array.isArray(data.features) ? data.features[0] : null;
+                    if (!feature) {
+                        status.textContent = 'El registro #' + id +
+                            ' no tiene coordenadas o no está en el seguimiento ML; ábrelo desde Calidad.';
+                        return;
+                    }
+                    var target = layerOf(feature), adjusted = false;
+                    checkboxes.forEach(function(input) {
+                        if (input.value === target && !input.checked) { input.checked = true; adjusted = true; }
+                    });
+                    if (propertyTypeOf(feature) !== selectedType) {
+                        knownTypes.add(propertyTypeOf(feature));
+                        selectedType = propertyTypeOf(feature);
+                        adjusted = true;
+                    }
+                    if (selectedDistrict && districtOf(feature) !== selectedDistrict) {
+                        selectedDistrict = '';
+                        adjusted = true;
+                    }
+                    // Si la corrección movió el registro fuera del área, se
+                    // lleva el mapa hasta él para que no se pierda de vista.
+                    var lat = numeric(feature.lat), lng = numeric(feature.lng);
+                    var visible = bounds();
+                    var outside = lat !== null && lng !== null && (!visible ||
+                        lat < visible.south || lat > visible.north || lng < visible.west || lng > visible.east);
+                    if (outside) {
+                        map.setCenter({lat: lat, lng: lng});
+                        if (typeof map.getZoom === 'function' && map.getZoom() < 16) map.setZoom(16);
+                        adjusted = true;
+                    }
+                    // Reflejar en los selectores lo que se acaba de ajustar.
+                    if (typeSelect) {
+                        fillSelect(typeSelect, Array.from(knownTypes), 'Elige un tipo');
+                        typeSelect.value = selectedType;
+                    }
+                    refreshDistrictOptions();
+                    var message = 'Registro #' + id + ' guardado: quedó en «' + layerLabel(target) + '»';
+                    message += selectedType ? ' · tipo ' + selectedType : '';
+                    message += (selectedDistrict ? ' · ' + selectedDistrict : '') + '.';
+                    if (adjusted) schedule(0, message);
+                    else status.textContent = message;
+                })
+                .catch(function() { /* el aviso de guardado original se conserva */ });
+        }
+
         // Los filtros corren en el cliente: elegir tipo o distrito no vuelve a
         // consultar el área ni reinicia la capa.
         function applyFilters() {
@@ -294,8 +366,10 @@
             }
             var label = features.length + (features.length === 1 ? ' registro de tipo ' : ' registros de tipo ') +
                 selectedType + (selectedDistrict ? ' en ' + selectedDistrict : '') + '.';
-            status.textContent = label + (features.length > HEAVY_RENDER ?
-                ' Son muchos pines: el mapa puede tardar en moverse.' : '');
+            var hidden = lastResult.features.length - features.length;
+            status.textContent = label +
+                (hidden > 0 ? ' ' + hidden + ' del área quedan fuera por el filtro de tipo o distrito.' : '') +
+                (features.length > HEAVY_RENDER ? ' Son muchos pines: el mapa puede tardar en moverse.' : '');
         }
 
         function schedule(delay, message, force) {
@@ -307,6 +381,8 @@
             var key = selectionKey();
             if (!key) {
                 clearMarkers();
+                // Sin capas activas no hay dónde reubicar el registro guardado.
+                savedRecordId = null;
                 status.textContent = emptyMessage;
                 return;
             }
@@ -361,6 +437,11 @@
                 lastResult = {features: features, total: numeric(data.total), key: key};
                 refreshTypeOptions(features);
                 applyFilters();
+                if (savedRecordId !== null && savedRecordId !== undefined) {
+                    var pending = savedRecordId;
+                    savedRecordId = null;
+                    reattachSavedRecord(pending);
+                }
             } catch (error) {
                 if (current !== sequence || error.name === 'AbortError') return;
                 status.textContent = error.message || 'No se pudo cargar el contexto ML.';
@@ -394,6 +475,7 @@
             // the pins steady until the refreshed data arrives.
             openFeatureId = null;
             info.close();
+            savedRecordId = id;
             schedule(0, 'Registro guardado. Consultando contexto actualizado…', true);
         });
         var instance = {refresh: function() { schedule(350, null, true); }};

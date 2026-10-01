@@ -190,6 +190,12 @@ class ContextMapIntegrationTests(TestCase):
         self.assertEqual(sorted((item['property_type'], item['district']) for item in data['features']),
                          [('Casa', 'Cayma'), ('Departamento', 'Cerro Colorado')])
 
+    def test_record_lookup_ignores_the_visible_area(self):
+        candidate = self.make_candidate('moved-away', latitud=-13.5, longitud=-71.9)
+        data = self.map({'record': candidate.propiedad_id})
+        self.assertEqual((data['shown'], data['features'][0]['id']),
+                         (1, candidate.propiedad_id))
+
     def test_current_context_shows_zone_version(self):
         candidate = self.make_candidate('zoned')
         self.context(candidate)

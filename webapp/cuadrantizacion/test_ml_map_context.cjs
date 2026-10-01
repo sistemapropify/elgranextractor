@@ -193,17 +193,34 @@ async function run() {
     assert.ok(infoWindows[0].content.children.some(child => child.textContent.includes('Contexto pendiente')),
         'The refreshed card displays the backend pending context without inferring a microzone.');
     assert.ok(infoWindows[0].content.children.some(child => child.textContent === 'USD 110,000'));
-    assert.equal(requests.length, 5, 'A save refreshes only the ML endpoint once.');
+    assert.equal(requests.length, 6, 'A save refreshes the area and then locates the saved record by id.');
     assert.ok(requests.every(request => request.url.startsWith('/ingestas/scraping/ml/mapa/')));
 
+    // El registro corregido cambia de estado y de tipo: el mapa debe reubicarlo.
+    const locateUrl = new URL(requests[5].url, 'https://example.test');
+    assert.equal(locateUrl.searchParams.get('record'), '6', 'The saved record is searched by id.');
+    assert.equal(locateUrl.searchParams.get('layers'), 'eligible,reference,review,duplicates',
+        'The saved record is searched across every layer.');
+    const corrected = {status: 'review', status_label: 'Necesita revisión',
+        property_type: 'Departamento', district: 'Cerro Colorado'};
+    await respond(5, [feature(6, corrected)]);
+    assert.equal(checkboxes[2].checked, true, 'The layer that now holds the record is enabled.');
+    assert.equal(typeSelect.value, 'Departamento', 'The type filter follows the corrected record.');
+    assert.match(status.textContent, /Registro #6 guardado: quedó en «Por revisar»/);
+    flushTimer(0);
+    await respond(6, [feature(6, corrected)]);
+    assert.ok(markerInstances.some(marker => marker.map === map && marker.mlFeature.id === 6),
+        'The corrected record is visible again after the correction.');
+
     // Tipo y distrito: se filtran en el cliente, sin volver a consultar el área.
+    checkboxes[2].checked = false;
     checkboxes[1].checked = false;
     checkboxes[0].checked = true;
     checkboxes[0].listeners.change();
     flushTimer(0);
     typeSelect.value = '';
     typeSelect.listeners.change();
-    await respond(5, [feature(7, {status: 'eligible', property_type: 'Casa'}),
+    await respond(7, [feature(7, {status: 'eligible', property_type: 'Casa'}),
         feature(8, {status: 'eligible', property_type: 'Departamento'}),
         feature(9, {status: 'eligible', property_type: 'Departamento', district: 'Cerro Colorado'})]);
     const drawnMarkers = () => markerInstances.filter(marker => marker.map === map);
@@ -238,6 +255,6 @@ async function run() {
     typeSelect.value = '';
     typeSelect.listeners.change();
     assert.equal(drawnMarkers().length, 0, 'Clearing the type cleans the map again.');
-    console.log('PASS: opt-in, linked coordinates, viewport bounds, debounce/abort/stale responses, markers, cards, links, editor, save refresh, type and district filters.');
+    console.log('PASS: opt-in, linked coordinates, viewport bounds, debounce/abort/stale responses, markers, cards, links, editor, save refresh, saved-record reattach, type and district filters.');
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });
