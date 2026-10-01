@@ -58,9 +58,7 @@ class ContextViewValidationTests(SimpleTestCase):
         with patch.object(ml_context, 'schema_ready', return_value=True), patch.object(views, '_candidates') as query:
             response = views.map_data(self.request(data=BOUNDS))
         data = json.loads(response.content)
-        self.assertEqual((data['features'], data['shown'], data['total'], data['limit']),
-                         ([], 0, 0, views.MAP_LIMIT))
-        self.assertFalse(data['truncated'])
+        self.assertEqual((data['features'], data['shown'], data['total']), ([], 0, 0))
         query.assert_not_called()
         self.assertEqual(response['Cache-Control'], 'private, no-store')
 
@@ -185,12 +183,12 @@ class ContextMapIntegrationTests(TestCase):
         self.assertEqual(self.map({'record': candidate.propiedad_id})['shown'], 1)
         self.assertEqual(self.map({'record': 9223372036854775807})['shown'], 0)
 
-    def test_feature_exposes_the_property_type_for_the_map_filter(self):
-        self.make_candidate('type-casa')
-        self.make_candidate('type-departamento', tipo_inmueble='Departamento')
+    def test_feature_exposes_type_and_district_for_the_map_filters(self):
+        self.make_candidate('type-casa', distrito='Cayma')
+        self.make_candidate('type-departamento', tipo_inmueble='Departamento', distrito='Cerro Colorado')
         data = self.map()
-        self.assertEqual(sorted(item['property_type'] for item in data['features']),
-                         ['Casa', 'Departamento'])
+        self.assertEqual(sorted((item['property_type'], item['district']) for item in data['features']),
+                         [('Casa', 'Cayma'), ('Departamento', 'Cerro Colorado')])
 
     def test_current_context_shows_zone_version(self):
         candidate = self.make_candidate('zoned')
@@ -230,7 +228,6 @@ class ContextMapIntegrationTests(TestCase):
         PropiedadesCompetencia.objects.filter(pk=candidate.propiedad_id).update(latitud=-16.4)
         data = self.map()
         self.assertEqual((data['shown'], data['omitted_stale_coordinates']), (0, 1))
-        self.assertTrue(data['truncated'])
 
     def test_duplicate_layer_does_not_require_candidate_layer(self):
         left = self.make_candidate('left', status='reference')
@@ -256,20 +253,19 @@ class ContextMapIntegrationTests(TestCase):
         ml_candidates.capture(right.propiedad_id, origin='test')
         self.assertEqual(self.map({'layers': 'duplicates'})['total'], 0)
 
-    def test_map_cap_and_deterministic_order(self):
-        with patch.object(views, 'MAP_LIMIT', 3):
-            sources = [PropiedadesCompetencia(fuente='remax', id_origen=f'cap-{i}', latitud=-16.4,
-                                             longitud=-71.5, precision_ubicacion='exacta') for i in range(4)]
-            PropiedadesCompetencia.objects.bulk_create(sources)
-            observations = [MLObservation(propiedad=source, sequence=1, content_hash=str(source.pk),
-                rule_version='test', snapshot={'fuente': source.fuente, 'id_origen': source.id_origen,
-                'latitud': '-16.4', 'longitud': '-71.5', 'precision_ubicacion': 'exacta'}) for source in sources]
-            MLObservation.objects.bulk_create(observations)
-            MLCandidate.objects.bulk_create([MLCandidate(propiedad=source, latest=observation, status='eligible')
-                                            for source, observation in zip(sources, observations)])
-            data = self.map()
-        self.assertEqual((data['total'], data['shown'], data['limit'], data['truncated']), (4, 3, 3, True))
-        self.assertEqual([item['id'] for item in data['features']], sorted(source.pk for source in sources)[:3])
+    def test_map_returns_every_matching_candidate_in_deterministic_order(self):
+        sources = [PropiedadesCompetencia(fuente='remax', id_origen=f'cap-{i}', latitud=-16.4,
+                                         longitud=-71.5, precision_ubicacion='exacta') for i in range(4)]
+        PropiedadesCompetencia.objects.bulk_create(sources)
+        observations = [MLObservation(propiedad=source, sequence=1, content_hash=str(source.pk),
+            rule_version='test', snapshot={'fuente': source.fuente, 'id_origen': source.id_origen,
+            'latitud': '-16.4', 'longitud': '-71.5', 'precision_ubicacion': 'exacta'}) for source in sources]
+        MLObservation.objects.bulk_create(observations)
+        MLCandidate.objects.bulk_create([MLCandidate(propiedad=source, latest=observation, status='eligible')
+                                        for source, observation in zip(sources, observations)])
+        data = self.map()
+        self.assertEqual((data['total'], data['shown']), (4, 4))
+        self.assertEqual([item['id'] for item in data['features']], sorted(source.pk for source in sources))
 
     def test_dashboard_filters_record_and_renders_review_editor_once(self):
         left, right = self.make_candidate('panel-left'), self.make_candidate('panel-right')

@@ -1163,10 +1163,14 @@ window.onGoogleMapsLoaded = function() {
                 <div class="ml-context-filters">
                     <label for="ml-map-type">Tipo de propiedad</label>
                     <select id="ml-map-type" aria-label="Filtrar el contexto ML por tipo de propiedad">
-                        <option value="">Todos los tipos</option>
+                        <option value="">Elige un tipo</option>
+                    </select>
+                    <label for="ml-map-district">Distrito</label>
+                    <select id="ml-map-district" disabled aria-label="Filtrar el contexto ML por distrito">
+                        <option value="">Todos los distritos</option>
                     </select>
                 </div>
-                <p id="ml-map-status" class="map-quality-help" role="status" aria-live="polite">Marca una capa para consultar el área visible.</p>
+                <p id="ml-map-status" class="map-quality-help" role="status" aria-live="polite">Marca una capa y elige un tipo de propiedad para ver el área visible.</p>
                 <p class="map-quality-help">Exa: exacta declarada por la fuente. Apx: aproximada. No certifican ubicación catastral. Los posibles duplicados requieren revisión.</p>
                 <a href="/ingestas/scraping/calidad/?tab=contexto" class="config-btn">Revisar identidad y microzonas ↗</a>
             </div>

@@ -78,8 +78,8 @@
         return box;
     }
 
-    // Debe coincidir con MAP_LIMIT del endpoint de contexto ML.
-    var MAX_MARKERS = 2000;
+    // Sobre este volumen el navegador dibuja bien, pero conviene avisarlo.
+    var HEAVY_RENDER = 3000;
     // Google reports slightly different bounds on each idle event of the same
     // viewport; a tiny tolerance avoids pointless refetches.
     var BOUND_TOLERANCE = 0.000001;
@@ -92,8 +92,12 @@
         checkboxes.forEach(function(input) { input.checked = false; });
         var status = document.getElementById('ml-map-status');
         var typeSelect = document.getElementById('ml-map-type');
+        var districtSelect = document.getElementById('ml-map-district');
         var knownTypes = new Set();
+        // Zonas disponibles por tipo, para no perder una selección al mover el mapa.
+        var knownDistricts = {};
         var selectedType = '';
+        var selectedDistrict = '';
         var lastResult = null;
         // disableAutoPan keeps opening a card from moving the map; a pan would
         // fire 'idle', reload the viewport and close the card just opened.
@@ -216,49 +220,82 @@
             });
         }
 
-        function refreshTypeOptions(features) {
-            features.forEach(function(feature) {
-                var value = String(feature.property_type || '').trim();
-                if (value) knownTypes.add(value);
-            });
-            if (!typeSelect) return;
-            typeSelect.innerHTML = '';
-            var all = node('option', 'Todos los tipos');
+        function propertyTypeOf(feature) {
+            return String(feature.property_type || '').trim() || 'Sin tipo';
+        }
+
+        function districtOf(feature) {
+            return String(feature.district || '').trim() || 'Sin distrito';
+        }
+
+        function fillSelect(select, values, defaultLabel) {
+            if (!select) return;
+            select.innerHTML = '';
+            var all = node('option', defaultLabel);
             all.value = '';
-            typeSelect.appendChild(all);
-            Array.from(knownTypes).sort(function(left, right) {
+            select.appendChild(all);
+            values.sort(function(left, right) {
                 return left.localeCompare(right, 'es', {sensitivity: 'base'});
             }).forEach(function(value) {
                 var option = node('option', value);
                 option.value = value;
-                typeSelect.appendChild(option);
+                select.appendChild(option);
             });
+        }
+
+        function refreshTypeOptions(features) {
+            features.forEach(function(feature) {
+                var type = propertyTypeOf(feature);
+                knownTypes.add(type);
+                if (!knownDistricts[type]) knownDistricts[type] = new Set();
+                knownDistricts[type].add(districtOf(feature));
+            });
+            if (!typeSelect) return;
+            fillSelect(typeSelect, Array.from(knownTypes), 'Elige un tipo');
             // Keep the user's choice while the area is reloaded.
             typeSelect.value = knownTypes.has(selectedType) ? selectedType : '';
             selectedType = typeSelect.value;
+            refreshDistrictOptions();
+        }
+
+        // Los distritos dependen del tipo elegido: se listan solo los que
+        // tienen registros de ese tipo en lo ya consultado.
+        function refreshDistrictOptions() {
+            if (!districtSelect) return;
+            var districts = selectedType && knownDistricts[selectedType] ?
+                Array.from(knownDistricts[selectedType]) : [];
+            fillSelect(districtSelect, districts, 'Todos los distritos');
+            districtSelect.disabled = !selectedType || !districts.length;
+            if (!selectedType || districts.indexOf(selectedDistrict) === -1) selectedDistrict = '';
+            districtSelect.value = selectedDistrict;
         }
 
         function filteredFeatures() {
             if (!lastResult) return [];
-            if (!selectedType) return lastResult.features;
+            // Nada se dibuja hasta elegir un tipo: el mapa queda limpio y el
+            // navegador no arma miles de pines que nadie pidió.
+            if (!selectedType) return [];
             return lastResult.features.filter(function(feature) {
-                return String(feature.property_type || '').trim() === selectedType;
+                return propertyTypeOf(feature) === selectedType &&
+                    (!selectedDistrict || districtOf(feature) === selectedDistrict);
             });
         }
 
-        // Filtering by type is local: it must not reload the area, so opening a
-        // card or choosing a type never resets the layer.
-        function applyTypeFilter() {
+        // Los filtros corren en el cliente: elegir tipo o distrito no vuelve a
+        // consultar el área ni reinicia la capa.
+        function applyFilters() {
             if (!lastResult) return;
-            var features = filteredFeatures(), total = lastResult.total;
+            var features = filteredFeatures();
             draw(features, lastResult.key);
-            var suffix = lastResult.truncated ?
-                ' Límite de ' + MAX_MARKERS + ': acerca el mapa para ver el detalle.' : '';
-            status.textContent = selectedType ?
-                features.length + ' de tipo ' + selectedType + ' en el área visible · ' +
-                    (total === null ? features.length : total) + ' registros en total.' + suffix :
-                features.length + ' de ' + (total === null ? features.length : total) +
-                    ' registros en el área visible.' + suffix;
+            if (!selectedType) {
+                status.textContent = lastResult.features.length +
+                    ' registros en el área visible. Elige un tipo de propiedad para verlos.';
+                return;
+            }
+            var label = features.length + (features.length === 1 ? ' registro de tipo ' : ' registros de tipo ') +
+                selectedType + (selectedDistrict ? ' en ' + selectedDistrict : '') + '.';
+            status.textContent = label + (features.length > HEAVY_RENDER ?
+                ' Son muchos pines: el mapa puede tardar en moverse.' : '');
         }
 
         function schedule(delay, message, force) {
@@ -319,12 +356,11 @@
                 var features = Array.isArray(data.features) ? data.features : [];
                 features = features.filter(function(feature) {
                     return /^[1-9]\d*$/.test(String(feature.id)) && inside(feature, viewport);
-                }).slice(0, MAX_MARKERS);
+                });
                 lastSuccess = {key: key, viewport: viewport};
-                lastResult = {features: features, total: numeric(data.total),
-                    truncated: !!data.truncated, key: key};
+                lastResult = {features: features, total: numeric(data.total), key: key};
                 refreshTypeOptions(features);
-                applyTypeFilter();
+                applyFilters();
             } catch (error) {
                 if (current !== sequence || error.name === 'AbortError') return;
                 status.textContent = error.message || 'No se pudo cargar el contexto ML.';
@@ -339,7 +375,15 @@
         if (typeSelect) {
             typeSelect.addEventListener('change', function() {
                 selectedType = typeSelect.value;
-                applyTypeFilter();
+                selectedDistrict = '';
+                refreshDistrictOptions();
+                applyFilters();
+            });
+        }
+        if (districtSelect) {
+            districtSelect.addEventListener('change', function() {
+                selectedDistrict = districtSelect.value;
+                applyFilters();
             });
         }
         map.addListener('idle', function() { schedule(350); });

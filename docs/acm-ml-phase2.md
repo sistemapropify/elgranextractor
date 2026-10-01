@@ -10,9 +10,10 @@ El ACM conserva su algoritmo.
   Presenta evaluación geográfica, versiones de microzona y coincidencias por revisar.
 - **Mapa**: /cuadrantizacion/mapa/. Capas Candidatas, Referencias, Por revisar
   y Posibles duplicados, todas desmarcadas al abrir. Solo consultan el área visible.
-  El filtro de tipo de propiedad actúa sobre el área ya cargada, sin volver a
-  consultar el servidor. El límite de 2000 registros se indica cuando corresponde; ampliar el zoom permite
-  inspeccionar un área menor. No representa el inventario total del mercado.
+  El mapa no dibuja pines hasta elegir un tipo de propiedad; luego se puede
+  acotar por distrito. Ambos filtros actúan sobre el área ya cargada, sin volver
+  a consultar el servidor, y no hay tope de registros por área. No representa el
+  inventario total del mercado.
 - Cada pin abre una ficha compacta con ID, portal, precisión, precio, superficies
   separadas, antigüedad, estado ML y microzona/versionado cuando estén disponibles.
   Desde allí se abre la publicación, el editor existente o el contexto de identidad.

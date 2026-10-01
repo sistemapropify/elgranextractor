@@ -21,7 +21,8 @@ function deferred() {
 }
 function feature(id, overrides = {}) {
     return {id, fuente: 'properati', code: 'ABC', title: 'Casa <script>no ejecutar</script>',
-        property_type: 'Casa', lat: -16.4, lng: -71.5, price_usd: '100000', land_area: 100,
+        property_type: 'Casa', district: 'Cayma', lat: -16.4, lng: -71.5,
+        price_usd: '100000', land_area: 100,
         built_area: 150, age: 0, precision: 'aproximada', status: 'reference',
         status_label: 'Referencia', geo_label: 'Ubicación aproximada',
         zone_name: 'Zona A', zone_version: 2, duplicate_count: 0,
@@ -33,6 +34,9 @@ async function run() {
     const status = element('p');
     const typeSelect = element('select');
     typeSelect.value = '';
+    const districtSelect = element('select');
+    districtSelect.value = '';
+    districtSelect.disabled = true;
     const panel = {querySelectorAll: () => checkboxes};
     const requests = [], markerInstances = [], editors = [];
     const timers = new Map();
@@ -62,7 +66,8 @@ async function run() {
     const context = vm.createContext({
         document: {
             getElementById: id => id === 'ml-context-layers' ? panel :
-                (id === 'ml-map-type' ? typeSelect : status),
+                (id === 'ml-map-type' ? typeSelect :
+                    (id === 'ml-map-district' ? districtSelect : status)),
             createElement: element,
         },
         location: {search: '?source=remax&record=81&ml_record=42&ml_lat=-16.4&ml_lng=-71.5'},
@@ -118,11 +123,16 @@ async function run() {
     mapEvents.idle();
     flushTimer(350);
     assert.equal(requests.length, 2, 'Rapid idle events create one viewport request.');
-    await respond(1, [feature(2), feature(3, {lat: -12}), feature(4, {lat: null})], {total: 503, truncated: true});
+    await respond(1, [feature(2), feature(3, {lat: -12}), feature(4, {lat: null})]);
+    assert.equal(markerInstances.length, 0, 'The area loads without drawing until a type is chosen.');
+    assert.match(status.textContent, /Elige un tipo de propiedad/);
+    assert.deepEqual(typeSelect.children.filter(child => child.tag === 'option').map(option => option.value),
+        ['', 'Casa'], 'The type selector lists the types of the visible area.');
+    typeSelect.value = 'Casa';
+    typeSelect.listeners.change();
     assert.equal(markerInstances.length, 1, 'Client additionally rejects out-of-viewport and missing coordinates.');
     assert.equal(markerInstances[0].options.icon.fillColor, '#687787');
-    assert.match(status.textContent, /1 de 503/);
-    assert.match(status.textContent, /Límite de 2000/);
+    assert.match(status.textContent, /1 registro de tipo Casa/);
     await respond(0, [feature(1)]);
     assert.equal(markerInstances.length, 1, 'A late superseded response cannot add markers.');
     markerInstances[0].events.click();
@@ -186,28 +196,48 @@ async function run() {
     assert.equal(requests.length, 5, 'A save refreshes only the ML endpoint once.');
     assert.ok(requests.every(request => request.url.startsWith('/ingestas/scraping/ml/mapa/')));
 
-    // Tipo de propiedad: se filtra en el cliente, sin volver a consultar el área.
+    // Tipo y distrito: se filtran en el cliente, sin volver a consultar el área.
     checkboxes[1].checked = false;
     checkboxes[0].checked = true;
     checkboxes[0].listeners.change();
     flushTimer(0);
-    await respond(5, [feature(7, {status: 'eligible', status_label: 'Candidata', property_type: 'Casa'}),
-        feature(8, {status: 'eligible', status_label: 'Candidata', property_type: 'Departamento'})]);
-    const drawnMarkers = () => markerInstances.filter(marker => marker.map === map);
-    assert.equal(drawnMarkers().length, 2, 'Every type is drawn while no type filter is active.');
-    assert.deepEqual(typeSelect.children.filter(child => child.tag === 'option').map(option => option.value),
-        ['', 'Casa', 'Departamento'], 'The type filter lists the types of the visible area.');
-    const requestsBeforeTypeFilter = requests.length;
-    typeSelect.value = 'Departamento';
-    typeSelect.listeners.change();
-    assert.equal(requests.length, requestsBeforeTypeFilter, 'Filtering by type must not reload the area.');
-    assert.equal(drawnMarkers().length, 1);
-    assert.equal(drawnMarkers()[0].mlFeature.property_type, 'Departamento');
-    assert.match(status.textContent, /de tipo Departamento en el área visible/);
     typeSelect.value = '';
     typeSelect.listeners.change();
-    assert.equal(drawnMarkers().length, 2, 'Clearing the type filter restores every marker.');
-    assert.match(status.textContent, /2 de 2 registros en el área visible/);
-    console.log('PASS: opt-in, linked coordinates, viewport bounds, debounce/abort/stale responses, markers, cards, links, editor, save refresh and type filter.');
+    await respond(5, [feature(7, {status: 'eligible', property_type: 'Casa'}),
+        feature(8, {status: 'eligible', property_type: 'Departamento'}),
+        feature(9, {status: 'eligible', property_type: 'Departamento', district: 'Cerro Colorado'})]);
+    const drawnMarkers = () => markerInstances.filter(marker => marker.map === map);
+    assert.equal(drawnMarkers().length, 0, 'Nothing is drawn until a type is chosen.');
+    assert.match(status.textContent, /3 registros en el área visible/);
+    assert.deepEqual(typeSelect.children.filter(child => child.tag === 'option').map(option => option.value),
+        ['', 'Casa', 'Departamento'], 'The type selector lists the types of the visible area.');
+    assert.equal(districtSelect.disabled, true, 'Districts stay disabled until a type is chosen.');
+
+    const requestsBeforeFilters = requests.length;
+    typeSelect.value = 'Departamento';
+    typeSelect.listeners.change();
+    assert.equal(requests.length, requestsBeforeFilters, 'Filtering must not reload the area.');
+    assert.equal(drawnMarkers().length, 2);
+    assert.ok(drawnMarkers().every(marker => marker.mlFeature.property_type === 'Departamento'));
+    assert.deepEqual(districtSelect.children.filter(child => child.tag === 'option').map(option => option.value),
+        ['', 'Cayma', 'Cerro Colorado'], 'Districts come from the records of the chosen type.');
+    assert.equal(districtSelect.disabled, false);
+
+    districtSelect.value = 'Cerro Colorado';
+    districtSelect.listeners.change();
+    assert.equal(drawnMarkers().length, 1, 'The district filter narrows the drawn records.');
+    assert.equal(drawnMarkers()[0].mlFeature.district, 'Cerro Colorado');
+    assert.match(status.textContent, /Departamento en Cerro Colorado/);
+
+    typeSelect.value = 'Casa';
+    typeSelect.listeners.change();
+    assert.equal(drawnMarkers().length, 1);
+    assert.equal(drawnMarkers()[0].mlFeature.property_type, 'Casa');
+    assert.equal(districtSelect.value, '', 'A district without records of the new type is cleared.');
+
+    typeSelect.value = '';
+    typeSelect.listeners.change();
+    assert.equal(drawnMarkers().length, 0, 'Clearing the type cleans the map again.');
+    console.log('PASS: opt-in, linked coordinates, viewport bounds, debounce/abort/stale responses, markers, cards, links, editor, save refresh, type and district filters.');
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

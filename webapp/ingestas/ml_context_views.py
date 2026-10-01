@@ -19,8 +19,6 @@ from .models import MLCandidate, MLIdentityDecision, MLIdentityPair, MLZoneVersi
 from .property_access import allowed, user_for
 
 
-# Tope de pines por area visible; el mapa usa el mismo valor en MAX_MARKERS.
-MAP_LIMIT = 2000
 GEO_LABELS = {**ml_context.GEO_LABELS, 'stale': 'Ubicación pendiente de reevaluar'}
 PAIR_LABELS = {'possible': 'Posible coincidencia', 'same': 'Misma propiedad, según revisión',
                'different': 'Propiedades diferentes, según revisión'}
@@ -104,26 +102,19 @@ def _current_pairs():
             status='different', decision_stale=False)
 
 
-# SQL Server admite 2100 parametros por consulta y el mapa puede devolver
-# MAP_LIMIT identificadores: se leen las parejas por lotes y se deduplican.
-_DUPLICATE_ID_CHUNK = 1000
-
-
 def _duplicate_counts(ids):
+    """Current duplicate evidence per candidate, without an unbounded ``IN``.
+
+    The map can return every candidate of the visible area, so filtering the
+    pairs by a large id list would exceed the SQL Server parameter limit as the
+    inventory grows. The current-pair set is small: one unfiltered pass is both
+    cheaper and stable.
+    """
     counts = Counter()
     included = set(ids)
     if not included:
         return counts
-    ordered = sorted(included)
-    pairs = set()
-    for offset in range(0, len(ordered), _DUPLICATE_ID_CHUNK):
-        chunk = ordered[offset:offset + _DUPLICATE_ID_CHUNK]
-        pairs.update(
-            _current_pairs()
-            .filter(Q(left_id__in=chunk) | Q(right_id__in=chunk))
-            .values_list('left_id', 'right_id')
-        )
-    for left, right in pairs:
+    for left, right in _current_pairs().values_list('left_id', 'right_id').iterator():
         if left in included:
             counts[left] += 1
         if right in included:
@@ -169,8 +160,9 @@ def _feature(candidate, catalog_hash, duplicate_count=0):
     geo = _geo(candidate, catalog_hash)
     return dict(id=candidate.propiedad_id, fuente=snapshot.get('fuente') or '',
         code=snapshot.get('id_origen') or '', title=snapshot.get('titulo') or '',
-        # Tipo de propiedad: permite filtrar la capa ML en el mapa.
+        # Tipo y distrito: permiten filtrar la capa ML en el mapa.
         property_type=str(snapshot.get('tipo_inmueble') or '').strip() or 'Propiedad',
+        district=str(snapshot.get('distrito') or '').strip() or 'Sin distrito',
         lat=_number(snapshot.get('latitud')), lng=_number(snapshot.get('longitud')),
         price_usd=_number(snapshot.get('precio_usd')), land_area=_number(snapshot.get('area_terreno')),
         built_area=_number(snapshot.get('area_construida')), age=_number(snapshot.get('antiguedad_anios')),
@@ -192,7 +184,7 @@ def map_data(request):
     if not ml_context.schema_ready():
         return _json({'ready': False, 'error': 'Migración del contexto ML pendiente.'}, 503)
     if not layers:
-        return _json(dict(features=[], total=0, shown=0, truncated=False, limit=MAP_LIMIT, ready=True))
+        return _json(dict(features=[], total=0, shown=0, ready=True))
     query = _candidates().filter(propiedad__latitud__gte=bounds['south'],
         propiedad__latitud__lte=bounds['north'], propiedad__longitud__gte=bounds['west'],
         propiedad__longitud__lte=bounds['east'])
@@ -205,8 +197,8 @@ def map_data(request):
         selected |= Q(propiedad_id__in=Subquery(pairs.values('left_id')))
         selected |= Q(propiedad_id__in=Subquery(pairs.values('right_id')))
     query = query.filter(selected).order_by('propiedad_id')
-    total = query.count()
-    candidates = list(query[:MAP_LIMIT])
+    # Sin tope: la capa ML dibuja todos los registros del area visible.
+    candidates = list(query)
     counts = _duplicate_counts([c.propiedad_id for c in candidates])
     catalog_hash = ml_context.current_catalog_hash()
     prepared = [_feature(c, catalog_hash, counts[c.propiedad_id]) for c in candidates]
@@ -215,8 +207,8 @@ def map_data(request):
     features = [item for item in prepared if item['lat'] is not None and item['lng'] is not None
                 and bounds['south'] <= item['lat'] <= bounds['north']
                 and bounds['west'] <= item['lng'] <= bounds['east']]
-    return _json(dict(features=features, total=total, shown=len(features), truncated=total > len(features),
-                      limit=MAP_LIMIT, ready=True, omitted_stale_coordinates=len(prepared) - len(features)))
+    return _json(dict(features=features, total=len(features), shown=len(features), ready=True,
+                      omitted_stale_coordinates=len(prepared) - len(features)))
 
 
 def _pair_is_current(pair):
