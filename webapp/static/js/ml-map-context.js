@@ -5,6 +5,44 @@
     var colors = {eligible: '#168353', reference: '#687787', review: '#bc7614', duplicates: '#8250c8'};
     var instances = new WeakMap();
     var endpoint = '/ingestas/scraping/ml/mapa/';
+    // Un color por tipo de propiedad: es el relleno del pin (el borde mantiene
+    // el color de la capa ML).
+    var TYPE_COLORS = {
+        Casa: '#1f6feb', Departamento: '#8957e5', Terreno: '#2ea043',
+        Oficina: '#d29922', Local: '#db61a2', Propiedad: '#39c5cf',
+        'Sin tipo': '#8b949e', Otro: '#6e7781'
+    };
+    var TYPE_FALLBACK = ['#1f6feb', '#8957e5', '#2ea043', '#d29922', '#db61a2', '#39c5cf', '#e5534b'];
+
+    function typeColor(type) {
+        var name = String(type || '').trim() || 'Sin tipo';
+        if (TYPE_COLORS[name]) return TYPE_COLORS[name];
+        var hash = 0;
+        for (var index = 0; index < name.length; index += 1) {
+            hash = (hash * 31 + name.charCodeAt(index)) % 9973;
+        }
+        return TYPE_FALLBACK[hash % TYPE_FALLBACK.length];
+    }
+
+    function money(value) {
+        var amount = numeric(value);
+        return amount === null ? '' : '$ ' + amount.toLocaleString('es-PE', {maximumFractionDigits: 0});
+    }
+
+    // Dos líneas bajo el pin: precio por m² del terreno (o de la construcción
+    // si no hay terreno) y antigüedad.
+    function pinLabel(feature) {
+        var rows = [];
+        var price = numeric(feature.price_usd);
+        var land = numeric(feature.land_area), built = numeric(feature.built_area);
+        if (price !== null && price > 0) {
+            if (land !== null && land > 0) rows.push('AT: ' + money(price / land) + '/m2');
+            else if (built !== null && built > 0) rows.push('AC: ' + money(price / built) + '/m2');
+        }
+        var age = numeric(feature.age);
+        if (age !== null) rows.push('Años: ' + age.toLocaleString('es-PE', {maximumFractionDigits: 1}));
+        return rows;
+    }
 
     function node(tag, text) {
         var element = document.createElement(tag);
@@ -98,7 +136,8 @@
         var knownTypes = new Set();
         // Zonas disponibles por tipo, para no perder una selección al mover el mapa.
         var knownDistricts = {};
-        var selectedType = '';
+        // Se pueden tener uno o varios tipos a la vez.
+        var selectedTypes = new Set();
         var selectedDistrict = '';
         var lastResult = null;
         var savedRecordId = null;
@@ -142,6 +181,9 @@
         }
 
         function clearMarkers() {
+            markersById.forEach(function(marker) {
+                if (marker.mlLabel) { marker.mlLabel.setMap(null); marker.mlLabel = null; }
+            });
             markersById.forEach(function(marker) { marker.setMap(null); });
             markersById.clear();
             openFeatureId = null;
@@ -173,19 +215,67 @@
                 lng >= viewport.west && lng <= viewport.east;
         }
 
-        function markerIcon(color) {
-            return {path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: color,
-                fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2};
+        function strokeColor(feature, key) {
+            if (key.indexOf('duplicates') !== -1 && numeric(feature.duplicate_count) > 0) {
+                return colors.duplicates;
+            }
+            return colors[feature.status] || colors.review;
+        }
+
+        // Relleno: tipo de propiedad. Borde: capa ML a la que pertenece.
+        function markerIcon(feature, key) {
+            return {path: google.maps.SymbolPath.CIRCLE, scale: 9,
+                fillColor: typeColor(propertyTypeOf(feature)), fillOpacity: 1,
+                strokeColor: strokeColor(feature, key), strokeWeight: 3};
+        }
+
+        // Etiqueta bajo el pin, con el mismo patrón de overlay que las tarjetas.
+        function labelOverlay(position) {
+            var overlay = new google.maps.OverlayView();
+            overlay.__position = position;
+            overlay.onAdd = function() {
+                var div = document.createElement('div');
+                div.className = 'ml-pin-label';
+                this.__div = div;
+                this.getPanes().overlayLayer.appendChild(div);
+            };
+            overlay.draw = function() {
+                if (!this.__div) return;
+                var projection = this.getProjection();
+                if (!projection || !this.__position) return;
+                var point = projection.fromLatLngToDivPixel(this.__position);
+                if (!point) return;
+                this.__div.style.left = point.x + 'px';
+                this.__div.style.top = (point.y + 12) + 'px';
+            };
+            overlay.onRemove = function() {
+                if (this.__div && this.__div.parentNode) this.__div.parentNode.removeChild(this.__div);
+                this.__div = null;
+            };
+            overlay.setMap(map);
+            return overlay;
+        }
+
+        function updateLabel(marker, feature) {
+            var rows = pinLabel(feature);
+            if (!rows.length) {
+                if (marker.mlLabel) { marker.mlLabel.setMap(null); marker.mlLabel = null; }
+                return;
+            }
+            if (!marker.mlLabel) marker.mlLabel = labelOverlay(marker.getPosition());
+            else marker.mlLabel.__position = marker.getPosition();
+            if (!marker.mlLabel.__div) return;
+            marker.mlLabel.__div.innerHTML = '';
+            rows.forEach(function(row) {
+                var line = document.createElement('div');
+                line.textContent = row;
+                marker.mlLabel.__div.appendChild(line);
+            });
         }
 
         function markerTitle(feature) {
-            return '#' + feature.id + ' · ' + (feature.fuente || '') + ' · ' +
+            return '#' + feature.id + ' · ' + propertyTypeOf(feature) + ' · ' + (feature.fuente || '') + ' · ' +
                 (feature.status_label || feature.status || '');
-        }
-
-        function markerColor(feature, key) {
-            return key.indexOf('duplicates') !== -1 && numeric(feature.duplicate_count) > 0 ?
-                colors.duplicates : (colors[feature.status] || colors.review);
         }
 
         // Refresh only what changed. Reusing the surviving markers keeps the
@@ -198,14 +288,14 @@
                 var marker = markersById.get(id);
                 if (marker) {
                     marker.setPosition({lat: Number(feature.lat), lng: Number(feature.lng)});
-                    marker.setIcon(markerIcon(markerColor(feature, key)));
+                    marker.setIcon(markerIcon(feature, key));
                     marker.setTitle(markerTitle(feature));
                 } else {
                     marker = new google.maps.Marker({
                         map: map,
                         position: {lat: Number(feature.lat), lng: Number(feature.lng)},
                         title: markerTitle(feature),
-                        icon: markerIcon(markerColor(feature, key)),
+                        icon: markerIcon(feature, key),
                         zIndex: 1500
                     });
                     marker.addListener('click', function() {
@@ -216,10 +306,12 @@
                     markersById.set(id, marker);
                 }
                 marker.mlFeature = feature;
+                updateLabel(marker, feature);
                 if (openFeatureId === id) info.setContent(card(feature));
             });
             markersById.forEach(function(marker, id) {
                 if (visible.has(id)) return;
+                if (marker.mlLabel) { marker.mlLabel.setMap(null); marker.mlLabel = null; }
                 marker.setMap(null);
                 markersById.delete(id);
                 if (openFeatureId === id) {
@@ -231,6 +323,12 @@
 
         function propertyTypeOf(feature) {
             return String(feature.property_type || '').trim() || 'Sin tipo';
+        }
+
+        function selectedTypeLabel() {
+            return Array.from(selectedTypes).sort(function(left, right) {
+                return left.localeCompare(right, 'es', {sensitivity: 'base'});
+            }).join(', ');
         }
 
         function districtOf(feature) {
@@ -252,19 +350,24 @@
             });
         }
 
-        // Botones de tipo: se elige uno y, al volver a pulsarlo, se quita.
+        // Botones de tipo: se combinan los que se quieran (Casa + Terreno).
+        // Volver a pulsar uno lo quita de la selección.
         function renderTypeButtons() {
             if (!typeButtons) return;
             typeButtons.innerHTML = '';
             Array.from(knownTypes).sort(function(left, right) {
                 return left.localeCompare(right, 'es', {sensitivity: 'base'});
             }).forEach(function(value) {
+                var active = selectedTypes.has(value);
                 var button = node('button', value);
                 button.type = 'button';
-                button.className = 'ml-type-button' + (value === selectedType ? ' active' : '');
-                button.setAttribute('aria-pressed', value === selectedType ? 'true' : 'false');
+                button.className = 'ml-type-button' + (active ? ' active' : '');
+                button.setAttribute('aria-pressed', active ? 'true' : 'false');
+                button.style.borderColor = typeColor(value);
+                if (active) button.style.background = typeColor(value);
                 button.addEventListener('click', function() {
-                    selectedType = value === selectedType ? '' : value;
+                    if (selectedTypes.has(value)) selectedTypes.delete(value);
+                    else selectedTypes.add(value);
                     renderTypeButtons();
                     refreshDistrictOptions();
                     applyFilters();
@@ -281,20 +384,25 @@
                 knownDistricts[type].add(districtOf(feature));
             });
             // Mantener la elección del usuario mientras se recarga el alcance.
-            if (selectedType && !knownTypes.has(selectedType)) selectedType = '';
+            selectedTypes.forEach(function(type) {
+                if (!knownTypes.has(type)) selectedTypes.delete(type);
+            });
             renderTypeButtons();
             refreshDistrictOptions();
         }
 
-        // Los distritos dependen del tipo elegido: se listan solo los que
-        // tienen registros de ese tipo en lo ya consultado.
+        // Los distritos dependen de los tipos elegidos: se listan los que tienen
+        // registros de cualquiera de ellos en lo ya consultado.
         function refreshDistrictOptions() {
             if (!districtSelect) return;
-            var districts = selectedType && knownDistricts[selectedType] ?
-                Array.from(knownDistricts[selectedType]) : [];
+            var union = new Set();
+            selectedTypes.forEach(function(type) {
+                (knownDistricts[type] || new Set()).forEach(function(name) { union.add(name); });
+            });
+            var districts = Array.from(union);
             fillSelect(districtSelect, districts, 'Todos los distritos');
-            districtSelect.disabled = !selectedType || !districts.length;
-            if (!selectedType || districts.indexOf(selectedDistrict) === -1) selectedDistrict = '';
+            districtSelect.disabled = !selectedTypes.size || !districts.length;
+            if (!selectedTypes.size || districts.indexOf(selectedDistrict) === -1) selectedDistrict = '';
             districtSelect.value = selectedDistrict;
         }
 
@@ -302,9 +410,9 @@
             if (!lastResult) return [];
             // Nada se dibuja hasta elegir un tipo: el mapa queda limpio y el
             // navegador no arma miles de pines que nadie pidió.
-            if (!selectedType) return [];
+            if (!selectedTypes.size) return [];
             return lastResult.features.filter(function(feature) {
-                return propertyTypeOf(feature) === selectedType &&
+                return selectedTypes.has(propertyTypeOf(feature)) &&
                     (!selectedDistrict || districtOf(feature) === selectedDistrict);
             });
         }
@@ -345,9 +453,9 @@
                     checkboxes.forEach(function(input) {
                         if (input.value === target && !input.checked) { input.checked = true; adjusted = true; }
                     });
-                    if (propertyTypeOf(feature) !== selectedType) {
+                    if (!selectedTypes.has(propertyTypeOf(feature))) {
                         knownTypes.add(propertyTypeOf(feature));
-                        selectedType = propertyTypeOf(feature);
+                        selectedTypes.add(propertyTypeOf(feature));
                         adjusted = true;
                     }
                     if (selectedDistrict && districtOf(feature) !== selectedDistrict) {
@@ -369,7 +477,7 @@
                     renderTypeButtons();
                     refreshDistrictOptions();
                     var message = 'Registro #' + id + ' guardado: quedó en «' + layerLabel(target) + '»';
-                    message += selectedType ? ' · tipo ' + selectedType : '';
+                    message += selectedTypes.size ? ' · tipo ' + selectedTypeLabel() : '';
                     message += (selectedDistrict ? ' · ' + selectedDistrict : '') + '.';
                     if (adjusted) schedule(0, message);
                     else status.textContent = message;
@@ -384,13 +492,14 @@
             var features = filteredFeatures();
             draw(features, lastResult.key);
             var scope = selectedDistrict ? ' en el distrito ' + selectedDistrict : ' en el área visible';
-            if (!selectedType) {
-                status.textContent = lastResult.features.length + ' registros' + scope +
-                    '. Elige un tipo de propiedad para verlos.';
+            if (!selectedTypes.size) {
+                status.textContent = lastResult.features.length +
+                    (lastResult.features.length === 1 ? ' registro' : ' registros') + scope +
+                    '. Elige uno o varios tipos de propiedad para verlos.';
                 return;
             }
-            var label = features.length + (features.length === 1 ? ' registro de tipo ' : ' registros de tipo ') +
-                selectedType + scope + '.';
+            var label = features.length + (features.length === 1 ? ' registro de ' : ' registros de ') +
+                selectedTypeLabel() + scope + '.';
             var hidden = lastResult.features.length - features.length;
             status.textContent = label +
                 (hidden > 0 ? ' ' + hidden + ' quedan fuera por el tipo elegido.' : '') +

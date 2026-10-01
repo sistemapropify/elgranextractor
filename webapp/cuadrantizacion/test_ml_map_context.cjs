@@ -66,12 +66,24 @@ async function run() {
     InfoWindow.prototype.close = function() { this.opened = false; };
     InfoWindow.prototype.setContent = function(content) { this.content = content; };
     InfoWindow.prototype.open = function() { this.opened = true; };
-    function Marker(options) { this.options = options; this.map = options.map; this.events = {}; markerInstances.push(this); }
+    function Marker(options) { this.options = options; this.map = options.map; this.position = options.position; this.events = {}; markerInstances.push(this); }
     Marker.prototype.addListener = function(name, callback) { this.events[name] = callback; };
     Marker.prototype.setMap = function(value) { this.map = value; };
     Marker.prototype.setPosition = function(value) { this.options.position = value; this.position = value; };
     Marker.prototype.setIcon = function(value) { this.options.icon = value; };
     Marker.prototype.setTitle = function(value) { this.options.title = value; };
+    Marker.prototype.getPosition = function() { return this.position; };
+    const panes = element('div');
+    const overlays = [];
+    function OverlayView() { overlays.push(this); }
+    OverlayView.prototype.setMap = function(value) {
+        this.map = value;
+        if (value && typeof this.onAdd === 'function') this.onAdd();
+        else if (!value && typeof this.onRemove === 'function') this.onRemove();
+    };
+    OverlayView.prototype.getPanes = function() { return {overlayLayer: panes}; };
+    OverlayView.prototype.getProjection = function() { return null; };
+    OverlayView.prototype.getPosition = function() { return this.__position; };
     const context = vm.createContext({
         document: {
             getElementById: id => id === 'ml-context-layers' ? panel :
@@ -93,7 +105,7 @@ async function run() {
             requests.push({url, options, result});
             return result.promise;
         },
-        google: {maps: {InfoWindow, Marker, SymbolPath: {CIRCLE: 'circle'}}},
+        google: {maps: {InfoWindow, Marker, SymbolPath: {CIRCLE: 'circle'}, OverlayView}},
         openScrapedEditor: id => editors.push(id),
     });
     context.window = context;
@@ -138,14 +150,17 @@ async function run() {
     assert.equal(requests.length, 2, 'Rapid idle events create one viewport request.');
     await respond(1, [feature(2), feature(3, {lat: -12}), feature(4, {lat: null})]);
     assert.equal(markerInstances.length, 0, 'The area loads without drawing until a type is chosen.');
-    assert.match(status.textContent, /Elige un tipo de propiedad/);
+    assert.match(status.textContent, /Elige uno o varios tipos de propiedad/);
     assert.deepEqual(typeButtons.children.map(button => button.textContent), ['Casa'],
         'The type buttons list the types of the visible area.');
     pickType('Casa');
     assert.deepEqual(activeTypes(), ['Casa'], 'The chosen type button stays pressed.');
     assert.equal(markerInstances.length, 1, 'Client additionally rejects out-of-viewport and missing coordinates.');
-    assert.equal(markerInstances[0].options.icon.fillColor, '#687787');
-    assert.match(status.textContent, /1 registro de tipo Casa/);
+    assert.equal(markerInstances[0].options.icon.fillColor, '#1f6feb', 'Casa uses its own colour.');
+    assert.equal(markerInstances[0].options.icon.strokeColor, '#687787', 'The border keeps the ML layer colour.');
+    assert.deepEqual(markerInstances[0].mlLabel.__div.children.map(line => line.textContent),
+        ['AT: $ 1,000/m2', 'Años: 0'], 'The pin shows price per square meter and age below it.');
+    assert.match(status.textContent, /1 registro de Casa/);
     await respond(0, [feature(1)]);
     assert.equal(markerInstances.length, 1, 'A late superseded response cannot add markers.');
     markerInstances[0].events.click();
@@ -171,7 +186,8 @@ async function run() {
     flushTimer(0);
     await respond(2, [feature(5, {duplicate_count: 2, url: 'javascript:alert(1)'})]);
     const duplicateMarker = markerInstances.at(-1);
-    assert.equal(duplicateMarker.options.icon.fillColor, '#8250c8');
+    assert.equal(duplicateMarker.options.icon.strokeColor, '#8250c8',
+        'A possible duplicate keeps the duplicate border.');
     duplicateMarker.events.click();
     assert.equal(infoWindows[0].content.children.at(-1).children.filter(child => child.tag === 'a').length, 1,
         'Unsafe publication URL is omitted; context link remains.');
@@ -218,7 +234,7 @@ async function run() {
         property_type: 'Departamento', district: 'Cerro Colorado'};
     await respond(5, [feature(6, corrected)]);
     assert.equal(checkboxes[2].checked, true, 'The layer that now holds the record is enabled.');
-    assert.deepEqual(activeTypes(), ['Departamento'], 'The type button follows the corrected record.');
+    assert.ok(activeTypes().includes('Departamento'), 'The corrected type is added to the chosen buttons.');
     flushTimer(0);
     assert.match(status.textContent, /Registro #6 guardado: quedó en «Por revisar»/);
     await respond(6, [feature(6, corrected)]);
@@ -231,7 +247,8 @@ async function run() {
     checkboxes[0].checked = true;
     checkboxes[0].listeners.change();
     flushTimer(0);
-    pickType('Departamento');   // quita la selección heredada
+    activeTypes().forEach(pickType);   // limpia la selección heredada
+    assert.deepEqual(activeTypes(), []);
     await respond(7, [feature(7, {status: 'eligible', property_type: 'Casa'}),
         feature(8, {status: 'eligible', property_type: 'Departamento'}),
         feature(9, {status: 'eligible', property_type: 'Departamento', district: 'Cerro Colorado'})]);
@@ -266,6 +283,16 @@ async function run() {
     assert.equal(drawnMarkers()[0].mlFeature.id, 9);
     assert.match(status.textContent, /en el distrito Cerro Colorado/);
 
+    // Varios tipos a la vez: Casa + Departamento.
+    pickType('Casa');
+    assert.deepEqual(activeTypes().sort(), ['Casa', 'Departamento'], 'Two type buttons stay pressed.');
+    assert.equal(drawnMarkers().length, 2, 'The two chosen types are drawn together.');
+    assert.match(status.textContent, /2 registros de Casa, Departamento/);
+    assert.equal(new Set(drawnMarkers().map(marker => marker.options.icon.fillColor)).size, 2,
+        'Each property type uses its own colour.');
+    pickType('Casa');
+    assert.equal(drawnMarkers().length, 1, 'Removing one type keeps the other one drawn.');
+
     // Con distrito elegido el alcance ya no depende de lo que se ve.
     const requestsBeforePan = requests.length;
     viewport = {south: -16.6, west: -71.7, north: -16.2, east: -71.2};
@@ -275,6 +302,6 @@ async function run() {
 
     pickType('Departamento');   // segundo clic: quita el tipo
     assert.equal(drawnMarkers().length, 0, 'Clearing the type cleans the map again.');
-    console.log('PASS: opt-in, linked coordinates, viewport bounds, debounce/abort/stale responses, markers, cards, links, editor, save refresh, saved-record reattach, type buttons and district scope.');
+    console.log('PASS: opt-in, linked coordinates, viewport bounds, debounce/abort/stale responses, markers with price/age labels and per-type colours, cards, links, editor, save refresh, saved-record reattach, multi-type buttons and district scope.');
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

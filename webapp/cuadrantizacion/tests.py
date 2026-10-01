@@ -115,6 +115,7 @@ class MapaZonasTemplateTests(SimpleTestCase):
         self.assertIn('ml-context-filters', self.source)
         self.assertIn('Elegir tipo de propiedad', self.source)
         self.assertIn('Filtrar el contexto ML por distrito', self.source)
+        self.assertIn('ml-pin-label', self.source)
 
 
 class ZonaValorHierarchyValidationTests(SimpleTestCase):
