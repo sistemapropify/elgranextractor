@@ -154,6 +154,8 @@ def _feature(candidate, catalog_hash, duplicate_count=0):
     geo = _geo(candidate, catalog_hash)
     return dict(id=candidate.propiedad_id, fuente=snapshot.get('fuente') or '',
         code=snapshot.get('id_origen') or '', title=snapshot.get('titulo') or '',
+        # Tipo de propiedad: permite filtrar la capa ML en el mapa.
+        property_type=str(snapshot.get('tipo_inmueble') or '').strip() or 'Propiedad',
         lat=_number(snapshot.get('latitud')), lng=_number(snapshot.get('longitud')),
         price_usd=_number(snapshot.get('precio_usd')), land_area=_number(snapshot.get('area_terreno')),
         built_area=_number(snapshot.get('area_construida')), age=_number(snapshot.get('antiguedad_anios')),

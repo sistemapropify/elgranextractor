@@ -7,11 +7,13 @@ const script = fs.readFileSync(fs.existsSync(deployedScript) ? deployedScript :
     path.join(__dirname, 'ml-map-context.js'), 'utf8');
 
 function element(tag) {
-    return {
+    const node = {
         tag, children: [], style: {}, listeners: {}, checked: false,
         appendChild(child) { this.children.push(child); return child; },
         addEventListener(name, callback) { this.listeners[name] = callback; },
     };
+    Object.defineProperty(node, 'innerHTML', { get() { return ''; }, set() { this.children = []; } });
+    return node;
 }
 function deferred() {
     let resolve;
@@ -19,7 +21,7 @@ function deferred() {
 }
 function feature(id, overrides = {}) {
     return {id, fuente: 'properati', code: 'ABC', title: 'Casa <script>no ejecutar</script>',
-        lat: -16.4, lng: -71.5, price_usd: '100000', land_area: 100,
+        property_type: 'Casa', lat: -16.4, lng: -71.5, price_usd: '100000', land_area: 100,
         built_area: 150, age: 0, precision: 'aproximada', status: 'reference',
         status_label: 'Referencia', geo_label: 'Ubicación aproximada',
         zone_name: 'Zona A', zone_version: 2, duplicate_count: 0,
@@ -29,6 +31,8 @@ function feature(id, overrides = {}) {
 async function run() {
     const checkboxes = ['eligible', 'reference', 'review', 'duplicates'].map(value => ({...element('input'), value}));
     const status = element('p');
+    const typeSelect = element('select');
+    typeSelect.value = '';
     const panel = {querySelectorAll: () => checkboxes};
     const requests = [], markerInstances = [], editors = [];
     const timers = new Map();
@@ -57,7 +61,8 @@ async function run() {
     Marker.prototype.setTitle = function(value) { this.options.title = value; };
     const context = vm.createContext({
         document: {
-            getElementById: id => id === 'ml-context-layers' ? panel : status,
+            getElementById: id => id === 'ml-context-layers' ? panel :
+                (id === 'ml-map-type' ? typeSelect : status),
             createElement: element,
         },
         location: {search: '?source=remax&record=81&ml_record=42&ml_lat=-16.4&ml_lng=-71.5'},
@@ -180,6 +185,29 @@ async function run() {
     assert.ok(infoWindows[0].content.children.some(child => child.textContent === 'USD 110,000'));
     assert.equal(requests.length, 5, 'A save refreshes only the ML endpoint once.');
     assert.ok(requests.every(request => request.url.startsWith('/ingestas/scraping/ml/mapa/')));
-    console.log('PASS: opt-in, linked coordinates, viewport bounds, debounce/abort/stale responses, markers, cards, links, editor, and save refresh.');
+
+    // Tipo de propiedad: se filtra en el cliente, sin volver a consultar el área.
+    checkboxes[1].checked = false;
+    checkboxes[0].checked = true;
+    checkboxes[0].listeners.change();
+    flushTimer(0);
+    await respond(5, [feature(7, {status: 'eligible', status_label: 'Candidata', property_type: 'Casa'}),
+        feature(8, {status: 'eligible', status_label: 'Candidata', property_type: 'Departamento'})]);
+    const drawnMarkers = () => markerInstances.filter(marker => marker.map === map);
+    assert.equal(drawnMarkers().length, 2, 'Every type is drawn while no type filter is active.');
+    assert.deepEqual(typeSelect.children.filter(child => child.tag === 'option').map(option => option.value),
+        ['', 'Casa', 'Departamento'], 'The type filter lists the types of the visible area.');
+    const requestsBeforeTypeFilter = requests.length;
+    typeSelect.value = 'Departamento';
+    typeSelect.listeners.change();
+    assert.equal(requests.length, requestsBeforeTypeFilter, 'Filtering by type must not reload the area.');
+    assert.equal(drawnMarkers().length, 1);
+    assert.equal(drawnMarkers()[0].mlFeature.property_type, 'Departamento');
+    assert.match(status.textContent, /de tipo Departamento en el área visible/);
+    typeSelect.value = '';
+    typeSelect.listeners.change();
+    assert.equal(drawnMarkers().length, 2, 'Clearing the type filter restores every marker.');
+    assert.match(status.textContent, /2 de 2 registros en el área visible/);
+    console.log('PASS: opt-in, linked coordinates, viewport bounds, debounce/abort/stale responses, markers, cards, links, editor, save refresh and type filter.');
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

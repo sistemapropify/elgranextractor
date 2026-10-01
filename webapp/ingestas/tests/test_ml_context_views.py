@@ -184,6 +184,13 @@ class ContextMapIntegrationTests(TestCase):
         self.assertEqual(self.map({'record': candidate.propiedad_id})['shown'], 1)
         self.assertEqual(self.map({'record': 9223372036854775807})['shown'], 0)
 
+    def test_feature_exposes_the_property_type_for_the_map_filter(self):
+        self.make_candidate('type-casa')
+        self.make_candidate('type-departamento', tipo_inmueble='Departamento')
+        data = self.map()
+        self.assertEqual(sorted(item['property_type'] for item in data['features']),
+                         ['Casa', 'Departamento'])
+
     def test_current_context_shows_zone_version(self):
         candidate = self.make_candidate('zoned')
         self.context(candidate)

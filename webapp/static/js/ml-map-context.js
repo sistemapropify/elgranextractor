@@ -39,6 +39,7 @@
         var title = node('p', feature.title || 'Sin título');
         title.style.margin = '6px 0';
         box.appendChild(title);
+        box.appendChild(node('div', 'Tipo: ' + (feature.property_type || 'Sin tipo')));
         var precision = String(feature.precision || '').toLowerCase();
         var precisionLabel = precision === 'exacta' ? 'Exa · exacta declarada' :
             precision === 'aproximada' ? 'Apx · aproximada' : 'Precisión desconocida';
@@ -89,6 +90,10 @@
         var checkboxes = Array.from(panel.querySelectorAll('input[name="ml-map-layer"]'));
         checkboxes.forEach(function(input) { input.checked = false; });
         var status = document.getElementById('ml-map-status');
+        var typeSelect = document.getElementById('ml-map-type');
+        var knownTypes = new Set();
+        var selectedType = '';
+        var lastResult = null;
         // disableAutoPan keeps opening a card from moving the map; a pan would
         // fire 'idle', reload the viewport and close the card just opened.
         var info = new google.maps.InfoWindow({maxWidth: 320, disableAutoPan: true});
@@ -127,6 +132,7 @@
             markersById.clear();
             openFeatureId = null;
             lastSuccess = null;
+            lastResult = null;
             info.close();
         }
 
@@ -209,6 +215,51 @@
             });
         }
 
+        function refreshTypeOptions(features) {
+            features.forEach(function(feature) {
+                var value = String(feature.property_type || '').trim();
+                if (value) knownTypes.add(value);
+            });
+            if (!typeSelect) return;
+            typeSelect.innerHTML = '';
+            var all = node('option', 'Todos los tipos');
+            all.value = '';
+            typeSelect.appendChild(all);
+            Array.from(knownTypes).sort(function(left, right) {
+                return left.localeCompare(right, 'es', {sensitivity: 'base'});
+            }).forEach(function(value) {
+                var option = node('option', value);
+                option.value = value;
+                typeSelect.appendChild(option);
+            });
+            // Keep the user's choice while the area is reloaded.
+            typeSelect.value = knownTypes.has(selectedType) ? selectedType : '';
+            selectedType = typeSelect.value;
+        }
+
+        function filteredFeatures() {
+            if (!lastResult) return [];
+            if (!selectedType) return lastResult.features;
+            return lastResult.features.filter(function(feature) {
+                return String(feature.property_type || '').trim() === selectedType;
+            });
+        }
+
+        // Filtering by type is local: it must not reload the area, so opening a
+        // card or choosing a type never resets the layer.
+        function applyTypeFilter() {
+            if (!lastResult) return;
+            var features = filteredFeatures(), total = lastResult.total;
+            draw(features, lastResult.key);
+            var suffix = lastResult.truncated ?
+                ' Límite de ' + MAX_MARKERS + ': acerca el mapa para ver el detalle.' : '';
+            status.textContent = selectedType ?
+                features.length + ' de tipo ' + selectedType + ' en el área visible · ' +
+                    (total === null ? features.length : total) + ' registros en total.' + suffix :
+                features.length + ' de ' + (total === null ? features.length : total) +
+                    ' registros en el área visible.' + suffix;
+        }
+
         function schedule(delay, message, force) {
             if (timer !== null) clearTimeout(timer);
             timer = null;
@@ -268,12 +319,11 @@
                 features = features.filter(function(feature) {
                     return /^[1-9]\d*$/.test(String(feature.id)) && inside(feature, viewport);
                 }).slice(0, MAX_MARKERS);
-                draw(features, key);
                 lastSuccess = {key: key, viewport: viewport};
-                var total = numeric(data.total);
-                status.textContent = features.length + ' de ' + (total === null ? features.length : total) +
-                    ' registros en el área visible.' + (data.truncated ?
-                        ' Límite de ' + MAX_MARKERS + ': acerca el mapa para ver el detalle.' : '');
+                lastResult = {features: features, total: numeric(data.total),
+                    truncated: !!data.truncated, key: key};
+                refreshTypeOptions(features);
+                applyTypeFilter();
             } catch (error) {
                 if (current !== sequence || error.name === 'AbortError') return;
                 status.textContent = error.message || 'No se pudo cargar el contexto ML.';
@@ -285,6 +335,12 @@
         checkboxes.forEach(function(input) {
             input.addEventListener('change', function() { schedule(0); });
         });
+        if (typeSelect) {
+            typeSelect.addEventListener('change', function() {
+                selectedType = typeSelect.value;
+                applyTypeFilter();
+            });
+        }
         map.addListener('idle', function() { schedule(350); });
         global.addEventListener('scraped-property-saved', function(event) {
             var id = event.detail && event.detail.id;

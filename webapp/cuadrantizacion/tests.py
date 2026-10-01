@@ -108,6 +108,11 @@ class MapaZonasTemplateTests(SimpleTestCase):
         self.assertIn('function applyPropertyFilterFacets(facets)', self.source)
         self.assertIn('propertyFilterFacetsLoaded = true', self.source)
 
+    def test_ml_context_layer_offers_a_property_type_filter(self):
+        self.assertIn('id="ml-map-type"', self.source)
+        self.assertIn('ml-context-filters', self.source)
+        self.assertIn('Filtrar el contexto ML por tipo de propiedad', self.source)
+
 
 class ZonaValorHierarchyValidationTests(SimpleTestCase):
     def test_zone_accepts_a_district_parent(self):
