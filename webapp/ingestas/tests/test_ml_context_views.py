@@ -196,6 +196,15 @@ class ContextMapIntegrationTests(TestCase):
         self.assertEqual((data['shown'], data['features'][0]['id']),
                          (1, candidate.propiedad_id))
 
+    def test_district_scope_returns_the_whole_district(self):
+        near = self.make_candidate('district-near', distrito='Cayma')
+        far = self.make_candidate('district-far', distrito='Cayma', latitud=-13.5, longitud=-71.9)
+        self.make_candidate('district-other', distrito='Yanahuara')
+        data = self.map({'district': 'Cayma'})
+        self.assertEqual(data['scope'], 'district')
+        self.assertEqual(sorted(item['id'] for item in data['features']),
+                         sorted([near.propiedad_id, far.propiedad_id]))
+
     def test_current_context_shows_zone_version(self):
         candidate = self.make_candidate('zoned')
         self.context(candidate)

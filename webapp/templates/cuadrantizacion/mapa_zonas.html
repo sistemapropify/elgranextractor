@@ -8,8 +8,11 @@
 <style>
 .ml-map-card{width:310px;max-width:calc(100vw - 48px);color:#162333;font:13px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;overflow-wrap:anywhere;background:#fff;border-radius:12px;padding:14px;box-shadow:0 8px 24px #10202d33}.ml-map-card strong{display:block;font-size:14px;color:#16304a;border-bottom:1px solid #dbe4ee;padding-bottom:8px;margin-bottom:8px}.ml-map-card p{margin:7px 0;color:#405366}.ml-map-card div{padding:3px 0}.ml-map-card a{color:#185dd0;font-weight:600}.ml-map-card button{font:inherit}
 .ml-context-filters{display:grid;gap:5px;margin-top:8px}
-.ml-context-filters label{font-size:11px;color:var(--text-secondary,#8b949e)}
+.ml-context-filters label,.ml-context-label{font-size:11px;color:var(--text-secondary,#8b949e)}
 .ml-context-filters select{width:100%;min-width:0;padding:6px 7px;border:1px solid var(--border-color,#30363d);border-radius:6px;background:var(--bg-secondary,#161b22);color:var(--text-primary,#f0f6fc);font-size:11px}
+.ml-type-buttons{display:flex;flex-wrap:wrap;gap:4px}
+.ml-type-buttons button{padding:5px 9px;border:1px solid var(--border-color,#30363d);border-radius:14px;background:var(--bg-secondary,#161b22);color:var(--text-primary,#f0f6fc);font:inherit;font-size:11px;cursor:pointer}
+.ml-type-buttons button.active{background:#1f6feb;border-color:#1f6feb;color:#fff;font-weight:600}
 /* ===== OVERRIDE content-area para mapa fullscreen ===== */
 .content-area {
     padding: 0 !important;
@@ -1161,10 +1164,8 @@ window.onGoogleMapsLoaded = function() {
                     <label class="portal-checkbox"><input type="checkbox" name="ml-map-layer" value="duplicates"><span style="color:#ba9cff">●</span> Posibles duplicados</label>
                 </div>
                 <div class="ml-context-filters">
-                    <label for="ml-map-type">Tipo de propiedad</label>
-                    <select id="ml-map-type" aria-label="Filtrar el contexto ML por tipo de propiedad">
-                        <option value="">Elige un tipo</option>
-                    </select>
+                    <span class="ml-context-label">Tipo de propiedad</span>
+                    <div class="ml-type-buttons" id="ml-map-types" role="group" aria-label="Elegir tipo de propiedad"></div>
                     <label for="ml-map-district">Distrito</label>
                     <select id="ml-map-district" disabled aria-label="Filtrar el contexto ML por distrito">
                         <option value="">Todos los distritos</option>

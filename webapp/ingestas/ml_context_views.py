@@ -57,6 +57,16 @@ def _record(request):
     return _positive_id(value) if value not in (None, '') else None
 
 
+def _district(params):
+    """Distrito elegido en el mapa: su alcance es todo el distrito, no el área visible."""
+    value = str(params.get('district') or '').strip()
+    if not value:
+        return ''
+    if len(value) > 120:
+        raise ValueError('El distrito indicado no es válido.')
+    return value
+
+
 def _bbox(params):
     values = {}
     for name in ('south', 'west', 'north', 'east'):
@@ -179,6 +189,7 @@ def map_data(request):
         return _json({'error': 'Inicia sesión.'}, 401)
     try:
         bounds, layers, record = _bbox(request.GET), _layers(request.GET), _record(request)
+        district = _district(request.GET)
     except ValueError as exc:
         return _json({'error': str(exc)}, 400)
     if not ml_context.schema_ready():
@@ -190,6 +201,9 @@ def map_data(request):
         # Un registro puntual se busca en todo el ámbito: tras una corrección
         # puede haber cambiado de ubicación y salir del área visible.
         query = query.filter(propiedad_id=record)
+    elif district:
+        # El distrito es el alcance completo: no se limita a lo que se ve.
+        query = query.filter(propiedad__distrito=district)
     else:
         query = query.filter(propiedad__latitud__gte=bounds['south'],
             propiedad__latitud__lte=bounds['north'], propiedad__longitud__gte=bounds['west'],
@@ -201,7 +215,7 @@ def map_data(request):
         selected |= Q(propiedad_id__in=Subquery(pairs.values('left_id')))
         selected |= Q(propiedad_id__in=Subquery(pairs.values('right_id')))
     query = query.filter(selected).order_by('propiedad_id')
-    # Sin tope: la capa ML dibuja todos los registros del area visible.
+    # Sin tope: la capa ML dibuja todos los registros del alcance elegido.
     candidates = list(query)
     counts = _duplicate_counts([c.propiedad_id for c in candidates])
     catalog_hash = ml_context.current_catalog_hash()
@@ -209,12 +223,13 @@ def map_data(request):
     # SQL bounds select live source rows; an uncaptured bulk edit can leave a
     # snapshot outside this viewport. Never move that historical snapshot's pin.
     located = [item for item in prepared if item['lat'] is not None and item['lng'] is not None]
-    features = located if record else [
+    features = located if record or district else [
         item for item in located
         if bounds['south'] <= item['lat'] <= bounds['north']
         and bounds['west'] <= item['lng'] <= bounds['east']
     ]
-    return _json(dict(features=features, total=len(features), shown=len(features), ready=True,
+    return _json(dict(features=features, total=len(features), shown=len(features),
+                      scope='district' if district else ('record' if record else 'area'), ready=True,
                       omitted_stale_coordinates=len(prepared) - len(features)))
 
 

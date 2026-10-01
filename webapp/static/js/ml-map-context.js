@@ -80,6 +80,8 @@
 
     // Sobre este volumen el navegador dibuja bien, pero conviene avisarlo.
     var HEAVY_RENDER = 3000;
+    // Una consulta colgada no debe dejar el panel en "Consultando…" para siempre.
+    var FETCH_TIMEOUT_MS = 25000;
     // Google reports slightly different bounds on each idle event of the same
     // viewport; a tiny tolerance avoids pointless refetches.
     var BOUND_TOLERANCE = 0.000001;
@@ -91,7 +93,7 @@
         var checkboxes = Array.from(panel.querySelectorAll('input[name="ml-map-layer"]'));
         checkboxes.forEach(function(input) { input.checked = false; });
         var status = document.getElementById('ml-map-status');
-        var typeSelect = document.getElementById('ml-map-type');
+        var typeButtons = document.getElementById('ml-map-types');
         var districtSelect = document.getElementById('ml-map-district');
         var knownTypes = new Set();
         // Zonas disponibles por tipo, para no perder una selección al mover el mapa.
@@ -131,6 +133,12 @@
 
         function selectionKey() {
             return selected().join(',');
+        }
+
+        // Alcance de la consulta: capas + distrito. Con distrito se trae el
+        // distrito completo; sin distrito, solo el área visible.
+        function scopeKey() {
+            return selectionKey() + '|' + selectedDistrict;
         }
 
         function clearMarkers() {
@@ -244,6 +252,27 @@
             });
         }
 
+        // Botones de tipo: se elige uno y, al volver a pulsarlo, se quita.
+        function renderTypeButtons() {
+            if (!typeButtons) return;
+            typeButtons.innerHTML = '';
+            Array.from(knownTypes).sort(function(left, right) {
+                return left.localeCompare(right, 'es', {sensitivity: 'base'});
+            }).forEach(function(value) {
+                var button = node('button', value);
+                button.type = 'button';
+                button.className = 'ml-type-button' + (value === selectedType ? ' active' : '');
+                button.setAttribute('aria-pressed', value === selectedType ? 'true' : 'false');
+                button.addEventListener('click', function() {
+                    selectedType = value === selectedType ? '' : value;
+                    renderTypeButtons();
+                    refreshDistrictOptions();
+                    applyFilters();
+                });
+                typeButtons.appendChild(button);
+            });
+        }
+
         function refreshTypeOptions(features) {
             features.forEach(function(feature) {
                 var type = propertyTypeOf(feature);
@@ -251,11 +280,9 @@
                 if (!knownDistricts[type]) knownDistricts[type] = new Set();
                 knownDistricts[type].add(districtOf(feature));
             });
-            if (!typeSelect) return;
-            fillSelect(typeSelect, Array.from(knownTypes), 'Elige un tipo');
-            // Keep the user's choice while the area is reloaded.
-            typeSelect.value = knownTypes.has(selectedType) ? selectedType : '';
-            selectedType = typeSelect.value;
+            // Mantener la elección del usuario mientras se recarga el alcance.
+            if (selectedType && !knownTypes.has(selectedType)) selectedType = '';
+            renderTypeButtons();
             refreshDistrictOptions();
         }
 
@@ -339,10 +366,7 @@
                         adjusted = true;
                     }
                     // Reflejar en los selectores lo que se acaba de ajustar.
-                    if (typeSelect) {
-                        fillSelect(typeSelect, Array.from(knownTypes), 'Elige un tipo');
-                        typeSelect.value = selectedType;
-                    }
+                    renderTypeButtons();
                     refreshDistrictOptions();
                     var message = 'Registro #' + id + ' guardado: quedó en «' + layerLabel(target) + '»';
                     message += selectedType ? ' · tipo ' + selectedType : '';
@@ -359,16 +383,17 @@
             if (!lastResult) return;
             var features = filteredFeatures();
             draw(features, lastResult.key);
+            var scope = selectedDistrict ? ' en el distrito ' + selectedDistrict : ' en el área visible';
             if (!selectedType) {
-                status.textContent = lastResult.features.length +
-                    ' registros en el área visible. Elige un tipo de propiedad para verlos.';
+                status.textContent = lastResult.features.length + ' registros' + scope +
+                    '. Elige un tipo de propiedad para verlos.';
                 return;
             }
             var label = features.length + (features.length === 1 ? ' registro de tipo ' : ' registros de tipo ') +
-                selectedType + (selectedDistrict ? ' en ' + selectedDistrict : '') + '.';
+                selectedType + scope + '.';
             var hidden = lastResult.features.length - features.length;
             status.textContent = label +
-                (hidden > 0 ? ' ' + hidden + ' del área quedan fuera por el filtro de tipo o distrito.' : '') +
+                (hidden > 0 ? ' ' + hidden + ' quedan fuera por el tipo elegido.' : '') +
                 (features.length > HEAVY_RENDER ? ' Son muchos pines: el mapa puede tardar en moverse.' : '');
         }
 
@@ -391,27 +416,36 @@
             if (force) lastSuccess = null;
             // Changing layers makes the current pins stale; drop them now
             // instead of leaving a layer the user just turned off on screen.
-            if (lastSuccess && lastSuccess.key !== key) clearMarkers();
-            status.textContent = message || 'Consultando contexto del área visible…';
+            if (lastSuccess && lastSuccess.key !== scopeKey()) clearMarkers();
             var current = sequence;
-            timer = setTimeout(function() { timer = null; load(current); }, delay);
+            timer = setTimeout(function() { timer = null; load(current, message); }, delay);
         }
 
-        async function load(current) {
-            var selection = selected(), viewport = bounds();
+        async function load(current, message) {
+            var selection = selected(), viewport = bounds(), district = selectedDistrict;
             if (current !== sequence || !selection.length) return;
             if (!viewport) {
                 status.textContent = 'Acerca el mapa para consultar un área visible.';
                 return;
             }
-            var key = selection.join(',');
+            var key = scopeKey();
             // 'idle' also fires when the map merely finished drawing; never
-            // requery a viewport that already answered with the same layers.
-            if (lastSuccess && lastSuccess.key === key && sameBounds(lastSuccess.viewport, viewport)) return;
+            // requery a scope that already answered. Con distrito el alcance es
+            // el distrito completo, así que mover el mapa no cambia la consulta.
+            if (lastSuccess && lastSuccess.key === key &&
+                (district || sameBounds(lastSuccess.viewport, viewport))) return;
+            status.textContent = message || (district ?
+                'Consultando el distrito ' + district + '…' : 'Consultando contexto del área visible…');
             controller = new AbortController();
+            var timedOut = false;
+            var timeoutId = setTimeout(function() {
+                timedOut = true;
+                controller.abort();
+            }, FETCH_TIMEOUT_MS);
             var params = new URLSearchParams();
             Object.keys(viewport).forEach(function(name) { params.set(name, String(viewport[name])); });
-            params.set('layers', key);
+            params.set('layers', selection.join(','));
+            if (district) params.set('district', district);
             if (record) params.set('record', record);
             try {
                 var response = await fetch(endpoint + '?' + params.toString(), {
@@ -426,14 +460,17 @@
                 }
                 var data = await response.json();
                 if (current !== sequence) return;
-                var visibleNow = bounds();
-                if (!visibleNow || !sameBounds(visibleNow, viewport)) return;
+                if (!district) {
+                    var visibleNow = bounds();
+                    if (!visibleNow || !sameBounds(visibleNow, viewport)) return;
+                }
                 if (!data.ready) throw new Error('El contexto ML todavía no está disponible.');
                 var features = Array.isArray(data.features) ? data.features : [];
                 features = features.filter(function(feature) {
-                    return /^[1-9]\d*$/.test(String(feature.id)) && inside(feature, viewport);
+                    return /^[1-9]\d*$/.test(String(feature.id)) &&
+                        (district ? true : inside(feature, viewport));
                 });
-                lastSuccess = {key: key, viewport: viewport};
+                lastSuccess = {key: key, viewport: district ? null : viewport};
                 lastResult = {features: features, total: numeric(data.total), key: key};
                 refreshTypeOptions(features);
                 applyFilters();
@@ -443,9 +480,13 @@
                     reattachSavedRecord(pending);
                 }
             } catch (error) {
-                if (current !== sequence || error.name === 'AbortError') return;
-                status.textContent = error.message || 'No se pudo cargar el contexto ML.';
+                if (current !== sequence) return;
+                if (error.name === 'AbortError' && !timedOut) return;
+                status.textContent = timedOut ?
+                    'La consulta tardó demasiado. Acota con tipo de propiedad o distrito.' :
+                    (error.message || 'No se pudo cargar el contexto ML.');
             } finally {
+                clearTimeout(timeoutId);
                 if (current === sequence) controller = null;
             }
         }
@@ -453,18 +494,11 @@
         checkboxes.forEach(function(input) {
             input.addEventListener('change', function() { schedule(0); });
         });
-        if (typeSelect) {
-            typeSelect.addEventListener('change', function() {
-                selectedType = typeSelect.value;
-                selectedDistrict = '';
-                refreshDistrictOptions();
-                applyFilters();
-            });
-        }
         if (districtSelect) {
             districtSelect.addEventListener('change', function() {
                 selectedDistrict = districtSelect.value;
-                applyFilters();
+                // El distrito es el alcance completo: se vuelve a consultar.
+                schedule(0);
             });
         }
         map.addListener('idle', function() { schedule(350); });
