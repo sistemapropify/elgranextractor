@@ -78,7 +78,8 @@
         return box;
     }
 
-    var MAX_MARKERS = 300;
+    // Debe coincidir con MAP_LIMIT del endpoint de contexto ML.
+    var MAX_MARKERS = 2000;
     // Google reports slightly different bounds on each idle event of the same
     // viewport; a tiny tolerance avoids pointless refetches.
     var BOUND_TOLERANCE = 0.000001;

@@ -58,7 +58,8 @@ class ContextViewValidationTests(SimpleTestCase):
         with patch.object(ml_context, 'schema_ready', return_value=True), patch.object(views, '_candidates') as query:
             response = views.map_data(self.request(data=BOUNDS))
         data = json.loads(response.content)
-        self.assertEqual((data['features'], data['shown'], data['total'], data['limit']), ([], 0, 0, 300))
+        self.assertEqual((data['features'], data['shown'], data['total'], data['limit']),
+                         ([], 0, 0, views.MAP_LIMIT))
         self.assertFalse(data['truncated'])
         query.assert_not_called()
         self.assertEqual(response['Cache-Control'], 'private, no-store')
@@ -256,18 +257,19 @@ class ContextMapIntegrationTests(TestCase):
         self.assertEqual(self.map({'layers': 'duplicates'})['total'], 0)
 
     def test_map_cap_and_deterministic_order(self):
-        sources = [PropiedadesCompetencia(fuente='remax', id_origen=f'cap-{i}', latitud=-16.4,
-                                         longitud=-71.5, precision_ubicacion='exacta') for i in range(301)]
-        PropiedadesCompetencia.objects.bulk_create(sources)
-        observations = [MLObservation(propiedad=source, sequence=1, content_hash=str(source.pk),
-            rule_version='test', snapshot={'fuente': source.fuente, 'id_origen': source.id_origen,
-            'latitud': '-16.4', 'longitud': '-71.5', 'precision_ubicacion': 'exacta'}) for source in sources]
-        MLObservation.objects.bulk_create(observations)
-        MLCandidate.objects.bulk_create([MLCandidate(propiedad=source, latest=observation, status='eligible')
-                                        for source, observation in zip(sources, observations)])
-        data = self.map()
-        self.assertEqual((data['total'], data['shown'], data['limit'], data['truncated']), (301, 300, 300, True))
-        self.assertEqual([item['id'] for item in data['features']], sorted(source.pk for source in sources)[:300])
+        with patch.object(views, 'MAP_LIMIT', 3):
+            sources = [PropiedadesCompetencia(fuente='remax', id_origen=f'cap-{i}', latitud=-16.4,
+                                             longitud=-71.5, precision_ubicacion='exacta') for i in range(4)]
+            PropiedadesCompetencia.objects.bulk_create(sources)
+            observations = [MLObservation(propiedad=source, sequence=1, content_hash=str(source.pk),
+                rule_version='test', snapshot={'fuente': source.fuente, 'id_origen': source.id_origen,
+                'latitud': '-16.4', 'longitud': '-71.5', 'precision_ubicacion': 'exacta'}) for source in sources]
+            MLObservation.objects.bulk_create(observations)
+            MLCandidate.objects.bulk_create([MLCandidate(propiedad=source, latest=observation, status='eligible')
+                                            for source, observation in zip(sources, observations)])
+            data = self.map()
+        self.assertEqual((data['total'], data['shown'], data['limit'], data['truncated']), (4, 3, 3, True))
+        self.assertEqual([item['id'] for item in data['features']], sorted(source.pk for source in sources)[:3])
 
     def test_dashboard_filters_record_and_renders_review_editor_once(self):
         left, right = self.make_candidate('panel-left'), self.make_candidate('panel-right')

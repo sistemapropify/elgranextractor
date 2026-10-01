@@ -19,7 +19,8 @@ from .models import MLCandidate, MLIdentityDecision, MLIdentityPair, MLZoneVersi
 from .property_access import allowed, user_for
 
 
-MAP_LIMIT = 300
+# Tope de pines por area visible; el mapa usa el mismo valor en MAX_MARKERS.
+MAP_LIMIT = 2000
 GEO_LABELS = {**ml_context.GEO_LABELS, 'stale': 'Ubicación pendiente de reevaluar'}
 PAIR_LABELS = {'possible': 'Posible coincidencia', 'same': 'Misma propiedad, según revisión',
                'different': 'Propiedades diferentes, según revisión'}
@@ -103,12 +104,26 @@ def _current_pairs():
             status='different', decision_stale=False)
 
 
+# SQL Server admite 2100 parametros por consulta y el mapa puede devolver
+# MAP_LIMIT identificadores: se leen las parejas por lotes y se deduplican.
+_DUPLICATE_ID_CHUNK = 1000
+
+
 def _duplicate_counts(ids):
     counts = Counter()
-    if not ids:
-        return counts
     included = set(ids)
-    for left, right in _current_pairs().filter(Q(left_id__in=ids) | Q(right_id__in=ids)).values_list('left_id', 'right_id'):
+    if not included:
+        return counts
+    ordered = sorted(included)
+    pairs = set()
+    for offset in range(0, len(ordered), _DUPLICATE_ID_CHUNK):
+        chunk = ordered[offset:offset + _DUPLICATE_ID_CHUNK]
+        pairs.update(
+            _current_pairs()
+            .filter(Q(left_id__in=chunk) | Q(right_id__in=chunk))
+            .values_list('left_id', 'right_id')
+        )
+    for left, right in pairs:
         if left in included:
             counts[left] += 1
         if right in included:

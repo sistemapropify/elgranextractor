@@ -122,7 +122,7 @@ async function run() {
     assert.equal(markerInstances.length, 1, 'Client additionally rejects out-of-viewport and missing coordinates.');
     assert.equal(markerInstances[0].options.icon.fillColor, '#687787');
     assert.match(status.textContent, /1 de 503/);
-    assert.match(status.textContent, /300/);
+    assert.match(status.textContent, /Límite de 2000/);
     await respond(0, [feature(1)]);
     assert.equal(markerInstances.length, 1, 'A late superseded response cannot add markers.');
     markerInstances[0].events.click();
