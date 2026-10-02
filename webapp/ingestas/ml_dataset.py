@@ -16,6 +16,8 @@ from .ml_context import LOCATION_RULE_VERSION, current_catalog_hash, fingerprint
 
 logger = logging.getLogger(__name__)
 CRITERIA_VERSION = 'offer-exact-location-v2'
+CANDIDATE_BATCH_SIZE = 400
+IDENTITY_BATCH_SIZE = 400
 _schema_cache = (0, False)
 
 
@@ -86,6 +88,49 @@ class _Components:
             self.parent[max(a, b)] = min(a, b)
 
 
+def _candidate_batches(batch_size=CANDIDATE_BATCH_SIZE):
+    """Yield candidates in bounded keyset chunks.
+
+    The frozen cut needs every candidate, but loading all of them together with
+    their observation, spatial context and zone version in a single query
+    exceeds the SQL command timeout once the catalog grows. Paginating by
+    ``propiedad_id`` keeps each round trip small and resumable without changing
+    the resulting classification.
+    """
+    from .models import MLCandidate
+    last_id = 0
+    while True:
+        batch = list(MLCandidate.objects.filter(propiedad_id__gt=last_id)
+                     .select_related('latest', 'context', 'context__zone_version')
+                     .order_by('propiedad_id')[:batch_size])
+        if not batch:
+            return
+        yield from batch
+        last_id = batch[-1].propiedad_id
+
+
+def _identity_pairs(ids, batch_size=IDENTITY_BATCH_SIZE):
+    """Iterate the identity pairs touching ``ids`` without oversized IN lists.
+
+    SQL Server rejects statements with more than ~2100 parameters, which a
+    single ``left_id__in=<every candidate>`` query would produce. Batching the
+    id list and deduplicating by primary key preserves the previous semantics
+    (pairs are applied set-wise, so processing order does not matter).
+    """
+    from .models import MLIdentityPair
+    seen = set()
+    for start in range(0, len(ids), batch_size):
+        batch = ids[start:start + batch_size]
+        query = MLIdentityPair.objects.filter(
+            Q(left_id__in=batch) | Q(right_id__in=batch)).select_related(
+                'left_observation', 'right_observation').order_by('pk')
+        for pair in query.iterator(chunk_size=500):
+            if pair.pk in seen:
+                continue
+            seen.add(pair.pk)
+            yield pair
+
+
 def _classified_entries(candidates, catalog_hash):
     from .models import MLIdentityPair
     zone_lookup = {str(zone['id']): zone for zone in load_zones()}
@@ -94,10 +139,7 @@ def _classified_entries(candidates, catalog_hash):
     groups = _Components(ids)
     blocked = set()
     different_edges = []
-    pair_query = MLIdentityPair.objects.filter(
-        Q(left_id__in=ids) | Q(right_id__in=ids)).select_related(
-            'left_observation', 'right_observation').order_by('pk')
-    for pair in pair_query.iterator(chunk_size=500):
+    for pair in _identity_pairs(ids):
         left, right = by_id.get(pair.left_id), by_id.get(pair.right_id)
         if not left or not right:
             continue
@@ -231,7 +273,7 @@ def freeze_dataset(force=False):
         return {'dataset_skipped': 'coalescing_recent_changes', 'dataset_id': latest_snapshot.pk}
     if MLObservation.objects.filter(status='pending').exists():
         return {'dataset_skipped': 'admission_pending'}
-    candidates = list(MLCandidate.objects.select_related('latest', 'context', 'context__zone_version').order_by('propiedad_id'))
+    candidates = list(_candidate_batches())
     # Make all derived text snapshots consistent before this bounded write.
     catalog_hash = current_catalog_hash()
     if MLCandidate.objects.filter(Q(context__isnull=True) | ~Q(context__observation_id=F('latest_id')) |

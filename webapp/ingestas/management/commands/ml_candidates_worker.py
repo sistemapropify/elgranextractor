@@ -13,6 +13,36 @@ from ingestas.ml_training import process_queue, monitor_dataset
 logger = logging.getLogger(__name__)
 
 
+def pending_reconciliation():
+    """Return the outstanding manual reevaluation request, if any.
+
+    The request is only a flag written by the web view; the worker owns the
+    reconciliation work. It stays pending until a cycle evaluates it.
+    """
+    from ingestas.models import MLPipelineState
+    state = MLPipelineState.objects.filter(pk='ml-reconciliation-request').first()
+    payload = dict(state.payload or {}) if state else {}
+    if payload.get('requested_at') and payload.get('requested_at') != payload.get('processed_at'):
+        return payload
+    return None
+
+
+def mark_reconciliation_processed(requested_at, result):
+    """Close the request, but only if it is still the one just evaluated."""
+    from django.utils import timezone
+    from ingestas.models import MLPipelineState
+    state, _ = MLPipelineState.objects.get_or_create(pk='ml-reconciliation-request')
+    payload = dict(state.payload or {})
+    if payload.get('requested_at') != requested_at:
+        return payload
+    payload['processed_at'] = timezone.now().isoformat()
+    payload['processed_result'] = {key: str(value) for key, value in (result or {}).items()}
+    state.payload = payload
+    state.heartbeat_at = timezone.now()
+    state.save(update_fields=['payload', 'heartbeat_at'])
+    return payload
+
+
 class Command(BaseCommand):
     help = 'Evalúa candidatas ML y completa antigüedad con evidencia; no entrena modelos.'
 
@@ -53,7 +83,12 @@ class Command(BaseCommand):
                 result = process_pending(batch)
                 context = process_spatial(batch)
                 identity = process_identity() if not MLObservation.objects.filter(status='pending').exists() and not context.get('spatial_pending') else {}
-                dataset = freeze_dataset() if not MLObservation.objects.filter(status='pending').exists() and not context.get('spatial_pending') else {'dataset_skipped': 'pipeline_pending'}
+                reconciliation = pending_reconciliation()
+                # A manual request bypasses the change-coalescing window; the
+                # input hash still decides whether a new version is warranted.
+                dataset = freeze_dataset(force=bool(reconciliation)) if not MLObservation.objects.filter(status='pending').exists() and not context.get('spatial_pending') else {'dataset_skipped': 'pipeline_pending'}
+                if reconciliation and dataset.get('dataset_skipped') != 'pipeline_pending':
+                    mark_reconciliation_processed(reconciliation.get('requested_at'), dataset)
                 initial_monitor = dataset.get('dataset_id') and not MLPipelineState.objects.filter(pk='model-contribution').exists()
                 monitored_id = dataset.get('dataset_created') or (dataset.get('dataset_id') if initial_monitor else None)
                 monitoring = monitor_dataset(MLDatasetSnapshot.objects.get(pk=monitored_id)) if monitored_id else []
@@ -70,7 +105,10 @@ class Command(BaseCommand):
                         while process_spatial(batch)['spatial_pending']:
                             pass
                         self.stdout.write(json.dumps({'event': 'ml.identity.finished', **process_identity(force=True)}))
+                        reconciliation = pending_reconciliation()
                         dataset_done = freeze_dataset(force=True)
+                        if reconciliation:
+                            mark_reconciliation_processed(reconciliation.get('requested_at'), dataset_done)
                         if dataset_done.get('dataset_created'):
                             monitor_dataset(MLDatasetSnapshot.objects.get(pk=dataset_done['dataset_created']))
                         self.stdout.write(json.dumps({'event': 'ml.dataset.finished', **dataset_done}))
