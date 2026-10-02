@@ -131,6 +131,43 @@ def _identity_pairs(ids, batch_size=IDENTITY_BATCH_SIZE):
             yield pair
 
 
+def _insert_entries(dataset, rows):
+    """Insert the frozen rows, isolating any single row the database rejects.
+
+    ``bulk_create`` builds one multi-row INSERT, so a single value the server
+    cannot convert aborts the whole cut and hides which record caused it. On
+    failure we retry row by row, so the cut is still produced and the offending
+    record is logged with its exact values for review.
+    """
+    from .models import MLDatasetEntry
+    entries = [MLDatasetEntry(dataset=dataset, candidate=row['candidate'],
+               observation=row['observation'], spatial_assessment=row['spatial_assessment'],
+               included=row['included'], reason_code=row['reason_code'],
+               reason=row['reason'][:300], identity_group_hash=row['identity_group_hash'],
+               features=row['features'], target_price_usd=row['target_price_usd'])
+               for row in rows]
+    try:
+        with transaction.atomic():
+            MLDatasetEntry.objects.bulk_create(entries, batch_size=100)
+        return 0
+    except Exception:
+        logger.exception('ml.dataset.bulk_insert_failed total=%s; se reintenta fila por fila', len(entries))
+    rejected = 0
+    for entry in entries:
+        try:
+            with transaction.atomic():
+                entry.pk = None
+                entry.save(force_insert=True)
+        except Exception as error:
+            rejected += 1
+            logger.error('ml.dataset.entry_rejected candidate=%s incluida=%s motivo=%s '
+                         'valor_precio=%r tipo_precio=%s features_len=%s error=%s',
+                         entry.candidate_id, entry.included, entry.reason_code,
+                         entry.target_price_usd, type(entry.target_price_usd).__name__,
+                         len(str(entry.features)), error)
+    return rejected
+
+
 def _classified_entries(candidates, catalog_hash):
     from .models import MLIdentityPair
     zone_lookup = {str(zone['id']): zone for zone in load_zones()}
@@ -319,18 +356,19 @@ def freeze_dataset(force=False):
         excluded_reasons=dict(reason_counts), coverage=coverage,
         newly_included=len(included_ids - previous_ids),
         removed_from_previous=len(previous_ids - included_ids), status='ready' if included_ids else 'empty')
-    MLDatasetEntry.objects.bulk_create([
-        MLDatasetEntry(dataset=dataset, candidate=row['candidate'], observation=row['observation'],
-            spatial_assessment=row['spatial_assessment'], included=row['included'],
-            reason_code=row['reason_code'], reason=row['reason'][:300],
-            identity_group_hash=row['identity_group_hash'], features=row['features'],
-            target_price_usd=row['target_price_usd']) for row in rows], batch_size=100)
+    rejected = _insert_entries(dataset, rows)
+    if rejected:
+        # Keep the cut's own counters consistent with the rows actually stored.
+        dataset.included = MLDatasetEntry.objects.filter(dataset=dataset, included=True).count()
+        dataset.status = 'ready' if dataset.included else 'empty'
+        dataset.save(update_fields=['included', 'status'])
     state.payload = {'latest_dataset_id': dataset.pk, 'latest_dataset_hash': input_hash}
     state.heartbeat_at = now
     state.save(update_fields=['payload', 'heartbeat_at'])
-    logger.info('ml.dataset.frozen id=%s total=%s included=%s new=%s removed=%s hash=%s',
+    logger.info('ml.dataset.frozen id=%s total=%s included=%s new=%s removed=%s rejected=%s hash=%s',
                 dataset.pk, dataset.total, dataset.included, dataset.newly_included,
-                dataset.removed_from_previous, dataset.input_hash[:12])
+                dataset.removed_from_previous, rejected, dataset.input_hash[:12])
     return {'dataset_created': dataset.pk, 'dataset_total': dataset.total,
             'dataset_included': dataset.included, 'dataset_newly_included': dataset.newly_included,
-            'dataset_removed_from_previous': dataset.removed_from_previous}
+            'dataset_removed_from_previous': dataset.removed_from_previous,
+            'dataset_rejected': rejected}
