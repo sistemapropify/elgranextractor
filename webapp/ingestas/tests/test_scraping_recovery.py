@@ -171,7 +171,8 @@ class PendingReplayTests(SimpleTestCase):
     def test_failed_pending_detail_does_not_starve_later_candidate(self):
         from scrapi.paged_engine import run_paged
         page = SimpleNamespace(set_viewport_size=AsyncMock())
-        browser = SimpleNamespace(new_page=AsyncMock(return_value=page))
+        browser_context = SimpleNamespace(new_page=AsyncMock(return_value=page))
+        browser = SimpleNamespace(new_context=AsyncMock(return_value=browser_context))
         context = MagicMock()
         context.__aenter__ = AsyncMock(return_value=browser)
         context.__aexit__ = AsyncMock(return_value=False)

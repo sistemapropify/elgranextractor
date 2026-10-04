@@ -22,7 +22,22 @@ jobs:
       - name: Dashboard preview, filters and resume in a real browser
         run: docker run --rm --network none --entrypoint python scraping-worker:test -m scrapi.dashboard_smoke
       - name: Database, adapters and dashboard regressions
-        run: docker run --rm --network none -e CAMOUFOX_EXECUTABLE_PATH= -e CAMOUFOX_AUTO_INSTALL=1 -e CAMOUFOX_HEADLESS=0 --entrypoint python scraping-worker:test manage.py test ingestas.tests scrapi.test_camoufox_launcher --settings=ingestas.scraping_test_settings --noinput
+        run: |
+          docker run --rm --network none -e CAMOUFOX_EXECUTABLE_PATH= -e CAMOUFOX_AUTO_INSTALL=1 -e CAMOUFOX_HEADLESS=0 --entrypoint python scraping-worker:test \
+            manage.py test \
+            ingestas.tests.test_facebook_marketplace_scraper \
+            ingestas.tests.test_marketplace_scroll \
+            ingestas.tests.test_properati_coordinates \
+            ingestas.tests.test_publication_lifecycle \
+            ingestas.tests.test_scraping_dashboard_state \
+            ingestas.tests.test_scraping_export \
+            ingestas.tests.test_scraping_integrity \
+            ingestas.tests.test_scraping_job_reporting \
+            ingestas.tests.test_scraping_recovery \
+            ingestas.tests.test_scraping_verification \
+            ingestas.tests.test_scraping_watchdog \
+            scrapi.test_camoufox_launcher \
+            --settings=ingestas.scraping_test_settings --noinput
       - name: Model and migration consistency
         run: docker run --rm --network none --entrypoint python scraping-worker:test manage.py makemigrations --check --dry-run --settings=ingestas.scraping_test_settings
       - name: SQL Server migration and persistence tests
