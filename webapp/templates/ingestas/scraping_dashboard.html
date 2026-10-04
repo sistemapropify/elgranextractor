@@ -662,6 +662,7 @@ let verificationMode = 'answer';
 let verificationSending = false;
 let verificationPendingId = null;
 let verificationRenderedId = null;
+let verificationImageSource = null;
 
 async function loadVerification(jobId) {
     if (verificationLoading || jobId !== currentJobId) return;
@@ -679,6 +680,7 @@ async function loadVerification(jobId) {
         if (!item) {
             verificationId = null;
             verificationRenderedId = null;
+            verificationImageSource = null;
             verificationPendingId = null;
             document.getElementById('verificationImage').removeAttribute('src');
             return;
@@ -703,7 +705,10 @@ async function loadVerification(jobId) {
             verificationRenderedId = null;
             const image = document.getElementById('verificationImage');
             image.onload = () => { if (verificationId === item.id) verificationRenderedId = item.id; };
-            image.src = 'data:image/png;base64,' + item.screenshot;
+            image.onerror = () => { document.getElementById('verificationMessage').textContent = 'No se pudo cargar la pantalla. Pulsa Actualizar pantalla.'; };
+            verificationImageSource = 'data:image/png;base64,' + item.screenshot;
+            image.src = verificationImageSource;
+            if (image.complete && image.naturalWidth) verificationRenderedId = item.id;
             document.getElementById('verificationMessage').textContent = 'Disponible hasta ' + new Date(item.expires_at).toLocaleTimeString() + '. Si vence, las fichas pendientes se conservan.';
             document.getElementById('verificationSubmit').disabled = false;
         }
@@ -742,16 +747,27 @@ document.getElementById('verificationForm').addEventListener('submit', async fun
 });
 
 async function sendBrowserVerification(action) {
-    if (verificationMode !== 'browser' || !verificationId || !currentJobId || verificationSending || verificationPendingId === verificationId) return;
-    const jobId = currentJobId, challengeId = verificationId;
     const message = document.getElementById('verificationMessage');
-    const form = new FormData();
-    form.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-    form.append('verification_id', challengeId);
-    form.append('answer', action);
+    if (verificationMode !== 'browser' || !verificationId || !currentJobId) {
+        message.textContent = 'La pantalla ya no está activa. Actualiza el dashboard para consultar la verificación.';
+        return;
+    }
+    if (verificationSending || verificationPendingId === verificationId) {
+        message.textContent = 'El clic anterior sigue pendiente en el navegador. Comprobando la respuesta…';
+        loadVerification(currentJobId);
+        return;
+    }
+    const jobId = currentJobId, challengeId = verificationId;
     verificationSending = true;
     document.getElementById('verificationRefresh').disabled = true;
+    message.textContent = action === 'refresh' ? 'Solicitando una pantalla nueva…' : 'Enviando tu clic al navegador…';
     try {
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (!csrf || !csrf.value) throw new Error('La sesión no permite enviar el clic. Recarga el dashboard e inténtalo de nuevo.');
+        const form = new FormData();
+        form.append('csrfmiddlewaretoken', csrf.value);
+        form.append('verification_id', challengeId);
+        form.append('answer', action);
         const response = await fetch(`/ingestas/scraping/verificacion/${jobId}/`, {method:'POST', body:form, signal:AbortSignal.timeout(10000)});
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'No se pudo enviar la acción.');
@@ -768,8 +784,18 @@ async function sendBrowserVerification(action) {
     }
 }
 document.getElementById('verificationImage').addEventListener('click', function(event) {
-    if (!this.complete || !this.naturalWidth || verificationRenderedId !== verificationId) return;
+    const message = document.getElementById('verificationMessage');
+    // Cached images can be ready before the load callback updates our flag.
+    // Check the current source as well, so an old screen never supplies a click.
+    if (this.complete && this.naturalWidth && verificationImageSource && this.getAttribute('src') === verificationImageSource) {
+        verificationRenderedId = verificationId;
+    }
+    if (!this.complete || !this.naturalWidth || verificationRenderedId !== verificationId) {
+        message.textContent = 'La pantalla aún no está lista. Pulsa Actualizar pantalla y vuelve a intentar.';
+        return;
+    }
     const box = this.getBoundingClientRect();
+    if (!box.width || !box.height) return;
     const x = Math.floor((event.clientX-box.left)*this.naturalWidth/box.width);
     const y = Math.floor((event.clientY-box.top)*this.naturalHeight/box.height);
     sendBrowserVerification(`c:${x}:${y}`);
