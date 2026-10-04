@@ -18,6 +18,7 @@ from typing import Dict, Any, List
 
 from celery import shared_task
 from django.db import close_old_connections
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -320,7 +321,10 @@ def _run_scraping(job_id: int, stop_event=None):
         id=job_id, estado='idle'
     ).update(
         estado='running',
-        iniciado_en=timezone.now(),
+        # Una reanudacion vuelve a reclamar el mismo job. Conservamos la
+        # primera hora real de inicio en vez de reemplazarla por la hora del
+        # ultimo intento.
+        iniciado_en=Coalesce('iniciado_en', lease_start),
         execution_token=execution_token,
         heartbeat_at=lease_start,
         lease_expires_at=lease_start + timedelta(seconds=180),

@@ -130,7 +130,6 @@ class Command(BaseCommand):
                 claim_query = claim_query.filter(Q(lease_expires_at__isnull=True) | Q(lease_expires_at__lte=timezone.now()))
             claimed = claim_query.update(
                 estado='idle', execution_token=None, parametros=parametros,
-                iniciado_en=None,
                 completado_en=None, mensaje_error=None,
             )
             if claimed:

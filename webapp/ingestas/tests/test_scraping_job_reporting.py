@@ -1,8 +1,11 @@
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from django.db.models.functions import Coalesce
 from django.template.loader import get_template
 from django.test import SimpleTestCase
+from django.utils import timezone
 
 from colas.scraping_tasks import (
     _actualizar_contadores,
@@ -67,6 +70,34 @@ class ScrapingJobReportingTests(SimpleTestCase):
         self.assertEqual(job.portales_detalle[0]["detectadas"], 12)
         self.assertEqual(job.estado_efectivo, "completed")
 
+    def test_job_decoration_uses_original_start_and_lifecycle_counts(self):
+        original_start = timezone.now() - timedelta(hours=2)
+        resumed_start = timezone.now()
+        runs = [
+            SimpleNamespace(posibles_retiradas=3, retiros_confirmados=1),
+            SimpleNamespace(posibles_retiradas=2, retiros_confirmados=4),
+        ]
+        job = SimpleNamespace(
+            parametros={"portales": ["urbania"]},
+            total_propiedades=10,
+            procesadas=10,
+            nuevas=0,
+            actualizadas=10,
+            errores=0,
+            estado="completed",
+            mensaje_error=None,
+            iniciado_en=resumed_start,
+            primer_log_en=original_start,
+            _prefetched_objects_cache={"ejecuciones_portal": runs},
+            get_estado_display=lambda: "Completado",
+        )
+
+        _decorate_scraping_job(job)
+
+        self.assertEqual(job.inicio_display, original_start)
+        self.assertEqual(job.primeras_ausencias, 5)
+        self.assertEqual(job.retiros_confirmados, 5)
+
     def test_historical_empty_completion_is_reported_as_error(self):
         job = SimpleNamespace(
             parametros={"portales": ["remax"]},
@@ -102,6 +133,7 @@ class ScrapingJobReportingTests(SimpleTestCase):
         claim_update = claim.update.call_args.kwargs
         self.assertEqual(claim_update['estado'], 'running')
         self.assertIsNotNone(claim_update['execution_token'])
+        self.assertIsInstance(claim_update['iniciado_en'], Coalesce)
         job.refresh_from_db.assert_not_called()
 
         instantiate_skill.assert_not_called()

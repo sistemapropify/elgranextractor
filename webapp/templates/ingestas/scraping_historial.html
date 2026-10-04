@@ -6,7 +6,7 @@
     <h2 style="margin:0 0 8px;font-size:18px;"><i class="bi bi-clock-history"></i> Historial de Scraping</h2>
     <p style="margin:0 0 16px;color:#8b949e;font-size:13px;">
         Detectadas es la base de cada ejecución. El resultado se desglosa en
-        nuevas, actualizadas o propiedades con error.
+        nuevas, actualizadas, propiedades con error y cambios de disponibilidad.
     </p>
 
     <div style="overflow-x:auto;">
@@ -20,6 +20,8 @@
                     <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Nuevas</th>
                     <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Actualizadas</th>
                     <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Errores</th>
+                    <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Primera ausencia</th>
+                    <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Retiro confirmado</th>
                     <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Inicio</th>
                     <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Fin</th>
                     <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Detalle</th>
@@ -55,7 +57,9 @@
                     <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);color:#3fb950;">{{ job.nuevas }}</td>
                     <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);color:#d29922;">{{ job.actualizadas }}</td>
                     <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);color:#f85149;">{{ job.errores }}</td>
-                    <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);font-size:12px;color:#8b949e;">{{ job.iniciado_en|date:'d/m/Y H:i'|default:'—' }}</td>
+                    <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);color:#d29922;">{{ job.primeras_ausencias }}</td>
+                    <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);color:#f85149;">{{ job.retiros_confirmados }}</td>
+                    <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);font-size:12px;color:#8b949e;">{{ job.inicio_display|date:'d/m/Y H:i'|default:'—' }}</td>
                     <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);font-size:12px;color:#8b949e;">{{ job.completado_en|date:'d/m/Y H:i'|default:'—' }}</td>
                     <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);font-size:12px;max-width:260px;">
                         {{ job.mensaje_error_display|default:'—' }}
@@ -63,7 +67,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="10" style="padding:20px;text-align:center;color:#8b949e;">No hay ejecuciones registradas</td>
+                    <td colspan="12" style="padding:20px;text-align:center;color:#8b949e;">No hay ejecuciones registradas</td>
                 </tr>
                 {% endfor %}
             </tbody>

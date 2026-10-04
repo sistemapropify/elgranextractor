@@ -1638,7 +1638,7 @@ from django.db import connection, transaction
 from django.db.models import Q
 from django.http import JsonResponse, StreamingHttpResponse
 from django.views.generic import TemplateView, View, ListView
-from django.db.models import Count
+from django.db.models import Count, OuterRef, Subquery
 from django.utils import timezone
 
 from .models import PropiedadesCompetencia, ScrapingJob, ScrapingLog
@@ -1687,6 +1687,30 @@ def _decorate_scraping_job(job):
     job.estado_efectivo = job.estado
     job.estado_display = job.get_estado_display()
     job.mensaje_error_display = job.mensaje_error
+    # Algunas ejecuciones antiguas sobrescribieron iniciado_en al reanudarse.
+    # El primer log permite mostrar su inicio original mientras que los jobs
+    # nuevos ya conservan iniciado_en de forma inmutable.
+    start_candidates = [
+        value for value in (
+            getattr(job, 'iniciado_en', None),
+            getattr(job, 'primer_log_en', None),
+        ) if value is not None
+    ]
+    job.inicio_display = min(start_candidates) if start_candidates else None
+
+    portal_runs = (getattr(job, '_prefetched_objects_cache', {}) or {}).get(
+        'ejecuciones_portal'
+    )
+    if portal_runs is not None:
+        job.primeras_ausencias = sum(
+            run.posibles_retiradas for run in portal_runs
+        )
+        job.retiros_confirmados = sum(
+            run.retiros_confirmados for run in portal_runs
+        )
+    else:
+        job.primeras_ausencias = getattr(job, 'primeras_ausencias', 0)
+        job.retiros_confirmados = getattr(job, 'retiros_confirmados', 0)
     if job.estado == 'completed' and job.detectadas_display <= 0 and parametros.get('mode') != 'preview':
         job.estado_efectivo = 'error'
         job.estado_display = 'Error: sin resultados'
@@ -2360,7 +2384,18 @@ class ScrapingHistorialView(TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        jobs = list(ScrapingJob.objects.order_by('-creado_en')[:50])
+        first_log = (
+            ScrapingLog.objects
+            .filter(job_id=OuterRef('pk'))
+            .order_by('timestamp')
+            .values('timestamp')[:1]
+        )
+        jobs = list(
+            ScrapingJob.objects
+            .annotate(primer_log_en=Subquery(first_log))
+            .prefetch_related('ejecuciones_portal')
+            .order_by('-creado_en')[:50]
+        )
         for job in jobs:
             _decorate_scraping_job(job)
         ctx['jobs'] = jobs
