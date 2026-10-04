@@ -11,7 +11,7 @@ class BrowserVerificationTests(unittest.IsolatedAsyncioTestCase):
         return SimpleNamespace(url='https://www.adondevivir.com/inmuebles-en-venta-en-arequipa.html',
             title=AsyncMock(return_value='Just a moment...'),
             locator=Mock(return_value=SimpleNamespace(count=AsyncMock(return_value=1))),
-            screenshot=AsyncMock(return_value=b'png'), set_viewport_size=AsyncMock(),
+            screenshot=AsyncMock(return_value=b'png'), set_viewport_size=AsyncMock(), bring_to_front=AsyncMock(),
             mouse=SimpleNamespace(click=AsyncMock()), _scraping_document_status=403)
 
     def test_coordinates_bounded_and_no_commands(self):
@@ -29,13 +29,31 @@ class BrowserVerificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await content_ready(page))
 
     async def test_only_user_click_is_forwarded_and_mailbox_closes(self):
-        page=self.page();exchange=Mock(side_effect=['id', 'c:300:200', None])
+        page=self.page();exchange=Mock(side_effect=['id', 'c:300:200', None, None])
+        events = []
+        page.bring_to_front.side_effect = lambda: events.append('focus')
+        page.screenshot.side_effect = lambda **kwargs: events.append('screen') or b'png'
+        page.mouse.click.side_effect = lambda *args: events.append('click')
         with patch('scrapi.browser_verification.content_ready', AsyncMock(side_effect=[False,False,True])), \
              patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()):
             self.assertTrue(await resolve(page,exchange,AsyncMock()))
         page.mouse.click.assert_awaited_once_with(300,200)
+        self.assertEqual(events, ['focus', 'screen', 'focus', 'click'])
+        self.assertEqual(exchange.call_args_list[-2].args, ('executed',))
+        self.assertEqual(exchange.call_args_list[-2].kwargs, {'id': 'id'})
         self.assertEqual(exchange.call_args.args, ('close',))
         page.screenshot.assert_awaited_once()
+
+    async def test_failed_click_is_never_acknowledged_as_executed(self):
+        page = self.page()
+        page.mouse.click.side_effect = RuntimeError('browser disconnected')
+        exchange = Mock(side_effect=['id', 'c:300:200', None])
+        emit = AsyncMock()
+        with self.assertRaisesRegex(RuntimeError, 'disconnected'):
+            await resolve(page, exchange, emit)
+        self.assertNotIn('executed', [call.args[0] for call in exchange.call_args_list])
+        self.assertNotIn('verification.click_executed', [call.kwargs.get('event') for call in emit.call_args_list])
+        self.assertEqual(exchange.call_args.args, ('close',))
 
     async def test_refresh_does_not_click_or_reload(self):
         page=self.page();exchange=Mock(side_effect=['id','refresh',None])

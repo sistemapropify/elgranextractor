@@ -37,6 +37,7 @@ jobs:
             ingestas.tests.test_scraping_verification \
             ingestas.tests.test_scraping_watchdog \
             scrapi.test_camoufox_launcher \
+            scrapi.test_browser_verification \
             --settings=ingestas.scraping_test_settings --noinput
       - name: Model and migration consistency
         run: docker run --rm --network none --entrypoint python scraping-worker:test manage.py makemigrations --check --dry-run --settings=ingestas.scraping_test_settings

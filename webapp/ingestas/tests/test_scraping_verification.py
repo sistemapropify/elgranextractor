@@ -3,7 +3,7 @@ import uuid
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from datetime import timedelta
-from django.test import SimpleTestCase, RequestFactory
+from django.test import SimpleTestCase, RequestFactory, TestCase
 from django.utils import timezone
 from django.contrib.auth.models import AnonymousUser
 from django.middleware.csrf import CsrfViewMiddleware
@@ -11,6 +11,49 @@ from django.template.loader import get_template
 from ingestas.views import ScrapingVerificationView
 from ingestas.scraping_verification import active_for_job, valid_answer
 from ingestas.scraping_verification import submit_answer
+from ingestas.scraping_verification import mailbox, public_state
+from ingestas.models import ScrapingJob, EjecucionPortal
+
+
+class VerificationMailboxTests(TestCase):
+    def setUp(self):
+        self.job = ScrapingJob.objects.create(estado='running', execution_token=uuid.uuid4(),
+            lease_expires_at=timezone.now() + timedelta(minutes=5))
+        self.run = EjecucionPortal.objects.create(job=self.job, portal='adondevivir')
+        self.exchange = mailbox(self.run.pk, self.job.execution_token)
+        self.challenge = self.exchange('open', screenshot='png', seconds=120)
+
+    def test_screen_stays_visible_until_browser_finishes_action(self):
+        self.assertEqual(public_state(self.job)['state'], 'waiting')
+        submit_answer(self.job.pk, self.challenge, 'c:200:100')
+        self.assertEqual(public_state(self.job)['state'], 'submitted')
+        self.assertEqual(self.exchange('poll', id=self.challenge), 'c:200:100')
+        self.assertEqual(public_state(self.job)['state'], 'consumed')
+        self.assertIsNone(self.exchange('poll', id=self.challenge))
+        self.exchange('executed', id=self.challenge)
+        state = public_state(self.job)
+        self.assertEqual(state['state'], 'executed')
+        self.assertEqual(state['screenshot'], 'png')
+        self.assertNotIn('answer', state)
+        self.assertNotIn('execution_token', state)
+        with self.assertRaises(ValueError):
+            submit_answer(self.job.pk, self.challenge, 'c:200:100')
+        next_id = self.exchange('open', screenshot='next', seconds=100)
+        self.assertEqual(public_state(self.job)['id'], next_id)
+        self.assertEqual(public_state(self.job)['state'], 'waiting')
+        self.exchange('close')
+        self.assertIsNone(public_state(self.job))
+
+    def test_cannot_confirm_unconsumed_action(self):
+        with self.assertRaises(ValueError):
+            self.exchange('executed', id=self.challenge)
+        self.assertEqual(public_state(self.job)['state'], 'waiting')
+
+    def test_properati_does_not_expose_submitted_answer_screen(self):
+        self.run.portal = 'properati'
+        self.run.save(update_fields=['portal'])
+        submit_answer(self.job.pk, self.challenge, '12')
+        self.assertIsNone(public_state(self.job))
 
 
 class VerificationAccessTests(SimpleTestCase):

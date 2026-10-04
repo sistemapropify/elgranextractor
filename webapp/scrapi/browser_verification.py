@@ -58,6 +58,9 @@ async def resolve(page, exchange, emit, timeout=300):
                message='Adondevivir requiere verificación: abre la pantalla en el dashboard y responde allí. '
                        'Se mantiene el navegador de producción durante 5 minutos.')
     try:
+        # Listing and detail share a context but are separate tabs. The human
+        # must interact with the tab represented by this screenshot.
+        await page.bring_to_front()
         await page.set_viewport_size({'width': WIDTH, 'height': HEIGHT})
         while time.monotonic() < deadline:
             if await content_ready(page):
@@ -82,7 +85,11 @@ async def resolve(page, exchange, emit, timeout=300):
                     action = parse_action(answer)
                     if action[0] == 'click':
                         # Forward only the coordinates submitted by the user.
+                        await page.bring_to_front()
                         await page.mouse.click(action[1], action[2])
+                        await asyncio.to_thread(exchange, 'executed', id=challenge_id)
+                        await emit(event='verification.click_executed',
+                                   message='El navegador ejecutó tu clic. Esto no confirma aún el acceso de Adondevivir.')
                     await asyncio.sleep(1)
                     break
                 await asyncio.sleep(1)

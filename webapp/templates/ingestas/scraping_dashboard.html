@@ -663,6 +663,8 @@ let verificationSending = false;
 let verificationPendingId = null;
 let verificationRenderedId = null;
 let verificationImageSource = null;
+let verificationPendingSince = null;
+let verificationPollTimer = null;
 
 async function loadVerification(jobId) {
     if (verificationLoading || jobId !== currentJobId) return;
@@ -682,6 +684,7 @@ async function loadVerification(jobId) {
             verificationRenderedId = null;
             verificationImageSource = null;
             verificationPendingId = null;
+            verificationPendingSince = null;
             document.getElementById('verificationImage').removeAttribute('src');
             return;
         }
@@ -711,6 +714,24 @@ async function loadVerification(jobId) {
             if (image.complete && image.naturalWidth) verificationRenderedId = item.id;
             document.getElementById('verificationMessage').textContent = 'Disponible hasta ' + new Date(item.expires_at).toLocaleTimeString() + '. Si vence, las fichas pendientes se conservan.';
             document.getElementById('verificationSubmit').disabled = false;
+        }
+        if (browserMode && ['submitted', 'consumed', 'executed'].includes(item.state)) {
+            verificationPendingId = item.id;
+            if (!verificationPendingSince) verificationPendingSince = Date.now();
+            document.getElementById('verificationRefresh').disabled = true;
+            const status = document.getElementById('verificationMessage');
+            status.textContent = item.state === 'executed'
+                ? 'El navegador ejecutó tu clic. Esperando la pantalla actualizada; el acceso todavía no está confirmado.'
+                : item.state === 'consumed'
+                    ? 'El worker recibió la acción y está procesándola en el navegador.'
+                    : 'Acción recibida por el servidor. Esperando que el worker la recoja.';
+            if (Date.now() - verificationPendingSince > 15000) {
+                status.textContent += ' Lleva más de 15 segundos sin una pantalla nueva. No repitas el clic: el procesamiento está demorado o bloqueado.';
+            }
+            clearTimeout(verificationPollTimer);
+            verificationPollTimer = setTimeout(() => loadVerification(jobId), 1500);
+        } else if (verificationPendingId !== item.id) {
+            verificationPendingSince = null;
         }
     } catch (error) {
         document.getElementById('verificationSubmit').disabled = true;
@@ -773,8 +794,10 @@ async function sendBrowserVerification(action) {
         if (!response.ok) throw new Error(data.error || 'No se pudo enviar la acción.');
         if (jobId !== currentJobId) return;
         verificationPendingId = challengeId;
-        message.textContent = 'Acción enviada al navegador de Adondevivir. Esperando la nueva pantalla…';
-        setTimeout(() => loadVerification(jobId), 1500);
+        verificationPendingSince = Date.now();
+        message.textContent = 'Acción recibida por el servidor. Aún falta la confirmación del navegador.';
+        clearTimeout(verificationPollTimer);
+        verificationPollTimer = setTimeout(() => loadVerification(jobId), 1500);
     } catch (error) {
         message.textContent = error.message;
         loadVerification(jobId);
