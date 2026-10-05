@@ -7,6 +7,7 @@ import base64
 import re
 import time
 from urllib.parse import urlsplit
+from playwright.async_api import Error as BrowserError, TimeoutError as BrowserTimeout
 
 from .contracts import ScrapingInterrupted
 
@@ -62,13 +63,29 @@ async def resolve(page, exchange, emit, timeout=300):
         # must interact with the tab represented by this screenshot.
         await page.bring_to_front()
         await page.set_viewport_size({'width': WIDTH, 'height': HEIGHT})
+        screenshot_failures = 0
         while time.monotonic() < deadline:
             if await content_ready(page):
                 await emit(event='verification.completed', message='Adondevivir confirmó acceso; continúa la extracción.')
                 return True
             if not allowed_page(page):
                 break
-            screenshot = await page.screenshot(type='png', full_page=False, scale='css', timeout=10000)
+            try:
+                screenshot = await page.screenshot(
+                    type='png', full_page=False, scale='css',
+                    timeout=max(1, min(10000, int((deadline - time.monotonic()) * 1000))))
+            except BrowserTimeout as exc:
+                screenshot_failures += 1
+                await emit(event='verification.screenshot_failed', level='warning',
+                           message=f'La captura de verificación agotó su tiempo ({screenshot_failures}/3). '
+                                   'Se conserva la misma pestaña, sin recargar el portal.')
+                if screenshot_failures >= 3:
+                    raise ScrapingInterrupted(
+                        'portal.paused: el navegador no pudo capturar la verificación tras 3 intentos; '
+                        'no se recargará el portal; pendientes conservados') from exc
+                await asyncio.sleep(min(2, max(0, deadline - time.monotonic())))
+                continue
+            screenshot_failures = 0
             challenge_id = await asyncio.to_thread(exchange, 'open',
                 screenshot=base64.b64encode(screenshot).decode('ascii'),
                 seconds=max(1, int(deadline-time.monotonic())))
@@ -94,5 +111,11 @@ async def resolve(page, exchange, emit, timeout=300):
                     break
                 await asyncio.sleep(1)
         raise ScrapingInterrupted('portal.paused: Adondevivir no confirmó la verificación; pendientes conservados')
+    except BrowserError as exc:
+        # A broken verification browser is not a transient listing request.
+        # Letting this escape as a navigation error restarts the challenge.
+        raise ScrapingInterrupted(
+            'portal.paused: falló el navegador durante la verificación; '
+            'no se recargará el portal; pendientes conservados') from exc
     finally:
         await asyncio.to_thread(exchange, 'close')

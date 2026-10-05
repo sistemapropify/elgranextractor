@@ -1,6 +1,7 @@
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
+from playwright.async_api import Error as BrowserError, TimeoutError as BrowserTimeout
 
 from scrapi.browser_verification import parse_action, content_ready, resolve
 from scrapi.contracts import ScrapingInterrupted
@@ -61,6 +62,56 @@ class BrowserVerificationTests(unittest.IsolatedAsyncioTestCase):
              patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()):
             self.assertTrue(await resolve(page,exchange,AsyncMock()))
         page.mouse.click.assert_not_awaited()
+
+    async def test_screenshot_timeout_retries_same_page_then_publishes(self):
+        page = self.page()
+        page.screenshot.side_effect = [BrowserTimeout('taking page screenshot'), b'png']
+        page.goto = AsyncMock()
+        page.reload = AsyncMock()
+        exchange = Mock(side_effect=['id', 'refresh', None])
+        with patch('scrapi.browser_verification.content_ready', AsyncMock(side_effect=[False, False, False, True])), \
+             patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()):
+            self.assertTrue(await resolve(page, exchange, AsyncMock()))
+        self.assertEqual(page.screenshot.await_count, 2)
+        self.assertEqual([call.args[0] for call in exchange.call_args_list], ['open', 'poll', 'close'])
+        page.goto.assert_not_awaited()
+        page.reload.assert_not_awaited()
+
+    async def test_repeated_screenshot_timeouts_pause_instead_of_navigation_retry(self):
+        page = self.page()
+        page.screenshot.side_effect = BrowserTimeout('fonts loaded; screenshot timed out')
+        exchange = Mock()
+        with patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()):
+            with self.assertRaisesRegex(ScrapingInterrupted, '3 intentos.*pendientes conservados'):
+                await resolve(page, exchange, AsyncMock())
+        self.assertEqual(page.screenshot.await_count, 3)
+        exchange.assert_called_once_with('close')
+        page.mouse.click.assert_not_awaited()
+
+    async def test_disconnected_browser_pauses_without_restarting_challenge(self):
+        page = self.page()
+        page.screenshot.side_effect = BrowserError('Target closed')
+        exchange = Mock()
+        with self.assertRaisesRegex(ScrapingInterrupted, 'falló el navegador'):
+            await resolve(page, exchange, AsyncMock())
+        page.screenshot.assert_awaited_once()
+        exchange.assert_called_once_with('close')
+
+    async def test_listing_does_not_navigate_again_after_capture_failure(self):
+        from scrapi.paged_engine import navigate
+        page = self.page()
+        page.goto = AsyncMock(return_value=SimpleNamespace(status=403))
+        page.screenshot.side_effect = BrowserTimeout('screenshot timed out')
+        emit = AsyncMock()
+        async def verify(target, **kwargs):
+            return await resolve(target, Mock(), emit)
+        source = SimpleNamespace(esperar_cloudflare=verify)
+        with patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()), \
+             patch('scrapi.paged_engine.wait_for_retry', AsyncMock()) as retry:
+            with self.assertRaises(ScrapingInterrupted):
+                await navigate(page, source, 'adondevivir', page.url, emit)
+        page.goto.assert_awaited_once()
+        retry.assert_not_awaited()
 
     async def test_cancel_from_worker_closes_mailbox(self):
         page=self.page();exchange=Mock(side_effect=['id',ScrapingInterrupted('stopped'),None])
