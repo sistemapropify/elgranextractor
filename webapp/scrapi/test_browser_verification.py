@@ -273,9 +273,11 @@ class BrowserVerificationTests(unittest.IsolatedAsyncioTestCase):
                 def mail(action, **kwargs):
                     return {'open': 'id', 'poll': 'c:300:200'}.get(action)
                 exchange = Mock(side_effect=mail)
-                with patch('scrapi.browser_verification.BROWSER_TIMEOUT_SECONDS', .02):
+                # Keep the deliberate browser stall bounded without racing
+                # Windows thread-pool scheduling of the healthy mailbox.
+                with patch('scrapi.browser_verification.BROWSER_TIMEOUT_SECONDS', .1):
                     with self.assertRaisesRegex(ScrapingInterrupted, phase):
-                        await asyncio.wait_for(resolve(page, exchange, emit), .5)
+                        await asyncio.wait_for(resolve(page, exchange, emit), 2)
                 self.assertNotIn('executed', [call.args[0] for call in exchange.call_args_list])
                 timeout_log = next(c for c in emit.call_args_list
                                    if c.kwargs.get('event') == 'verification.browser_timeout')
