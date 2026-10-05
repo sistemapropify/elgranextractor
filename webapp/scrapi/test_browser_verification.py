@@ -76,6 +76,23 @@ class BrowserVerificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(executed.kwargs['used'], {'x': 300, 'y': 200})
         self.assertEqual(executed.kwargs['target_before']['tag'], 'iframe')
 
+    async def test_diagnostic_evaluation_failure_never_blocks_the_click(self):
+        page = self.page()
+        page.evaluate = AsyncMock(side_effect=TimeoutError('cross-origin frame stalled'))
+        exchange = Mock(side_effect=['id', 'c:300:200', None, None, None])
+        emit = AsyncMock()
+        with patch('scrapi.browser_verification.content_ready',
+                   AsyncMock(side_effect=[False, False, True])), \
+             patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()):
+            self.assertTrue(await resolve(page, exchange, emit))
+        page.mouse.click.assert_awaited_once_with(300, 200)
+        executed = next(call for call in emit.call_args_list
+                        if call.kwargs.get('event') == 'verification.click_executed')
+        self.assertEqual(
+            executed.kwargs['target_before'],
+            {'inspection_error': 'TimeoutError'},
+        )
+
     async def test_failed_click_is_never_acknowledged_as_executed(self):
         page = self.page()
         page.mouse.click.side_effect = RuntimeError('browser disconnected')

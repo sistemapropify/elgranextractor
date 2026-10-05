@@ -15,6 +15,7 @@ from .contracts import ScrapingInterrupted
 WIDTH, HEIGHT = 1440, 1000
 MAX_SCREEN_COORDINATE = 8191
 POST_CLICK_WAIT_SECONDS = 10
+DIAGNOSTIC_TIMEOUT_SECONDS = 0.75
 
 
 def parse_action(value):
@@ -42,13 +43,16 @@ def _png_size(screenshot):
 async def _viewport(page):
     """Return the CSS coordinate space that page.mouse uses."""
     try:
-        result = await page.evaluate('''() => ({
-            width: window.innerWidth,
-            height: window.innerHeight,
-            devicePixelRatio: window.devicePixelRatio,
-            scrollX: window.scrollX,
-            scrollY: window.scrollY
-        })''')
+        result = await asyncio.wait_for(
+            page.evaluate('''() => ({
+                width: window.innerWidth,
+                height: window.innerHeight,
+                devicePixelRatio: window.devicePixelRatio,
+                scrollX: window.scrollX,
+                scrollY: window.scrollY
+            })'''),
+            timeout=DIAGNOSTIC_TIMEOUT_SECONDS,
+        )
         if result.get('width') and result.get('height'):
             return result
     except Exception:
@@ -86,28 +90,17 @@ async def _hit_target(page, x, y):
                        width: Math.round(rect.width), height: Math.round(rect.height)}
             };
         }'''
-        target = await page.evaluate(describe, [x, y])
-        if not target or target.get('tag') != 'iframe':
-            return target
-        # If the selected point falls inside a child frame, record the element
-        # at that same point within the frame. This is observation only: the
-        # worker does not search for, select, or solve a challenge control.
-        for frame in getattr(page, 'frames', [])[1:]:
-            try:
-                element = await frame.frame_element()
-                box = await element.bounding_box()
-                if (box and box['x'] <= x < box['x'] + box['width']
-                        and box['y'] <= y < box['y'] + box['height']):
-                    target['frame'] = {
-                        'url': str(frame.url)[:240],
-                        'point': {'x': round(x - box['x'], 2),
-                                  'y': round(y - box['y'], 2)},
-                        'element': await frame.evaluate(
-                            describe, [x - box['x'], y - box['y']]),
-                    }
-                    break
-            except Exception:
-                continue
+        target = await asyncio.wait_for(
+            page.evaluate(describe, [x, y]),
+            timeout=DIAGNOSTIC_TIMEOUT_SECONDS,
+        )
+        if target and target.get('tag') == 'iframe':
+            # Frame URLs are synchronous Playwright metadata. Never evaluate
+            # the cross-origin challenge frame before clicking: in production
+            # that inspection can wait indefinitely and consume the action
+            # without ever reaching page.mouse.
+            target['frame_urls'] = [str(frame.url)[:240]
+                                    for frame in getattr(page, 'frames', [])[1:6]]
         return target
     except Exception as exc:
         return {'inspection_error': type(exc).__name__}
