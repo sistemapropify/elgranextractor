@@ -127,6 +127,27 @@ class BrowserVerificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('verification.click_not_accepted', events)
         self.assertNotIn('verification.completed', events)
 
+    async def test_post_click_feedback_is_published_while_acceptance_is_pending(self):
+        page = self.page()
+        polls = 0
+        feedbacks = []
+        def exchange(action, **payload):
+            nonlocal polls
+            if action == 'open': return 'id'
+            if action == 'poll':
+                polls += 1
+                return 'c:300:200' if polls == 1 else None
+            if action == 'feedback': feedbacks.append(payload)
+        # Access remains blocked for the first post-click observation, then
+        # becomes ready. The intermediate screen must reach the mailbox.
+        with patch('scrapi.browser_verification.content_ready',
+                   AsyncMock(side_effect=[False, False, False, True])), \
+             patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()):
+            self.assertTrue(await resolve(page, exchange, AsyncMock()))
+        self.assertEqual(feedbacks, [{'id': 'id', 'screenshot': 'cG5n'}])
+        self.assertEqual(page.screenshot.await_count, 2)
+        page.mouse.click.assert_awaited_once_with(300, 200)
+
     async def test_humanized_pointer_never_uses_a_multistep_move(self):
         page = self.page()
         # This is the real mouse API shape, unlike the minimal click-only mock.

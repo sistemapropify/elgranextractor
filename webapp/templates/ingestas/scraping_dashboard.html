@@ -732,7 +732,8 @@ async function loadVerification(jobId) {
         document.getElementById('verificationImage').alt = browserMode ? 'Pantalla de verificación de Adondevivir' : 'Verificación de Properati';
         document.getElementById('verificationSubmit').disabled = verificationSending;
         document.getElementById('verificationRefresh').disabled = verificationSending || verificationPendingId === item.id;
-        if (verificationId !== item.id) {
+        const nextImageSource = 'data:image/png;base64,' + item.screenshot;
+        if (verificationId !== item.id || verificationImageSource !== nextImageSource) {
             verificationId = item.id;
             if (verificationPendingId !== item.id) verificationPendingId = null;
             document.getElementById('verificationAnswer').value = '';
@@ -740,7 +741,7 @@ async function loadVerification(jobId) {
             const image = document.getElementById('verificationImage');
             image.onload = () => { if (verificationId === item.id) verificationRenderedId = item.id; };
             image.onerror = () => { document.getElementById('verificationMessage').textContent = 'No se pudo cargar la pantalla. Pulsa Actualizar pantalla.'; };
-            verificationImageSource = 'data:image/png;base64,' + item.screenshot;
+            verificationImageSource = nextImageSource;
             image.src = verificationImageSource;
             if (image.complete && image.naturalWidth) verificationRenderedId = item.id;
             document.getElementById('verificationMessage').textContent = 'Disponible hasta ' + new Date(item.expires_at).toLocaleTimeString() + '. Si vence, las fichas pendientes se conservan.';

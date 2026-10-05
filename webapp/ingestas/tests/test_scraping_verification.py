@@ -49,6 +49,20 @@ class VerificationMailboxTests(TestCase):
             self.exchange('executed', id=self.challenge)
         self.assertEqual(public_state(self.job)['state'], 'waiting')
 
+    def test_post_click_feedback_updates_screen_without_unlocking_action(self):
+        with self.assertRaises(ValueError):
+            self.exchange('feedback', id=self.challenge, screenshot='after-click')
+        submit_answer(self.job.pk, self.challenge, 'c:200:100')
+        self.exchange('poll', id=self.challenge)
+        self.exchange('executed', id=self.challenge)
+        self.exchange('feedback', id=self.challenge, screenshot='after-click')
+        state = public_state(self.job)
+        self.assertEqual(state['id'], self.challenge)
+        self.assertEqual(state['state'], 'executed')
+        self.assertEqual(state['screenshot'], 'after-click')
+        with self.assertRaises(ValueError):
+            submit_answer(self.job.pk, self.challenge, 'c:200:100')
+
     def test_automatic_capture_rotates_id_without_extending_deadline(self):
         expiry = public_state(self.job)['expires_at']
         next_id = self.exchange('refresh', id=self.challenge, screenshot='new-screen')

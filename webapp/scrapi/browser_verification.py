@@ -292,8 +292,11 @@ async def _resolve(page, exchange, emit, deadline, step):
                                received={'x': action[1], 'y': action[2]}, used={'x': click_x, 'y': click_y},
                                viewport=viewport, screenshot=screenshot_size, target_before=target_before)
                     observe_until = min(deadline, time.monotonic() + POST_CLICK_WAIT_SECONDS)
+                    feedback_at = time.monotonic()
+                    first_observation = True
                     while time.monotonic() < observe_until:
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(.25 if first_observation else 1)
+                        first_observation = False
                         await mail('poll', id=challenge_id)
                         if await ready():
                             await emit(event='verification.completed',
@@ -303,6 +306,18 @@ async def _resolve(page, exchange, emit, deadline, step):
                         if not allowed_page(page):
                             raise ScrapingInterrupted(
                                 'portal.paused: dominio de verificación inesperado; pendientes conservados')
+                        if time.monotonic() >= feedback_at:
+                            try:
+                                feedback = await asyncio.wait_for(page.screenshot(
+                                    type='png', full_page=False, scale='css', timeout=1500), 2)
+                            except (BrowserError, asyncio.TimeoutError):
+                                # Feedback is best-effort, never replay the click
+                                # or abort it just because one frame was slow.
+                                feedback = None
+                            if feedback is not None and allowed_page(page):
+                                await mail('feedback', id=challenge_id,
+                                           screenshot=base64.b64encode(feedback).decode('ascii'))
+                            feedback_at = time.monotonic() + 2
                     await emit(event='verification.click_not_accepted', level='warning',
                                message='Adondevivir no confirmó el clic; se publicará una pantalla nueva antes de permitir otro intento.',
                                received={'x': action[1], 'y': action[2]}, used={'x': click_x, 'y': click_y},
