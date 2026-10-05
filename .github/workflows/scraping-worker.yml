@@ -21,6 +21,8 @@ jobs:
         run: docker run --rm --network none --entrypoint python scraping-worker:test -m scrapi.worker_smoke
       - name: Dashboard preview, filters and resume in a real browser
         run: docker run --rm --network none --entrypoint python scraping-worker:test -m scrapi.dashboard_smoke
+      - name: Actual Adondevivir detail age template in a real browser
+        run: docker run --rm --network none --entrypoint python scraping-worker:test -m scrapi.detail_age_smoke
       - name: Ordinary pointer forwarding and remote screenshot refresh
         run: timeout 180 docker run --rm --network none --entrypoint python scraping-worker:test -m scrapi.browser_verification_smoke
       - name: Database, adapters and dashboard regressions

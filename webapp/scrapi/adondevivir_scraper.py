@@ -25,6 +25,16 @@ GUARDAR_CADA_N_PAGINAS = 5
 PROPS_POR_PAGINA = 30
 detener = False
 
+# Observed on detail 151259141: labels are text inside li.icon-feature,
+# including the age item with i.icon-antiguedad. Retain the older template
+# only as a fallback; never scan description/advertiser prose for bare years.
+DETAIL_FEATURES_JS = r"""() => {
+    const current = [...document.querySelectorAll(
+        '#section-icon-features-property li.icon-feature, .section-icon-features-property li.icon-feature')];
+    const labels = current.length ? current : [...document.querySelectorAll('.nf-container .item .label')];
+    return labels.map(el => el.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean);
+}"""
+
 
 # =========================================================================
 # NORMALIZACION / ESTANDARIZACION (compartido con REMAX, Properati, Urbania)
@@ -642,13 +652,8 @@ async def extraer_coordenadas_desde_detalle(page, url, prop=None):
             area_cubierta_ficha = area_etiquetada(texto_ficha, 'cub')
 
         if prop is not None:
-            # Same Navent feature chips as Urbania; keep their labels as raw
-            # evidence instead of guessing age from the whole page's prose.
-            features = await _evaluate_with_timeout(page, """() =>
-                [...document.querySelectorAll('.nf-container .item .label')]
-                    .map(el => el.textContent.replace(/\\s+/g, ' ').trim())
-                    .filter(Boolean)
-            """, timeout=15)
+            # Keep the actual detail labels as evidence for normalization.
+            features = await _evaluate_with_timeout(page, DETAIL_FEATURES_JS, timeout=15)
             prop['Caracteristicas'] = ' | '.join(features or [])
 
         imagen_url = extraer_imagen_desde_html(html_content)

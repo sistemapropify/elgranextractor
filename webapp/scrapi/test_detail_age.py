@@ -44,6 +44,21 @@ class DetailAgeTests(unittest.TestCase):
         self.assertEqual(adon.mapear_a_formato_remax({'antiguedad': 0})['Antiguedad'], 0)
         self.assertEqual(normalize('adondevivir', adon, {'id': '123456', 'antiguedad': 13})['antiguedad_anios'], 13)
 
+    def test_same_integer_age_format_as_remax_and_urbania(self):
+        from scrapi import remax_scraper as remax
+        for age in (0, 7, 13):
+            rows = (
+                normalize('remax', remax, {'ID': '123456', 'Tipo': 'Departamento', 'Antiguedad': age}),
+                normalize('adondevivir', adon, {'id': '123456', 'tipo': 'Departamento',
+                    'Caracteristicas': f'62 m² tot. | {age} años'}),
+                urbania_row({'ID': '123456', 'Tipo': 'Departamento',
+                    'Caracteristicas': f'62 m² tot. | {age} años'}, '2026-10-05'),
+            )
+            for row in rows:
+                with self.subTest(age=age, portal=row['fuente']):
+                    self.assertIs(type(row['antiguedad_anios']), int)
+                    self.assertEqual(row['antiguedad_anios'], age)
+
 
 class AdonDetailExtractionTests(unittest.IsolatedAsyncioTestCase):
     async def test_detail_chips_reach_normalized_age_without_changing_areas(self):

@@ -170,6 +170,23 @@ class DurableScrapingTests(TestCase):
         self.assertEqual(saved.antiguedad_anios, 13)
         self.assertEqual(saved.datos_crudos['_age_evidence']['value'], '13 años')
 
+    def test_adondevivir_actual_feature_age_updates_empty_property(self):
+        from scrapi import adondevivir_scraper as source
+        from scrapi.paged_engine import normalize
+        token = uuid.uuid4()
+        job = ScrapingJob.objects.create(estado='running', execution_token=token,
+            parametros={'portales': ['adondevivir']})
+        run = start_or_resume_portal_run(job, 'adondevivir')
+        guardar_propiedades([{'id_origen': '151259141', 'titulo': 'Departamento'}],
+            'adondevivir', lifecycle_run_id=run.pk, execution_token=token)
+        self.assertIsNone(PropiedadesCompetencia.objects.get(id_origen='151259141').antiguedad_anios)
+        row = normalize('adondevivir', source, {'id': '151259141',
+            'tipo': 'Departamento', 'Caracteristicas': '62 m² tot. | 62 m² cub. | 1 baño | 2 dorm. | 7 años'})
+        guardar_propiedades([row], 'adondevivir', lifecycle_run_id=run.pk, execution_token=token)
+        saved = PropiedadesCompetencia.objects.get(id_origen='151259141')
+        self.assertEqual(saved.antiguedad_anios, 7)
+        self.assertEqual(saved.datos_crudos['_age_evidence']['value'], '7 años')
+
     def test_superseded_owner_cannot_write_or_checkpoint(self):
         job, run, token = self.make_run()
         ScrapingJob.objects.filter(pk=job.pk).update(execution_token=uuid.uuid4())
