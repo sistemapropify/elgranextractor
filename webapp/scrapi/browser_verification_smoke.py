@@ -48,11 +48,56 @@ async def check_pointer(browser):
         await page.close()
 
 
+async def check_cross_origin_pointer(browser):
+    """Native input must reach an ordinary closed-shadow cross-origin frame.
+
+    COOP/COEP force the frame boundary missing from the old top-level test.
+    Both origins are local routed fixtures, with no challenge or external IO.
+    """
+    context = await browser.new_context(viewport={'width': 1440, 'height': 1000})
+    page = await context.new_page()
+    requests = []
+
+    async def fixture(route):
+        requests.append(route.request.url)
+        if route.request.url.startswith('https://frame.test/'):
+            body = '''<body style="margin:0"><input id="test" type="checkbox"
+                style="position:absolute;left:10px;top:24px;width:22px;height:22px;margin:0">
+                <script>document.querySelector('input').addEventListener('click', e =>
+                parent.postMessage({checked:e.target.checked}, 'https://parent.test'))</script>'''
+        else:
+            body = '''<div id="host" style="position:absolute;left:272px;top:304px;width:896px;height:68px"></div>
+                <script>const root=document.querySelector('#host').attachShadow({mode:'closed'});
+                root.innerHTML='<iframe src="https://frame.test/control" style="border:0;width:896px;height:68px"></iframe>';
+                window.addEventListener('message', e => {if(e.origin==='https://frame.test')
+                document.body.dataset.checked=String(e.data.checked)});</script>'''
+        await route.fulfill(content_type='text/html', body=body, headers={
+            'Cross-Origin-Opener-Policy': 'same-origin',
+            'Cross-Origin-Embedder-Policy': 'require-corp',
+            'Cross-Origin-Resource-Policy': 'cross-origin',
+        })
+
+    try:
+        await context.route('**/*', fixture)
+        async with page.expect_event('framenavigated',
+                                     predicate=lambda frame: frame.url == 'https://frame.test/control',
+                                     timeout=10000):
+            await page.goto('https://parent.test/control')
+        await page.frame(url='https://frame.test/control').locator('#test').wait_for()
+        await asyncio.wait_for(_perform_user_click(page, 293, 338), BROWSER_TIMEOUT_SECONDS)
+        await page.locator('body[data-checked="true"]').wait_for(state='attached', timeout=3000)
+        assert requests == ['https://parent.test/control', 'https://frame.test/control'], requests
+        print('Closed-shadow cross-origin ordinary checkbox received the native click', flush=True)
+    finally:
+        await context.close()
+
+
 async def main():
     print('Starting offline verification smoke', flush=True)
     options = await asyncio.to_thread(manual_pointer_kwargs)
     async with AsyncCamoufox(**options) as browser:
         timings = await check_pointer(browser)
+        await check_cross_origin_pointer(browser)
         print('Ordinary pointer check passed; checking screenshot refresh', flush=True)
         page = await browser.new_page()
         requests, navigations, screenshots, events = [], [], [], []
