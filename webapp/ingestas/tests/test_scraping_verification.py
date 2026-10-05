@@ -124,7 +124,7 @@ class VerificationAccessTests(SimpleTestCase):
              patch('ingestas.scraping_verification.active_for_job', return_value=query):
             submit_answer.__wrapped__(1, 'challenge', 'c:100:200')
             query.filter.return_value.update.assert_called_once_with(answer='c:100:200', state='submitted')
-            with self.assertRaises(ValueError): submit_answer.__wrapped__(1, 'challenge', 'c:1440:20')
+            with self.assertRaises(ValueError): submit_answer.__wrapped__(1, 'challenge', 'c:8192:20')
 
     def test_click_cannot_be_sent_to_properati(self):
         item = SimpleNamespace(pk='challenge', run=SimpleNamespace(portal='properati'))

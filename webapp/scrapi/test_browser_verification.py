@@ -1,9 +1,10 @@
 import unittest
+import struct
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 from playwright.async_api import Error as BrowserError, TimeoutError as BrowserTimeout
 
-from scrapi.browser_verification import parse_action, content_ready, resolve
+from scrapi.browser_verification import _map_click, _png_size, parse_action, content_ready, resolve
 from scrapi.contracts import ScrapingInterrupted
 
 
@@ -16,10 +17,18 @@ class BrowserVerificationTests(unittest.IsolatedAsyncioTestCase):
             mouse=SimpleNamespace(click=AsyncMock()), _scraping_document_status=403)
 
     def test_coordinates_bounded_and_no_commands(self):
-        self.assertEqual(parse_action('c:1439:999'), ('click', 1439, 999))
+        self.assertEqual(parse_action('c:2879:1999'), ('click', 2879, 1999))
         self.assertEqual(parse_action('refresh'), ('refresh',))
-        for raw in ('c:1440:100', 'c:10:1000', 'c:-1:4', 'c:nan:4', 'eval:x', 'https://other', '1', None):
+        for raw in ('c:8192:100', 'c:10:8192', 'c:-1:4', 'c:nan:4', 'eval:x', 'https://other', '1', None):
             with self.assertRaises(ValueError): parse_action(raw)
+
+    def test_png_coordinates_are_mapped_to_css_viewport(self):
+        png = b'\x89PNG\r\n\x1a\n' + b'\0' * 8 + struct.pack('>II', 2880, 2000)
+        size = _png_size(png)
+        self.assertEqual(size, {'width': 2880, 'height': 2000})
+        self.assertEqual(_map_click(600, 400, size, {'width': 1440, 'height': 1000}), (300, 200))
+        with self.assertRaisesRegex(ValueError, 'fuera'):
+            _map_click(2880, 400, size, {'width': 1440, 'height': 1000})
 
     async def test_title_alone_never_confirms_access(self):
         page=self.page();page.title.return_value='Inmuebles en venta'
@@ -30,7 +39,7 @@ class BrowserVerificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await content_ready(page))
 
     async def test_only_user_click_is_forwarded_and_mailbox_closes(self):
-        page=self.page();exchange=Mock(side_effect=['id', 'c:300:200', None, None])
+        page=self.page();exchange=Mock(side_effect=['id', 'c:300:200', None, None, None])
         events = []
         page.bring_to_front.side_effect = lambda: events.append('focus')
         page.screenshot.side_effect = lambda **kwargs: events.append('screen') or b'png'
@@ -40,10 +49,32 @@ class BrowserVerificationTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(await resolve(page,exchange,AsyncMock()))
         page.mouse.click.assert_awaited_once_with(300,200)
         self.assertEqual(events, ['focus', 'screen', 'focus', 'click'])
-        self.assertEqual(exchange.call_args_list[-2].args, ('executed',))
-        self.assertEqual(exchange.call_args_list[-2].kwargs, {'id': 'id'})
+        executed = next(call for call in exchange.call_args_list if call.args == ('executed',))
+        self.assertEqual(executed.kwargs, {'id': 'id'})
         self.assertEqual(exchange.call_args.args, ('close',))
         page.screenshot.assert_awaited_once()
+
+    async def test_click_diagnostics_record_real_geometry_and_hit_target(self):
+        page = self.page()
+        page.screenshot.return_value = (
+            b'\x89PNG\r\n\x1a\n' + b'\0' * 8 + struct.pack('>II', 2880, 2000))
+        page.evaluate = AsyncMock(side_effect=[
+            {'width': 1440, 'height': 1000, 'devicePixelRatio': 2, 'scrollX': 0, 'scrollY': 0},
+            {'width': 1440, 'height': 1000, 'devicePixelRatio': 2, 'scrollX': 0, 'scrollY': 0},
+            {'tag': 'iframe', 'id': '', 'className': '', 'title': 'Widget containing a Cloudflare security challenge',
+             'src': 'https://challenges.cloudflare.com/', 'rect': {'x': 250, 'y': 300, 'width': 300, 'height': 65}},
+        ])
+        exchange = Mock(side_effect=['id', 'c:600:400', None, None, None])
+        emit = AsyncMock()
+        with patch('scrapi.browser_verification.content_ready', AsyncMock(side_effect=[False, False, True])), \
+             patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()):
+            self.assertTrue(await resolve(page, exchange, emit))
+        page.mouse.click.assert_awaited_once_with(300, 200)
+        executed = next(call for call in emit.call_args_list
+                        if call.kwargs.get('event') == 'verification.click_executed')
+        self.assertEqual(executed.kwargs['received'], {'x': 600, 'y': 400})
+        self.assertEqual(executed.kwargs['used'], {'x': 300, 'y': 200})
+        self.assertEqual(executed.kwargs['target_before']['tag'], 'iframe')
 
     async def test_failed_click_is_never_acknowledged_as_executed(self):
         page = self.page()
@@ -55,6 +86,28 @@ class BrowserVerificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('executed', [call.args[0] for call in exchange.call_args_list])
         self.assertNotIn('verification.click_executed', [call.kwargs.get('event') for call in emit.call_args_list])
         self.assertEqual(exchange.call_args.args, ('close',))
+
+    async def test_unaccepted_click_is_reported_and_never_marked_completed(self):
+        page = self.page()
+        page.mouse = SimpleNamespace(
+            move=AsyncMock(), down=AsyncMock(), up=AsyncMock(), click=AsyncMock())
+        exchange = Mock(side_effect=[
+            'id', 'c:300:200', None,
+            ScrapingInterrupted('stopped after refreshed screen'), None])
+        emit = AsyncMock()
+        with patch('scrapi.browser_verification.content_ready', AsyncMock(return_value=False)), \
+             patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()), \
+             patch('scrapi.browser_verification.POST_CLICK_WAIT_SECONDS', 0):
+            with self.assertRaisesRegex(ScrapingInterrupted, 'stopped'):
+                await resolve(page, exchange, emit)
+        page.mouse.move.assert_awaited_once_with(300, 200, steps=12)
+        page.mouse.down.assert_awaited_once()
+        page.mouse.up.assert_awaited_once()
+        page.mouse.click.assert_not_awaited()
+        events = [call.kwargs.get('event') for call in emit.call_args_list]
+        self.assertIn('verification.click_executed', events)
+        self.assertIn('verification.click_not_accepted', events)
+        self.assertNotIn('verification.completed', events)
 
     async def test_refresh_does_not_click_or_reload(self):
         page=self.page();exchange=Mock(side_effect=['id','refresh',None])
