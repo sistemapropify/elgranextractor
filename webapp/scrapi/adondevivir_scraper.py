@@ -388,7 +388,7 @@ def mapear_a_formato_remax(prop):
         "Energia Electrica": "",
         "Serv. Drenaje": "",
         "Serv. Gas": "",
-        "Antiguedad": "",
+        "Antiguedad": prop.get("Antiguedad", prop.get("antiguedad", "")),
         "Pisos": "",
         "Google Maps Link": f"https://www.google.com/maps?q={lat},{lng}" if lat and lng else "",
         # Campo extra para QA
@@ -579,7 +579,7 @@ def decodificar_coordenadas(base64_str):
         return None
 
 
-async def extraer_coordenadas_desde_detalle(page, url):
+async def extraer_coordenadas_desde_detalle(page, url, prop=None):
     """Navega a una pagina de detalle y extrae coordenadas de mapLatOf/mapLngOf (base64)."""
     await navegar_con_cloudflare(page, url, timeout=30)
 
@@ -640,6 +640,16 @@ async def extraer_coordenadas_desde_detalle(page, url):
         if texto_ficha:
             area_total_ficha = area_etiquetada(texto_ficha, 'tot')
             area_cubierta_ficha = area_etiquetada(texto_ficha, 'cub')
+
+        if prop is not None:
+            # Same Navent feature chips as Urbania; keep their labels as raw
+            # evidence instead of guessing age from the whole page's prose.
+            features = await _evaluate_with_timeout(page, """() =>
+                [...document.querySelectorAll('.nf-container .item .label')]
+                    .map(el => el.textContent.replace(/\\s+/g, ' ').trim())
+                    .filter(Boolean)
+            """, timeout=15)
+            prop['Caracteristicas'] = ' | '.join(features or [])
 
         imagen_url = extraer_imagen_desde_html(html_content)
         if imagen_url:

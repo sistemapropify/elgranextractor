@@ -99,6 +99,15 @@ def construction_age(raw, extracted_at=None):
             match = re.fullmatch(r'(\d+)', '0')
         if match and int(match.group(1)) <= 150:
             structured.append((int(match.group(1)), key, str(value)))
+    # A standalone feature chip ("13 años") is a portal age field, not
+    # description prose such as "13 años de experiencia" or delivery dates.
+    for key in ('Caracteristicas', 'caracteristicas'):
+        features = raw.get(key)
+        labels = features if isinstance(features, (list, tuple)) else re.split(r'[|\n\r]', str(features or ''))
+        for label in labels:
+            match = re.fullmatch(r'\s*(?:antiguedad\s*:?\s*)?(\d{1,3})\s*anos?(?:\s+de\s+antiguedad)?\s*', plain(label))
+            if match and int(match.group(1)) <= 150:
+                structured.append((int(match.group(1)), key, str(label).strip()))
     parts = [raw.get(key) for key in ('Descripcion', 'descripcion', 'description',
              'Caracteristicas', 'caracteristicas', 'Caracteristicas Extra', 'visible_text_excerpt')]
     normalized = plain(' '.join(str(v) for v in parts if v))

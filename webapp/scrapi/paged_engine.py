@@ -162,7 +162,7 @@ async def enrich(portal, source, page, raw):
     raw.pop('_detail_error', None)
     if portal == 'adondevivir':
         (lat, lng, kind, image,
-         area_total_ficha, area_cubierta_ficha) = await source.extraer_coordenadas_desde_detalle(page, url)
+         area_total_ficha, area_cubierta_ficha) = await source.extraer_coordenadas_desde_detalle(page, url, prop=raw)
         raw.update(latitud=lat, longitud=lng)
         if kind:
             raw['tipo'] = kind

@@ -157,6 +157,19 @@ class DurableScrapingTests(TestCase):
         counts = self.save(run, token, 'a')
         self.assertEqual((counts['total'], counts['nuevas'], counts['actualizadas']), (2, 2, 0))
 
+    def test_detail_feature_age_is_saved_and_updates_existing_empty_field(self):
+        from scrapi.normalization import urbania_row
+        _, run, token = self.make_run()
+        self.save(run, token, 'age-detail')
+        self.assertIsNone(PropiedadesCompetencia.objects.get(id_origen='age-detail').antiguedad_anios)
+        row = urbania_row({'ID': 'age-detail', 'Tipo': 'Departamento',
+            'Caracteristicas': '112 m² tot. | 112 m² cub. | 2 baños | 3 dorm. | 13 años'},
+            '2026-10-05T12:00:00+00:00')
+        guardar_propiedades([row], 'urbania', lifecycle_run_id=run.pk, execution_token=token)
+        saved = PropiedadesCompetencia.objects.get(id_origen='age-detail')
+        self.assertEqual(saved.antiguedad_anios, 13)
+        self.assertEqual(saved.datos_crudos['_age_evidence']['value'], '13 años')
+
     def test_superseded_owner_cannot_write_or_checkpoint(self):
         job, run, token = self.make_run()
         ScrapingJob.objects.filter(pk=job.pk).update(execution_token=uuid.uuid4())
