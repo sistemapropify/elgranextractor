@@ -4,18 +4,52 @@ All requests are intercepted; this does not visit a portal or solve a CAPTCHA.
 """
 import asyncio
 import json
+import time
 from unittest.mock import patch
 
 from camoufox.async_api import AsyncCamoufox
 
-from .browser_verification import resolve
+from .browser_verification import BROWSER_TIMEOUT_SECONDS, _perform_user_click, resolve
 from .camoufox_launcher import camoufox_kwargs
 from .contracts import ScrapingInterrupted
+
+
+async def check_pointer(browser):
+    """Use production humanization on a fixed, ordinary offline checkbox."""
+    page = await browser.new_page(viewport={'width': 1440, 'height': 1000})
+    requests = []
+    async def fixture(route):
+        requests.append(route.request.url)
+        await route.fulfill(content_type='text/html', body='''<!doctype html>
+            <title>Ordinary pointer test</title><input type="checkbox" id="test"
+            style="position:absolute;left:290px;top:190px;width:20px;height:20px">
+            <script>document.querySelector('input').dataset.clickCount = '0';
+            document.querySelector('input').addEventListener('click', event => {
+                event.target.dataset.clickCount = String(Number(event.target.dataset.clickCount) + 1);
+            });
+            </script>''')
+    await page.route('**/*', fixture)
+    await page.goto('https://example.test/offline-checkbox')
+    timings = []
+    try:
+        for _ in range(3):
+            await page.locator('#test').evaluate('element => element.checked = false')
+            await page.mouse.move(0, 0)
+            started = time.monotonic()
+            await asyncio.wait_for(_perform_user_click(page, 300, 200), BROWSER_TIMEOUT_SECONDS)
+            timings.append(round(time.monotonic() - started, 3))
+            assert await page.locator('#test').is_checked(), 'Ordinary checkbox did not receive click'
+        assert await page.locator('#test').get_attribute('data-click-count') == '3', 'Duplicate or missing clicks'
+        assert len(requests) == 1, requests
+        return timings
+    finally:
+        await page.close()
 
 
 async def main():
     options = await asyncio.to_thread(camoufox_kwargs)
     async with AsyncCamoufox(**options) as browser:
+        timings = await check_pointer(browser)
         page = await browser.new_page()
         requests, navigations, screenshots, events = [], [], [], []
         async def fixture(route):
@@ -68,7 +102,8 @@ async def main():
             assert len(navigations) == 1, navigations
             assert len(requests) == 1, requests
             print(json.dumps({'result': 'passed', 'automatic_captures': len(screenshots),
-                              'navigations': len(navigations), 'control_clicked': False}))
+                              'navigations': len(navigations), 'control_clicked': False,
+                              'ordinary_checkbox_click_seconds': timings}))
         finally:
             if not reveal.done():
                 reveal.cancel()

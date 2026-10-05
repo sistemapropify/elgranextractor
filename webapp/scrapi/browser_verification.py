@@ -111,17 +111,15 @@ async def _hit_target(page, x, y):
 
 
 async def _perform_user_click(page, x, y):
-    """Replay only the human-selected point with a realistic pointer sequence."""
-    mouse = page.mouse
-    if all(hasattr(mouse, method) for method in ('move', 'down', 'up')):
-        await mouse.move(x, y, steps=12)
-        await asyncio.sleep(0.12)
-        await mouse.down()
-        await asyncio.sleep(0.08)
-        await mouse.up()
-        return
-    # Compatibility fallback for older/mocked Playwright mouse objects.
-    await mouse.click(x, y)
+    """Replay exactly one click at the point selected by the human.
+
+    Camoufox already interpolates pointer movement with humanize enabled.
+    Twelve Playwright steps invoke that interpolation twelve times, consuming
+    the operation's deadline before button-down. A single native click moves,
+    presses and releases without duplicating interpolation or leaving our own
+    separately scheduled button-down pending on cancellation.
+    """
+    await page.mouse.click(x, y)
 
 
 def allowed_page(page):

@@ -118,14 +118,30 @@ class BrowserVerificationTests(unittest.IsolatedAsyncioTestCase):
              patch('scrapi.browser_verification.POST_CLICK_WAIT_SECONDS', 0):
             with self.assertRaisesRegex(ScrapingInterrupted, 'stopped'):
                 await resolve(page, exchange, emit)
-        page.mouse.move.assert_awaited_once_with(300, 200, steps=12)
-        page.mouse.down.assert_awaited_once()
-        page.mouse.up.assert_awaited_once()
-        page.mouse.click.assert_not_awaited()
+        page.mouse.click.assert_awaited_once_with(300, 200)
+        page.mouse.move.assert_not_awaited()
+        page.mouse.down.assert_not_awaited()
+        page.mouse.up.assert_not_awaited()
         events = [call.kwargs.get('event') for call in emit.call_args_list]
         self.assertIn('verification.click_executed', events)
         self.assertIn('verification.click_not_accepted', events)
         self.assertNotIn('verification.completed', events)
+
+    async def test_humanized_pointer_never_uses_a_multistep_move(self):
+        page = self.page()
+        # This is the real mouse API shape, unlike the minimal click-only mock.
+        # An extra move must not delay the human action or prevent button-down.
+        page.mouse = SimpleNamespace(
+            move=AsyncMock(side_effect=AssertionError('duplicate interpolation')),
+            down=AsyncMock(), up=AsyncMock(), click=AsyncMock())
+        exchange = Mock(side_effect=['id', 'c:300:200', None, None])
+        with patch('scrapi.browser_verification.content_ready',
+                   AsyncMock(side_effect=[False, False, True])):
+            self.assertTrue(await resolve(page, exchange, AsyncMock()))
+        page.mouse.click.assert_awaited_once_with(300, 200)
+        page.mouse.move.assert_not_awaited()
+        page.mouse.down.assert_not_awaited()
+        page.mouse.up.assert_not_awaited()
 
     async def test_refresh_does_not_click_or_reload(self):
         page=self.page();exchange=Mock(side_effect=['id','refresh',None])
