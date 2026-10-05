@@ -43,6 +43,15 @@ async def main():
             await enrich('adondevivir', adon, page, raw)
         assert normalize('adondevivir', adon, raw)['antiguedad_anios'] is None
 
+        for label in ('A estrenar', 'De estreno', 'Estreno'):
+            await render(fixture.replace('        7\n        años', '        ' + label))
+            raw = {'id': '151259141', 'url': url, 'tipo': 'Departamento'}
+            with patch.object(adon, 'navegar_con_cloudflare', side_effect=navigate):
+                await enrich('adondevivir', adon, page, raw)
+            row = normalize('adondevivir', adon, raw)
+            assert type(row['antiguedad_anios']) is int and row['antiguedad_anios'] == 0
+            assert row['datos_crudos']['_age_evidence']['value'] == label
+
         # Older feature template remains supported.
         await render('<html><head><title>Departamento</title></head><body>'
                      '<div class="nf-container"><div class="item"><span class="label">13 años</span></div></div></body></html>')

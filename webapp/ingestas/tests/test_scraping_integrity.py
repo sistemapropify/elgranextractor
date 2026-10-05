@@ -187,6 +187,23 @@ class DurableScrapingTests(TestCase):
         self.assertEqual(saved.antiguedad_anios, 7)
         self.assertEqual(saved.datos_crudos['_age_evidence']['value'], '7 años')
 
+    def test_new_condition_zero_is_saved_without_rewriting_protected_age(self):
+        from scrapi.normalization import urbania_row
+        from ingestas.models import RevisionPropiedadScraping
+        _, run, token = self.make_run()
+        row = urbania_row({'ID': 'new-condition', 'Tipo': 'Casa', 'Caracteristicas': 'A estrenar'},
+                          '2026-10-05T12:00:00+00:00')
+        guardar_propiedades([row], 'urbania', lifecycle_run_id=run.pk, execution_token=token)
+        saved = PropiedadesCompetencia.objects.get(id_origen='new-condition')
+        self.assertEqual(saved.antiguedad_anios, 0)
+        self.assertEqual(saved.datos_crudos['_age_evidence']['value'], 'A estrenar')
+        saved.antiguedad_anios = 7
+        saved.save(update_fields=['antiguedad_anios'])
+        RevisionPropiedadScraping.objects.create(propiedad=saved, campos_protegidos=['antiguedad_anios'])
+        guardar_propiedades([row], 'urbania', lifecycle_run_id=run.pk, execution_token=token)
+        saved.refresh_from_db()
+        self.assertEqual(saved.antiguedad_anios, 7)
+
     def test_superseded_owner_cannot_write_or_checkpoint(self):
         job, run, token = self.make_run()
         ScrapingJob.objects.filter(pk=job.pk).update(execution_token=uuid.uuid4())

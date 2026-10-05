@@ -92,22 +92,45 @@ def construction_age(raw, extracted_at=None):
     """Use explicit age/build-year evidence; never infer age from marketing dates."""
     raw = raw if isinstance(raw, dict) else {}
     structured = []
+    new_conditions = []
+    invalid_age_labels = []
+    unfinished = False
+
+    def read_condition(value, key):
+        nonlocal unfinished
+        label = re.sub(r'\s+', ' ', plain(value)).strip()
+        if re.fullmatch(r'(?:antiguedad\s*[:=\-]?\s*)?(?:a estrenar|de estreno|estreno)', label):
+            new_conditions.append({'label': key, 'value': str(value).strip()})
+        elif re.fullmatch(r'(?:antiguedad\s*[:=\-]?\s*)?(?:en construccion|en proyecto|proyecto|en pozo)', label):
+            unfinished = True
+
     for key in ('Antiguedad', 'antiguedad', 'Antigüedad', 'antiguedad_anios'):
         value = raw.get(key)
+        read_condition(value, key)
         match = re.fullmatch(r'\s*(\d{1,3})\s*(?:años?|years?)?\s*', str(value or ''), re.I)
         if value == 0:
             match = re.fullmatch(r'(\d+)', '0')
         if match and int(match.group(1)) <= 150:
             structured.append((int(match.group(1)), key, str(value)))
+        elif re.search(r'\d', str(value or '')):
+            invalid_age_labels.append({'label': key, 'value': str(value)})
     # A standalone feature chip ("13 años") is a portal age field, not
     # description prose such as "13 años de experiencia" or delivery dates.
     for key in ('Caracteristicas', 'caracteristicas'):
         features = raw.get(key)
         labels = features if isinstance(features, (list, tuple)) else re.split(r'[|\n\r]', str(features or ''))
         for label in labels:
+            read_condition(label, key)
             match = re.fullmatch(r'\s*(?:antiguedad\s*:?\s*)?(\d{1,3})\s*anos?(?:\s+de\s+antiguedad)?\s*', plain(label))
             if match and int(match.group(1)) <= 150:
                 structured.append((int(match.group(1)), key, str(label).strip()))
+            elif re.search(r'\d.*\banos?\b', plain(label)):
+                invalid_age_labels.append({'label': key, 'value': str(label).strip()})
+    # Only an explicitly labelled age in prose is accepted. Titles and
+    # marketing phrases ("como nueva", "remodelada") never imply zero years.
+    for key in ('Descripcion', 'descripcion', 'description', 'visible_text_excerpt'):
+        for match in re.finditer(r'\bantig[uü]edad\s*[:=]\s*(a\s+estrenar|de\s+estreno|estreno)\b', str(raw.get(key) or ''), re.I):
+            read_condition(match.group(1), key)
     parts = [raw.get(key) for key in ('Descripcion', 'descripcion', 'description',
              'Caracteristicas', 'caracteristicas', 'Caracteristicas Extra', 'visible_text_excerpt')]
     normalized = plain(' '.join(str(v) for v in parts if v))
@@ -123,6 +146,12 @@ def construction_age(raw, extracted_at=None):
                     r'\bano\s+en\s+que\s+fue\s+construid[oa]\s*[:=\-]?\s*(19\d{2}|20\d{2})\b'):
         years.update(int(m.group(1)) for m in re.finditer(pattern, normalized))
     evidence = {'source': 'description_age', 'values': sorted(ages), 'construction_years': sorted(years)}
+    if new_conditions:
+        evidence['new_condition_claims'] = new_conditions
+
+    def record_condition_conflict(age):
+        if new_conditions and age != 0:
+            evidence['condition_conflict'] = 'numeric_age_overrides_new_condition'
     reference_year = None
     if years:
         try:
@@ -144,16 +173,26 @@ def construction_age(raw, extracted_at=None):
         # Conflicts stay visible but description evidence never rewrites a portal field.
         if len({a for a, _, _ in structured}) > 1:
             return None, evidence
+        record_condition_conflict(age)
         return age, evidence
     if evidence.get('reason'):
         return None, evidence
     if not ages:
+        if new_conditions:
+            if unfinished or invalid_age_labels:
+                evidence['reason'] = 'conflicting_property_condition' if unfinished else 'invalid_explicit_age'
+                if invalid_age_labels:
+                    evidence['invalid_age_labels'] = invalid_age_labels
+                return None, evidence
+            evidence.update(source='portal_new_condition', years=0, **new_conditions[0])
+            return 0, evidence
         return None, None
     age = next(iter(ages))
     evidence['source'] = 'description_construction_year' if years else 'description_age'
     evidence['years'] = age
     if years:
         evidence['year'] = next(iter(years))
+    record_condition_conflict(age)
     return age, evidence
 
 

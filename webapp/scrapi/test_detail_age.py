@@ -35,7 +35,6 @@ class DetailAgeTests(unittest.TestCase):
             {'Caracteristicas': '10 a 13 años'},
             {'Caracteristicas': '13 años | 20 años'},
             {'Caracteristicas': '151 años'},
-            {'Caracteristicas': 'A estrenar'},
         ):
             with self.subTest(raw=raw):
                 self.assertIsNone(construction_age(raw)[0])
@@ -58,6 +57,61 @@ class DetailAgeTests(unittest.TestCase):
                 with self.subTest(age=age, portal=row['fuente']):
                     self.assertIs(type(row['antiguedad_anios']), int)
                     self.assertEqual(row['antiguedad_anios'], age)
+
+    def test_explicit_new_condition_is_zero_with_original_evidence(self):
+        for label in ('A estrenar', 'de estreno', 'ESTRENO', ' A\u00a0estrenar ', 'Antigüedad: de estreno'):
+            for key in ('Antiguedad', 'antiguedad', 'Antigüedad', 'Caracteristicas', 'caracteristicas'):
+                with self.subTest(label=label, key=key):
+                    age, evidence = construction_age({key: label})
+                    self.assertIs(type(age), int)
+                    self.assertEqual(age, 0)
+                    self.assertEqual(evidence['value'], label.strip())
+                    self.assertEqual(evidence['source'], 'portal_new_condition')
+        self.assertEqual(construction_age({'description': 'Casa. Antigüedad: a estrenar.'})[0], 0)
+
+    def test_numeric_age_and_build_year_override_new_condition(self):
+        for raw, expected in (
+            ({'Antiguedad': 7, 'Caracteristicas': 'De estreno'}, 7),
+            ({'Antiguedad': 'A estrenar', 'Caracteristicas': '13 años'}, 13),
+            ({'Tipo': 'Casa', 'Descripcion': 'Antigüedad: 7 años', 'Caracteristicas': 'Estreno'}, 7),
+            ({'description': 'Casa construida en 2020', 'Caracteristicas': 'A estrenar'}, 6),
+        ):
+            with self.subTest(raw=raw):
+                age, evidence = construction_age(raw, '2026-10-05')
+                self.assertEqual(age, expected)
+                self.assertEqual(evidence['condition_conflict'], 'numeric_age_overrides_new_condition')
+        self.assertIsNone(construction_age({'Caracteristicas': '7 años | 13 años | A estrenar'})[0])
+
+    def test_unknown_unfinished_marketing_and_invalid_age_are_not_zero(self):
+        for raw in (
+            {}, {'Antiguedad': ''}, {'Antiguedad': 'En construcción'},
+            {'Antiguedad': 'En proyecto'}, {'Caracteristicas': 'Remodelada'},
+            {'Caracteristicas': 'Como nueva'}, {'title': 'Casa de estreno'},
+            {'description': 'Remodelada como nueva, cocina de estreno'},
+            {'Antiguedad': 'No es de estreno'},
+            {'Caracteristicas': 'A estrenar | En construcción'},
+            {'Antiguedad': 151, 'Caracteristicas': 'A estrenar'},
+            {'Caracteristicas': '10 a 20 años | Estreno'},
+        ):
+            with self.subTest(raw=raw):
+                self.assertIsNone(construction_age(raw)[0])
+
+    def test_new_condition_same_integer_format_across_all_scrapers(self):
+        from scrapi import remax_scraper as remax, properati_scraper as properati
+        from scrapi.facebook_marketplace_scraper import standardize
+        for label in ('A estrenar', 'de estreno', 'Estreno'):
+            rows = (
+                normalize('remax', remax, {'ID': '123456', 'Tipo': 'Casa', 'Antiguedad': label}),
+                normalize('properati', properati, {'ID': '123456', 'Tipo': 'Casa', 'Antiguedad': label}),
+                normalize('adondevivir', adon, {'id': '123456', 'tipo': 'Casa', 'Caracteristicas': label}),
+                urbania_row({'ID': '123456', 'Tipo': 'Casa', 'Caracteristicas': label}, '2026-10-05'),
+                standardize({'id': '123456', 'title': 'Casa', 'description': f'Antigüedad: {label}'}, '2026-10-05'),
+            )
+            for row in rows:
+                with self.subTest(label=label, portal=row['fuente']):
+                    self.assertIs(type(row['antiguedad_anios']), int)
+                    self.assertEqual(row['antiguedad_anios'], 0)
+                    self.assertIn('_age_evidence', row['datos_crudos'])
 
 
 class AdonDetailExtractionTests(unittest.IsolatedAsyncioTestCase):
