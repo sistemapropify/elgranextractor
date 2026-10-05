@@ -517,7 +517,7 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
 
     async def run():
         from camoufox.async_api import AsyncCamoufox
-        from .camoufox_launcher import camoufox_kwargs
+        from .camoufox_launcher import camoufox_kwargs, manual_pointer_kwargs
         # preflight is bounded internally; run it off the async event loop.
         launch = {
             'timeout': int(os.environ.get('CAMOUFOX_LAUNCH_TIMEOUT', '120')) * 1000,
@@ -533,7 +533,10 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
             # navegador corre "con pantalla"; si no hay Xvfb instalado,
             # camoufox_kwargs cae de vuelta a headless sin romper la corrida.
             launch['headless'] = 'virtual'
-        options = await asyncio.to_thread(camoufox_kwargs, **launch)
+        prepare_browser = (manual_pointer_kwargs
+                           if portal == 'adondevivir' and manual_verification
+                           else camoufox_kwargs)
+        options = await asyncio.to_thread(prepare_browser, **launch)
         async with AsyncCamoufox(**options) as browser:
             # browser.new_page() abre un contexto AISLADO por pestaña: la ficha
             # de detalle no heredaría la cookie cf_clearance que el listado ya

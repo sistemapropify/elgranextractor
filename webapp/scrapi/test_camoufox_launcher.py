@@ -10,6 +10,16 @@ from scrapi import camoufox_launcher as launcher
 
 
 class CamoufoxLauncherTests(unittest.TestCase):
+    def test_manual_remote_pointer_disables_generated_trajectories_only(self):
+        with patch.object(launcher, 'ensure_camoufox_installed'), \
+             patch.object(launcher, 'ensure_camoufox_system_dependencies'):
+            ordinary = launcher.camoufox_kwargs(headless=True)
+            manual = launcher.manual_pointer_kwargs(headless=True, humanize=True)
+        self.assertTrue(ordinary['humanize'])
+        self.assertFalse(manual['humanize'])
+        self.assertEqual({k: v for k, v in ordinary.items() if k != 'humanize'},
+                         {k: v for k, v in manual.items() if k != 'humanize'})
+
     def test_kwargs_do_not_pass_unsupported_data_dir(self):
         with patch.object(launcher, "ensure_camoufox_installed"):
             options = launcher.camoufox_kwargs(headless=True)

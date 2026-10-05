@@ -10,12 +10,12 @@ from unittest.mock import patch
 from camoufox.async_api import AsyncCamoufox
 
 from .browser_verification import BROWSER_TIMEOUT_SECONDS, _perform_user_click, resolve
-from .camoufox_launcher import camoufox_kwargs
+from .camoufox_launcher import manual_pointer_kwargs
 from .contracts import ScrapingInterrupted
 
 
 async def check_pointer(browser):
-    """Use production humanization on a fixed, ordinary offline checkbox."""
+    """Use the manual-input production launcher on an offline checkbox."""
     page = await browser.new_page(viewport={'width': 1440, 'height': 1000})
     requests = []
     async def fixture(route):
@@ -35,8 +35,6 @@ async def check_pointer(browser):
     try:
         for _ in range(3):
             await page.locator('#test').evaluate('element => element.checked = false')
-            # Avoid the viewport corner: native humanization at (0, 0) is not
-            # part of the production action and can stall older Linux builds.
             await asyncio.wait_for(page.mouse.move(30, 30), BROWSER_TIMEOUT_SECONDS)
             started = time.monotonic()
             await asyncio.wait_for(_perform_user_click(page, 300, 200), BROWSER_TIMEOUT_SECONDS)
@@ -52,7 +50,7 @@ async def check_pointer(browser):
 
 async def main():
     print('Starting offline verification smoke', flush=True)
-    options = await asyncio.to_thread(camoufox_kwargs)
+    options = await asyncio.to_thread(manual_pointer_kwargs)
     async with AsyncCamoufox(**options) as browser:
         timings = await check_pointer(browser)
         print('Ordinary pointer check passed; checking screenshot refresh', flush=True)
