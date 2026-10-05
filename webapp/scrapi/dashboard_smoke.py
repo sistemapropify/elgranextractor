@@ -49,7 +49,10 @@ async def main():
             await route.fulfill(content_type='text/html', body='<table><tbody></tbody></table>')
             return
         await route.fulfill(content_type='application/json', body=json.dumps(data))
-    options = await asyncio.to_thread(camoufox_kwargs)
+    # This fixture tests dashboard behavior, not generated cursor paths. The
+    # pinned Linux browser can stall on intermediate humanization events;
+    # use real native clicks without that unrelated randomized input layer.
+    options = await asyncio.to_thread(camoufox_kwargs, humanize=False)
     async with AsyncCamoufox(**options) as browser:
         page = await browser.new_page()
         await page.route('**/*', respond)
