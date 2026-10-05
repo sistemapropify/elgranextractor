@@ -20,6 +20,7 @@ function panel({ stale = false, csrf = true, verification = null } = {}) {
     const context = vm.createContext({ document: { getElementById: get,
         querySelector: () => csrf ? { value: 'test-csrf' } : null },
         currentJobId: 42, FormData, AbortSignal, setTimeout: () => {}, clearTimeout: () => {},
+        navigator: { onLine: true }, window: { addEventListener() {} }, appendLog() {},
         fetch: async (url, options) => {
             if (options.method === 'POST') posts.push(Object.fromEntries(options.body));
             return { ok: true, json: async () => ({ success: true, verification }) };

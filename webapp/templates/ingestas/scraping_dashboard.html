@@ -723,7 +723,7 @@ async function loadVerification(jobId) {
         const browserMode = verificationMode === 'browser';
         document.getElementById('verificationHeading').textContent = browserMode ? 'Adondevivir necesita tu verificación' : 'Properati necesita tu verificación';
         document.getElementById('verificationInstructions').textContent = browserMode
-            ? 'Esta es la pantalla del navegador de producción. Haz clic sobre la casilla o los controles que indique el portal. Actualizar pantalla obtiene una imagen nueva sin recargar la página. Si solo muestra un bloqueo sin controles, el portal no permite resolverlo aquí.'
+            ? 'Esta es la pantalla del navegador de producción. Se actualiza automáticamente mientras esperas, sin recargar el portal. Haz clic solo cuando aparezca la casilla o el control. Si permanece en Performing security verification, el portal aún no ofrece una interacción manual; no pulses sobre una casilla que no aparece.'
             : 'Resuelve el ejercicio de la imagen. Tu respuesta se enviará al navegador que está extrayendo las propiedades.';
         document.getElementById('verificationForm').hidden = browserMode;
         document.getElementById('verificationRefresh').hidden = !browserMode;

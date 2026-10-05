@@ -49,6 +49,40 @@ class VerificationMailboxTests(TestCase):
             self.exchange('executed', id=self.challenge)
         self.assertEqual(public_state(self.job)['state'], 'waiting')
 
+    def test_automatic_capture_rotates_id_without_extending_deadline(self):
+        expiry = public_state(self.job)['expires_at']
+        next_id = self.exchange('refresh', id=self.challenge, screenshot='new-screen')
+        self.assertNotEqual(next_id, self.challenge)
+        state = public_state(self.job)
+        self.assertEqual(state['id'], next_id)
+        self.assertEqual(state['screenshot'], 'new-screen')
+        self.assertEqual(state['expires_at'], expiry)
+        with self.assertRaises(ValueError):
+            submit_answer(self.job.pk, self.challenge, 'c:200:100')
+        submit_answer(self.job.pk, next_id, 'c:300:200')
+        self.assertEqual(self.exchange('poll', id=next_id), 'c:300:200')
+
+    def test_answer_submitted_during_capture_is_not_discarded(self):
+        submit_answer(self.job.pk, self.challenge, 'c:200:100')
+        self.assertIsNone(self.exchange('refresh', id=self.challenge, screenshot='new-screen'))
+        self.assertEqual(public_state(self.job)['screenshot'], 'png')
+        self.assertEqual(self.exchange('poll', id=self.challenge), 'c:200:100')
+
+    def test_automatic_capture_cannot_replace_a_consumed_or_executed_action(self):
+        submit_answer(self.job.pk, self.challenge, 'c:200:100')
+        self.exchange('poll', id=self.challenge)
+        self.assertIsNone(self.exchange('refresh', id=self.challenge, screenshot='new-screen'))
+        self.exchange('executed', id=self.challenge)
+        self.assertIsNone(self.exchange('refresh', id=self.challenge, screenshot='new-screen'))
+        self.assertEqual(public_state(self.job)['id'], self.challenge)
+
+    def test_automatic_capture_is_not_enabled_for_properati(self):
+        self.run.portal = 'properati'
+        self.run.save(update_fields=['portal'])
+        with self.assertRaises(ValueError):
+            self.exchange('refresh', id=self.challenge, screenshot='new-screen')
+        self.assertEqual(public_state(self.job)['id'], self.challenge)
+
     def test_properati_does_not_expose_submitted_answer_screen(self):
         self.run.portal = 'properati'
         self.run.save(update_fields=['portal'])

@@ -28,6 +28,7 @@ class CamoufoxLauncherTests(unittest.TestCase):
 
     def test_missing_linux_library_fails_before_browser_launch(self):
         with (
+            patch.object(launcher.sys, 'platform', 'linux'),
             patch.object(launcher, 'is_headless_server', return_value=True),
             patch.object(launcher.ctypes, 'CDLL', side_effect=OSError),
         ):
@@ -43,6 +44,7 @@ class CamoufoxLauncherTests(unittest.TestCase):
                 marker.unlink()
 
             with (
+                patch.object(launcher.sys, 'platform', 'linux'),
                 patch.object(launcher, "is_headless_server", return_value=True),
                 patch.object(launcher, "_CAMOUFOX_DEPS_INSTALLING", marker),
                 patch.object(

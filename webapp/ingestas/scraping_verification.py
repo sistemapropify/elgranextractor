@@ -77,6 +77,20 @@ def mailbox(run_id, execution_token):
             item = query.select_for_update().get(pk=payload['id'])
             if item.expires_at <= timezone.now():
                 raise ScrapingInterrupted('portal.paused: la verificación manual venció; pendientes conservados')
+            if action == 'refresh':
+                if run.portal != 'adondevivir':
+                    raise ValueError('Este portal no admite capturas automáticas.')
+                # lock_run and submit_answer both lock the job first. A human
+                # answer racing a capture is either preserved on this ID, or
+                # rejected as stale; it can never target the replacement image.
+                if item.state != 'waiting':
+                    return None
+                item.screenshot, item.answer, item.state = '', '', 'closed'
+                item.save(update_fields=['screenshot', 'answer', 'state'])
+                replacement = ScrapingVerification.objects.create(
+                    run=run, execution_token=execution_token,
+                    expires_at=item.expires_at, screenshot=payload['screenshot'])
+                return str(replacement.pk)
             if action == 'executed':
                 if run.portal != 'adondevivir' or item.state != 'consumed':
                     raise ValueError('No hay una acción consumida que confirmar.')

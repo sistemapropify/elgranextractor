@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 import struct
 from types import SimpleNamespace
@@ -139,7 +140,7 @@ class BrowserVerificationTests(unittest.IsolatedAsyncioTestCase):
         page.goto = AsyncMock()
         page.reload = AsyncMock()
         exchange = Mock(side_effect=['id', 'refresh', None])
-        with patch('scrapi.browser_verification.content_ready', AsyncMock(side_effect=[False, False, False, True])), \
+        with patch('scrapi.browser_verification.content_ready', AsyncMock(side_effect=[False, False, True])), \
              patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()):
             self.assertTrue(await resolve(page, exchange, AsyncMock()))
         self.assertEqual(page.screenshot.await_count, 2)
@@ -211,6 +212,131 @@ class BrowserVerificationTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(await source.esperar_cloudflare(page))
         page._manual_verification.assert_awaited_once_with(page)
         page.reload.assert_not_awaited()
+
+    async def stalled(self, *args, **kwargs):
+        # A genuinely pending operation, not an exception supplied by a mock.
+        await asyncio.Event().wait()
+
+    async def test_pending_title_and_dom_reads_have_a_real_deadline(self):
+        for field in ('title', 'count'):
+            with self.subTest(field=field):
+                page = self.page()
+                page.title.return_value = 'Inmuebles en venta'
+                target = page.title if field == 'title' else page.locator.return_value.count
+                target.side_effect = self.stalled
+                with patch('scrapi.browser_verification.CONTENT_TIMEOUT_SECONDS', .01):
+                    self.assertFalse(await asyncio.wait_for(content_ready(page), .5))
+
+    async def test_title_stall_after_consuming_action_does_not_block_click(self):
+        page = self.page()
+        calls = 0
+        async def title():
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                await self.stalled()
+            return 'Just a moment' if calls == 1 else 'Inmuebles en venta'
+        page.title.side_effect = title
+        page.mouse.click.side_effect = lambda *args: setattr(page, '_scraping_document_status', 200)
+        exchange = Mock(side_effect=['id', 'c:300:200', None, None, None])
+        emit = AsyncMock()
+        with patch('scrapi.browser_verification.CONTENT_TIMEOUT_SECONDS', .01), \
+             patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()):
+            self.assertTrue(await asyncio.wait_for(resolve(page, exchange, emit), .5))
+        page.mouse.click.assert_awaited_once_with(300, 200)
+        self.assertIn('verification.content_check_timeout', [c.kwargs.get('event') for c in emit.call_args_list])
+        self.assertEqual(exchange.call_args.args, ('close',))
+
+    async def test_focus_resize_and_mouse_stalls_pause_with_the_exact_phase(self):
+        for phase in ('focus', 'resize', 'mouse_click'):
+            with self.subTest(phase=phase):
+                page, emit = self.page(), AsyncMock()
+                target = {'focus': page.bring_to_front, 'resize': page.set_viewport_size,
+                          'mouse_click': page.mouse.click}[phase]
+                target.side_effect = self.stalled
+                def mail(action, **kwargs):
+                    return {'open': 'id', 'poll': 'c:300:200'}.get(action)
+                exchange = Mock(side_effect=mail)
+                with patch('scrapi.browser_verification.BROWSER_TIMEOUT_SECONDS', .02):
+                    with self.assertRaisesRegex(ScrapingInterrupted, phase):
+                        await asyncio.wait_for(resolve(page, exchange, emit), .5)
+                self.assertNotIn('executed', [call.args[0] for call in exchange.call_args_list])
+                timeout_log = next(c for c in emit.call_args_list
+                                   if c.kwargs.get('event') == 'verification.browser_timeout')
+                self.assertEqual(timeout_log.kwargs['phase'], phase)
+                self.assertEqual(exchange.call_args.args, ('close',))
+
+    async def test_screenshot_stall_is_bounded_even_if_driver_ignores_timeout(self):
+        page, emit, exchange = self.page(), AsyncMock(), Mock()
+        page.screenshot.side_effect = self.stalled
+        page.goto, page.reload = AsyncMock(), AsyncMock()
+        with patch('scrapi.browser_verification.BROWSER_TIMEOUT_SECONDS', .02), \
+             patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()):
+            with self.assertRaisesRegex(ScrapingInterrupted, '3 intentos'):
+                await asyncio.wait_for(resolve(page, exchange, emit), .5)
+        self.assertEqual(page.screenshot.await_count, 3)
+        page.goto.assert_not_awaited()
+        page.reload.assert_not_awaited()
+        exchange.assert_called_once_with('close')
+
+    async def test_wall_deadline_cancels_a_pending_browser_step(self):
+        page, exchange, emit = self.page(), Mock(), AsyncMock()
+        page.bring_to_front.side_effect = self.stalled
+        # The total budget is smaller than the per-operation timeout.
+        with self.assertRaisesRegex(ScrapingInterrupted, 'focus'):
+            await asyncio.wait_for(resolve(page, exchange, emit, timeout=.02), .5)
+        exchange.assert_called_once_with('close')
+
+    async def test_pending_diagnostics_do_not_block_a_human_click(self):
+        page, exchange = self.page(), Mock(side_effect=['id', 'c:300:200', None, None, None])
+        page.evaluate = AsyncMock(side_effect=self.stalled)
+        with patch('scrapi.browser_verification.DIAGNOSTIC_TIMEOUT_SECONDS', .01), \
+             patch('scrapi.browser_verification.content_ready', AsyncMock(side_effect=[False, False, True])), \
+             patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()):
+            self.assertTrue(await asyncio.wait_for(resolve(page, exchange, AsyncMock()), .5))
+        page.mouse.click.assert_awaited_once_with(300, 200)
+
+    async def test_screen_refreshes_without_any_human_action_or_reload(self):
+        page, emit = self.page(), AsyncMock()
+        page.goto, page.reload = AsyncMock(), AsyncMock()
+        def mail(action, **kwargs):
+            if action == 'open': return 'first'
+            if action == 'refresh':
+                self.assertEqual(kwargs['id'], 'first')
+                return 'second'
+            if action == 'poll' and kwargs['id'] == 'second':
+                raise ScrapingInterrupted('test finished after automatic refresh')
+        exchange = Mock(side_effect=mail)
+        with patch('scrapi.browser_verification.SCREEN_REFRESH_SECONDS', 0), \
+             patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()):
+            with self.assertRaisesRegex(ScrapingInterrupted, 'test finished'):
+                await resolve(page, exchange, emit)
+        self.assertEqual(page.screenshot.await_count, 2)
+        self.assertIn('verification.screen_refreshed', [c.kwargs.get('event') for c in emit.call_args_list])
+        page.mouse.click.assert_not_awaited()
+        page.goto.assert_not_awaited()
+        page.reload.assert_not_awaited()
+
+    async def test_answer_arriving_during_capture_keeps_original_geometry(self):
+        page = self.page()
+        page.screenshot.side_effect = [
+            b'\x89PNG\r\n\x1a\n' + b'\0' * 8 + struct.pack('>II', w, h)
+            for w, h in ((1440, 1000), (2880, 2000))]
+        polls = iter([None, 'c:300:200', None])
+        def mail(action, **kwargs):
+            if action == 'open': return 'original'
+            if action == 'poll':
+                self.assertEqual(kwargs['id'], 'original')
+                return next(polls)
+            # Rotation refused because a human submitted while we captured.
+            if action == 'refresh': return None
+        exchange = Mock(side_effect=mail)
+        with patch('scrapi.browser_verification.SCREEN_REFRESH_SECONDS', 0), \
+             patch('scrapi.browser_verification.content_ready', AsyncMock(side_effect=[False, False, False, True])), \
+             patch('scrapi.browser_verification.asyncio.sleep', AsyncMock()):
+            self.assertTrue(await resolve(page, exchange, AsyncMock()))
+        page.mouse.click.assert_awaited_once_with(300, 200)
+        self.assertEqual(page.screenshot.await_count, 2)
 
 
 if __name__ == '__main__': unittest.main()
