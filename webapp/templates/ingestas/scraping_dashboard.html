@@ -665,9 +665,40 @@ let verificationRenderedId = null;
 let verificationImageSource = null;
 let verificationPendingSince = null;
 let verificationPollTimer = null;
+let connectionWasOffline = false;
+
+function reportConnectivity() {
+    const online = navigator.onLine !== false;
+    if (!online && !connectionWasOffline) {
+        appendLog('warning', 'Sin conexión a internet: el navegador detectó que se cortó la red. No se pueden enviar acciones ni actualizar los logs. El trabajo en el servidor puede seguir ejecutándose.', null, null, 'connection.offline');
+    } else if (online && connectionWasOffline) {
+        appendLog('info', 'El navegador vuelve a detectar conexión. Comprobando el servidor y recuperando las actualizaciones; las acciones pendientes no se reenviarán automáticamente.', null, null, 'connection.online');
+    }
+    connectionWasOffline = !online;
+    return online;
+}
+
+function connectionErrorMessage(error, timeoutMessage) {
+    if (navigator.onLine === false) {
+        reportConnectivity();
+        return 'Sin conexión a internet. No se pudo confirmar la acción; revisa el estado cuando vuelva la conexión antes de repetirla.';
+    }
+    if (['AbortError', 'TimeoutError'].includes(error.name)) return timeoutMessage;
+    if (error instanceof TypeError) {
+        return 'No se pudo contactar con el servidor. Comprueba tu conexión a internet; el servidor también podría estar temporalmente fuera de servicio. Revisa el estado antes de repetir la acción.';
+    }
+    return error.message;
+}
+
+window.addEventListener('offline', reportConnectivity);
+window.addEventListener('online', function() {
+    reportConnectivity();
+    loadTable();
+    if (currentJobId) loadStats(currentJobId);
+});
 
 async function loadVerification(jobId) {
-    if (verificationLoading || jobId !== currentJobId) return;
+    if (verificationLoading || jobId !== currentJobId || !reportConnectivity()) return;
     verificationLoading = true;
     try {
         const response = await fetch(`/ingestas/scraping/verificacion/${jobId}/`, {
@@ -735,7 +766,7 @@ async function loadVerification(jobId) {
         }
     } catch (error) {
         document.getElementById('verificationSubmit').disabled = true;
-        if (verificationId) document.getElementById('verificationMessage').textContent = 'No se pudo comprobar la conexión. Se volverá a intentar automáticamente.';
+        if (verificationId) document.getElementById('verificationMessage').textContent = connectionErrorMessage(error, 'El servidor no respondió al consultar la verificación. Se volverá a intentar automáticamente.');
     } finally {
         verificationLoading = false;
     }
@@ -743,6 +774,7 @@ async function loadVerification(jobId) {
 
 document.getElementById('verificationForm').addEventListener('submit', async function(event) {
     event.preventDefault();
+    if (!reportConnectivity()) return;
     if (!verificationId || !currentJobId) return;
     const jobId = currentJobId;
     const button = document.getElementById('verificationSubmit');
@@ -762,13 +794,17 @@ document.getElementById('verificationForm').addEventListener('submit', async fun
         document.getElementById('verificationAnswer').value = '';
         appendLog('info', 'Respuesta enviada a Properati; esperando confirmación.');
     } catch (error) {
-        message.textContent = error.message;
+        message.textContent = connectionErrorMessage(error, 'El servidor no respondió al enviar la respuesta. Comprueba el estado antes de repetirla.');
         button.disabled = false;
     }
 });
 
 async function sendBrowserVerification(action) {
     const message = document.getElementById('verificationMessage');
+    if (!reportConnectivity()) {
+        message.textContent = 'Sin conexión a internet. La acción no se envió.';
+        return;
+    }
     if (verificationMode !== 'browser' || !verificationId || !currentJobId) {
         message.textContent = 'La pantalla ya no está activa. Actualiza el dashboard para consultar la verificación.';
         return;
@@ -799,7 +835,7 @@ async function sendBrowserVerification(action) {
         clearTimeout(verificationPollTimer);
         verificationPollTimer = setTimeout(() => loadVerification(jobId), 1500);
     } catch (error) {
-        message.textContent = error.message;
+        message.textContent = connectionErrorMessage(error, 'El servidor no respondió al enviar la acción. Comprueba el estado antes de repetirla.');
         loadVerification(jobId);
     } finally {
         verificationSending = false;
@@ -836,6 +872,7 @@ function recogerUrls() {
 }
 
 function guardarUrls() {
+    if (!reportConnectivity()) return;
     const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
     const fd = new FormData();
     fd.append('action', 'save_urls');
@@ -851,11 +888,15 @@ function guardarUrls() {
                 appendLog('error', d.error || 'No se pudieron guardar las URLs.');
             }
         })
-        .catch(e => appendLog('error', 'Error al guardar URLs: ' + e.message));
+        .catch(e => appendLog('error', connectionErrorMessage(e, 'El servidor no respondió al guardar las URLs.')));
 }
 
 // ── Control ──
 function control(action) {
+    if (!reportConnectivity()) {
+        appendLog('warning', 'La acción no se envió: no hay conexión a internet.', null, null, 'connection.action_not_sent');
+        return;
+    }
     const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
     const formData = new FormData();
     formData.append('action', action);
@@ -928,9 +969,7 @@ function control(action) {
         } else if ((action === 'start' || action === 'preview')) {
             updateUI('inactive');
         }
-        const message = err.name === 'AbortError'
-            ? 'El servidor tardó más de 20 segundos en iniciar el trabajo.'
-            : err.message;
+        const message = connectionErrorMessage(err, 'El servidor no respondió en 20 segundos. No se pudo confirmar la acción; revisa el estado antes de repetirla.');
         appendLog('error', `❌ ${message}`);
         console.error('Control error:', err);
     })
@@ -949,11 +988,16 @@ function connectSSE(jobId) {
         request = new AbortController();
         const timeout = setTimeout(() => request.abort(), 15000);
         try {
+            if (!reportConnectivity()) {
+                delay = 5000;
+                return;
+            }
             const params = logQuery(cursor);
             const response = await fetch(`/ingestas/scraping/stream/${jobId}/?${params}`, { signal: request.signal });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             if (stopped) return;
+            if (failures) appendLog('info', 'Comunicación con el servidor restablecida. Recuperando los logs pendientes.', null, null, 'connection.restored');
             data.logs.forEach(log => appendLog(log.nivel, log.mensaje, log.portal, log.timestamp, log.evento, log.contexto));
             cursor = data.last_id;
             failures = 0;
@@ -967,7 +1011,7 @@ function connectSSE(jobId) {
             }
             delay = data.has_more ? 50 : 1500;
         } catch (error) {
-            if (!stopped && failures++ === 0) appendLog('warning', 'Conexión interrumpida; recuperando eventos desde el último recibido.');
+            if (!stopped && reportConnectivity() && failures++ === 0) appendLog('warning', 'Se interrumpió la comunicación con el servidor. Puede ser la conexión a internet o el servidor; se intentará recuperar los logs automáticamente.', null, null, 'connection.unreachable');
             delay = Math.min(15000, 1500 * (failures + 1));
         } finally {
             clearTimeout(timeout);
@@ -987,7 +1031,7 @@ function logQuery(cursor) {
 }
 
 async function exportLogs() {
-    if (!currentJobId) return;
+    if (!currentJobId || !reportConnectivity()) return;
     let cursor = 0, through = null;
     const lines = [];
     const exportJobId = currentJobId;
@@ -1049,6 +1093,10 @@ function clearTerminal() {
         <i class="bi bi-terminal" style="font-size:24px;display:block;margin-bottom:8px;"></i>
         Terminal limpiado. Esperando logs...
     </div>`;
+    if (navigator.onLine === false) {
+        connectionWasOffline = false;
+        reportConnectivity();
+    }
 }
 
 // ── UI State ──
@@ -1118,7 +1166,7 @@ function updateUI(estado) {
 
 // ── Stats ──
 function loadStats(jobId) {
-    if (!jobId) return;
+    if (!jobId || !reportConnectivity()) return;
     fetch(`/ingestas/scraping/status/${jobId}/`)
         .then(r => {
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -1164,6 +1212,7 @@ function filtrosTabla() {
 }
 
 function exportarTabla() {
+    if (!reportConnectivity()) return;
     // Exporta la tabla propiedades_competencia respetando los filtros activos.
     const params = filtrosTabla();
     const url = '/ingestas/scraping/propiedades/exportar/?' + params.toString();
@@ -1171,6 +1220,7 @@ function exportarTabla() {
 }
 
 function loadTable() {
+    if (!reportConnectivity()) return;
     const params = filtrosTabla();
     params.set('page', '1');
     params.set('limit', '25');
@@ -1214,6 +1264,8 @@ document.addEventListener('DOMContentLoaded', function() {
     connectSSE(currentJobId);
     {% endif %}
     {% endif %}
+
+    reportConnectivity();
 
     // Mantener estado y contadores sincronizados después de recargar.
     setInterval(function() {

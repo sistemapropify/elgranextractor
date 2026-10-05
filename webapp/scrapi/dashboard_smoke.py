@@ -23,6 +23,7 @@ async def main():
         'worker_health': {'ready': True, 'message': 'Worker disponible'},
     })) + '</body></html>'
     requests, errors = [], []
+    control_connection_failed = False
     async def respond(route):
         request = route.request
         parts = urlsplit(request.url)
@@ -31,6 +32,9 @@ async def main():
             await route.fulfill(content_type='text/html', body=html)
             return
         if '/control/' in parts.path:
+            if control_connection_failed:
+                await route.abort('internetdisconnected')
+                return
             data = {'success': True, 'job_id': 42, 'estado': 'running'}
         elif '/stream/' in parts.path:
             data = {'logs': [{'id': 1, 'nivel': 'warning', 'mensaje': '<img src=x onerror=alert(1)>',
@@ -53,6 +57,24 @@ async def main():
         await page.goto('http://scraping.test/')
         await page.locator('.url-input').first.wait_for()
         assert await page.locator('.url-input').count() == 5
+        # Exercise a real offline/online transition in the browser. A click
+        # while offline must not become a delayed job submission on reconnect.
+        await page.context.set_offline(True)
+        await page.locator('#terminalBody').get_by_text('Sin conexión a internet:', exact=False).wait_for()
+        await page.locator('#btnStart').click()
+        await page.locator('#terminalBody').get_by_text('La acción no se envió:', exact=False).wait_for()
+        assert not any('/control/' in r['path'] for r in requests)
+        assert await page.locator('#terminalBody').get_by_text('Sin conexión a internet:', exact=False).count() == 1
+        await page.context.set_offline(False)
+        await page.locator('#terminalBody').get_by_text('El navegador vuelve a detectar conexión.', exact=False).wait_for()
+        assert not any('/control/' in r['path'] for r in requests)
+
+        # A failed request while the network adapter is online has an unknown
+        # cause: do not claim that the user definitely lost internet access.
+        control_connection_failed = True
+        await page.locator('#btnStart').click()
+        await page.locator('#terminalBody').get_by_text('No se pudo contactar con el servidor.', exact=False).wait_for()
+        control_connection_failed = False
         await page.locator('#btnPreview').click()
         await page.locator('#runCoverage').get_by_text('30 IDs', exact=False).wait_for()
         assert await page.locator('#terminalBody img').count() == 0
@@ -69,7 +91,7 @@ async def main():
         assert any('resume' in r['body'] for r in requests)
         assert not errors, errors
         await page.close()
-    print(json.dumps({'dashboard': 'passed', 'checks': ['preview', 'csrf', 'five_urls', 'coverage', 'text_only_logs', 'filters', 'resume']}))
+    print(json.dumps({'dashboard': 'passed', 'checks': ['offline', 'online', 'no_action_replay', 'network_error', 'preview', 'csrf', 'five_urls', 'coverage', 'text_only_logs', 'filters', 'resume']}))
 
 
 if __name__ == '__main__':
