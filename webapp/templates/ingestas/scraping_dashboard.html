@@ -384,6 +384,14 @@
             <small>Vista previa prueba los portales seleccionados y muestra datos en los logs, sin guardar propiedades.</small>
             <label><input type="checkbox" class="portal-cb" value="remax" checked> Remax</label>
             <label><input type="checkbox" class="portal-cb" value="adondevivir" checked> Adondevivir</label>
+            <label for="adonExecutor">Navegador de Adondevivir:
+                <select id="adonExecutor">
+                    <option value="local_pc" selected>Ventana real en mi PC</option>
+                    <option value="azure">Navegador remoto de Azure</option>
+                </select>
+            </label>
+            <small id="localWorkerStatus" role="status">Comprobando conexión con la PC…</small>
+            <small>En modo PC, los portales seleccionados se ejecutan allí. La verificación se hace en la ventana real; resultados y progreso aparecen aquí.</small>
             <label><input type="checkbox" class="portal-cb" value="properati" checked> Properati</label>
             <label><input type="checkbox" class="portal-cb" value="urbania" checked> Urbania</label>
             <label><input type="checkbox" class="portal-cb" value="facebook_marketplace"> Facebook Marketplace</label>
@@ -893,6 +901,23 @@ function guardarUrls() {
 }
 
 // ── Control ──
+async function refreshLocalWorker() {
+    const label = document.getElementById('localWorkerStatus');
+    try {
+        if (!navigator.onLine) throw new Error('offline');
+        const response = await fetch('/ingestas/scraping/control/?local_status=1',
+                                     {signal: AbortSignal.timeout(8000)});
+        if (!response.ok) throw new Error('unavailable');
+        const data = await response.json();
+        label.textContent = data.message;
+    } catch (error) {
+        label.textContent = 'No se pudo comprobar la conexión con la PC.';
+    } finally {
+        setTimeout(refreshLocalWorker, 10000);
+    }
+}
+refreshLocalWorker();
+
 function control(action) {
     if (!reportConnectivity()) {
         appendLog('warning', 'La acción no se envió: no hay conexión a internet.', null, null, 'connection.action_not_sent');
@@ -902,6 +927,7 @@ function control(action) {
     const formData = new FormData();
     formData.append('action', action);
     formData.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+    formData.append('adon_executor', document.getElementById('adonExecutor').value);
 
     if ((action === 'start' || action === 'preview')) {
         const checked = Array.from(document.querySelectorAll('.portal-cb:checked'))

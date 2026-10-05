@@ -141,9 +141,8 @@ class Command(BaseCommand):
 
     @staticmethod
     def _can_execute_here(job):
-        parametros = dict(job.parametros or {})
-        scope = parametros.get('execution_scope')
-        return not (scope == 'local_interactive' and os.name != 'nt')
+        from ingestas.scraping_execution import can_execute
+        return can_execute(job.parametros)
 
     @staticmethod
     def _is_recoverable_error(job):

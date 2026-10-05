@@ -38,8 +38,10 @@ jobs:
             ingestas.tests.test_scraping_recovery \
             ingestas.tests.test_scraping_verification \
             ingestas.tests.test_scraping_watchdog \
+            ingestas.tests.test_scraping_local_worker \
             scrapi.test_camoufox_launcher \
             scrapi.test_browser_verification \
+            scrapi.test_native_verification \
             --settings=ingestas.scraping_test_settings --noinput
       - name: Model and migration consistency
         run: docker run --rm --network none --entrypoint python scraping-worker:test manage.py makemigrations --check --dry-run --settings=ingestas.scraping_test_settings
@@ -59,7 +61,7 @@ jobs:
           test "$ready" = 1
           docker run --rm --network scraping-test --entrypoint python \
             -e SCRAPING_TEST_SQL=1 -e SCRAPING_DB_PASSWORD="$db_password" \
-            scraping-worker:test manage.py test ingestas.tests.test_scraping_integrity ingestas.tests.test_publication_lifecycle ingestas.tests.test_scraping_recovery \
+            scraping-worker:test manage.py test ingestas.tests.test_scraping_integrity ingestas.tests.test_publication_lifecycle ingestas.tests.test_scraping_recovery ingestas.tests.test_scraping_local_worker \
             --settings=ingestas.scraping_test_settings --noinput
       - name: Remove isolated SQL test resources
         if: always()

@@ -1,5 +1,38 @@
 # Worker de scraping
 
+## Adondevivir en una ventana real de la PC
+
+El dashboard permite elegir **Ventana real en mi PC** para Adondevivir. La PC
+debe estar encendida, con escritorio abierto y el conector activo:
+
+```powershell
+.\start-adondevivir-worker.ps1 -Python 'RUTA\DEL\VENV\Scripts\python.exe'
+```
+
+Necesita las dependencias del proyecto, Camoufox instalado, ODBC Driver 18 y
+una sesión de Azure CLI autorizada para leer la configuración del App Service
+existente. No instala dependencias, cambia permisos ni almacena secretos. Para
+dejarlo en segundo plano, añade `-Background`; conserva un log en el directorio
+temporal `propify-local-worker`. No arranca automáticamente al reiniciar Windows.
+
+Al mostrar **PC conectada**, selecciona Adondevivir y pulsa Iniciar. La ventana
+de Camoufox aparece en esa PC; cualquier verificación se hace directamente allí,
+sin capturas remotas ni clics generados. Los datos, progreso, candidatos y
+checkpoints se guardan en la misma base de producción y se ven en el dashboard.
+Cuando se seleccionan otros portales junto con Adondevivir, todo ese trabajo se
+ejecuta en la PC. El modo Azure continúa disponible como elección explícita.
+
+Un trabajo local queda asignado a una identidad de PC concreta. Azure y otros
+ejecutores no pueden reclamarlo. Si la PC está desconectada no se inicia ni se
+redirige silenciosamente a Azure. Pausar, detener y reanudar conservan los mismos
+controles de propiedad y guardado idempotente. Para trasladar un trabajo antiguo
+de Azure, primero deténlo y reanúdalo con el modo PC seleccionado; se conservan
+sus IDs y checkpoints. No se transfieren sesiones/cookies entre computadoras.
+
+Para un piloto autorizado de una página con guardado, añade `-PilotUrl URL`.
+No ejecuta el triaje IA ni certifica cobertura completa. La verificación de
+acceso y la extracción completa siguen dependiendo del portal externo.
+
 Estado: implementación integrada en `codex/scraping-integral-20260908`, sobre la
 revisión compartida `f4ead8d4`. Linux, navegador sin red y SQL Server aislado
 pasaron en [CI](https://github.com/sistemapropify/elgranextractor/actions/runs/34240278527).

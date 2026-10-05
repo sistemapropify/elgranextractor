@@ -30,6 +30,10 @@ async def main():
     async def respond(route):
         request = route.request
         parts = urlsplit(request.url)
+        if '/control/' in parts.path and request.method == 'GET':
+            await route.fulfill(content_type='application/json', body=json.dumps({
+                'ready': True, 'identity': 'adondevivir-pc:fixture', 'message': 'PC conectada: fixture'}))
+            return  # Read-only health polling is not a replay of a user action.
         requests.append({'path': parts.path, 'query': parse_qs(parts.query), 'body': request.post_data or ''})
         if parts.path == '/':
             await route.fulfill(content_type='text/html', body=html)
@@ -99,6 +103,8 @@ async def main():
                                         and 'resume' in (response.request.post_data or '')):
             await page.locator('#btnResume').click()
         assert any('preview' in r['body'] and 'isolated-test-token' in r['body'] for r in requests)
+        assert any('adon_executor' in r['body'] and 'local_pc' in r['body'] for r in requests)
+        await page.locator('#localWorkerStatus').get_by_text('PC conectada: fixture', exact=True).wait_for()
         assert any(r['query'].get('evento') == ['detail.failed'] and r['query'].get('propiedad_id') == ['123'] for r in requests)
         assert any('resume' in r['body'] for r in requests)
 

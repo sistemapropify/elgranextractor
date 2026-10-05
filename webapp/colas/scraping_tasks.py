@@ -312,6 +312,11 @@ def _run_scraping(job_id: int, stop_event=None):
         logger.error(f"ScrapingJob {job_id} no encontrado")
         return
 
+    from ingestas.scraping_execution import can_execute
+    if not can_execute(job.parametros):
+        logger.info('ScrapingJob #%s reservado para su ejecutor local; no se reclama aquí.', job_id)
+        return
+
     # Claim compare-and-swap: solo un ejecutor puede mover idle -> running.
     # Un segundo despacho del mismo job termina antes de abrir Camoufox.
     execution_token = uuid.uuid4()
@@ -569,17 +574,20 @@ def _run_scraping(job_id: int, stop_event=None):
                 try:
                     resultado = skill.execute(
                         {
-                            'max_paginas': 0,
+                            'max_paginas': int((parametros.get('limits') or {}).get('max_paginas') or 0),
                             'start_page': start_page,
                             'resume_item_ids': resume_queues.get(portal),
                             'source_url': portal_run.source_config['source_url'],
                             'resume_state': resume_state(portal_run),
                             'max_items': (parametros.get('limits') or {}).get('max_items', 1500),
+                            'solo_listado': bool(parametros.get('solo_listado')),
                         },
                         context={
                             'progress_callback': reportar_progreso,
                             'lifecycle_run_id': portal_run.id,
                             'execution_token': execution_token,
+                            'native_verification': bool(portal == 'adondevivir'
+                                                        and parametros.get('native_verification')),
                         },
                     )
                 finally:
@@ -792,6 +800,9 @@ def _run_scraping(job_id: int, stop_event=None):
     )
     _crear_log(job, 'success' if job.estado == 'completed' else 'info', resumen)
     logger.info(f"ScrapingJob #{job_id}: {resumen}")
+
+    if (job.parametros or {}).get('local_pilot'):
+        return  # A bounded integration pilot must not trigger additional AI work.
 
     # ── Triaje de calidad (agente IA) ──
     # Al terminar la corrida, el agente clasifica en background las alertas nuevas

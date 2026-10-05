@@ -32,7 +32,9 @@ def run_preview(job, token, stop_event=None):
                                        discovery_only=True, progress_callback=progress)
                 else:
                     rows = run_paged(portal, source_url=config['source_url'], max_paginas=1,
-                                     listing_only=True, progress_callback=progress)
+                                     listing_only=True, progress_callback=progress,
+                                     native_verification=bool(portal == 'adondevivir'
+                                         and (job.parametros or {}).get('native_verification')))
                 progress({'event': 'preview.result', 'message': f'{portal}: muestra de {len(rows)} anuncios; sin guardar propiedades',
                           'source': config, 'discovery': rows.discovery.as_dict(), 'sample': list(rows[:3])})
                 if not rows:

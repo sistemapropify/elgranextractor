@@ -1840,7 +1840,7 @@ def _reconcile_stale_scraping_jobs():
         ),
     )
 
-def _launch_scraping_job(job_id):
+def _launch_scraping_job(job_id, execution_params=None):
     """Despacha sin bloquear la respuesta HTTP del dashboard.
 
     El modo no se infiere del broker: tener una URL Redis configurada no
@@ -1849,6 +1849,9 @@ def _launch_scraping_job(job_id):
     defecto. Celery solo se activa explícitamente cuando hay worker dedicado.
     """
     from colas.scraping_tasks import scraping_task, scraping_task_run
+
+    if (execution_params or {}).get('native_verification'):
+        return 'local_pc'  # Native Windows worker consumes this SQL job.
 
     execution_mode = str(
         getattr(
@@ -1962,9 +1965,17 @@ from django.utils.decorators import method_decorator
 class ScrapingControlView(ScrapingLoginRequiredMixin, View):
     """Controla la ejecución del scraping: start, pause, resume, stop."""
 
+    def get(self, request):
+        from .scraping_execution import local_worker_status
+        return JsonResponse(local_worker_status())
+
     def post(self, request):
         action = request.POST.get('action')
         job_id = request.POST.get('job_id')
+
+        from .scraping_execution import local_worker_status
+        if action == 'local_status':
+            return JsonResponse(local_worker_status())
 
         from .scraping_config import get_urls_portales, save_urls_portales
         from scrapi.source_config import DEFAULT_URLS, source_snapshot, validate_urls
@@ -1992,12 +2003,19 @@ class ScrapingControlView(ScrapingLoginRequiredMixin, View):
                 max_items = int(request.POST.get('max_items') or 1500)
                 if not 1 <= max_items <= 100000:
                     raise ValueError('El límite de Marketplace debe estar entre 1 y 100000.')
+                adon_executor = request.POST.get('adon_executor', 'local_pc')
+                if adon_executor not in ('local_pc', 'azure'):
+                    raise ValueError('Ejecutor de Adondevivir no admitido.')
             except (ValueError, TypeError) as exc:
                 return JsonResponse({'success': False, 'error': str(exc)}, status=400)
             except Exception:
                 return JsonResponse({'success': False, 'error': 'No se pudo leer la configuración; no se inició el trabajo.'}, status=503)
 
             _reconcile_stale_scraping_jobs()
+            native = 'adondevivir' in portales and adon_executor == 'local_pc'
+            local_worker = local_worker_status() if native else None
+            if native and not local_worker['ready']:
+                return JsonResponse({'success': False, 'error': local_worker['message']}, status=503)
             with transaction.atomic():
                 if not _acquire_scraping_start_lock():
                     return JsonResponse(
@@ -2029,10 +2047,10 @@ class ScrapingControlView(ScrapingLoginRequiredMixin, View):
                 # perfil bloqueado. No hay job activo, por lo que es seguro
                 # cerrar solo esos procesos y liberar sus locks antes de crear
                 # el contexto persistente del siguiente trabajo.
-                stale_browsers_terminated = _terminate_scraping_browsers()
+                stale_browsers_terminated = 0 if native else _terminate_scraping_browsers()
                 execution_scope = (
                     'local_interactive'
-                    if os.name == 'nt' and 'facebook_marketplace' in portales
+                    if native or (os.name == 'nt' and 'facebook_marketplace' in portales)
                     else 'portable'
                 )
                 job = ScrapingJob.objects.create(
@@ -2042,7 +2060,8 @@ class ScrapingControlView(ScrapingLoginRequiredMixin, View):
                     parametros={
                         'portales': portales or None,
                         'execution_scope': execution_scope,
-                        'execution_host': socket.gethostname(),
+                        'execution_host': local_worker['identity'] if native else socket.gethostname(),
+                        'native_verification': native,
                         'sources': sources,
                         'urls': urls,
                         'limits': {'max_items': max_items},
@@ -2051,7 +2070,8 @@ class ScrapingControlView(ScrapingLoginRequiredMixin, View):
                 )
 
             try:
-                execution_mode = _launch_scraping_job(job.id)
+                execution_mode = (_launch_scraping_job(job.id, execution_params=job.parametros)
+                                  if native else _launch_scraping_job(job.id))
             except Exception as exc:
                 ScrapingJob.objects.filter(id=job.id).update(
                     estado='error',
@@ -2093,6 +2113,28 @@ class ScrapingControlView(ScrapingLoginRequiredMixin, View):
                     status=404,
                 )
 
+            params = dict(job.parametros or {})
+            native = bool(params.get('native_verification'))
+            migrate_to_pc = bool(not native and request.POST.get('adon_executor') == 'local_pc'
+                                 and 'adondevivir' in (params.get('portales') or []))
+            if migrate_to_pc:
+                if job.estado not in ('error', 'stopped'):
+                    return JsonResponse({'success': False, 'error':
+                        'Detén el navegador de Azure antes de reanudar este trabajo en la PC.'}, status=409)
+                local_worker = local_worker_status()
+                if not local_worker['ready']:
+                    return JsonResponse({'success': False, 'error': local_worker['message']}, status=503)
+                params.update(native_verification=True, execution_scope='local_interactive',
+                              execution_host=local_worker['identity'])
+                native = True
+            if native:
+                local_worker = local_worker_status(params.get('execution_host'))
+                if not local_worker['ready']:
+                    return JsonResponse({'success': False, 'error': local_worker['message']}, status=503)
+            def dispatch():
+                return (_launch_scraping_job(job.pk, execution_params=job.parametros)
+                        if native else _launch_scraping_job(job.pk))
+
             if job.estado == 'paused':
                 with transaction.atomic():
                     current = ScrapingJob.objects.select_for_update().get(pk=job_id)
@@ -2101,15 +2143,17 @@ class ScrapingControlView(ScrapingLoginRequiredMixin, View):
                     updates = {'estado': 'running'} if alive else {
                         'estado': 'idle', 'execution_token': None, 'lease_expires_at': None}
                     updated = ScrapingJob.objects.filter(pk=job_id, estado='paused').update(**updates)
-                execution_mode = ('existing' if alive else _launch_scraping_job(job.pk)) if updated else None
+                execution_mode = ('existing' if alive else dispatch()) if updated else None
             elif job.estado in ('error', 'stopped'):
                 # El proceso anterior ya no está vivo: liberar Camoufox,
                 # volver el job reclamable y despachar desde sus checkpoints.
-                _terminate_scraping_browsers()
-                parametros = dict(job.parametros or {})
+                if not native:
+                    _terminate_scraping_browsers()
+                parametros = params
                 if (
                     os.name == 'nt'
                     and 'facebook_marketplace' in (parametros.get('portales') or [])
+                    and not native
                 ):
                     parametros['execution_scope'] = 'local_interactive'
                     parametros['execution_host'] = socket.gethostname()
@@ -2123,7 +2167,8 @@ class ScrapingControlView(ScrapingLoginRequiredMixin, View):
                     portal_actual=None,
                     parametros=parametros,
                 )
-                execution_mode = _launch_scraping_job(job.id) if updated else None
+                job.parametros = parametros
+                execution_mode = dispatch() if updated else None
             else:
                 updated = 0
                 execution_mode = None

@@ -506,7 +506,9 @@ async def crawl_pages(portal, source_url, source, page, detail_page, *, emit,
 
 def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
               progress_callback=None, batch_callback=None, resume_state=None,
-              listing_only=False, manual_verification=None):
+              listing_only=False, manual_verification=None, native_verification=False):
+    if native_verification and (portal != 'adondevivir' or os.name != 'nt' or manual_verification):
+        raise ValueError('La verificación nativa requiere Adondevivir en Windows, sin panel remoto.')
     source = importlib.import_module(f'scrapi.{portal}_scraper')
     state = resume_state or {}
 
@@ -533,6 +535,8 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
             # navegador corre "con pantalla"; si no hay Xvfb instalado,
             # camoufox_kwargs cae de vuelta a headless sin romper la corrida.
             launch['headless'] = 'virtual'
+        if native_verification:
+            launch['headless'] = False
         prepare_browser = (manual_pointer_kwargs
                            if portal == 'adondevivir' and manual_verification
                            else camoufox_kwargs)
@@ -547,7 +551,13 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
             if portal in ('adondevivir', 'properati', 'urbania'):
                 context = await browser.new_context()
                 page, detail_page = await context.new_page(), await context.new_page()
-                if portal in ('properati', 'adondevivir') and manual_verification:
+                if native_verification:
+                    from .native_verification import resolve_native
+                    async def verify_local(target):
+                        return await resolve_native(target, emit)
+                    page._manual_verification = verify_local
+                    detail_page._manual_verification = verify_local
+                elif portal in ('properati', 'adondevivir') and manual_verification:
                     if portal == 'adondevivir':
                         from .browser_verification import resolve
                     else:

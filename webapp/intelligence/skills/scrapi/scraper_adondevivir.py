@@ -8,11 +8,12 @@ from .paged_skill import execute_paged_skill
 
 def _ejecutar_scraping(max_paginas=0, start_page=1, source_url=None, url=None,
                        progress_callback=None, batch_callback=None, resume_state=None,
-                       manual_verification=None):
+                       manual_verification=None, native_verification=False, listing_only=False):
     return run_paged('adondevivir', max_paginas=max_paginas, start_page=start_page,
         source_url=requested_url('adondevivir', {'source_url': source_url or url}),
         progress_callback=progress_callback, batch_callback=batch_callback, resume_state=resume_state,
-        manual_verification=manual_verification)
+        manual_verification=manual_verification, native_verification=native_verification,
+        listing_only=listing_only)
 
 
 class ScraperAdondevivirSkill(BaseSkill):
