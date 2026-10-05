@@ -21,8 +21,8 @@ jobs:
         run: docker run --rm --network none --entrypoint python scraping-worker:test -m scrapi.worker_smoke
       - name: Dashboard preview, filters and resume in a real browser
         run: docker run --rm --network none --entrypoint python scraping-worker:test -m scrapi.dashboard_smoke
-      - name: Remote verification screen refreshes without navigation or clicks
-        run: docker run --rm --network none --entrypoint python scraping-worker:test -m scrapi.browser_verification_smoke
+      - name: Ordinary pointer forwarding and remote screenshot refresh
+        run: timeout 180 docker run --rm --network none --entrypoint python scraping-worker:test -m scrapi.browser_verification_smoke
       - name: Database, adapters and dashboard regressions
         run: |
           docker run --rm --network none -e CAMOUFOX_EXECUTABLE_PATH= -e CAMOUFOX_AUTO_INSTALL=1 -e CAMOUFOX_HEADLESS=0 --entrypoint python scraping-worker:test \

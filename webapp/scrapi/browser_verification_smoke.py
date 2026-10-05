@@ -30,15 +30,19 @@ async def check_pointer(browser):
             </script>''')
     await page.route('**/*', fixture)
     await page.goto('https://example.test/offline-checkbox')
+    print('Ordinary offline checkbox loaded', flush=True)
     timings = []
     try:
         for _ in range(3):
             await page.locator('#test').evaluate('element => element.checked = false')
-            await page.mouse.move(0, 0)
+            # Avoid the viewport corner: native humanization at (0, 0) is not
+            # part of the production action and can stall older Linux builds.
+            await asyncio.wait_for(page.mouse.move(30, 30), BROWSER_TIMEOUT_SECONDS)
             started = time.monotonic()
             await asyncio.wait_for(_perform_user_click(page, 300, 200), BROWSER_TIMEOUT_SECONDS)
             timings.append(round(time.monotonic() - started, 3))
             assert await page.locator('#test').is_checked(), 'Ordinary checkbox did not receive click'
+            print('Ordinary checkbox click completed:', timings[-1], flush=True)
         assert await page.locator('#test').get_attribute('data-click-count') == '3', 'Duplicate or missing clicks'
         assert len(requests) == 1, requests
         return timings
@@ -47,9 +51,11 @@ async def check_pointer(browser):
 
 
 async def main():
+    print('Starting offline verification smoke', flush=True)
     options = await asyncio.to_thread(camoufox_kwargs)
     async with AsyncCamoufox(**options) as browser:
         timings = await check_pointer(browser)
+        print('Ordinary pointer check passed; checking screenshot refresh', flush=True)
         page = await browser.new_page()
         requests, navigations, screenshots, events = [], [], [], []
         async def fixture(route):
