@@ -31,6 +31,7 @@ urlpatterns = [
         name='api_available_map_properties',
     ),
     path('jerarquia/', views.configurar_jerarquia, name='configurar_jerarquia'),
+    path('capas-raster/', views.api_capas_raster, name='api_capas_raster'),
     path('heatmap/', views.mapa_heatmap, name='mapa_heatmap'),
     path('heatmap-data/', views.api_heatmap_data, name='api_heatmap_data'),
 ]

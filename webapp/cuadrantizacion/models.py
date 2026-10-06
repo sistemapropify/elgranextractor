@@ -247,3 +247,100 @@ class HistorialPrecioZona(models.Model):
     
     def __str__(self):
         return f"{self.zona} - {self.fecha_registro}: ${self.precio_promedio_m2}/m²"
+
+
+class CapaRasterMapa(models.Model):
+    """
+    Capa raster (imagen) georreferenciada que se superpone al mapa base.
+
+    Se usa para calzar planos que vienen en PDF/imagen —por ejemplo la
+    Zonificación del Plan de Desarrollo Metropolitano de Arequipa 2016-2025—
+    sobre Google Maps. El encaje geográfico se define con las esquinas de la
+    imagen en longitud/latitud; sobre ese encaje se aplican ajustes finos de
+    transparencia, giro, escala y desplazamiento, que se guardan aquí para que
+    la capa quede igual para todos los usuarios.
+    """
+
+    nombre = models.CharField(max_length=200)
+    descripcion = models.TextField(blank=True, null=True)
+
+    imagen_url = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        help_text="Ruta dentro de /static/ o URL completa de la imagen de la capa."
+    )
+
+    # Georreferenciación: esquinas de la imagen expresadas en [longitud, latitud].
+    # Orden esperado: tl (sup.izq), tr (sup.der), br (inf.der), bl (inf.izq).
+    esquinas = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='{"tl": [lon, lat], "tr": [lon, lat], "br": [lon, lat], "bl": [lon, lat]}'
+    )
+
+    # Ajuste fino sobre el encaje georreferenciado
+    opacidad = models.FloatField(
+        default=0.65,
+        help_text="0 = totalmente transparente, 1 = totalmente opaca"
+    )
+    rotacion = models.FloatField(default=0.0, help_text="Giro en grados (positivo = sentido horario)")
+    escala = models.FloatField(default=1.0, help_text="Factor de escala")
+    offset_x = models.FloatField(
+        default=0.0,
+        help_text="Desplazamiento horizontal en píxeles de pantalla"
+    )
+    offset_y = models.FloatField(
+        default=0.0,
+        help_text="Desplazamiento vertical en píxeles de pantalla"
+    )
+
+    # Estado
+    bloqueado = models.BooleanField(
+        default=False,
+        help_text="Si está bloqueada, la capa no se puede mover ni girar"
+    )
+    visible = models.BooleanField(default=True)
+    activo = models.BooleanField(default=True)
+    orden = models.IntegerField(default=0)
+
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Capa raster del mapa"
+        verbose_name_plural = "Capas raster del mapa"
+        ordering = ['orden', 'nombre']
+        indexes = [
+            models.Index(fields=['activo', 'orden']),
+        ]
+
+    def __str__(self):
+        return self.nombre
+
+    def tiene_georreferencia(self):
+        """Indica si la capa tiene las cuatro esquinas cargadas."""
+        esquinas = self.esquinas or {}
+        return all(
+            isinstance(esquinas.get(clave), (list, tuple)) and len(esquinas[clave]) == 2
+            for clave in ('tl', 'tr', 'br', 'bl')
+        )
+
+    def a_diccionario(self):
+        """Serializa la capa para el mapa (y para la API de guardado)."""
+        return {
+            'id': self.id,
+            'nombre': self.nombre,
+            'descripcion': self.descripcion or '',
+            'imagen_url': self.imagen_url or '',
+            'esquinas': self.esquinas or {},
+            'opacidad': self.opacidad,
+            'rotacion': self.rotacion,
+            'escala': self.escala,
+            'offset_x': self.offset_x,
+            'offset_y': self.offset_y,
+            'bloqueado': self.bloqueado,
+            'visible': self.visible,
+            'activo': self.activo,
+            'orden': self.orden,
+        }

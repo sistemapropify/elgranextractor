@@ -5,6 +5,7 @@
 
 {% block extra_head %}
 {{ block.super }}
+<link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
 <style>
 .ml-map-card{width:310px;max-width:calc(100vw - 48px);color:#162333;font:13px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;overflow-wrap:anywhere;background:#fff;border-radius:12px;padding:14px;box-shadow:0 8px 24px #10202d33}.ml-map-card strong{display:block;font-size:14px;color:#16304a;border-bottom:1px solid #dbe4ee;padding-bottom:8px;margin-bottom:8px}.ml-map-card p{margin:7px 0;color:#405366}.ml-map-card div{padding:3px 0}.ml-map-card a{color:#185dd0;font-weight:600}.ml-map-card button{font:inherit}
 .ml-context-filters{display:grid;gap:5px;margin-top:8px}
@@ -1192,6 +1193,72 @@ window.onGoogleMapsLoaded = function() {
             </div>
         </div>
 
+        <div class="map-panel" id="panel-capa-raster" style="display:none">
+            <div class="map-panel-header">
+                Capa de zonificación
+            </div>
+            <div class="map-panel-body">
+                <div class="capa-raster-control" id="capa-raster-selector">
+                    <label for="capa-raster-select">Capa</label>
+                    <select id="capa-raster-select" class="form-control"></select>
+                </div>
+
+                <label class="capa-raster-toggle" for="capa-raster-visible">
+                    <input type="checkbox" id="capa-raster-visible" checked>
+                    <span>Mostrar capa</span>
+                </label>
+
+                <div class="capa-raster-control">
+                    <label for="capa-raster-transparencia">
+                        Transparencia
+                        <span class="capa-raster-valor" id="capa-raster-transparencia-val">35%</span>
+                    </label>
+                    <input type="range" id="capa-raster-transparencia" min="0" max="100" step="1" value="35">
+                </div>
+
+                <div class="capa-raster-control">
+                    <label for="capa-raster-rotacion">
+                        Giro
+                        <span class="capa-raster-valor" id="capa-raster-rotacion-val">0.00</span>
+                    </label>
+                    <input type="range" id="capa-raster-rotacion" min="-15" max="15" step="0.01" value="0">
+                </div>
+
+                <div class="capa-raster-control">
+                    <label for="capa-raster-escala">
+                        Escala
+                        <span class="capa-raster-valor" id="capa-raster-escala-val">1.000</span>
+                    </label>
+                    <input type="range" id="capa-raster-escala" min="0.8" max="1.25" step="0.001" value="1">
+                </div>
+
+                <span class="capa-raster-label">Mover la capa (5 m por clic)</span>
+                <div class="capa-raster-nudge" style="grid-template-columns:repeat(2,1fr)">
+                    <button type="button" id="capa-raster-norte">▲ Norte</button>
+                    <button type="button" id="capa-raster-sur">▼ Sur</button>
+                    <button type="button" id="capa-raster-oeste">◀ Oeste</button>
+                    <button type="button" id="capa-raster-este">▶ Este</button>
+                </div>
+
+                <label class="capa-raster-toggle" for="capa-raster-bloqueo">
+                    <input type="checkbox" id="capa-raster-bloqueo">
+                    <span>Inmovilizar capa</span>
+                </label>
+                <div class="capa-raster-aviso" id="capa-raster-bloqueo-aviso">
+                    🔒 Capa inmovilizada: no se puede mover, girar ni escalar.
+                </div>
+
+                <button class="btn-success btn-block" id="capa-raster-guardar" type="button">Guardar ajuste</button>
+                <button class="btn btn-block" id="capa-raster-restablecer" type="button" style="margin-top:8px">Restablecer ajuste</button>
+
+                <p class="capa-raster-ayuda">
+                    Arrastra el mango azul sobre el mapa para cuadrar la capa. Al guardar,
+                    el ajuste queda aplicado para todos los usuarios.
+                </p>
+                <p class="capa-raster-estado" id="capa-raster-estado" role="status" aria-live="polite"></p>
+            </div>
+        </div>
+
         <div class="map-panel">
             <div class="map-panel-header">
                 Configuración
@@ -1214,6 +1281,8 @@ window.onGoogleMapsLoaded = function() {
 {% block extra_scripts %}
 {{ block.super }}
 <script src="{% static 'js/ml-map-context.js' %}"></script>
+{{ capas_raster|json_script:"capas-raster-data" }}
+<script src="{% static 'js/capa-raster-overlay.js' %}"></script>
 <script>
 // ============================================================
 // CUADRANTIZACIÓN MAPA — JavaScript
@@ -1441,6 +1510,13 @@ function initMap() {
         console.error('ml.map.initialization.failed', error);
         var mlStatus = document.getElementById('ml-map-status');
         if (mlStatus) mlStatus.textContent = 'No se pudo iniciar la capa ML. El mapa y las zonas siguen disponibles.';
+    }
+
+    // Capa raster georreferenciada (zonificación PDM): opacidad, giro y escala.
+    try {
+        if (window.CapaRasterOverlay) window.CapaRasterOverlay.init(map);
+    } catch (error) {
+        console.error('capa.raster.initialization.failed', error);
     }
 }
 

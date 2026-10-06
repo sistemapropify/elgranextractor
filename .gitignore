@@ -103,6 +103,7 @@ screenshot_*.png
 *.ico
 !webapp/acm/static/acm/img/LOGO-PROPIFY.png
 !webapp/acm/static/acm/img/LOGO-PROPIFY.jpg
+!webapp/static/cuadrantizacion/capas/zonificacion_pdm_2016_2025.png
 
 # Environment variables
 .env

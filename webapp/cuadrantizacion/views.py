@@ -592,6 +592,13 @@ def mapa_zonas_valor(request):
     # Obtener zonas raíz (sin padre)
     zonas_raiz = zonas.filter(parent__isnull=True)
     
+    # Capas raster georreferenciadas (ej. Zonificación PDM 2016-2025)
+    from .models import CapaRasterMapa
+    capas_raster = [
+        _capa_raster_para_mapa(capa)
+        for capa in CapaRasterMapa.objects.filter(activo=True)
+    ]
+
     # Preparar datos para el template
     context = {
         'title': 'Mapa de Zonas de Valor - Jerarquía',
@@ -602,6 +609,7 @@ def mapa_zonas_valor(request):
         'niveles': ZonaValor.NIVELES,
         'total_zonas': zonas.count(),
         'orden_niveles': [nivel[0] for nivel in ZonaValor.NIVELES],  # Lista de códigos en orden
+        'capas_raster': capas_raster,
     }
     return render(request, 'cuadrantizacion/mapa_zonas.html', context)
 
@@ -1269,3 +1277,140 @@ def configurar_jerarquia(request):
     }
     
     return render(request, 'cuadrantizacion/configurar_jerarquia.html', context)
+
+
+# ============================================================
+# Capas raster georreferenciadas del mapa (zonificación PDM, etc.)
+# ============================================================
+
+def _capa_raster_para_mapa(capa):
+    """
+    Serializa una capa y resuelve su imagen.
+
+    `imagen_url` puede venir como ruta dentro de /static/ (lo habitual), como
+    URL absoluta o como ruta ya servida. Aquí siempre se entrega al navegador
+    una URL utilizable.
+    """
+    datos = capa.a_diccionario()
+    url = (datos.get('imagen_url') or '').strip()
+    if url and not url.startswith(('http://', 'https://', '/')):
+        from django.templatetags.static import static as static_url
+        datos['imagen_url'] = static_url(url)
+    return datos
+
+
+def _capa_raster_desde_payload(payload, capa=None):
+    """
+    Aplica el payload recibido sobre una capa raster.
+
+    Devuelve (capa, error). Si `error` no es None, el payload no es válido y
+    la capa no debe guardarse.
+    """
+    from .models import CapaRasterMapa
+
+    def _numero(valor, minimo, maximo, por_defecto):
+        if valor is None or valor == '':
+            return por_defecto
+        try:
+            numero = float(valor)
+        except (TypeError, ValueError):
+            raise ValueError('valor numérico inválido')
+        if numero != numero:  # NaN
+            raise ValueError('valor numérico inválido')
+        return max(minimo, min(maximo, numero))
+
+    if capa is None:
+        capa = CapaRasterMapa(nombre=str(payload.get('nombre') or 'Capa raster')[:200])
+
+    if 'nombre' in payload and payload.get('nombre'):
+        capa.nombre = str(payload['nombre'])[:200]
+    if 'descripcion' in payload:
+        capa.descripcion = str(payload.get('descripcion') or '') or None
+    if payload.get('imagen_url'):
+        capa.imagen_url = str(payload['imagen_url'])[:500]
+
+    esquinas = payload.get('esquinas')
+    if esquinas is not None:
+        if not isinstance(esquinas, dict):
+            return capa, 'Las esquinas deben ser un objeto {tl, tr, br, bl}.'
+        limpias = {}
+        for clave in ('tl', 'tr', 'br', 'bl'):
+            valor = esquinas.get(clave)
+            if valor is None:
+                continue
+            if not isinstance(valor, (list, tuple)) or len(valor) != 2:
+                return capa, f'La esquina {clave} debe ser [longitud, latitud].'
+            try:
+                limpias[clave] = [float(valor[0]), float(valor[1])]
+            except (TypeError, ValueError):
+                return capa, f'La esquina {clave} tiene valores no numéricos.'
+        if limpias:
+            capa.esquinas = limpias
+
+    try:
+        if 'opacidad' in payload:
+            capa.opacidad = _numero(payload.get('opacidad'), 0.0, 1.0, capa.opacidad)
+        if 'rotacion' in payload:
+            capa.rotacion = _numero(payload.get('rotacion'), -180.0, 180.0, capa.rotacion)
+        if 'escala' in payload:
+            capa.escala = _numero(payload.get('escala'), 0.05, 20.0, capa.escala)
+        if 'offset_x' in payload:
+            capa.offset_x = _numero(payload.get('offset_x'), -200000.0, 200000.0, capa.offset_x)
+        if 'offset_y' in payload:
+            capa.offset_y = _numero(payload.get('offset_y'), -200000.0, 200000.0, capa.offset_y)
+    except ValueError as error:
+        return capa, str(error)
+
+    if 'bloqueado' in payload:
+        capa.bloqueado = bool(payload.get('bloqueado'))
+    if 'visible' in payload:
+        capa.visible = bool(payload.get('visible'))
+    if 'activo' in payload:
+        capa.activo = bool(payload.get('activo'))
+    if 'orden' in payload:
+        capa.orden = int(_numero(payload.get('orden'), -9999, 9999, capa.orden))
+
+    return capa, None
+
+
+def api_capas_raster(request):
+    """
+    GET  -> lista las capas raster activas con su calibración.
+    POST -> guarda (crea o actualiza) la calibración de una capa.
+
+    El ajuste se guarda en base de datos, así que la capa queda alineada para
+    todos los usuarios y no solo en el navegador de quien la cuadró.
+    """
+    from .models import CapaRasterMapa
+
+    if request.method == 'GET':
+        capas = CapaRasterMapa.objects.filter(activo=True)
+        return JsonResponse({'capas': [_capa_raster_para_mapa(capa) for capa in capas]})
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    import json
+
+    try:
+        payload = json.loads(request.body or b'{}')
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+    if not isinstance(payload, dict):
+        return JsonResponse({'error': 'Se esperaba un objeto JSON'}, status=400)
+
+    capa = None
+    capa_id = payload.get('id')
+    if capa_id:
+        capa = get_object_or_404(CapaRasterMapa, pk=capa_id)
+
+    capa, error = _capa_raster_desde_payload(payload, capa=capa)
+    if error:
+        return JsonResponse({'error': error}, status=400)
+    if not capa.imagen_url:
+        return JsonResponse({'error': 'Falta la imagen de la capa.'}, status=400)
+
+    capa.activo = True
+    capa.save()
+    return JsonResponse({'ok': True, 'capa': _capa_raster_para_mapa(capa)})
