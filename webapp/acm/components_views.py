@@ -45,10 +45,24 @@ def user_key(request):
 def page(request):
     # The page shell exposes no records and retains the site's login dialog.
     # Both data endpoints still require an authenticated, active session.
+    # Capa de zonificación (misma que cuadrantización): si algo falla, la página
+    # del ACM debe seguir funcionando sin el plano superpuesto.
+    try:
+        from cuadrantizacion.views import _capa_raster_para_mapa
+        from cuadrantizacion.models import CapaRasterMapa
+        capas_raster = [
+            _capa_raster_para_mapa(capa)
+            for capa in CapaRasterMapa.objects.filter(activo=True)
+        ]
+    except Exception:
+        logger.warning('No se pudo cargar la capa de zonificación para el ACM', exc_info=True)
+        capas_raster = []
+
     response = render(request,'acm/components.html',{
         'sources':SOURCES,
         'test_mode':'analisis-pruebas' in request.path,
         'google_maps_api_key':getattr(settings,'GOOGLE_MAPS_API_KEY',None) or 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',
+        'capas_raster':capas_raster,
     })
     response['Cache-Control'] = 'no-store'
     from .components_engine import VERSION

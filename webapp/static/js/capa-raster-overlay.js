@@ -23,6 +23,31 @@
 
     function $(id) { return document.getElementById(id); }
 
+    function setValor(id, valor) {
+        var el = $(id);
+        if (el) el.value = valor;
+    }
+
+    function setTexto(id, valor) {
+        var el = $(id);
+        if (el) el.textContent = valor;
+    }
+
+    function setChecked(id, valor) {
+        var el = $(id);
+        if (el) el.checked = !!valor;
+    }
+
+    function alClic(id, manejador) {
+        var el = $(id);
+        if (el) el.addEventListener('click', manejador);
+    }
+
+    function alCambiar(id, manejador) {
+        var el = $(id);
+        if (el) el.addEventListener('change', manejador);
+    }
+
     function mulMatrix(m, n) {
         return {
             a: m.a * n.a + m.c * n.b,
@@ -259,23 +284,25 @@
             'capa-raster-transparencia', 'capa-raster-rotacion', 'capa-raster-escala'
         ];
 
-        $('capa-raster-transparencia').value = transparencia;
-        $('capa-raster-transparencia-val').textContent = transparencia + '%';
-        $('capa-raster-rotacion').value = ajuste.rotacion;
-        $('capa-raster-rotacion-val').textContent = ajuste.rotacion.toFixed(2);
-        $('capa-raster-escala').value = ajuste.escala;
-        $('capa-raster-escala-val').textContent = ajuste.escala.toFixed(3);
-        $('capa-raster-visible').checked = this.visible;
-        $('capa-raster-bloqueo').checked = this.bloqueado;
+        setValor('capa-raster-transparencia', transparencia);
+        setTexto('capa-raster-transparencia-val', transparencia + '%');
+        setValor('capa-raster-rotacion', ajuste.rotacion);
+        setTexto('capa-raster-rotacion-val', ajuste.rotacion.toFixed(2));
+        setValor('capa-raster-escala', ajuste.escala);
+        setTexto('capa-raster-escala-val', ajuste.escala.toFixed(3));
+        setChecked('capa-raster-visible', this.visible);
+        setChecked('capa-raster-bloqueo', this.bloqueado);
 
         controles.forEach(function (id) {
-            $(id).disabled = this.bloqueado;
+            if ($(id)) $(id).disabled = this.bloqueado;
         }, this);
         ['capa-raster-norte', 'capa-raster-sur', 'capa-raster-este',
          'capa-raster-oeste'].forEach(function (id) {
-            $(id).disabled = this.bloqueado;
+            if ($(id)) $(id).disabled = this.bloqueado;
         }, this);
-        $('capa-raster-restablecer').disabled = this.bloqueado;
+        if ($('capa-raster-restablecer')) {
+            $('capa-raster-restablecer').disabled = this.bloqueado;
+        }
 
         var bloqueo = $('capa-raster-bloqueo-aviso');
         if (bloqueo) bloqueo.style.display = this.bloqueado ? 'block' : 'none';
@@ -354,24 +381,24 @@
             c.ajuste.escala = valor;
         }, function (valor) { return valor.toFixed(3); });
 
-        $('capa-raster-visible').addEventListener('change', function (event) {
+        alCambiar('capa-raster-visible', function (event) {
             capa.visible = event.target.checked;
             capa.draw();
         });
 
-        $('capa-raster-bloqueo').addEventListener('change', function (event) {
+        alCambiar('capa-raster-bloqueo', function (event) {
             capa.bloqueado = event.target.checked;
             capa.draw();
         });
 
-        $('capa-raster-norte').addEventListener('click', function () { capa.moverMetros(0, 5); });
-        $('capa-raster-sur').addEventListener('click', function () { capa.moverMetros(0, -5); });
-        $('capa-raster-este').addEventListener('click', function () { capa.moverMetros(5, 0); });
-        $('capa-raster-oeste').addEventListener('click', function () { capa.moverMetros(-5, 0); });
+        alClic('capa-raster-norte', function () { capa.moverMetros(0, 5); });
+        alClic('capa-raster-sur', function () { capa.moverMetros(0, -5); });
+        alClic('capa-raster-este', function () { capa.moverMetros(5, 0); });
+        alClic('capa-raster-oeste', function () { capa.moverMetros(-5, 0); });
 
-        $('capa-raster-guardar').addEventListener('click', function () { guardar(capa); });
+        alClic('capa-raster-guardar', function () { guardar(capa); });
 
-        $('capa-raster-restablecer').addEventListener('click', function () {
+        alClic('capa-raster-restablecer', function () {
             if (capa.bloqueado) return;
             capa.ajuste = Object.assign({}, capa.guardado);
             capa.draw();

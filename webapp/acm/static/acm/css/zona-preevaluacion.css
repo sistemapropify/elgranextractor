@@ -1,0 +1,74 @@
+/* ==========================================================================
+   Pre-evaluación de zona (PDM) en el ACM
+   ========================================================================== */
+
+.cmp-zona h2 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--text-secondary, #8b949e);
+}
+
+.cmp-zona-linea {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.cmp-zona-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, .45);
+    flex: 0 0 auto;
+}
+
+.cmp-zona-codigo {
+    font-size: 16px;
+    letter-spacing: .02em;
+}
+
+.cmp-zona-categoria {
+    font-size: 11px;
+    padding: 2px 8px;
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 99px;
+    color: var(--text-secondary, #8b949e);
+}
+
+.cmp-zona-ok,
+.cmp-zona-aviso {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 99px;
+}
+
+.cmp-zona-ok {
+    color: #3fb950;
+    border: 1px solid rgba(63, 185, 80, .45);
+}
+
+.cmp-zona-aviso {
+    color: #d29922;
+    border: 1px solid rgba(210, 153, 34, .45);
+    cursor: help;
+}
+
+.cmp-zona-nombre {
+    margin: 8px 0 0;
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.cmp-zona-nota {
+    margin-top: 6px;
+    font-size: 11px;
+}
+
+/* La capa raster usa el panel compartido; aquí solo se ajusta el ancho. */
+.cmp-map-panel .capa-raster-control {
+    margin: 10px 0;
+}
