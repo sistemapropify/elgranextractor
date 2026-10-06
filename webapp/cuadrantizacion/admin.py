@@ -1,6 +1,28 @@
 from django.contrib import admin
 
-from .models import CapaRasterMapa
+from .models import CapaRasterMapa, ZonaUso, Zonificacion
+
+
+@admin.register(Zonificacion)
+class ZonificacionAdmin(admin.ModelAdmin):
+    list_display = (
+        'fuente', 'propiedad_id', 'codigo', 'nombre',
+        'confianza', 'verificada', 'fecha_verificacion',
+    )
+    list_filter = ('fuente', 'codigo', 'verificada', 'confianza', 'origen_calculo')
+    search_fields = ('propiedad_id', 'propiedad_ref', 'codigo', 'nombre')
+    readonly_fields = ('fecha_calculo', 'fecha_actualizacion')
+    list_editable = ('verificada',)
+    list_per_page = 50
+
+
+@admin.register(ZonaUso)
+class ZonaUsoAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'nombre', 'categoria', 'color', 'orden', 'activo')
+    list_filter = ('categoria', 'activo')
+    search_fields = ('codigo', 'nombre', 'categoria')
+    ordering = ('orden', 'codigo')
+    readonly_fields = ('fecha_creacion', 'fecha_actualizacion')
 
 
 @admin.register(CapaRasterMapa)

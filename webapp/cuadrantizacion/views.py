@@ -599,6 +599,10 @@ def mapa_zonas_valor(request):
         for capa in CapaRasterMapa.objects.filter(activo=True)
     ]
 
+    # Leyenda de usos de suelo (para pintar el código y el color de cada marcador)
+    from .models import ZonaUso
+    zonas_uso = [zona.a_diccionario() for zona in ZonaUso.objects.filter(activo=True)]
+
     # Preparar datos para el template
     context = {
         'title': 'Mapa de Zonas de Valor - Jerarquía',
@@ -610,6 +614,7 @@ def mapa_zonas_valor(request):
         'total_zonas': zonas.count(),
         'orden_niveles': [nivel[0] for nivel in ZonaValor.NIVELES],  # Lista de códigos en orden
         'capas_raster': capas_raster,
+        'zonas_uso': zonas_uso,
     }
     return render(request, 'cuadrantizacion/mapa_zonas.html', context)
 
@@ -1414,3 +1419,324 @@ def api_capas_raster(request):
     capa.activo = True
     capa.save()
     return JsonResponse({'ok': True, 'capa': _capa_raster_para_mapa(capa)})
+
+
+# ============================================================
+# Zonificación: leyenda del plano y clasificación de marcadores
+# ============================================================
+
+MAX_PUNTOS_POR_CONSULTA = 500
+
+
+def api_zonificacion_leyenda(request):
+    """Leyenda de usos de suelo del plano (código, descripción y color)."""
+    from .models import ZonaUso
+
+    zonas = ZonaUso.objects.filter(activo=True).order_by('orden', 'codigo')
+    return JsonResponse({
+        'zonas': [zona.a_diccionario() for zona in zonas],
+        'total': zonas.count(),
+    })
+
+
+def api_clasificar_zonificacion(request):
+    """
+    Devuelve la zona de uso del plano para uno o varios puntos.
+
+    Acepta un punto suelto (`lat` y `lng`) o un lote (`puntos`), que es lo que
+    usa el mapa para resolver la zona de cada marcador. La clasificación es
+    local: se lee el color del plano georreferenciado en la posición del punto.
+    """
+    from .zonificacion import (
+        clasificar_punto, obtener_clasificador, zonificaciones_guardadas,
+    )
+
+    if request.method == 'GET':
+        lat, lng = request.GET.get('lat'), request.GET.get('lng')
+        if lat is None or lng is None:
+            return JsonResponse({'error': 'Faltan lat y lng.'}, status=400)
+        puntos = [{'lat': lat, 'lng': lng, 'id': request.GET.get('id')}]
+    elif request.method == 'POST':
+        import json
+
+        try:
+            payload = json.loads(request.body or b'{}')
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'JSON inválido'}, status=400)
+        if not isinstance(payload, dict):
+            return JsonResponse({'error': 'Se esperaba un objeto JSON'}, status=400)
+        if 'puntos' in payload:
+            puntos = payload.get('puntos') or []
+            if not isinstance(puntos, list):
+                return JsonResponse({'error': '"puntos" debe ser una lista.'}, status=400)
+        else:
+            puntos = [payload]
+    else:
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    if not puntos:
+        return JsonResponse({'resultados': [], 'sin_plano': False})
+    if len(puntos) > MAX_PUNTOS_POR_CONSULTA:
+        return JsonResponse(
+            {'error': f'Máximo {MAX_PUNTOS_POR_CONSULTA} puntos por consulta.'},
+            status=400,
+        )
+
+    # 1) Normalizar la entrada
+    normalizados = []
+    for indice, punto in enumerate(puntos):
+        if not isinstance(punto, dict):
+            continue
+        item = {
+            'indice': indice,
+            'id': punto.get('id'),
+            'fuente': punto.get('fuente'),
+            'propiedad_id': punto.get('propiedad_id'),
+            'lat': None,
+            'lng': None,
+        }
+        try:
+            item['lat'] = float(punto.get('lat'))
+            item['lng'] = float(punto.get('lng'))
+        except (TypeError, ValueError):
+            item['error'] = 'coordenadas_invalidas'
+        normalizados.append(item)
+
+    # 2) Revisar qué propiedades ya tienen zona guardada (tabla Zonificacion)
+    guardadas = zonificaciones_guardadas([
+        (item['fuente'], item['propiedad_id'])
+        for item in normalizados
+        if item['fuente'] and item['propiedad_id']
+    ])
+
+    # 3) Solo se carga el plano si hay algo que calcular
+    necesita_calculo = any(
+        not item.get('error')
+        and not (item['fuente'] and item['propiedad_id']
+                 and (str(item['fuente']).strip().casefold(),
+                      str(item['propiedad_id']).strip()) in guardadas)
+        for item in normalizados
+    )
+    if necesita_calculo and obtener_clasificador() is None:
+        return JsonResponse({
+            'resultados': [],
+            'sin_plano': True,
+            'error': 'La capa de zonificación no está disponible.',
+        })
+
+    resultados = []
+    for item in normalizados:
+        salida = {'id': item['id']}
+        if item.get('error'):
+            salida.update({'codigo': None, 'motivo': item['error']})
+            resultados.append(salida)
+            continue
+
+        clave = None
+        if item['fuente'] and item['propiedad_id']:
+            clave = (str(item['fuente']).strip().casefold(),
+                     str(item['propiedad_id']).strip())
+        fila = guardadas.get(clave) if clave else None
+        if fila is not None:
+            salida.update({
+                'codigo': fila.codigo or None,
+                'uso': fila.nombre or '',
+                'nombre': fila.nombre or '',
+                'categoria': fila.categoria or '',
+                'color': fila.color or '',
+                'cobertura': fila.cobertura,
+                'confianza': fila.confianza or '',
+                'verificada': fila.verificada,
+                'origen_calculo': fila.origen_calculo,
+                'guardada': True,
+            })
+            if not fila.codigo:
+                salida['motivo'] = 'sin_zona'
+            resultados.append(salida)
+            continue
+
+        zona = clasificar_punto(item['lat'], item['lng'])
+        if zona is None:
+            salida.update({'codigo': None, 'motivo': 'sin_zona', 'verificada': False,
+                           'guardada': False})
+        else:
+            salida.update(zona)
+            salida['verificada'] = False
+            salida['guardada'] = False
+        resultados.append(salida)
+
+    return JsonResponse({
+        'resultados': resultados,
+        'total': len(resultados),
+        'sin_plano': False,
+    })
+
+
+def _usuario_actual(request):
+    usuario = getattr(request, 'current_user', None)
+    if usuario is None:
+        usuario = getattr(request, 'user', None)
+    if usuario is None:
+        return None
+    nombre = getattr(usuario, 'username', None) or getattr(usuario, 'email', None)
+    return str(nombre) if nombre else None
+
+
+def api_zonificaciones(request):
+    """
+    Lista la tabla de zonificación de propiedades, con filtros simples.
+
+    Parámetros: fuente, codigo, verificada (1/0), buscar, limite, desplazamiento.
+    """
+    from .models import Zonificacion
+
+    consulta = Zonificacion.objects.all()
+
+    fuente = (request.GET.get('fuente') or '').strip()
+    if fuente:
+        consulta = consulta.filter(fuente=fuente.casefold())
+
+    codigo = (request.GET.get('codigo') or '').strip()
+    if codigo:
+        consulta = consulta.filter(codigo__iexact=codigo)
+
+    verificada = request.GET.get('verificada')
+    if verificada in {'0', '1'}:
+        consulta = consulta.filter(verificada=(verificada == '1'))
+
+    buscar = (request.GET.get('buscar') or '').strip()
+    if buscar:
+        from django.db.models import Q
+        consulta = consulta.filter(
+            Q(propiedad_id__icontains=buscar)
+            | Q(propiedad_ref__icontains=buscar)
+            | Q(codigo__icontains=buscar)
+            | Q(nombre__icontains=buscar)
+        )
+
+    try:
+        limite = min(int(request.GET.get('limite') or 200), 1000)
+    except (TypeError, ValueError):
+        limite = 200
+    try:
+        desplazamiento = max(int(request.GET.get('desplazamiento') or 0), 0)
+    except (TypeError, ValueError):
+        desplazamiento = 0
+
+    total = consulta.count()
+    filas = consulta.order_by('fuente', 'propiedad_id')[desplazamiento:desplazamiento + limite]
+
+    from collections import Counter
+    resumen = Counter(
+        (codigo or 'sin_zona')
+        for codigo in Zonificacion.objects.values_list('codigo', flat=True)
+    )
+
+    return JsonResponse({
+        'total': total,
+        'resultados': [fila.a_diccionario() for fila in filas],
+        'resumen_por_zona': resumen,
+        'verificadas': Zonificacion.objects.filter(verificada=True).count(),
+    })
+
+
+def api_verificar_zonificacion(request):
+    """
+    Marca o desmarca la verificación humana de la zona de una propiedad.
+
+    Recibe {fuente, propiedad_id, verificada, observacion?, lat?, lng?,
+    propiedad_ref?}. Si la fila no existe todavía, se calcula la zona y se crea.
+    """
+    from .zonificacion import guardar_verificacion
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    import json
+
+    try:
+        payload = json.loads(request.body or b'{}')
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({'error': 'Se esperaba un objeto JSON'}, status=400)
+
+    fuente = (str(payload.get('fuente') or '')).strip()
+    propiedad_id = (str(payload.get('propiedad_id') or '')).strip()
+    if not fuente or not propiedad_id:
+        return JsonResponse({'error': 'Faltan fuente y propiedad_id.'}, status=400)
+
+    fila = guardar_verificacion(
+        fuente=fuente,
+        propiedad_id=propiedad_id,
+        verificada=bool(payload.get('verificada')),
+        usuario=_usuario_actual(request),
+        observacion=payload.get('observacion') if 'observacion' in payload else None,
+        lat=payload.get('lat'),
+        lng=payload.get('lng'),
+        propiedad_ref=payload.get('propiedad_ref'),
+    )
+    if fila is None:
+        return JsonResponse({'error': 'No se pudo guardar la zonificación.'}, status=400)
+
+    return JsonResponse({'ok': True, 'zonificacion': fila.a_diccionario()})
+
+
+def api_recalcular_zonificacion(request):
+    """
+    Recalcula la zona de una lista de propiedades y la guarda en la tabla.
+
+    Pensado para que el mapa asigne la zonificación de las propiedades que ya
+    tiene cargadas. No pisa las filas verificadas por una persona.
+    """
+    from .zonificacion import asignar_zonificacion, obtener_clasificador
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    import json
+
+    try:
+        payload = json.loads(request.body or b'{}')
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+    puntos = (payload or {}).get('puntos') or []
+    if not isinstance(puntos, list):
+        return JsonResponse({'error': '"puntos" debe ser una lista.'}, status=400)
+    if len(puntos) > MAX_PUNTOS_POR_CONSULTA:
+        return JsonResponse(
+            {'error': f'Máximo {MAX_PUNTOS_POR_CONSULTA} puntos por consulta.'},
+            status=400,
+        )
+    if obtener_clasificador() is None:
+        return JsonResponse(
+            {'error': 'La capa de zonificación no está disponible.'}, status=503
+        )
+
+    procesadas = 0
+    con_zona = 0
+    for punto in puntos:
+        if not isinstance(punto, dict):
+            continue
+        lat, lng = punto.get('lat'), punto.get('lng')
+        if lat is None or lng is None:
+            continue
+        fila = asignar_zonificacion(
+            fuente=punto.get('fuente'),
+            propiedad_id=punto.get('propiedad_id'),
+            lat=lat,
+            lng=lng,
+            propiedad_ref=punto.get('propiedad_ref'),
+        )
+        if fila is None:
+            continue
+        procesadas += 1
+        if fila.codigo:
+            con_zona += 1
+
+    return JsonResponse({
+        'ok': True,
+        'procesadas': procesadas,
+        'con_zona': con_zona,
+    })

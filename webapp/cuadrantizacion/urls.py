@@ -32,6 +32,23 @@ urlpatterns = [
     ),
     path('jerarquia/', views.configurar_jerarquia, name='configurar_jerarquia'),
     path('capas-raster/', views.api_capas_raster, name='api_capas_raster'),
+    path('zonificacion/leyenda/', views.api_zonificacion_leyenda, name='api_zonificacion_leyenda'),
+    path(
+        'zonificacion/clasificar/',
+        views.api_clasificar_zonificacion,
+        name='api_clasificar_zonificacion',
+    ),
+    path('zonificacion/', views.api_zonificaciones, name='api_zonificaciones'),
+    path(
+        'zonificacion/verificar/',
+        views.api_verificar_zonificacion,
+        name='api_verificar_zonificacion',
+    ),
+    path(
+        'zonificacion/recalcular/',
+        views.api_recalcular_zonificacion,
+        name='api_recalcular_zonificacion',
+    ),
     path('heatmap/', views.mapa_heatmap, name='mapa_heatmap'),
     path('heatmap-data/', views.api_heatmap_data, name='api_heatmap_data'),
 ]

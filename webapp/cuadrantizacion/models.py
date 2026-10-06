@@ -344,3 +344,142 @@ class CapaRasterMapa(models.Model):
             'activo': self.activo,
             'orden': self.orden,
         }
+
+
+class ZonaUso(models.Model):
+    """
+    Categoría de uso del suelo de la leyenda del plano de zonificación.
+
+    Cada fila es un recuadro de la leyenda: su código (el que va impreso en el
+    mapa), su descripción, la categoría general y el color de relleno. El
+    clasificador usa este color para deducir la zona de cada marcador.
+    """
+
+    codigo = models.CharField(max_length=20, unique=True)
+    nombre = models.CharField(max_length=200)
+    categoria = models.CharField(max_length=60, blank=True, default='')
+    color = models.CharField(
+        max_length=7,
+        help_text="Color de relleno en formato HEX, tal como aparece en la leyenda."
+    )
+    descripcion = models.TextField(blank=True, null=True)
+    orden = models.IntegerField(default=0)
+    activo = models.BooleanField(default=True)
+
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Zona de uso (leyenda)"
+        verbose_name_plural = "Zonas de uso (leyenda)"
+        ordering = ['orden', 'codigo']
+
+    def __str__(self):
+        return f"{self.codigo} - {self.nombre}"
+
+    def a_diccionario(self):
+        return {
+            'id': self.id,
+            'codigo': self.codigo,
+            'nombre': self.nombre,
+            'categoria': self.categoria,
+            'color': self.color,
+            'activo': self.activo,
+        }
+
+
+class Zonificacion(models.Model):
+    """
+    Zona de uso del plano (PDM) asignada a una propiedad del scraper.
+
+    Una fila por propiedad: guarda el código y el nombre de la zona —que salen
+    de leer el color del plano georreferenciado en la ubicación de la propiedad—
+    y el control de verificación humana en el campo `verificada`.
+
+    La clave es (fuente, propiedad_id) porque el mapa reúne propiedades de
+    orígenes distintos: Propify vive en su propia base y los portales
+    (remax, properati, ...) en PropiedadesCompetencia. `propiedad_id` guarda el
+    identificador dentro de su origen, tal como lo expone el mapa.
+    """
+
+    ORIGENES_CALCULO = [
+        ('automatico', 'Automático (color del plano)'),
+        ('manual', 'Manual'),
+    ]
+
+    fuente = models.CharField(
+        max_length=40,
+        help_text="Origen de la propiedad: propify, remax, properati, ..."
+    )
+    propiedad_id = models.CharField(
+        max_length=80,
+        help_text="Identificador de la propiedad dentro de su origen"
+    )
+    propiedad_ref = models.CharField(
+        max_length=200, blank=True, null=True,
+        help_text="Código o título de la publicación, para reconocerla rápido"
+    )
+    latitud = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    longitud = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+
+    # Zona asignada (copia del código de la leyenda)
+    codigo = models.CharField(max_length=20, blank=True, default='')
+    nombre = models.CharField(max_length=200, blank=True, default='')
+    categoria = models.CharField(max_length=60, blank=True, default='')
+    color = models.CharField(max_length=7, blank=True, default='')
+    cobertura = models.FloatField(null=True, blank=True, help_text="Proporción de píxeles que coinciden")
+    confianza = models.CharField(max_length=10, blank=True, default='')
+    origen_calculo = models.CharField(
+        max_length=20, choices=ORIGENES_CALCULO, default='automatico'
+    )
+    fecha_calculo = models.DateTimeField(auto_now_add=True)
+
+    # Verificación humana
+    verificada = models.BooleanField(
+        default=False,
+        help_text="Marca que alguien confirmó que la propiedad está bien ubicada en esta zona"
+    )
+    verificada_por = models.CharField(max_length=150, blank=True, null=True)
+    fecha_verificacion = models.DateTimeField(null=True, blank=True)
+    observacion = models.TextField(blank=True, null=True)
+
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Zonificación de propiedad"
+        verbose_name_plural = "Zonificaciones de propiedades"
+        ordering = ['fuente', 'propiedad_id']
+        unique_together = [('fuente', 'propiedad_id')]
+        indexes = [
+            models.Index(fields=['fuente', 'propiedad_id']),
+            models.Index(fields=['codigo']),
+            models.Index(fields=['verificada']),
+        ]
+
+    def __str__(self):
+        if self.codigo:
+            return f"{self.fuente}:{self.propiedad_id} → {self.codigo}"
+        return f"{self.fuente}:{self.propiedad_id} → sin zona"
+
+    def a_diccionario(self):
+        return {
+            'id': self.id,
+            'fuente': self.fuente,
+            'propiedad_id': self.propiedad_id,
+            'propiedad_ref': self.propiedad_ref or '',
+            'latitud': float(self.latitud) if self.latitud is not None else None,
+            'longitud': float(self.longitud) if self.longitud is not None else None,
+            'codigo': self.codigo or None,
+            'nombre': self.nombre or '',
+            'categoria': self.categoria or '',
+            'color': self.color or '',
+            'cobertura': self.cobertura,
+            'confianza': self.confianza or '',
+            'origen_calculo': self.origen_calculo,
+            'verificada': self.verificada,
+            'verificada_por': self.verificada_por or '',
+            'fecha_verificacion': (
+                self.fecha_verificacion.isoformat() if self.fecha_verificacion else None
+            ),
+            'observacion': self.observacion or '',
+        }

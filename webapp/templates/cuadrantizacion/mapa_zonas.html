@@ -6,6 +6,7 @@
 {% block extra_head %}
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
+<link rel="stylesheet" href="{% static 'css/zonificacion-marcadores.css' %}">
 <style>
 .ml-map-card{width:310px;max-width:calc(100vw - 48px);color:#162333;font:13px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;overflow-wrap:anywhere;background:#fff;border-radius:12px;padding:14px;box-shadow:0 8px 24px #10202d33}.ml-map-card strong{display:block;font-size:14px;color:#16304a;border-bottom:1px solid #dbe4ee;padding-bottom:8px;margin-bottom:8px}.ml-map-card p{margin:7px 0;color:#405366}.ml-map-card div{padding:3px 0}.ml-map-card a{color:#185dd0;font-weight:600}.ml-map-card button{font:inherit}
 .ml-context-filters{display:grid;gap:5px;margin-top:8px}
@@ -1283,6 +1284,7 @@ window.onGoogleMapsLoaded = function() {
 <script src="{% static 'js/ml-map-context.js' %}"></script>
 {{ capas_raster|json_script:"capas-raster-data" }}
 <script src="{% static 'js/capa-raster-overlay.js' %}"></script>
+<script src="{% static 'js/zonificacion-marcadores.js' %}"></script>
 <script>
 // ============================================================
 // CUADRANTIZACIÓN MAPA — JavaScript
@@ -2323,6 +2325,15 @@ function showPropifyFloatingCard(property) {
         ? '<div class="propify-card-actions"><a class="propify-card-open" href="' +
             escapeMapHtml(property.url) + '" target="_blank" rel="noopener noreferrer">Abrir publicación ↗</a></div>'
         : '';
+
+    // Zona de uso del plano de zonificación, resuelta por color del plano.
+    var zonaBloque = '';
+    if (window.ZonificacionMapa) {
+        var zonaConocida = ZonificacionMapa.zonaDe(property);
+        zonaBloque = '<div class="propify-card-zona" id="propify-card-zona" data-clave="' +
+            escapeMapHtml(ZonificacionMapa.claveDe(property)) + '">' +
+            ZonificacionMapa.bloqueHtml(zonaConocida, !zonaConocida) + '</div>';
+    }
     function areaBlock(label, areaValue, pricePerM2, pricePerM2Usd, usedKey) {
         var area = formatPropifyArea(areaValue);
         if (!area) return '';
@@ -2366,6 +2377,7 @@ function showPropifyFloatingCard(property) {
                 code +
             '</div>' +
         '</div>' +
+        zonaBloque +
         (areas.length ? '<div class="propify-card-areas">' + areas.join('') + '</div>' : '') +
         address +
         propertyQualityDetails(property) +
@@ -2390,6 +2402,7 @@ function showPropifyFloatingCard(property) {
     }
 
     card.hidden = false;
+    if (window.ZonificacionMapa) ZonificacionMapa.resolver(property);
 }
 
 function setupDraggablePropifyCard() {
@@ -2538,6 +2551,10 @@ function renderPropifyPropertyMarkers() {
     var outliers = filtered.filter(function(p) { return p.quality_status === 'outlier'; });
     document.getElementById('property-quality-summary').textContent = filtered.length + ' propiedades filtradas · ' + alertRows.length + ' con alertas · ' + outliers.length + ' posibles atípicos. Comparación entre las fuentes cargadas.';
     refreshPropertyAreaSelectionResults();
+
+    // Resuelve la zonificación de los marcadores en lote (para que la tarjeta
+    // muestre la zona sin esperar al clic).
+    if (window.ZonificacionMapa) ZonificacionMapa.precargar(filtered);
 }
 
 function loadPropifyProperties() {
