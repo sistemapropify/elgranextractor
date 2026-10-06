@@ -167,6 +167,10 @@
                                        class="btn btn-outline-success btn-sm" title="Descargar informe Word">
                                         <i class="bi bi-file-earmark-word"></i>
                                     </a>
+                                    <a href="{% url 'acm:componentes_historial_pdf' acm.id %}"
+                                       class="btn btn-outline-danger btn-sm" title="Descargar informe PDF">
+                                        <i class="bi bi-file-earmark-pdf"></i>
+                                    </a>
                                     {% else %}
                                     <a href="/acm/ver-pdf/{{ acm.id }}/" target="_blank"
                                        class="btn btn-outline-success btn-sm" title="Ver PDF">

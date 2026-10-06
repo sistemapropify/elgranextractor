@@ -260,6 +260,31 @@ def word_report(request):
 @require_POST
 @csrf_protect
 @authenticated
+def pdf_report(request):
+    """Informe PDF con la estructura del ACM de Propify (solo identidad Propify)."""
+    try:
+        state,excluded=_signed_selection(request)
+        result=calculate(state['records'],state['params'],excluded)
+        history,_=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
+        from .components_pdf import build_acm_pdf
+        content=build_acm_pdf(state['params'],state['records'],result,excluded,user=session_user(request))
+        response=HttpResponse(content,content_type='application/pdf')
+        response['Content-Disposition']='attachment; filename="informe-acm.pdf"'
+        response['X-ACM-History-Code']=history.codigo_display
+        response['Cache-Control']='no-store'
+        return response
+    except signing.SignatureExpired:
+        return JsonResponse({'error':'La búsqueda venció (30 minutos). Busca nuevamente para descargar el informe.'},status=409)
+    except (signing.BadSignature,ValueError,TypeError,KeyError,AttributeError):
+        return JsonResponse({'error':'Búsqueda o selección inválida. Busca nuevamente.'},status=400)
+    except Exception:
+        logger.exception('ACM componentes: no se pudo generar el informe PDF')
+        return JsonResponse({'error':'No se pudo generar el informe PDF. El error quedó registrado.'},status=503)
+
+
+@require_POST
+@csrf_protect
+@authenticated
 def save_history(request):
     try:
         state,excluded=_signed_selection(request)
@@ -285,5 +310,18 @@ def history_word_report(request, uuid):
     content=build_acm_docx(history.parametros_json,history.propiedades_json,history.resultado_json,())
     response=HttpResponse(content,content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
     response['Content-Disposition']=f'attachment; filename="{history.codigo_display}-acm.docx"'
+    response['Cache-Control']='no-store'
+    return response
+
+
+@authenticated
+def history_pdf_report(request, uuid):
+    from .models import ACMLink
+    history=get_object_or_404(ACMLink,id=uuid,user=session_user(request),metodo='componentes')
+    from .components_pdf import build_acm_pdf
+    content=build_acm_pdf(history.parametros_json,history.propiedades_json,history.resultado_json,(),
+                          generated_at=history.created_at,user=session_user(request))
+    response=HttpResponse(content,content_type='application/pdf')
+    response['Content-Disposition']=f'attachment; filename="{history.codigo_display}-acm.pdf"'
     response['Cache-Control']='no-store'
     return response

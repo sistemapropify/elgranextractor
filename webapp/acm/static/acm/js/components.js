@@ -92,7 +92,7 @@
     aiProposal=null;$('cmp-proposal').hidden=true;
     $('cmp-simple').textContent='';
     $('cmp-scenario').hidden=true;
-    result=null;clearMap();drawCircles();$('cmp-export').disabled=true;$('cmp-word').disabled=true;$('cmp-save').disabled=true;$('cmp-save').textContent='Guardar en historial';
+    result=null;clearMap();drawCircles();$('cmp-export').disabled=true;$('cmp-word').disabled=true;$('cmp-pdf').disabled=true;$('cmp-save').disabled=true;$('cmp-save').textContent='Guardar en historial';
     $('cmp-new').innerHTML='<h2>Valoración por componentes</h2><p class="cmp-muted">'+escape(message)+'</p>';
     $('cmp-old').innerHTML='<span>Cálculo anterior</span><strong>—</strong>';
     $('cmp-map-count').textContent='Sin análisis vigente';
@@ -317,7 +317,7 @@
     $('cmp-ai-panel').hidden=!result.new;$('cmp-ai-status').textContent='';
     aiProposal=null;$('cmp-proposal').hidden=true;
     result.breakdown.forEach(d=>{const row=snapshot.records.find(r=>r.id===d.id);if(row)for(const key of ['land_similarity','built_similarity','distance_similarity','overall_similarity'])if(d[key]!=null)row[key]=d[key];});
-    renderSummary();renderCalculationExplanation();renderCards();renderMap();renderDetail();renderSimple();$('cmp-export').disabled=false;$('cmp-word').disabled=!result.new;$('cmp-save').disabled=!result.new;
+    renderSummary();renderCalculationExplanation();renderCards();renderMap();renderDetail();renderSimple();$('cmp-export').disabled=false;$('cmp-word').disabled=!result.new;$('cmp-pdf').disabled=!result.new;$('cmp-save').disabled=!result.new;
     $('cmp-scenario').hidden=result.model!=='components'||!result.new;
     $('cmp-scenario-land').value=snapshot.params.land;$('cmp-scenario-built').value=snapshot.params.built;
     document.dispatchEvent(new CustomEvent('acm:result',{detail:{available:!!result.new}}));
@@ -367,12 +367,14 @@
     try{const data=await post('guardar',selection());button.textContent='Guardado · '+data.code;$('cmp-status').textContent=data.created?'Análisis guardado en el historial.':'Este mismo análisis ya estaba guardado en el historial.';}
     catch(error){$('cmp-status').textContent=error.message;button.disabled=false;}
   });
-  $('cmp-word').addEventListener('click',async()=>{
-    if(!snapshot||!result)return;const button=$('cmp-word');button.disabled=true;$('cmp-status').textContent='Generando informe Word con las operaciones del análisis…';
-    try{const response=await fetch(form.dataset.reportUrl,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:JSON.stringify(selection())});
-      if(!response.ok){let body={};try{body=await response.json();}catch(e){}throw Error(body.error||'No se pudo generar el informe Word.');}
-      const code=response.headers.get('X-ACM-History-Code')||'';const url=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=url;a.download=(code||'informe-acm')+'.docx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('cmp-save').textContent=code?'Guardado · '+code:'Guardado en historial';$('cmp-save').disabled=true;$('cmp-status').textContent='Informe Word descargado y análisis guardado en el historial.';
+  async function downloadReport(button,url,extension,label){
+    if(!snapshot||!result)return;button.disabled=true;$('cmp-status').textContent='Generando informe '+label+' con las operaciones del análisis…';
+    try{const response=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:JSON.stringify(selection())});
+      if(!response.ok){let body={};try{body=await response.json();}catch(e){}throw Error(body.error||('No se pudo generar el informe '+label+'.'));}
+      const code=response.headers.get('X-ACM-History-Code')||'';const objectUrl=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=objectUrl;a.download=(code||'informe-acm')+extension;a.click();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);$('cmp-save').textContent=code?'Guardado · '+code:'Guardado en historial';$('cmp-save').disabled=true;$('cmp-status').textContent='Informe '+label+' descargado y análisis guardado en el historial.';
     }catch(error){$('cmp-status').textContent=error.message;}finally{button.disabled=false;}
-  });
+  }
+  $('cmp-word').addEventListener('click',()=>downloadReport($('cmp-word'),form.dataset.reportUrl,'.docx','Word'));
+  $('cmp-pdf').addEventListener('click',()=>downloadReport($('cmp-pdf'),form.dataset.pdfUrl,'.pdf','PDF'));
   configureType();
 })();

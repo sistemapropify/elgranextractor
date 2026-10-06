@@ -1,11 +1,14 @@
 import json
+import base64
+import re
+import zlib
 from statistics import median
 from types import SimpleNamespace
 from unittest.mock import patch
 from django.test import SimpleTestCase, TestCase, RequestFactory
 from django.urls import resolve, reverse
 from acm.components_engine import parameters,candidates,calculate,old_estimate
-from acm.components_views import search,recalculate,word_report,save_history,page,scraped_rows,propify_rows
+from acm.components_views import search,recalculate,word_report,pdf_report,save_history,page,scraped_rows,propify_rows
 
 
 def params():
@@ -285,3 +288,77 @@ class ComponentsDatabaseTests(TestCase):
         self.assertEqual(row['land'],150)
         self.assertEqual(row['built'],200)
         self.assertIsNone(row['record_id'])
+
+
+def _pdf_text(pdf):
+    """Texto de un PDF de reportlab (ASCII85 + Flate), para revisar su contenido."""
+    chunks=[]
+    for raw in re.findall(rb'stream\r?\n(.*?)endstream',pdf,re.S):
+        data=raw.strip(b'\r\n')
+        if data.endswith(b'~>'):
+            try:
+                data=base64.a85decode(data[:-2])
+            except ValueError:
+                continue
+        try:
+            chunks.append(zlib.decompressobj().decompress(data))
+        except zlib.error:
+            continue
+    return b'\n'.join(chunks)
+
+
+class ComponentsPdfReportTests(SimpleTestCase):
+    def setUp(self):
+        self.factory=RequestFactory();self.user=SimpleNamespace(pk=1,is_active=True,is_authenticated=True)
+
+    def request(self,data):
+        req=self.factory.post('/',json.dumps(data),content_type='application/json');req.current_user=self.user
+        req._dont_enforce_csrf_checks=True
+        return req
+
+    @patch('acm.components_views._persist_history')
+    @patch('acm.components_pdf.build_acm_pdf',return_value=b'%PDF-pdf-report')
+    @patch('acm.components_views.load_records')
+    def test_pdf_report_uses_same_signed_selection(self,load,build,persist):
+        persist.return_value=(SimpleNamespace(codigo_display='ACM1234567'),True)
+        load.return_value=(candidates(sample(),params()),[])
+        data=json.loads(search(self.request(params())).content)
+        response=pdf_report(self.request({'token':data['token'],'excluded':['a']}))
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.content,b'%PDF-pdf-report')
+        self.assertEqual(response['Content-Type'],'application/pdf')
+        self.assertIn('informe-acm.pdf',response['Content-Disposition'])
+        self.assertEqual(response['X-ACM-History-Code'],'ACM1234567')
+        self.assertEqual(build.call_args.args[3],['a'])
+
+    def test_pdf_report_rejects_expired_or_invalid_selection(self):
+        self.assertEqual(pdf_report(self.request({'token':'tampered','excluded':[]})).status_code,400)
+        self.assertEqual(pdf_report(self.request({'token':'','excluded':[]})).status_code,400)
+
+    def test_dashboard_exposes_the_pdf_download(self):
+        response=page(self.factory.get('/acm/analisis/'))
+        self.assertContains(response,'Descargar informe PDF')
+        self.assertContains(response,'data-pdf-url="/acm/componentes/informe-pdf/"')
+        self.assertContains(response,'id="cmp-pdf"')
+
+    def test_pdf_uses_a_propify_only_structure(self):
+        from acm.components_pdf import build_acm_pdf
+        p=params();raw=sample()
+        raw[0]['district']='Zona Remax';raw[0]['title']='Casa REMAX Arequipa'
+        raw[1]['district']='Urb. Properati';raw[1]['title']='Properati'
+        for row in raw: row['source']='properati'
+        rows=candidates(raw,p);result=calculate(rows,p)
+        pdf=build_acm_pdf(p,rows,result,(),fetch_images=False)
+        self.assertTrue(pdf.startswith(b'%PDF'))
+        self.assertIn(b'%%EOF',pdf[-2048:])
+        text=_pdf_text(pdf).lower()
+        for portal in (b'remax',b'properati',b'adondevivir'):
+            self.assertNotIn(portal,text)
+        self.assertIn(b'mercado',text)   # el informe conserva su contenido
+        self.assertIn(b'propify',text)   # y su identidad
+
+    def test_clean_removes_every_portal_mention(self):
+        from acm.components_pdf import _clean
+        self.assertEqual(_clean('Casa Remax en Properati Arequipa'),'Casa en Arequipa')
+        self.assertEqual(_clean('Adondevivir · Urbania'),'')
+        self.assertEqual(_clean('','Sin dirección'),'Sin dirección')
