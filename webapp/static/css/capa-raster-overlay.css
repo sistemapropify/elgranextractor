@@ -98,3 +98,23 @@
     color: var(--text-secondary, #8b949e);
     margin: 6px 0 0;
 }
+
+/* Cada capa vectorial (zonas, estructura vial, códigos) con su propio control */
+.capa-vectorial-bloque {
+    padding: 6px 0 2px;
+    border-top: 1px solid var(--border-color, #30363d);
+}
+
+.capa-vectorial-bloque:first-child {
+    border-top: 0;
+    padding-top: 0;
+}
+
+.capa-vectorial-bloque .capa-raster-toggle {
+    margin: 4px 0 2px;
+}
+
+.capa-rotulo {
+    pointer-events: none;
+    user-select: none;
+}

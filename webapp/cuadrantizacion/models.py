@@ -496,8 +496,18 @@ class CapaVectorialMapa(models.Model):
     marcador por geometría en vez de por color.
     """
 
+    TIPOS = [
+        ('poligonos', 'Polígonos (zonas de uso)'),
+        ('lineas', 'Líneas (estructura vial)'),
+        ('etiquetas', 'Rótulos (códigos de zona)'),
+    ]
+
     nombre = models.CharField(max_length=200)
     descripcion = models.TextField(blank=True, null=True)
+    tipo = models.CharField(
+        max_length=20, choices=TIPOS, default='poligonos',
+        help_text="Cómo se dibuja el GeoJSON: relleno, líneas o rótulos."
+    )
     geojson_url = models.CharField(
         max_length=500,
         help_text="Ruta dentro de /static/ o URL del archivo GeoJSON."
@@ -518,6 +528,17 @@ class CapaVectorialMapa(models.Model):
         help_text="Color del borde de los polígonos (vacío = sin borde)."
     )
     grosor_borde = models.FloatField(default=0.4)
+    escala_ancho = models.FloatField(
+        default=0.8,
+        help_text="Para líneas: factor que convierte el ancho en puntos del plano "
+                  "al grosor en píxeles de pantalla."
+    )
+    zoom_minimo = models.IntegerField(
+        default=0,
+        help_text="Zoom mínimo para dibujar la capa (útil en rótulos, que a zoom "
+                  "lejano solo estorban)."
+    )
+    tamano_rotulo = models.FloatField(default=10.0, help_text="Tamaño de los rótulos, en píxeles.")
 
     visible = models.BooleanField(default=True)
     activo = models.BooleanField(default=True)
@@ -539,12 +560,16 @@ class CapaVectorialMapa(models.Model):
             'id': self.id,
             'nombre': self.nombre,
             'descripcion': self.descripcion or '',
+            'tipo': self.tipo,
             'geojson_url': self.geojson_url or '',
             'propiedad_color': self.propiedad_color or 'color',
             'propiedad_codigo': self.propiedad_codigo or 'codigo',
             'opacidad': self.opacidad,
             'color_borde': self.color_borde or '',
             'grosor_borde': self.grosor_borde,
+            'escala_ancho': self.escala_ancho,
+            'zoom_minimo': self.zoom_minimo,
+            'tamano_rotulo': self.tamano_rotulo,
             'visible': self.visible,
             'activo': self.activo,
             'orden': self.orden,
