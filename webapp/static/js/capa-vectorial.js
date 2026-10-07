@@ -74,9 +74,14 @@
         var divs = [];
         var puntos = [];
         var contenedor = document.createElement('div');
-        contenedor.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none';
+        // z-index dentro del panel de superposición: los rótulos quedan por
+        // encima de los polígonos y de las líneas, pero por debajo de los pines.
+        contenedor.style.cssText =
+            'position:absolute;left:0;top:0;pointer-events:none;z-index:10';
 
         var overlay = new google.maps.OverlayView();
+        var tamanoBase = numero(capa.datos.tamano_rotulo, 13);
+        var ultimoZoom = null;
         overlay.onAdd = function () {
             this.getPanes().overlayLayer.appendChild(contenedor);
         };
@@ -88,6 +93,14 @@
             contenedor.style.display = mostrar ? 'block' : 'none';
             contenedor.style.opacity = capa.opacidad;
             if (!mostrar) return;
+            // El rótulo crece con el zoom para mantener la proporción con el mapa.
+            if (zoom !== ultimoZoom) {
+                var tamano = Math.round(tamanoBase * (1 + Math.max(0, zoom - 14) * 0.12));
+                for (var j = 0; j < divs.length; j++) {
+                    divs[j].style.fontSize = tamano + 'px';
+                }
+                ultimoZoom = zoom;
+            }
             for (var i = 0; i < puntos.length; i++) {
                 var div = divs[i];
                 if (!div) continue;
@@ -140,6 +153,7 @@
         if (!contenedor) return;
         contenedor.innerHTML = '';
 
+        // Una casilla por capa y un único control de transparencia para todas.
         capas.forEach(function (capa) {
             var bloque = document.createElement('div');
             bloque.className = 'capa-vectorial-bloque';
@@ -154,41 +168,47 @@
             etiqueta.appendChild(casilla);
             etiqueta.appendChild(texto);
 
-            var control = document.createElement('div');
-            control.className = 'capa-raster-control';
-            var titulo = document.createElement('label');
-            var valor = document.createElement('span');
-            valor.className = 'capa-raster-valor';
-            titulo.appendChild(document.createTextNode('Transparencia '));
-            titulo.appendChild(valor);
-            var rango = document.createElement('input');
-            rango.type = 'range';
-            rango.min = '0';
-            rango.max = '100';
-            rango.step = '1';
-            control.appendChild(titulo);
-            control.appendChild(rango);
-
-            function pintarValor() {
-                var transparencia = Math.round((1 - capa.opacidad) * 100);
-                rango.value = String(transparencia);
-                valor.textContent = transparencia + '%';
-            }
-            pintarValor();
-
             casilla.addEventListener('change', function () {
                 capa.visible = casilla.checked;
                 repintar(capa);
             });
-            rango.addEventListener('input', function () {
-                capa.opacidad = Math.max(0, Math.min(1, 1 - parseFloat(rango.value) / 100));
-                valor.textContent = Math.round(parseFloat(rango.value)) + '%';
-                repintar(capa);
-            });
 
             bloque.appendChild(etiqueta);
-            bloque.appendChild(control);
             contenedor.appendChild(bloque);
+        });
+
+        var control = document.createElement('div');
+        control.className = 'capa-raster-control';
+        var titulo = document.createElement('label');
+        var valor = document.createElement('span');
+        valor.className = 'capa-raster-valor';
+        titulo.appendChild(document.createTextNode('Transparencia '));
+        titulo.appendChild(valor);
+        var rango = document.createElement('input');
+        rango.type = 'range';
+        rango.min = '0';
+        rango.max = '100';
+        rango.step = '1';
+        rango.id = 'capas-vectoriales-transparencia';
+        control.appendChild(titulo);
+        control.appendChild(rango);
+        contenedor.appendChild(control);
+
+        function pintarValor() {
+            var referencia = capas.length ? capas[0].opacidad : 0.65;
+            var transparencia = Math.round((1 - referencia) * 100);
+            rango.value = String(transparencia);
+            valor.textContent = transparencia + '%';
+        }
+        pintarValor();
+
+        rango.addEventListener('input', function () {
+            var opacidad = Math.max(0, Math.min(1, 1 - parseFloat(rango.value) / 100));
+            valor.textContent = Math.round(parseFloat(rango.value)) + '%';
+            capas.forEach(function (capa) {
+                capa.opacidad = opacidad;
+                repintar(capa);
+            });
         });
     }
 

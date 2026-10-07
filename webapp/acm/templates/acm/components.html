@@ -100,7 +100,7 @@
 {{ capas_raster|json_script:"capas-raster-data" }}
 {{ capas_vectoriales|json_script:"capas-vectoriales-data" }}
 <script src="{% static 'js/capa-raster-overlay.js' %}?v=4"></script>
-<script src="{% static 'js/capa-vectorial.js' %}?v=2"></script>
+<script src="{% static 'js/capa-vectorial.js' %}?v=3"></script>
 <script src="{% static 'acm/js/zona-preevaluacion.js' %}?v=2"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}
