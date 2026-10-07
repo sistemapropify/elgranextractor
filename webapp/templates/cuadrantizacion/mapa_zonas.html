@@ -1283,7 +1283,7 @@ window.onGoogleMapsLoaded = function() {
 {{ block.super }}
 <script src="{% static 'js/ml-map-context.js' %}"></script>
 {{ capas_raster|json_script:"capas-raster-data" }}
-<script src="{% static 'js/capa-raster-overlay.js' %}"></script>
+<script src="{% static 'js/capa-raster-overlay.js' %}?v=3"></script>
 <script src="{% static 'js/zonificacion-marcadores.js' %}"></script>
 <script>
 // ============================================================

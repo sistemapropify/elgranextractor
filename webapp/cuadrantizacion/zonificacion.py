@@ -129,10 +129,14 @@ class ClasificadorZonificacion:
     """Lee el color del plano georreferenciado en la posición de cada marcador."""
 
     VENTANA = 7
+    # Lado de la ventana de muestreo medido en metros: así el clasificador se
+    # comporta igual si se cambia la resolución de la capa.
+    VENTANA_METROS = 64.0
     TOLERANCIA = 20.0
     TOLERANCIA_GRIS = 12.0
     TOLERANCIA_EXACTA = 6.0
     VOTOS_MINIMOS_EXACTOS = 4
+    FRACCION_MINIMA_EXACTOS = 0.06
     COBERTURA_MINIMA = 0.28
     COBERTURA_ALTA = 0.55
 
@@ -168,6 +172,24 @@ class ClasificadorZonificacion:
     def dentro(self, x, y):
         return 0 <= x < self.ancho and 0 <= y < self.alto
 
+    def metros_por_pixel(self):
+        return (
+            abs(self.georref['easting_por_px'])
+            + abs(self.georref['northing_por_px'])
+        ) / 2
+
+    def ventana_en_pixeles(self):
+        """Ventana de muestreo de ~64 m, siempre impar y de al menos 3 px."""
+        lado = int(round(self.VENTANA_METROS / self.metros_por_pixel()))
+        lado = max(3, lado)
+        return lado if lado % 2 else lado + 1
+
+    def votos_minimos_exactos(self, ventana):
+        return max(
+            self.VOTOS_MINIMOS_EXACTOS,
+            int(round(self.FRACCION_MINIMA_EXACTOS * ventana * ventana)),
+        )
+
     def clasificar(self, lat, lon, **kwargs):
         """
         Devuelve la zona del punto (o None si no se puede determinar).
@@ -193,7 +215,7 @@ class ClasificadorZonificacion:
         if not self.dentro(x, y):
             return None
 
-        ventana = ventana or self.VENTANA
+        ventana = ventana or self.ventana_en_pixeles()
         tolerancia = tolerancia or self.TOLERANCIA
         cobertura_minima = cobertura_minima if cobertura_minima is not None else self.COBERTURA_MINIMA
 
@@ -240,7 +262,7 @@ class ClasificadorZonificacion:
                 )
                 coinciden = distancias <= self.TOLERANCIA_EXACTA
                 cuenta = int(coinciden.sum())
-                if cuenta < self.VOTOS_MINIMOS_EXACTOS:
+                if cuenta < self.votos_minimos_exactos(ventana):
                     continue
                 promedio = float(distancias[coinciden].mean())
                 if votos == 0 or cuenta > votos or (cuenta == votos and promedio < distancia):
@@ -288,7 +310,7 @@ class ClasificadorZonificacion:
         """
         if not self.dentro(x, y):
             return None
-        ventana = ventana or self.VENTANA
+        ventana = ventana or self.ventana_en_pixeles()
         mitad = ventana // 2
         xi, yi = int(round(x)), int(round(y))
         x0, x1 = max(0, xi - mitad), min(self.ancho, xi + mitad + 1)

@@ -14,6 +14,9 @@
 
     var ENDPOINT = '/cuadrantizacion/capas-raster/';
     var DATA_ID = 'capas-raster-data';
+    // Se sube cuando cambia el archivo de la capa: el nombre no cambia y la
+    // capa se sirve con caché larga, así que hay que forzar la recarga.
+    var VERSION_CAPA = '3';
 
     var map = null;
     var capas = [];
@@ -22,6 +25,11 @@
     /* ----------------------------- utilidades ---------------------------- */
 
     function $(id) { return document.getElementById(id); }
+
+    function urlConVersion(url) {
+        if (!url) return url;
+        return url + (url.indexOf('?') === -1 ? '?' : '&') + 'v=' + VERSION_CAPA;
+    }
 
     function setValor(id, valor) {
         var el = $(id);
@@ -115,7 +123,7 @@
                 'position:absolute;left:0;top:0;will-change:transform;pointer-events:none';
 
             var img = document.createElement('img');
-            img.src = self.datos.imagen_url;
+            img.src = urlConVersion(self.datos.imagen_url);
             img.alt = self.datos.nombre || 'Capa raster';
             img.draggable = false;
             img.style.cssText =

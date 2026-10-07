@@ -95,7 +95,7 @@
 <script src="{% static 'acm/js/components.js' %}?v=24"></script>
 <script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>
 {{ capas_raster|json_script:"capas-raster-data" }}
-<script src="{% static 'js/capa-raster-overlay.js' %}?v=2"></script>
+<script src="{% static 'js/capa-raster-overlay.js' %}?v=3"></script>
 <script src="{% static 'acm/js/zona-preevaluacion.js' %}?v=2"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}
