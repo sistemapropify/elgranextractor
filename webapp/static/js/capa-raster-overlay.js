@@ -16,7 +16,7 @@
     var DATA_ID = 'capas-raster-data';
     // Se sube cuando cambia el archivo de la capa: el nombre no cambia y la
     // capa se sirve con caché larga, así que hay que forzar la recarga.
-    var VERSION_CAPA = '3';
+    var VERSION_CAPA = '4';
 
     var map = null;
     var capas = [];
