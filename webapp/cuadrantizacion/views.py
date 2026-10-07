@@ -1517,7 +1517,8 @@ def api_clasificar_zonificacion(request):
                       str(item['propiedad_id']).strip()) in guardadas)
         for item in normalizados
     )
-    if necesita_calculo and obtener_clasificador() is None:
+    clasificador = obtener_clasificador() if necesita_calculo else None
+    if necesita_calculo and clasificador is None:
         return JsonResponse({
             'resultados': [],
             'sin_plano': True,
@@ -1555,10 +1556,24 @@ def api_clasificar_zonificacion(request):
             resultados.append(salida)
             continue
 
-        zona = clasificar_punto(item['lat'], item['lng'])
+        zona = clasificador.clasificar(item['lat'], item['lng'])
         if zona is None:
-            salida.update({'codigo': None, 'motivo': 'sin_zona', 'verificada': False,
-                           'guardada': False})
+            # Se distingue "el punto está fuera del plano" de "está dentro pero
+            # sin uso asignado (terreno, manzana suelta, área no normada)".
+            try:
+                px, py = clasificador.pixel_de(item['lat'], item['lng'])
+                dentro = clasificador.dentro(px, py)
+                if dentro:
+                    salida['color_mas_cercano'] = clasificador.color_mas_cercano_pixel(px, py)
+            except Exception:
+                dentro = False
+            salida.update({
+                'codigo': None,
+                'motivo': 'sin_zona' if dentro else 'fuera_del_plano',
+                'dentro_del_plano': dentro,
+                'verificada': False,
+                'guardada': False,
+            })
         else:
             salida.update(zona)
             salida['verificada'] = False

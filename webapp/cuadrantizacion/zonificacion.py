@@ -131,6 +131,8 @@ class ClasificadorZonificacion:
     VENTANA = 7
     TOLERANCIA = 20.0
     TOLERANCIA_GRIS = 12.0
+    TOLERANCIA_EXACTA = 6.0
+    VOTOS_MINIMOS_EXACTOS = 4
     COBERTURA_MINIMA = 0.28
     COBERTURA_ALTA = 0.55
 
@@ -166,15 +168,28 @@ class ClasificadorZonificacion:
     def dentro(self, x, y):
         return 0 <= x < self.ancho and 0 <= y < self.alto
 
-    def clasificar(self, lat, lon, ventana=None, tolerancia=None, cobertura_minima=None):
+    def clasificar(self, lat, lon, **kwargs):
         """
-        Devuelve la zona del punto o None si cae fuera del plano o sobre una
-        zona sin uso asignado (terreno, manzana suelta, borde, etc.).
+        Devuelve la zona del punto (o None si no se puede determinar).
+
+        Ver `clasificar_pixel` para el detalle del algoritmo.
         """
         try:
             x, y = self.pixel_de(float(lat), float(lon))
         except (TypeError, ValueError):
             return None
+        return self.clasificar_pixel(x, y, **kwargs)
+
+    def clasificar_pixel(self, x, y, ventana=None, tolerancia=None,
+                         cobertura_minima=None, permitir_aproximado=True):
+        """
+        Resuelve la zona leyendo el plano alrededor del píxel indicado.
+
+        Primero busca una zona "llena": la mayoría del vecindario debe coincidir
+        con un color de la leyenda. Si eso falla —calles, etiquetas, manzanas
+        sueltas o polígonos muy pequeños— reintenta con una coincidencia casi
+        exacta del color de relleno, que en este plano es inequívoca.
+        """
         if not self.dentro(x, y):
             return None
 
@@ -205,14 +220,38 @@ class ClasificadorZonificacion:
                     float(distancias[coinciden].mean()),
                     item,
                 ))
-        if not candidatos:
+        candidatos.sort(key=lambda c: (-c[0], c[1]))
+
+        aproximado = False
+        if candidatos and (candidatos[0][0] / total) >= cobertura_minima:
+            votos, distancia, item = candidatos[0]
+        elif permitir_aproximado:
+            # Segundo intento: color de relleno casi exacto (el plano usa los
+            # colores de la leyenda sin degradado, así que una coincidencia
+            # exacta es evidencia suficiente aunque el polígono sea pequeño).
+            votos, distancia, item = 0, 0.0, None
+            for candidato in self.paleta:
+                # Los grises se parecen al terreno del mapa base: no se aceptan
+                # por coincidencia exacta, solo por zona llena.
+                if candidato['gris']:
+                    continue
+                distancias = np.sqrt(
+                    ((bloque - candidato['rgb']) ** 2).sum(axis=1).astype(np.float64)
+                )
+                coinciden = distancias <= self.TOLERANCIA_EXACTA
+                cuenta = int(coinciden.sum())
+                if cuenta < self.VOTOS_MINIMOS_EXACTOS:
+                    continue
+                promedio = float(distancias[coinciden].mean())
+                if votos == 0 or cuenta > votos or (cuenta == votos and promedio < distancia):
+                    votos, distancia, item = cuenta, promedio, candidato
+            if item is None:
+                return None
+            aproximado = True
+        else:
             return None
 
-        candidatos.sort(key=lambda c: (-c[0], c[1]))
-        votos, distancia, item = candidatos[0]
         cobertura = votos / total
-        if cobertura < cobertura_minima:
-            return None
 
         # Empate técnico entre dos colores muy parecidos (p. ej. EA y ZA): se
         # prefiere el que tenga menor distancia promedio.
@@ -227,7 +266,11 @@ class ClasificadorZonificacion:
             'categoria': item['categoria'],
             'color': item['color'],
             'cobertura': round(cobertura, 3),
-            'confianza': 'alta' if cobertura >= self.COBERTURA_ALTA else 'media',
+            'confianza': (
+                'baja' if aproximado
+                else ('alta' if cobertura >= self.COBERTURA_ALTA else 'media')
+            ),
+            'aproximado': aproximado,
             'distancia_color': round(distancia, 1),
             'px': [round(x, 1), round(y, 1)],
         }
@@ -235,6 +278,37 @@ class ClasificadorZonificacion:
     def clasificar_lote(self, puntos):
         """Clasifica una lista de (lat, lon) manteniendo el orden."""
         return [self.clasificar(lat, lon) for lat, lon in puntos]
+
+    def color_mas_cercano_pixel(self, x, y, ventana=None):
+        """
+        Diagnóstico: el color de la leyenda más parecido alrededor del píxel.
+
+        Sirve para explicar por qué un punto quedó sin zona (por ejemplo, si el
+        vecindario es casi todo terreno o si está pegado al borde de un polígono).
+        """
+        if not self.dentro(x, y):
+            return None
+        ventana = ventana or self.VENTANA
+        mitad = ventana // 2
+        xi, yi = int(round(x)), int(round(y))
+        x0, x1 = max(0, xi - mitad), min(self.ancho, xi + mitad + 1)
+        y0, y1 = max(0, yi - mitad), min(self.alto, yi + mitad + 1)
+        bloque = self.pixeles[y0:y1, x0:x1, :3].reshape(-1, 3).astype(np.int32)
+        if not len(bloque):
+            return None
+        mejor = None
+        for item in self.paleta:
+            distancias = np.sqrt(
+                ((bloque - item['rgb']) ** 2).sum(axis=1).astype(np.float64)
+            )
+            promedio = float(distancias.mean())
+            if mejor is None or promedio < mejor[0]:
+                mejor = (promedio, item)
+        return {
+            'codigo': mejor[1]['codigo'],
+            'nombre': mejor[1]['nombre'],
+            'distancia_promedio': round(mejor[0], 1),
+        }
 
 
 # --------------------------------------------------------------- caché

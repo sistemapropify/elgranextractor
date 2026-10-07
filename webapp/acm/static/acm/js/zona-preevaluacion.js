@@ -36,10 +36,14 @@
 
     function pintarZona(zona) {
         var color = zona.color || '#8b949e';
-        var confianza = zona.confianza === 'media'
-            ? '<span class="cmp-zona-aviso" title="El punto cae en un borde o zona mixta">' +
-              'aproximada</span>'
-            : '<span class="cmp-zona-ok">alta</span>';
+        var etiquetas = {
+            alta: '<span class="cmp-zona-ok">alta</span>',
+            media: '<span class="cmp-zona-aviso" title="El punto cae en un borde o zona mixta">' +
+                   'aproximada</span>',
+            baja: '<span class="cmp-zona-aviso" title="Polígono pequeño o muy texturado; ' +
+                  'conviene confirmar en campo">a confirmar</span>'
+        };
+        var confianza = etiquetas[zona.confianza] || etiquetas.media;
         pintar(
             '<h2>Zona de uso (PDM)</h2>' +
             '<div class="cmp-zona-linea">' +
@@ -56,6 +60,18 @@
         );
     }
 
+    function mensajeSinZona(datos, lat, lng) {
+        var fila = datos && datos.resultados && datos.resultados[0];
+        var coordenada = ' (' + Number(lat).toFixed(5) + ', ' + Number(lng).toFixed(5) + ')';
+        if (fila && fila.motivo === 'fuera_del_plano') {
+            return 'El punto está fuera del área cubierta por el plano de zonificación' +
+                coordenada + '. El plano abarca la ciudad de Arequipa y su entorno inmediato.';
+        }
+        return 'El punto cae dentro del plano pero no tiene uso asignado en la leyenda' +
+            coordenada + ': es terreno, manzana suelta o área no normada. Prueba con un ' +
+            'punto sobre una zona coloreada.';
+    }
+
     function actualizar(lat, lng) {
         if (lat == null || lng == null || !isFinite(lat) || !isFinite(lng)) return;
         ultimo = { lat: lat, lng: lng };
@@ -67,7 +83,16 @@
             cache: 'no-store',
             headers: { 'Accept': 'application/json' }
         })
-            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (r) {
+                // Si la sesión venció, Django redirige al login y devuelve HTML:
+                // hay que avisarlo, no confundirlo con "sin zona".
+                if (r.redirected && /\/login\//.test(r.url)) return null;
+                if (!r.ok) return null;
+                if ((r.headers.get('content-type') || '').indexOf('application/json') === -1) {
+                    return null;
+                }
+                return r.json();
+            })
             .then(function (datos) {
                 if (marca !== contador) return;   // llegó tarde: hay un punto más nuevo
                 var fila = datos && datos.resultados && datos.resultados[0];
@@ -75,9 +100,11 @@
                     pintarZona(fila);
                 } else if (datos && datos.sin_plano) {
                     pintarVacio('La capa de zonificación no está disponible.');
+                } else if (datos && Array.isArray(datos.resultados)) {
+                    pintarVacio(mensajeSinZona(datos, lat, lng));
                 } else {
-                    pintarVacio('El punto no cae dentro de una zona del plano ' +
-                                '(terreno sin uso asignado o fuera del área).');
+                    pintarVacio('No se pudo consultar la zonificación. Si la sesión ' +
+                                'expiró, vuelve a iniciar sesión.');
                 }
             })
             .catch(function () {
