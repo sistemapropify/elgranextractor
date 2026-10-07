@@ -58,11 +58,23 @@ def page(request):
         logger.warning('No se pudo cargar la capa de zonificación para el ACM', exc_info=True)
         capas_raster = []
 
+    try:
+        from cuadrantizacion.views import _capa_vectorial_para_mapa
+        from cuadrantizacion.models import CapaVectorialMapa
+        capas_vectoriales = [
+            _capa_vectorial_para_mapa(capa)
+            for capa in CapaVectorialMapa.objects.filter(activo=True)
+        ]
+    except Exception:
+        logger.warning('No se pudo cargar la capa vectorial para el ACM', exc_info=True)
+        capas_vectoriales = []
+
     response = render(request,'acm/components.html',{
         'sources':SOURCES,
         'test_mode':'analisis-pruebas' in request.path,
         'google_maps_api_key':getattr(settings,'GOOGLE_MAPS_API_KEY',None) or 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',
         'capas_raster':capas_raster,
+        'capas_vectoriales':capas_vectoriales,
     })
     response['Cache-Control'] = 'no-store'
     from .components_engine import VERSION

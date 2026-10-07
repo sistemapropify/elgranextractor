@@ -603,6 +603,13 @@ def mapa_zonas_valor(request):
     from .models import ZonaUso
     zonas_uso = [zona.a_diccionario() for zona in ZonaUso.objects.filter(activo=True)]
 
+    # Capas vectoriales (zonificación en polígonos, con líneas exactas a todo zoom)
+    from .models import CapaVectorialMapa
+    capas_vectoriales = [
+        _capa_vectorial_para_mapa(capa)
+        for capa in CapaVectorialMapa.objects.filter(activo=True)
+    ]
+
     # Preparar datos para el template
     context = {
         'title': 'Mapa de Zonas de Valor - Jerarquía',
@@ -615,6 +622,7 @@ def mapa_zonas_valor(request):
         'orden_niveles': [nivel[0] for nivel in ZonaValor.NIVELES],  # Lista de códigos en orden
         'capas_raster': capas_raster,
         'zonas_uso': zonas_uso,
+        'capas_vectoriales': capas_vectoriales,
     }
     return render(request, 'cuadrantizacion/mapa_zonas.html', context)
 
@@ -1301,6 +1309,16 @@ def _capa_raster_para_mapa(capa):
     if url and not url.startswith(('http://', 'https://', '/')):
         from django.templatetags.static import static as static_url
         datos['imagen_url'] = static_url(url)
+    return datos
+
+
+def _capa_vectorial_para_mapa(capa):
+    """Serializa una capa vectorial resolviendo la URL de su GeoJSON."""
+    datos = capa.a_diccionario()
+    url = (datos.get('geojson_url') or '').strip()
+    if url and not url.startswith(('http://', 'https://', '/')):
+        from django.templatetags.static import static as static_url
+        datos['geojson_url'] = static_url(url)
     return datos
 
 

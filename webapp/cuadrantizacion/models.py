@@ -393,7 +393,7 @@ class Zonificacion(models.Model):
     Zona de uso del plano (PDM) asignada a una propiedad del scraper.
 
     Una fila por propiedad: guarda el código y el nombre de la zona —que salen
-    de leer el color del plano georreferenciado en la ubicación de la propiedad—
+    de resolver el polígono del plano que contiene la propiedad—
     y el control de verificación humana en el campo `verificada`.
 
     La clave es (fuente, propiedad_id) porque el mapa reúne propiedades de
@@ -482,4 +482,70 @@ class Zonificacion(models.Model):
                 self.fecha_verificacion.isoformat() if self.fecha_verificacion else None
             ),
             'observacion': self.observacion or '',
+        }
+
+
+class CapaVectorialMapa(models.Model):
+    """
+    Capa vectorial (polígonos) que se dibuja sobre el mapa base.
+
+    El plano de zonificación del PDM se extrae del PDF como polígonos
+    georreferenciados y se sirve como GeoJSON. Dibujar vectores en lugar de una
+    imagen hace que los límites entre zonas sean líneas exactas a cualquier
+    zoom, con los colores sólidos de la leyenda, y permite clasificar cada
+    marcador por geometría en vez de por color.
+    """
+
+    nombre = models.CharField(max_length=200)
+    descripcion = models.TextField(blank=True, null=True)
+    geojson_url = models.CharField(
+        max_length=500,
+        help_text="Ruta dentro de /static/ o URL del archivo GeoJSON."
+    )
+    propiedad_color = models.CharField(
+        max_length=60, default='color',
+        help_text="Nombre de la propiedad del feature que trae el color de relleno."
+    )
+    propiedad_codigo = models.CharField(
+        max_length=60, default='codigo',
+        help_text="Nombre de la propiedad del feature que trae el código de zona."
+    )
+    opacidad = models.FloatField(
+        default=0.65, help_text="0 = invisible, 1 = relleno sólido"
+    )
+    color_borde = models.CharField(
+        max_length=7, default='#000000', blank=True,
+        help_text="Color del borde de los polígonos (vacío = sin borde)."
+    )
+    grosor_borde = models.FloatField(default=0.4)
+
+    visible = models.BooleanField(default=True)
+    activo = models.BooleanField(default=True)
+    orden = models.IntegerField(default=0)
+
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Capa vectorial del mapa"
+        verbose_name_plural = "Capas vectoriales del mapa"
+        ordering = ['orden', 'nombre']
+
+    def __str__(self):
+        return self.nombre
+
+    def a_diccionario(self):
+        return {
+            'id': self.id,
+            'nombre': self.nombre,
+            'descripcion': self.descripcion or '',
+            'geojson_url': self.geojson_url or '',
+            'propiedad_color': self.propiedad_color or 'color',
+            'propiedad_codigo': self.propiedad_codigo or 'codigo',
+            'opacidad': self.opacidad,
+            'color_borde': self.color_borde or '',
+            'grosor_borde': self.grosor_borde,
+            'visible': self.visible,
+            'activo': self.activo,
+            'orden': self.orden,
         }

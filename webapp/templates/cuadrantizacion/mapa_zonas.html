@@ -1194,6 +1194,29 @@ window.onGoogleMapsLoaded = function() {
             </div>
         </div>
 
+        <div class="map-panel" id="panel-capa-vectorial" style="display:none">
+            <div class="map-panel-header">
+                Zonificación (polígonos)
+            </div>
+            <div class="map-panel-body">
+                <label class="capa-raster-toggle" for="capa-vectorial-visible">
+                    <input type="checkbox" id="capa-vectorial-visible" checked>
+                    <span>Mostrar zonas</span>
+                </label>
+                <div class="capa-raster-control">
+                    <label for="capa-vectorial-transparencia">
+                        Transparencia
+                        <span class="capa-raster-valor" id="capa-vectorial-transparencia-val">35%</span>
+                    </label>
+                    <input type="range" id="capa-vectorial-transparencia" min="0" max="100" step="1" value="35">
+                </div>
+                <p class="capa-raster-estado" id="capa-vectorial-estado" role="status" aria-live="polite"></p>
+                <p class="capa-raster-ayuda">
+                    Polígonos vectoriales del plano: los límites se mantienen nítidos a cualquier zoom.
+                </p>
+            </div>
+        </div>
+
         <div class="map-panel" id="panel-capa-raster" style="display:none">
             <div class="map-panel-header">
                 Capa de zonificación
@@ -1283,7 +1306,9 @@ window.onGoogleMapsLoaded = function() {
 {{ block.super }}
 <script src="{% static 'js/ml-map-context.js' %}"></script>
 {{ capas_raster|json_script:"capas-raster-data" }}
+{{ capas_vectoriales|json_script:"capas-vectoriales-data" }}
 <script src="{% static 'js/capa-raster-overlay.js' %}?v=4"></script>
+<script src="{% static 'js/capa-vectorial.js' %}?v=1"></script>
 <script src="{% static 'js/zonificacion-marcadores.js' %}"></script>
 <script>
 // ============================================================
@@ -1517,6 +1542,7 @@ function initMap() {
     // Capa raster georreferenciada (zonificación PDM): opacidad, giro y escala.
     try {
         if (window.CapaRasterOverlay) window.CapaRasterOverlay.init(map);
+        if (window.CapaVectorial) window.CapaVectorial.init(map);
     } catch (error) {
         console.error('capa.raster.initialization.failed', error);
     }

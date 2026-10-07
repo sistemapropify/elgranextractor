@@ -1,6 +1,17 @@
 from django.contrib import admin
 
-from .models import CapaRasterMapa, ZonaUso, Zonificacion
+from .models import CapaRasterMapa, CapaVectorialMapa, ZonaUso, Zonificacion
+
+
+@admin.register(CapaVectorialMapa)
+class CapaVectorialMapaAdmin(admin.ModelAdmin):
+    list_display = (
+        'nombre', 'activo', 'visible', 'opacidad',
+        'color_borde', 'grosor_borde', 'orden',
+    )
+    list_filter = ('activo', 'visible')
+    search_fields = ('nombre', 'descripcion', 'geojson_url')
+    readonly_fields = ('fecha_creacion', 'fecha_actualizacion')
 
 
 @admin.register(Zonificacion)

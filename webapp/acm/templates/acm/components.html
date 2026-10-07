@@ -41,6 +41,18 @@
         <label><input type="checkbox" name="map_layer" value="other_reference"> <span id="cmp-other-reference-layer-label">Otros no usados</span></label>
       </fieldset>
       <p class="cmp-muted">Exa: exacta · Apx: aproximada · S/d: precisión sin informar. Las ubicaciones aproximadas o sin precisión se muestran como referencia y no intervienen en el cálculo.</p>
+      <div class="capa-raster-control" id="panel-capa-vectorial" style="display:none">
+        <label class="capa-raster-toggle" for="capa-vectorial-visible">
+          <input type="checkbox" id="capa-vectorial-visible" checked>
+          <span>Zonificación PDM (polígonos)</span>
+        </label>
+        <label for="capa-vectorial-transparencia">
+          Transparencia
+          <span class="capa-raster-valor" id="capa-vectorial-transparencia-val">35%</span>
+        </label>
+        <input type="range" id="capa-vectorial-transparencia" min="0" max="100" step="1" value="35">
+        <p class="capa-raster-estado" id="capa-vectorial-estado"></p>
+      </div>
       <div class="capa-raster-control" id="panel-capa-raster" style="display:none">
         <label class="capa-raster-toggle" for="capa-raster-visible">
           <input type="checkbox" id="capa-raster-visible" checked>
@@ -95,7 +107,9 @@
 <script src="{% static 'acm/js/components.js' %}?v=24"></script>
 <script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>
 {{ capas_raster|json_script:"capas-raster-data" }}
+{{ capas_vectoriales|json_script:"capas-vectoriales-data" }}
 <script src="{% static 'js/capa-raster-overlay.js' %}?v=4"></script>
+<script src="{% static 'js/capa-vectorial.js' %}?v=1"></script>
 <script src="{% static 'acm/js/zona-preevaluacion.js' %}?v=2"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}
