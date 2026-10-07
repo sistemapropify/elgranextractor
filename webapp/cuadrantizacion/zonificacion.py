@@ -104,9 +104,12 @@ class ClasificadorZonificacion:
             datos = json.load(archivo)
 
         self.leyenda = {}
-        for codigo, nombre, categoria, color in (leyenda or LEYENDA_PDM):
+        for fila in (leyenda or LEYENDA_PDM):
+            codigo, nombre, categoria, color = fila[:4]
+            parametros = fila[4] if len(fila) > 4 else {}
             self.leyenda[codigo] = {
                 'nombre': nombre, 'categoria': categoria, 'color': color,
+                'parametros': parametros or {},
             }
 
         self.poligonos = []
@@ -167,6 +170,7 @@ class ClasificadorZonificacion:
             'uso': informacion.get('nombre') or elegido['codigo'],
             'categoria': informacion.get('categoria') or '',
             'color': informacion.get('color') or elegido['color'],
+            'parametros': informacion.get('parametros') or {},
             # Se conserva la forma de la respuesta anterior para no tocar a los
             # consumidores; ahora la cobertura es geométrica, no de color.
             'cobertura': 1.0,
@@ -224,7 +228,10 @@ def _paleta_desde_bd():
         from .models import ZonaUso
         filas = list(ZonaUso.objects.filter(activo=True).order_by('orden', 'codigo'))
         if filas:
-            return [(z.codigo, z.nombre, z.categoria, z.color) for z in filas]
+            return [
+                (z.codigo, z.nombre, z.categoria, z.color, z.parametros or {})
+                for z in filas
+            ]
     except Exception:
         pass
     return None

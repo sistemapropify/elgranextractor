@@ -55,9 +55,55 @@
                 confianza +
             '</div>' +
             '<p class="cmp-zona-nombre">' + escapar(zona.uso || zona.nombre || '') + '</p>' +
+            tablaParametros(zona.parametros) +
             '<p class="cmp-muted cmp-zona-nota">Pre-evaluación según el plano de zonificación. ' +
             'Sirve de contexto antes de calcular; no reemplaza la verificación en campo.</p>'
         );
+    }
+
+    var ETIQUETAS = [
+        ['densidad', 'Densidad Neta'],
+        ['lote_minimo', 'Lote mínimo'],
+        ['frente_minimo', 'Frente mínimo'],
+        ['altura', 'Altura de edificación'],
+        ['coeficiente', 'Coeficiente de edificación'],
+        ['area_libre', 'Área libre'],
+        ['retiros', 'Retiros'],
+        ['alineamiento', 'Alineamiento de fachada'],
+        ['estacionamiento', 'Espacios de Estacionamiento']
+    ];
+
+    function tablaParametros(parametros) {
+        if (!parametros || !parametros.bloques || !parametros.bloques.length) {
+            return '';
+        }
+        var html = '';
+        parametros.bloques.forEach(function (bloque) {
+            var filas = '';
+            ETIQUETAS.forEach(function (par) {
+                var valor = bloque[par[0]];
+                if (valor === undefined || valor === null || valor === '') return;
+                filas += '<tr><th>' + escapar(par[1]) + '</th><td>' +
+                    escapar(valor) + '</td></tr>';
+            });
+            if (!filas) return;
+            html += '<div class="cmp-zona-ficha">' +
+                '<div class="cmp-zona-ficha-titulo">' +
+                escapar(bloque.tipologia || 'Parámetros') + '</div>' +
+                '<table class="cmp-zona-tabla">' + filas + '</table></div>';
+        });
+        if (parametros.usos_compatibles) {
+            html += '<p class="cmp-zona-compatibles"><strong>Usos compatibles:</strong> ' +
+                escapar(parametros.usos_compatibles) + '</p>';
+        }
+        if (parametros.notas && parametros.notas.length) {
+            html += '<ul class="cmp-zona-notas">';
+            parametros.notas.forEach(function (nota) {
+                html += '<li>' + escapar(nota) + '</li>';
+            });
+            html += '</ul>';
+        }
+        return html;
     }
 
     function mensajeSinZona(datos, lat, lng) {

@@ -363,6 +363,15 @@ class ZonaUso(models.Model):
         help_text="Color de relleno en formato HEX, tal como aparece en la leyenda."
     )
     descripcion = models.TextField(blank=True, null=True)
+    parametros = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Ficha normativa del reglamento para esta zona: bloques por "
+            "tipología con densidad, lote mínimo, frente, altura, coeficiente, "
+            "área libre, retiros, alineamiento y estacionamiento."
+        ),
+    )
     orden = models.IntegerField(default=0)
     activo = models.BooleanField(default=True)
 
@@ -384,6 +393,7 @@ class ZonaUso(models.Model):
             'nombre': self.nombre,
             'categoria': self.categoria,
             'color': self.color,
+            'parametros': self.parametros or {},
             'activo': self.activo,
         }
 

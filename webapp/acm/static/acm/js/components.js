@@ -122,7 +122,6 @@
     auto.addListener('place_changed',()=>{const place=auto.getPlace();if(place.geometry){setLocation(place.geometry.location.lat(),place.geometry.location.lng());map.setZoom(16);}});
     const gestureObserver=new MutationObserver(hideGoogleGestureHint);gestureObserver.observe($('cmp-map'),{childList:true,subtree:true,characterData:true});hideGoogleGestureHint();
     drawCircles();if(snapshot&&result)renderMap();
-    if(window.CapaRasterOverlay)window.CapaRasterOverlay.init(map);
     if(window.CapaVectorial)window.CapaVectorial.init(map);
   };
   window.gm_authFailure=()=>{$('cmp-status').textContent='No se pudo cargar Google Maps. Puedes ingresar latitud y longitud para buscar.';};

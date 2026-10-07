@@ -4,7 +4,7 @@
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=13">
 <link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
-<link rel="stylesheet" href="{% static 'acm/css/zona-preevaluacion.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'acm/css/zona-preevaluacion.css' %}?v=2">
 {% endblock %}
 {% block content %}
 <main class="components-acm">
@@ -42,6 +42,7 @@
       </fieldset>
       <p class="cmp-muted">Exa: exacta · Apx: aproximada · S/d: precisión sin informar. Las ubicaciones aproximadas o sin precisión se muestran como referencia y no intervienen en el cálculo.</p>
       <div id="panel-capa-vectorial" style="display:none">
+        <strong class="capa-vectorial-titulo">Capas del plano (vectorial)</strong>
         <div id="capas-vectoriales-controles"></div>
       </div>
       <div class="capa-raster-control" id="panel-capa-raster" style="display:none">
@@ -95,11 +96,9 @@
 {% block extra_scripts %}
 {{ block.super }}
 <script src="{% static 'acm/js/components-presentation.js' %}?v=8"></script>
-<script src="{% static 'acm/js/components.js' %}?v=24"></script>
+<script src="{% static 'acm/js/components.js' %}?v=25"></script>
 <script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>
-{{ capas_raster|json_script:"capas-raster-data" }}
 {{ capas_vectoriales|json_script:"capas-vectoriales-data" }}
-<script src="{% static 'js/capa-raster-overlay.js' %}?v=4"></script>
 <script src="{% static 'js/capa-vectorial.js' %}?v=3"></script>
 <script src="{% static 'acm/js/zona-preevaluacion.js' %}?v=2"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
