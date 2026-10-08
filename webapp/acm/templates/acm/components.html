@@ -2,90 +2,219 @@
 {% load static %}
 {% block title %}ACM · Suelo y construcción{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=13">
+<link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=14">
 <link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
-<link rel="stylesheet" href="{% static 'acm/css/zona-preevaluacion.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'acm/css/zona-preevaluacion.css' %}?v=3">
 {% endblock %}
 {% block content %}
 <main class="components-acm">
-  <header class="cmp-header"><div><h1>Análisis comparativo <span>Venta{% if test_mode %} · Pruebas{% endif %}</span></h1><p id="cmp-method-label">Casa: valor del suelo + aporte de construcción y mejoras</p></div>
-    <div><a href="{% url 'acm:modelos_dashboard' %}">Modelos ML ↗</a> · <a href="{% url 'acm:acm_analisis_clasico' %}">ACM clásico ↗</a></div></header>
-  <div class="cmp-layout">
-    <section class="cmp-map-column">
-      <form id="cmp-form" class="cmp-panel" data-search-url="{% url 'acm:componentes_buscar' %}" data-calculate-url="{% url 'acm:componentes_calcular' %}" data-report-url="{% url 'acm:componentes_informe_word' %}" data-pdf-url="{% url 'acm:componentes_informe_pdf' %}" data-save-url="{% url 'acm:componentes_guardar' %}">{% csrf_token %}
-        <div class="cmp-search-grid">
-        <label>Tipo de propiedad<select name="property_type"><option>Casa</option><option>Terreno</option><option>Departamento</option><option>Oficina</option></select></label>
-        <label class="cmp-address-field">Ubicación<input id="cmp-address" placeholder="Dirección o clic en el mapa" autocomplete="off"></label>
-        <label id="cmp-land-field">Terreno (m²)<input name="land" type="number" min="0.01" max="1000000" step="any" required placeholder="150"></label>
-        <label id="cmp-built-field">Construcción (m²)<input name="built" type="number" min="0.01" max="1000000" step="any" required placeholder="200"></label>
-        <label id="cmp-rooms-field">Habitaciones (informativo)<input name="rooms" type="number" min="0" max="200" step="1" placeholder="Opcional"></label>
-        <label id="cmp-baths-field">Baños (informativo)<input name="baths" type="number" min="0" max="200" step="0.5" placeholder="Opcional"></label>
-        <label id="cmp-floor-field" hidden>Piso (informativo)<input name="floor" type="number" min="0" max="200" step="1" placeholder="Opcional" disabled></label></div>
-        <div class="cmp-search-actions"><label>Radio de comparables: <strong id="cmp-radius-label">500 m</strong>
-          <input name="radius" type="range" min="100" max="2000" step="100" value="500"></label>
-        <button class="cmp-primary" id="cmp-search" type="submit">Buscar y calcular</button></div>
-        <details class="cmp-options"><summary>Fuentes, coordenadas y ampliación de terrenos</summary>
-        <fieldset><legend>Fuentes</legend><div class="cmp-sources">{% for source in sources %}<label><input type="checkbox" name="source" value="{{ source }}" {% if source == 'propify' or source == 'remax' or source == 'properati' %}checked{% endif %}>{{ source|title }}</label>{% endfor %}</div></fieldset>
-        <div class="cmp-fields"><label>Latitud<input name="lat" type="number" step="any" min="-90" max="90" value="-16.3989" required></label>
-        <label>Longitud<input name="lng" type="number" step="any" min="-180" max="180" value="-71.535" required></label></div>
-        <label id="cmp-expansion-field">Ampliación máxima de suelo para casas<select name="max_radius"><option value="2000">Hasta 2.000 m</option><option value="3000">Hasta 3.000 m</option><option value="5000">Hasta 5.000 m</option></select></label>
-        <p class="cmp-muted">Casas: se prioriza la casa apta más próxima. El suelo se busca desde 500 m, independientemente del radio del mapa; se amplía de 500 en 500 m solo si no hay terrenos aptos. Habitaciones, baños y piso son informativos.</p>
-        </details>
-      </form>
-      <section class="cmp-panel cmp-map-panel">
-      <div class="cmp-map-toolbar"><strong id="cmp-map-count">Comparables en el mapa</strong><label>Mostrar bajo el pin<select id="cmp-marker-mode"><option value="land">Suelo estimado / m²</option><option value="improvements">Construcción y mejoras / m²</option><option value="price">Precio total anunciado</option></select></label></div>
-      <fieldset class="cmp-map-layers"><legend>Capas visibles</legend>
-        <label><input type="checkbox" name="map_layer" value="property" checked> <span id="cmp-property-layer-label">Casas comparables</span></label>
-        <label><input type="checkbox" name="map_layer" value="land"> <span id="cmp-land-layer-label">Terrenos para valor del suelo</span></label>
-        <label><input type="checkbox" name="map_layer" value="property_reference"> <span id="cmp-property-reference-layer-label">Casas solo referencia</span></label>
-        <label><input type="checkbox" name="map_layer" value="other_reference"> <span id="cmp-other-reference-layer-label">Otros no usados</span></label>
-      </fieldset>
-      <p class="cmp-muted">Exa: exacta · Apx: aproximada · S/d: precisión sin informar. Las ubicaciones aproximadas o sin precisión se muestran como referencia y no intervienen en el cálculo.</p>
-      <div id="panel-capa-vectorial" style="display:none">
-        <strong class="capa-vectorial-titulo">Capas del plano (vectorial)</strong>
-        <div id="capas-vectoriales-controles"></div>
-      </div>
-      <div class="capa-raster-control" id="panel-capa-raster" style="display:none">
-        <label class="capa-raster-toggle" for="capa-raster-visible">
-          <input type="checkbox" id="capa-raster-visible" checked>
-          <span>Zonificación PDM (plano superpuesto)</span>
-        </label>
-        <label for="capa-raster-transparencia">
-          Transparencia
-          <span class="capa-raster-valor" id="capa-raster-transparencia-val">35%</span>
-        </label>
-        <input type="range" id="capa-raster-transparencia" min="0" max="100" step="1" value="35">
-      </div>
+<div class="map-layout">
+
+  <!-- ===== Mapa, con la tarjeta de controles flotando encima ===== -->
+  <div class="map-main">
+    <div id="map-container">
       <div id="cmp-map" aria-label="Mapa de influencia"></div>
-      <p class="cmp-muted" id="cmp-map-explanation">El valor de suelo se obtiene de los terrenos seleccionados. Cada casa muestra el remanente que su anuncio atribuye a construcción y mejoras.</p>
-      </section>
-    </section>
-    <section class="cmp-results">
-      <p id="cmp-status" role="status" aria-live="polite">Selecciona la ubicación y completa las dos superficies para empezar.</p>
-      <div id="cmp-warnings" role="alert"></div>
-      <section class="cmp-panel cmp-zona" id="cmp-zona" aria-label="Pre-evaluación de zona" hidden></section>
-      <section class="cmp-panel cmp-summary" aria-label="Resultado ACM">
+
+      <div class="map-controls" id="cmp-controls">
+        <form id="cmp-form" data-search-url="{% url 'acm:componentes_buscar' %}" data-calculate-url="{% url 'acm:componentes_calcular' %}" data-report-url="{% url 'acm:componentes_informe_word' %}" data-pdf-url="{% url 'acm:componentes_informe_pdf' %}" data-save-url="{% url 'acm:componentes_guardar' %}">{% csrf_token %}
+
+          <div class="form-group">
+            <label for="cmp-type">Tipo de propiedad</label>
+            <select id="cmp-type" name="property_type" class="form-control">
+              <option>Casa</option><option>Terreno</option>
+              <option>Departamento</option><option>Oficina</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="cmp-address">Ubicación</label>
+            <input id="cmp-address" class="form-control" placeholder="Dirección o clic en el mapa" autocomplete="off">
+          </div>
+
+          <div class="form-group" id="cmp-land-field">
+            <label for="cmp-land">Terreno (m²)</label>
+            <input id="cmp-land" name="land" type="number" min="0.01" max="1000000" step="any" required placeholder="150" class="form-control">
+          </div>
+
+          <div class="form-group" id="cmp-built-field">
+            <label for="cmp-built">Construcción (m²)</label>
+            <input id="cmp-built" name="built" type="number" min="0.01" max="1000000" step="any" required placeholder="200" class="form-control">
+          </div>
+
+          <div class="form-group" id="cmp-rooms-field">
+            <label for="cmp-rooms">Habitaciones (informativo)</label>
+            <input id="cmp-rooms" name="rooms" type="number" min="0" max="200" step="1" placeholder="Opcional" class="form-control">
+          </div>
+
+          <div class="form-group" id="cmp-baths-field">
+            <label for="cmp-baths">Baños (informativo)</label>
+            <input id="cmp-baths" name="baths" type="number" min="0" max="200" step="0.5" placeholder="Opcional" class="form-control">
+          </div>
+
+          <div class="form-group" id="cmp-floor-field" hidden>
+            <label for="cmp-floor">Piso (informativo)</label>
+            <input id="cmp-floor" name="floor" type="number" min="0" max="200" step="1" placeholder="Opcional" disabled class="form-control">
+          </div>
+
+          <div class="form-group">
+            <label for="cmp-radius">Radio de comparables: <strong id="cmp-radius-label">500 m</strong></label>
+            <input id="cmp-radius" name="radius" type="range" min="100" max="2000" step="100" value="500"
+                   style="width:100%;accent-color:#58a6ff">
+          </div>
+
+          <button class="btn-success btn-block" id="cmp-search" type="submit">Buscar y calcular</button>
+
+          <details class="cmp-options" id="cmp-options">
+            <summary>Fuentes, coordenadas y ampliación de terrenos</summary>
+            <fieldset class="cmp-fuentes">
+              <legend>Fuentes</legend>
+              <div class="portal-checkboxes">
+                {% for source in sources %}<label class="portal-checkbox"><input type="checkbox" name="source" value="{{ source }}" {% if source == 'propify' or source == 'remax' or source == 'properati' %}checked{% endif %}><span>{{ source|title }}</span></label>{% endfor %}
+              </div>
+            </fieldset>
+            <div class="property-map-filters">
+              <label>Latitud<input name="lat" type="number" step="any" min="-90" max="90" value="-16.3989" required></label>
+              <label>Longitud<input name="lng" type="number" step="any" min="-180" max="180" value="-71.535" required></label>
+            </div>
+            <div class="form-group" id="cmp-expansion-field">
+              <label for="cmp-max-radius">Ampliación máxima de suelo para casas</label>
+              <select id="cmp-max-radius" name="max_radius" class="form-control">
+                <option value="2000">Hasta 2.000 m</option>
+                <option value="3000">Hasta 3.000 m</option>
+                <option value="5000">Hasta 5.000 m</option>
+              </select>
+            </div>
+            <p class="map-quality-help">Casas: se prioriza la casa apta más próxima. El suelo se busca desde 500 m, independientemente del radio del mapa; se amplía de 500 en 500 m solo si no hay terrenos aptos. Habitaciones, baños y piso son informativos.</p>
+          </details>
+        </form>
+
+        <div class="section-title" style="margin-top:12px">Comparables en el mapa</div>
+        <div class="form-group">
+          <label for="cmp-marker-mode">Mostrar bajo el pin</label>
+          <select id="cmp-marker-mode" class="form-control">
+            <option value="land">Suelo estimado / m²</option>
+            <option value="improvements">Construcción y mejoras / m²</option>
+            <option value="price">Precio total anunciado</option>
+          </select>
+        </div>
+
+        <div class="section-title">Capas visibles</div>
+        <label class="property-layer-toggle"><input type="checkbox" name="map_layer" value="property" checked>
+          <span class="layer-label" id="cmp-property-layer-label">Casas comparables</span>
+          <span class="panel-badge" id="cmp-map-count">Sin análisis</span></label>
+        <label class="property-layer-toggle"><input type="checkbox" name="map_layer" value="land">
+          <span class="layer-label" id="cmp-land-layer-label">Terrenos para valor del suelo</span></label>
+        <label class="property-layer-toggle"><input type="checkbox" name="map_layer" value="property_reference">
+          <span class="layer-label" id="cmp-property-reference-layer-label">Casas solo referencia</span></label>
+        <label class="property-layer-toggle"><input type="checkbox" name="map_layer" value="other_reference">
+          <span class="layer-label" id="cmp-other-reference-layer-label">Otros no usados</span></label>
+
+        <p class="map-quality-help">Exa: exacta · Apx: aproximada · S/d: precisión sin informar. Las ubicaciones aproximadas o sin precisión se muestran como referencia y no intervienen en el cálculo.</p>
+
+        <div class="section-title" style="margin-top:12px">Capas del plano (vectorial)</div>
+        <div id="panel-capa-vectorial" style="display:none">
+          <div id="capas-vectoriales-controles"></div>
+        </div>
+        <div class="capa-raster-control" id="panel-capa-raster" style="display:none">
+          <label class="capa-raster-toggle" for="capa-raster-visible">
+            <input type="checkbox" id="capa-raster-visible" checked>
+            <span>Zonificación PDM (plano superpuesto)</span>
+          </label>
+          <label for="capa-raster-transparencia">Transparencia
+            <span class="capa-raster-valor" id="capa-raster-transparencia-val">35%</span></label>
+          <input type="range" id="capa-raster-transparencia" min="0" max="100" step="1" value="35">
+        </div>
+        <p class="map-quality-help" id="cmp-map-explanation">El valor de suelo se obtiene de los terrenos seleccionados. Cada casa muestra el remanente que su anuncio atribuye a construcción y mejoras.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Columna derecha: enlaces y resultados ===== -->
+  <aside class="map-sidebar">
+    <div class="map-panel">
+      <div class="map-panel-body cmp-enlaces">
+        <a href="{% url 'acm:modelos_dashboard' %}">Modelos ML ↗</a>
+        <span>·</span>
+        <a href="{% url 'acm:acm_analisis_clasico' %}">ACM clásico ↗</a>
+      </div>
+    </div>
+
+    <div class="map-panel">
+      <div class="map-panel-body">
+        <p id="cmp-status" role="status" aria-live="polite" class="map-quality-help" style="margin:0">Selecciona la ubicación y completa las dos superficies para empezar.</p>
+        <div id="cmp-warnings" role="alert"></div>
+      </div>
+    </div>
+
+    <section class="map-panel cmp-zona" id="cmp-zona" aria-label="Pre-evaluación de zona" hidden></section>
+
+    <section class="map-panel cmp-summary" aria-label="Resultado ACM">
+      <div class="map-panel-body">
         <div id="cmp-new"><h2>Resultado nuevo</h2><p class="cmp-muted">Pendiente de búsqueda</p></div>
         <aside id="cmp-old"><span>Cálculo anterior</span><strong>—</strong><small>Mismas casas completas seleccionadas. Precio/m² construido ponderado por distancia.</small></aside>
-      </section>
-      <section class="cmp-panel" id="cmp-ml-preview" data-url="{% url 'acm:modelo_estimacion' %}" hidden><h2>Estimación del modelo ML</h2><p id="cmp-ml-status"></p><p id="cmp-ml-result"></p><a href="{% url 'acm:modelos_dashboard' %}">Ver evaluación y versión del modelo</a></section>
-      <p class="cmp-note">Estimación de <strong>precios de oferta</strong>, no de ventas cerradas. El remanente incluye construcción y mejoras; no representa un coste de obra verificado. Si falta precio USD, conversión referencial S/3,44 por dólar.</p>
-      <details id="cmp-scenario" class="cmp-panel" hidden><summary>Comparar otros metrajes con la misma muestra</summary>
-        <p>Se conservan las casas, los terrenos y los pesos de la búsqueda inicial. Solo cambian las superficies objetivo. Para cambiar ubicación, fuentes o radio, usa Buscar y calcular.</p>
-        <div class="cmp-fields"><label>Terreno (m²)<input id="cmp-scenario-land" type="number" min="0.01" max="1000000" step="any"></label><label>Construcción (m²)<input id="cmp-scenario-built" type="number" min="0.01" max="1000000" step="any"></label></div>
-        <button id="cmp-scenario-apply" type="button">Ajustar con los mismos comparables</button>
-      </details>
-      <section class="cmp-panel" id="cmp-ai-panel" data-url="{% url 'acm:componentes_explicar' %}" hidden><h2 id="cmp-ai-title">Explicación del resultado</h2>
+      </div>
+    </section>
+
+    <section class="map-panel" id="cmp-ml-preview" data-url="{% url 'acm:modelo_estimacion' %}" hidden>
+      <div class="map-panel-body">
+        <h2>Estimación del modelo ML</h2>
+        <p id="cmp-ml-status"></p><p id="cmp-ml-result"></p>
+        <a href="{% url 'acm:modelos_dashboard' %}">Ver evaluación y versión del modelo</a>
+      </div>
+    </section>
+
+    <div class="map-panel">
+      <div class="map-panel-body">
+        <p class="cmp-note">Estimación de <strong>precios de oferta</strong>, no de ventas cerradas. El remanente incluye construcción y mejoras; no representa un coste de obra verificado. Si falta precio USD, conversión referencial S/3,44 por dólar.</p>
+      </div>
+    </div>
+
+    <details id="cmp-scenario" class="map-panel" hidden>
+      <summary>Cómo se calculó este resultado</summary>
+      <div class="map-panel-body">
+        <p>Se conservan las casas, los terrenos y los pesos de la búsqueda inicial. Solo cambian las superficies objetivo.</p>
+        <div class="cmp-fields">
+          <label>Terreno (m²)<input id="cmp-scenario-land" type="number" min="0.01" max="1000000" step="any" class="form-control"></label>
+          <label>Construcción (m²)<input id="cmp-scenario-built" type="number" min="0.01" max="1000000" step="any" class="form-control"></label>
+        </div>
+        <button class="btn-success btn-block" id="cmp-scenario-apply" type="button">Ajustar con los mismos comparables</button>
+      </div>
+    </details>
+
+    <section class="map-panel" id="cmp-ai-panel" data-url="{% url 'acm:componentes_explicar' %}" hidden>
+      <div class="map-panel-body">
+        <h2 id="cmp-ai-title">Explicación del resultado</h2>
         <p id="cmp-ai-status" role="status"></p>
         <div id="cmp-simple" hidden role="status" style="white-space:pre-line"></div>
-        <div id="cmp-proposal" hidden><div id="cmp-proposal-summary"></div><button id="cmp-proposal-apply" type="button">Usar estas casas</button></div>
-      </section>
-      <div class="cmp-toolbar"><strong id="cmp-counts">Sin comparables</strong><div class="cmp-downloads"><button id="cmp-save" class="cmp-save" type="button" disabled>Guardar en historial</button><button id="cmp-word" type="button" disabled>Descargar informe Word</button><button id="cmp-pdf" type="button" disabled>Descargar informe PDF</button><button id="cmp-export" type="button" disabled>Descargar datos JSON</button></div></div>
-      <nav class="cmp-tabs" aria-label="Grupos de comparables"><button data-tab="Casa" aria-pressed="true">Comparables <span id="cmp-house-count"></span></button><button data-tab="Terreno" aria-pressed="false">Terrenos usados <span id="cmp-land-count"></span></button><button data-tab="reference" aria-pressed="false">Solo referencia <span id="cmp-ref-count"></span></button></nav>
-      <div id="cmp-cards"><p class="cmp-muted">Aquí aparecerán Propify y los portales seleccionados.</p></div>
-      <details class="cmp-panel" open><summary>Cómo se calculó este resultado</summary><div id="cmp-calculation-explanation"><p>Busca comparables para ver aquí las operaciones con sus valores reales.</p></div></details>
+        <div id="cmp-proposal" hidden><div id="cmp-proposal-summary"></div>
+          <button id="cmp-proposal-apply" type="button" class="btn-success btn-block">Usar estas casas</button></div>
+      </div>
     </section>
-  </div>
+
+    <div class="map-panel">
+      <div class="map-panel-body">
+        <div class="cmp-toolbar"><strong id="cmp-counts">Sin comparables</strong></div>
+        <div class="cmp-downloads">
+          <button id="cmp-save" class="btn" type="button" disabled>Guardar en historial</button>
+          <button id="cmp-word" class="btn" type="button" disabled>Informe Word</button>
+          <button id="cmp-pdf" class="btn" type="button" disabled>Informe PDF</button>
+          <button id="cmp-export" class="btn" type="button" disabled>Datos JSON</button>
+        </div>
+        <nav class="cmp-tabs" aria-label="Grupos de comparables">
+          <button data-tab="Casa" aria-pressed="true">Comparables <span id="cmp-house-count"></span></button>
+          <button data-tab="Terreno" aria-pressed="false">Terrenos <span id="cmp-land-count"></span></button>
+          <button data-tab="reference" aria-pressed="false">Referencia <span id="cmp-ref-count"></span></button>
+        </nav>
+        <div id="cmp-cards"><p class="cmp-muted">Aquí aparecerán Propify y los portales seleccionados.</p></div>
+        <details class="cmp-panel" open>
+          <summary>Cómo se calculó este resultado</summary>
+          <div id="cmp-calculation-explanation"><p>Busca comparables para ver aquí las operaciones con sus valores reales.</p></div>
+        </details>
+      </div>
+    </div>
+  </aside>
+
+</div>
 </main>
 <dialog id="cmp-detail" class="cmp-detail" aria-labelledby="cmp-detail-heading">
   <header class="cmp-detail-header"><div><span>COMPARABLE · ANÁLISIS POR COMPONENTES</span><h2 id="cmp-detail-heading">Detalle de la propiedad</h2></div><button type="button" id="cmp-detail-close" autofocus aria-label="Cerrar detalle">Cerrar <span aria-hidden="true">×</span></button></header>
@@ -96,10 +225,10 @@
 {% block extra_scripts %}
 {{ block.super }}
 <script src="{% static 'acm/js/components-presentation.js' %}?v=8"></script>
-<script src="{% static 'acm/js/components.js' %}?v=25"></script>
+<script src="{% static 'acm/js/components.js' %}?v=26"></script>
 <script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>
 {{ capas_vectoriales|json_script:"capas-vectoriales-data" }}
-<script src="{% static 'js/capa-vectorial.js' %}?v=3"></script>
-<script src="{% static 'acm/js/zona-preevaluacion.js' %}?v=2"></script>
+<script src="{% static 'js/capa-vectorial.js' %}?v=4"></script>
+<script src="{% static 'acm/js/zona-preevaluacion.js' %}?v=3"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}
