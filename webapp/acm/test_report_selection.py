@@ -5,7 +5,7 @@ from django.test import SimpleTestCase, override_settings
 from .test_components import params, record, sample, _pdf_text
 from .components_engine import candidates, calculate
 from .components_pdf import build_acm_pdf, _static_map, _maps_key
-from .report_selection import report_records, report_total
+from .report_selection import report_records, report_total, report_values
 
 
 class ReportSelectionTests(SimpleTestCase):
@@ -15,6 +15,29 @@ class ReportSelectionTests(SimpleTestCase):
         self.assertEqual(report_records(p,rows,[rows[0]['id']]),[rows[0]])
         result=calculate(rows,p);p['manual_valuation']=234000
         self.assertEqual(report_total(p,result),234000)
+
+    def test_pdf_uses_commercial_value_with_five_percent_market_limits(self):
+        p={**params(),'property_type':'Departamento','land':0,'built':90,'radius':700}
+        rows=[record('p1',kind='Departamento',price=79900,land=None,built=90,distance=624,issues=[]),
+              record('p2',kind='Departamento',price=94476.74,land=None,built=87,distance=331,issues=[]),
+              record('p3',kind='Departamento',price=72000,land=None,built=68,distance=657,issues=[])]
+        result=calculate(rows,p)
+        self.assertAlmostEqual(result['new']['total'],95294.11764705881)
+        result['old']['total']=92479.83
+        p['manual_valuation']=110000
+        self.assertEqual(report_values(p,result),{'market_entry':115500,'commercial':110000,'immediate':104500})
+        pdf=build_acm_pdf(p,rows,result,fetch_images=False)
+        text=_pdf_text(pdf)
+        self.assertNotIn(b'EXPECTATIVA CLIENTE',text)
+        self.assertNotIn(b'92,479.83',text)
+        self.assertNotIn(b'PRECIO DE VENTA SUGERIDO',text)
+        self.assertIn(b'115,500.00',text)
+        self.assertIn(b'110,000.00',text)
+        self.assertIn(b'104,500.00',text)
+        self.assertLess(text.index(b'VALOR DE SALIDA AL MERCADO'),text.index(b'VALOR COMERCIAL'))
+        self.assertLess(text.index(b'VALOR COMERCIAL'),text.index(b'VALOR DE REALIZACI'))
+        p.pop('manual_valuation')
+        self.assertAlmostEqual(report_values(p,result)['commercial'],95294.11764705881)
 
     def test_pdf_does_not_include_property_codes_or_unchecked_properties(self):
         p=params();raw=sample()

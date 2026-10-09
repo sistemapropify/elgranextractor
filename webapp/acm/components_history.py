@@ -7,7 +7,7 @@ from statistics import median
 from django.db import transaction
 
 from .models import ACMLink, generar_codigo_acm
-from .report_selection import report_records, report_total
+from .report_selection import report_records, report_values
 
 
 def _decimal(value):
@@ -47,17 +47,18 @@ def persist_component_history(user, params, records, result, excluded=()):
     stored_result = dict(result)
     stored_result['excluded_ids'] = excluded
     stored_result['reference_summary'] = _reference_summary(records, result, excluded)
+    values = report_values(params,result)
     fingerprint_payload = {
         'version': result.get('version'), 'params': params,
         'selected': sorted(row['id'] for row in selected_records), 'excluded': excluded,
         'total': result['new'].get('total'),
+        'report_values': values,
     }
     fingerprint = hashlib.sha256(json.dumps(fingerprint_payload, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     units = _unit_values(result) or [result['new'].get('unit') or result['new'].get('built_unit') or 0]
     units = [float(value) for value in units if value is not None]
     unit_mid = median(units) if units else 0
     area = params.get('land') if params['property_type'] == 'Terreno' else params.get('built')
-    total = report_total(params,result)
     defaults = {
         'codigo': generar_codigo_acm(), 'origen': 'componentes', 'metodo': 'componentes',
         'tipo_propiedad': params['property_type'], 'area_m2': _decimal(area),
@@ -66,8 +67,8 @@ def persist_component_history(user, params, records, result, excluded=()):
         'precio_max_m2': _decimal(max(units) if units else 0),
         'precio_promedio_m2': _decimal(sum(units) / len(units) if units else 0),
         'precio_promedio_ponderado_m2': _decimal(result['new'].get('built_unit',result['new'].get('unit',unit_mid))),
-        'valor_comercial': _decimal(total), 'precio_venta_sugerido': _decimal(total),
-        'valor_realizacion': _decimal(total), 'num_comparables': len(selected_records),
+        'valor_comercial': _decimal(values['commercial']), 'precio_venta_sugerido': _decimal(values['market_entry']),
+        'valor_realizacion': _decimal(values['immediate']), 'num_comparables': len(selected_records),
         'propiedades_json': selected_records, 'parametros_json': params,
         'resultado_json': stored_result,
     }

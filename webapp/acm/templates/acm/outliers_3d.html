@@ -1,0 +1,136 @@
+{% extends 'propifai_base.html' %}
+{% block title %}ACM · Atípicos en 3D{% endblock %}
+{% block extra_head %}<style>
+.out-page{padding:18px;color:#e6edf3;font:13px/1.5 system-ui}
+.out-page h1{font-size:21px;margin:0 0 8px}
+.out-page h2{font-size:14px;margin:20px 0 8px}
+.out-page a{color:#82c5ff}
+.out-page .out-explain{color:#aebdcb;max-width:1000px;font-size:12px}
+.out-page form{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:14px 0}
+.out-page label{font-size:11px;color:#aebdcb}
+.out-page select{display:block;background:#0d1117;color:#e6edf3;border:1px solid #44515f;padding:7px;border-radius:5px;min-width:220px}
+.out-page button{padding:7px 12px;background:#263b4b;color:#fff;border:1px solid #52718b;border-radius:6px;cursor:pointer}
+.out-page .out-box{display:inline-flex;gap:16px;flex-wrap:wrap;padding:10px 14px;background:#192b30;border:1px solid #355e63;border-radius:8px;margin-bottom:12px}
+.out-page .out-box b{font-size:16px}
+.out-page .out-toggle{font-size:12px;color:#aebdcb;margin:0 0 8px}
+#grafico-3d{width:100%;height:620px;background:#0d1117;border:1px solid #354151;border-radius:8px}
+.out-page table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}
+.out-page th,.out-page td{padding:7px 9px;text-align:left;border-bottom:1px solid #354151;vertical-align:top}
+.out-page th{background:#1a2735}
+.out-page tr.out-atipica td{background:#2a1416}
+</style>{% endblock %}
+{% block content %}
+<div class="out-page">
+  <h1>Atípicos en 3D · casas en venta</h1>
+  <p class="out-explain">Cada punto es una casa ubicada por sus tres variables a la vez: <strong>terreno</strong>, <strong>construida</strong> y <strong>precio</strong>. Se normalizan con logaritmo (para que unas pocas casas enormes no aplasten el resto) y z robusto con mediana y MAD; la distancia al centro del grupo es la suma de esos tres vectores. Arrastra con el mouse para girar la nube, rueda para acercar. Las casas a más de {{ corte }} unidades del centro quedan marcadas en rojo.</p>
+
+  <form method="get">
+    <label>Distrito<select name="distrito" onchange="this.form.submit()">
+      <option value="">Elige un distrito…</option>
+      {% for d in distritos %}<option value="{{ d.distrito }}" {% if distrito == d.distrito %}selected{% endif %}>{{ d.distrito }} · {{ d.usables }} casas</option>{% endfor %}
+    </select></label>
+    <button>Aplicar</button>
+  </form>
+
+  {% if datos %}
+    <div class="out-box">
+      <div>Casas comparables<br><b>{{ datos.total }}</b></div>
+      <div>Atípicas (más de {{ datos.corte }} del centro)<br><b style="color:#f87171">{{ datos.atipicas }}</b></div>
+      <div>Terreno central<br><b>{{ datos.ejes.l_terreno.valor_central|floatformat:0 }} m²</b></div>
+      <div>Construida central<br><b>{{ datos.ejes.l_construida.valor_central|floatformat:0 }} m²</b></div>
+      <div>Precio central<br><b>US$ {{ datos.ejes.l_precio.valor_central|floatformat:0 }}</b></div>
+    </div>
+
+    <p class="out-toggle"><label><input type="checkbox" id="out-normalizar"> Ver los vectores normalizados (z) en vez de los valores reales</label></p>
+    <div id="grafico-3d"></div>
+
+    <h2>Las más lejanas al centro</h2>
+    <div style="overflow:auto"><table>
+      <thead><tr><th>#</th><th>Casa</th><th>Terreno</th><th>Construida</th><th>Precio</th><th>Precio / m²</th><th>Distancia</th><th></th></tr></thead>
+      <tbody>
+      {% for c in datos.casas|slice:":20" %}
+        <tr {% if c.atipica %}class="out-atipica"{% endif %}>
+          <td>{{ forloop.counter }}</td>
+          <td>{{ c.fuente }} · {{ c.id_origen }}<br><small style="color:#aebdcb">{{ c.titulo|truncatechars:48 }}</small></td>
+          <td>{{ c.area_terreno|floatformat:0 }} m²</td>
+          <td>{{ c.area_construida|floatformat:0 }} m²</td>
+          <td>US$ {{ c.precio_usd|floatformat:0 }}</td>
+          <td>US$ {{ c.precio_m2|floatformat:0 }}</td>
+          <td><strong style="color:{% if c.atipica %}#f87171{% else %}#aebdcb{% endif %}">{{ c.distancia }}</strong></td>
+          <td>{% if c.url %}<a href="{{ c.url }}" target="_blank" rel="noopener noreferrer">Abrir ↗</a>{% endif %}{% if c.latitud and c.longitud %}<br><a href="/cuadrantizacion/mapa/?source={{ c.fuente|urlencode }}&record={{ c.id }}">Mapa ↗</a>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  {% else %}
+    <p class="out-explain">{% if distrito %}Ese distrito no llega a {{ min_casas }} casas con terreno, construcción y precio; no hay con qué comparar.{% else %}Elige un distrito para ver su nube de casas.{% endif %}</p>
+  {% endif %}
+</div>
+{{ datos|json_script:"datos-3d" }}
+{% endblock %}
+{% block extra_scripts %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-gl3d-dist-min@4.1.1/plotly-gl3d.min.js"></script>
+<script>
+(function () {
+  const host = document.getElementById('grafico-3d');
+  const blob = document.getElementById('datos-3d');
+  if (!host || !blob || typeof Plotly === 'undefined') return;
+  const datos = JSON.parse(blob.textContent);
+  if (!datos) return;
+
+  const usd = v => 'US$ ' + Math.round(v).toLocaleString('en-US');
+  const num = v => Math.round(v).toLocaleString('en-US');
+
+  function coordenadas(casa, z) {
+    return z ? [casa.z_terreno, casa.z_construida, casa.z_precio]
+             : [casa.area_terreno, casa.area_construida, casa.precio_usd];
+  }
+
+  function globo(casa) {
+    return casa.fuente + ' · ' + casa.id_origen
+      + '<br>' + casa.titulo
+      + '<br>Terreno ' + num(casa.area_terreno) + ' m² · Construida ' + num(casa.area_construida) + ' m²'
+      + '<br>Precio ' + usd(casa.precio_usd) + ' · ' + usd(casa.precio_m2) + '/m²'
+      + '<br>Distancia al centro: ' + casa.distancia;
+  }
+
+  function traza(casas, z, color, tamano, nombre) {
+    const ejes = casas.map(c => coordenadas(c, z));
+    return {
+      type: 'scatter3d', mode: 'markers', name: nombre,
+      x: ejes.map(p => p[0]), y: ejes.map(p => p[1]), z: ejes.map(p => p[2]),
+      text: casas.map(globo), hoverinfo: 'text',
+      marker: { size: tamano, color: color, opacity: 0.85, line: { width: 0 } }
+    };
+  }
+
+  function pintar(z) {
+    const normales = datos.casas.filter(c => !c.atipica);
+    const atipicas = datos.casas.filter(c => c.atipica);
+    const eje = datos.ejes;
+    const layout = {
+      paper_bgcolor: '#0d1117', plot_bgcolor: '#0d1117',
+      font: { color: '#e6edf3', size: 11 },
+      margin: { l: 0, r: 0, t: 0, b: 0 },
+      scene: {
+        xaxis: { title: { text: z ? 'Terreno (z)' : eje.l_terreno.etiqueta }, backgroundcolor: '#0d1117', gridcolor: '#263449', zerolinecolor: '#3b4a5e' },
+        yaxis: { title: { text: z ? 'Construida (z)' : eje.l_construida.etiqueta }, backgroundcolor: '#0d1117', gridcolor: '#263449', zerolinecolor: '#3b4a5e' },
+        zaxis: { title: { text: z ? 'Precio (z)' : eje.l_precio.etiqueta }, backgroundcolor: '#0d1117', gridcolor: '#263449', zerolinecolor: '#3b4a5e' },
+        camera: { eye: { x: 1.6, y: 1.5, z: 1.1 } }
+      },
+      legend: { x: 0, y: 1, bgcolor: 'rgba(0,0,0,0)' }
+    };
+    Plotly.react(host, [
+      traza(normales, z, '#60a5fa', 5, 'Dentro de lo esperado'),
+      traza(atipicas, z, '#f87171', 9, 'Fuera de lo esperado')
+    ], layout, { responsive: true, displaylogo: false });
+  }
+
+  document.getElementById('out-normalizar').addEventListener('change', function () {
+    pintar(this.checked);
+  });
+  pintar(false);
+})();
+</script>
+{% endblock %}

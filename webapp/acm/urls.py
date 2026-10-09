@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import outlier_views
 from .components_routes import urlpatterns as component_routes
 
 app_name = 'acm'
@@ -28,4 +29,5 @@ urlpatterns = [
     path('ver-pdf/<uuid:uuid>/', views.ver_pdf_acm, name='ver_pdf_acm'),
     path('analisis-espacial/png/', views.analisis_espacial_png, name='analisis_espacial_png'),
     path('analisis-espacial/test/', views.analisis_espacial_test, name='analisis_espacial_test'),
+    path('atipicos-3d/', outlier_views.outliers_3d, name='atipicos_3d'),
 ] + component_routes

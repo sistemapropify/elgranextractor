@@ -311,7 +311,7 @@ def _selection(records, result, excluded):
 def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
                   user=None, fetch_images=True):
     """Construye el informe PDF (A4) con la identidad de Propify."""
-    from .report_selection import report_records, report_total
+    from .report_selection import report_records, report_values
     records=report_records(params,records,excluded)
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_RIGHT
@@ -476,9 +476,6 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     # ------------------------------------------------------ Propiedad sujeto
     story.append(Paragraph('PROPIEDAD SUJETO', styles['section']))
     story.append(centered(Paragraph(f'<b>ZONA :</b> {zona()}', styles['center'])))
-    expectativa = (_money(result['old']['total'])
-                   if result.get('old') and result['old'].get('total') else 'Sin informar')
-    story.append(centered(Paragraph(f'<b>EXPECTATIVA CLIENTE :</b> {expectativa}', styles['center'])))
     story.append(Spacer(1, 6 * mm))
     areas = Table([[
         Paragraph(f'<b>ÁREA TERRENO :</b> {_number(params.get("land"), 2, " m²") if params.get("land") else "No aplica"}', styles['center_small']),
@@ -611,14 +608,14 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
         story.append(squared(text, styles['body']))
     story.append(Spacer(1, 8 * mm))
     if new:
-        comercial = report_total(params,result)
+        values = report_values(params,result)
         result_table = Table([
+            [Paragraph('VALOR DE SALIDA AL MERCADO', styles['result_label']),
+             Paragraph(_money(values['market_entry']), styles['result_value'])],
             [Paragraph('VALOR COMERCIAL', styles['result_label']),
-             Paragraph(_money(comercial), styles['result_value'])],
+             Paragraph(_money(values['commercial']), styles['result_value'])],
             [Paragraph('VALOR DE REALIZACIÓN INMEDIATA', styles['result_label']),
-             Paragraph(_money(comercial * .90), styles['result_value'])],
-            [Paragraph('PRECIO DE VENTA SUGERIDO', styles['result_label']),
-             Paragraph(_money(comercial * .9499), styles['result_value'])],
+             Paragraph(_money(values['immediate']), styles['result_value'])],
         ], colWidths=[width * .58, width * .42])
         result_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),

@@ -11,3 +11,9 @@ def report_records(params, records, excluded=()):
 
 def report_total(params, result):
     return params.get('manual_valuation', (result.get('new') or {}).get('total'))
+
+
+def report_values(params, result):
+    total = report_total(params, result)
+    return {'market_entry': total * 1.05, 'commercial': total,
+            'immediate': total * .95}
