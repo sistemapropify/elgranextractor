@@ -146,7 +146,7 @@
   <!-- ===== Columna derecha: enlaces y resultados ===== -->
   <div id="cmp-resizer" class="cmp-resizer" role="separator" tabindex="0" aria-label="Cambiar ancho de resultados" aria-orientation="vertical" aria-controls="cmp-results" title="Arrastra para ajustar el ancho; también puedes usar las flechas del teclado"></div>
   <aside class="map-sidebar" id="cmp-results" aria-label="Resultados y comparables">
-    <section class="map-panel cmp-selected-card" id="cmp-selected-card" aria-label="Propiedad seleccionada en el mapa">
+    <section class="map-panel cmp-selected-card" id="cmp-selected-card" hidden aria-label="Propiedad seleccionada en el mapa">
       <button type="button" id="cmp-selected-toggle" class="cmp-selected-header" aria-expanded="false" aria-controls="cmp-selected-content">
         <span class="cmp-selected-caret" aria-hidden="true">&#9656;</span>
         <span class="cmp-selected-title">Propiedad seleccionada</span>
@@ -256,7 +256,7 @@
 <script src="{% static 'acm/js/workspace-layout.js' %}?v=1"></script>
 <script src="{% static 'acm/js/floating-comparison.js' %}?v=4"></script>
 <script src="{% static 'acm/js/comparison-valuation.js' %}?v=2"></script>
-<script src="{% static 'acm/js/components.js' %}?v=42"></script>
+<script src="{% static 'acm/js/components.js' %}?v=43"></script>
 <script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>
 {{ capas_vectoriales|json_script:"capas-vectoriales-data" }}
 {{ capas_raster|json_script:"capas-raster-data" }}

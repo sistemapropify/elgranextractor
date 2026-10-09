@@ -349,6 +349,7 @@
     const row=(snapshot?.records||[]).find(r=>String(r.id)===String(id));
     if(!row)return;
     selectedMapId=String(row.id);
+    const card=$('cmp-selected-card');if(card)card.hidden=false;
     renderSelectedCard();
     setSelectedCardOpen(true);
     applySelectedRow();
@@ -359,6 +360,7 @@
     renderSelectedCard();
     setSelectedCardOpen(false);
     applySelectedRow();
+    const card=$('cmp-selected-card');if(card)card.hidden=true;
   }
   function selection(){const manual=window.ACMComparisonValuation?.value();return {token:snapshot.token,excluded:[...excluded],report_ids:comparisonRows().filter(row=>!unselected.has(row.id)).map(row=>row.id),...(manual==null?{}:{manual_valuation:manual}),...(snapshot.params.weight_reference?{target_areas:{land:snapshot.params.land,built:snapshot.params.built}}:{})};}
   function updateReportButtons(){const none=!result?.new||!comparisonRows().some(row=>!unselected.has(row.id));$('cmp-word').disabled=none;$('cmp-pdf').disabled=none;$('cmp-save').disabled=none;}
