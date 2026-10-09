@@ -1353,3 +1353,22 @@
 #cmp-plan-layers input[type="range"] { height: 18px; margin: 0; padding: 0; border: 0; background: transparent; }
 #cmp-plan-layers .form-control { min-height: 26px; margin: 0; padding: 3px 5px; font-size: 10px; }
 #cmp-plan-layers .map-quality-help { margin: 5px 0 0; font-size: 10px; line-height: 1.35; }
+
+/* ===== Tarjeta lateral: la propiedad elegida con un pin del mapa ===== */
+.cmp-selected-card { background: #0f1720; border: 1px solid #2b3947; }
+.cmp-selected-header {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 10px 12px; background: none; border: 0; cursor: pointer;
+  color: #e6edf3; font: inherit; font-size: 12px; font-weight: 600; text-align: left;
+}
+.cmp-selected-header:hover { background: #16202b; }
+.cmp-selected-caret { color: #7ee787; font-size: 11px; line-height: 1; transition: transform .18s ease; }
+.cmp-selected-card.is-open .cmp-selected-caret { transform: rotate(90deg); }
+.cmp-selected-title { white-space: nowrap; }
+.cmp-selected-hint { margin-left: auto; color: #8b949e; font-size: 11px; font-weight: 400; text-align: right; }
+.cmp-selected-content { padding: 0 12px 12px; }
+.cmp-selected-empty { margin: 0; color: #8b949e; font-size: 11px; line-height: 1.45; }
+
+/* La fila de "Casas comparables" que corresponde al pin, en verde fosforescente. */
+.cmp-calc-table tr.cmp-row-selected td { background: #39ff14; color: #04240a; font-weight: 700; }
+.cmp-calc-table tr.cmp-row-selected td a { color: #04240a; text-decoration: underline; }
