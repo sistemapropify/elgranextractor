@@ -1020,3 +1020,336 @@
 .map-sidebar .map-panel.cmp-zona {
     padding: 10px 14px;
 }
+
+/* Parámetros compactos: superficies y características comparten fila. */
+#cmp-controls {
+    width: min(280px, calc(100% - 20px));
+    padding: 10px;
+}
+
+#cmp-form {
+    display: grid;
+    gap: 8px;
+}
+
+#cmp-form .form-group {
+    min-width: 0;
+    margin-bottom: 0;
+}
+
+#cmp-form label {
+    margin-bottom: 3px;
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+#cmp-form .form-control {
+    min-height: 32px;
+    margin-top: 0;
+    padding: 5px 8px;
+    font-size: 12px;
+    line-height: 1.3;
+}
+
+.cmp-form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 8px;
+}
+
+.cmp-info-row {
+    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+}
+
+.cmp-info-label {
+    margin-bottom: 4px;
+    color: var(--text-secondary, #8b949e);
+    font-size: 10px;
+    line-height: 1.3;
+}
+
+.cmp-info-fields:not(:has(.form-group:not([hidden]))) {
+    display: none;
+}
+
+#cmp-radius {
+    height: 20px;
+    margin-top: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    accent-color: #58a6ff;
+}
+
+#cmp-search {
+    min-height: 34px;
+    padding: 6px 10px;
+}
+
+#cmp-form details.cmp-options {
+    margin-top: 0;
+}
+
+/* El mapa tiene prioridad; las opciones secundarias se abren cuando hacen falta. */
+#cmp-controls .cmp-map-settings {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-color, #30363d);
+}
+
+#cmp-controls .cmp-map-settings > summary {
+    color: var(--text-secondary, #8b949e);
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+#cmp-map-count {
+    margin-left: 4px;
+    color: var(--accent-color, #58a6ff);
+    font-size: 9px;
+    text-transform: none;
+}
+
+#cmp-controls .section-title {
+    margin: 8px 0 4px;
+    font-size: 10px;
+    line-height: 1.2;
+}
+
+#cmp-controls .cmp-map-settings .form-group {
+    margin-bottom: 6px;
+}
+
+#cmp-controls .cmp-map-settings label {
+    margin-bottom: 3px;
+    font-size: 10px;
+    line-height: 1.3;
+}
+
+#cmp-controls .cmp-map-settings .form-control {
+    min-height: 30px;
+    margin-top: 0;
+    padding: 4px 7px;
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+.cmp-visible-layers {
+    display: grid;
+    gap: 2px;
+}
+
+#cmp-controls .cmp-visible-layers .property-layer-toggle,
+#cmp-controls .cmp-map-settings .capa-raster-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 18px;
+    margin: 0;
+    padding: 1px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 10px;
+    line-height: 1.3;
+}
+
+#cmp-controls .property-layer-toggle input,
+#cmp-controls .capa-raster-toggle input[type="checkbox"] {
+    flex: 0 0 12px;
+    width: 12px;
+    height: 12px;
+    margin: 0;
+}
+
+#cmp-controls .capa-vectorial-bloque {
+    margin: 0 0 2px;
+    padding: 0;
+    border: 0;
+}
+
+#cmp-controls .capa-raster-control {
+    margin: 6px 0 0;
+}
+
+#cmp-controls .capa-raster-control input[type="range"] {
+    height: 18px;
+    margin-top: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+/* Resultados: una columna real, independiente del ancho de la ventana. */
+.components-acm { min-height: calc(100dvh - 60px); }
+.components-acm .map-layout { height: calc(100dvh - 88px); min-height: 440px; }
+.components-acm .map-sidebar {
+    flex: 0 0 var(--cmp-sidebar-width, 280px);
+    width: var(--cmp-sidebar-width, 280px);
+    min-width: 0;
+    max-height: none;
+    container-type: inline-size;
+    container-name: acm-results;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+.map-sidebar > .map-panel { flex: 0 0 auto; min-width: 0; }
+.map-sidebar .map-panel-body { padding: 10px 12px; }
+.map-sidebar .cmp-summary { display: block; }
+.map-sidebar .cmp-summary .map-panel-body { display: block; width: 100%; }
+.map-sidebar .cmp-total { font-size: 26px; font-weight: 650; overflow-wrap: anywhere; }
+.map-sidebar .cmp-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-size: 11px; }
+.map-sidebar p, .map-sidebar small, .map-sidebar strong { overflow-wrap: anywhere; }
+.map-sidebar summary { cursor: pointer; color: #b4c5d4; font-size: 11px; line-height: 1.45; }
+.map-sidebar .cmp-secondary > summary { padding: 8px 12px; }
+.map-sidebar .cmp-secondary[open] > summary { color: #e6edf3; }
+.map-sidebar .cmp-secondary .map-panel-body { padding-top: 0; }
+.map-sidebar .cmp-zone-parameters { margin-top: 7px; }
+.map-sidebar .cmp-zona-nombre { font-size: 12px; margin-top: 5px; }
+.map-sidebar .cmp-zona-linea { gap: 5px; }
+.map-sidebar .cmp-zona-swatch { width: 12px; height: 12px; }
+.map-sidebar .cmp-zona-categoria, .map-sidebar .cmp-zona-ok, .map-sidebar .cmp-zona-aviso { padding: 1px 5px; font-size: 10px; }
+.map-sidebar .cmp-fields { gap: 8px; align-items: start; }
+.map-sidebar .cmp-fields label { min-width: 0; font-size: 11px; }
+.map-sidebar .cmp-fields input { min-height: 30px; padding: 5px 7px; }
+.map-sidebar .cmp-toolbar { margin: 0 0 9px; }
+.map-sidebar .cmp-toolbar strong { font-size: 11px; line-height: 1.45; }
+.map-sidebar .cmp-notices { margin-top: 6px; }
+.map-sidebar .cmp-notices > summary { color: #e7c58f; }
+.map-sidebar .cmp-notices .cmp-warning { margin: 6px 0 0; font-size: 11px; line-height: 1.45; padding: 7px; }
+.cmp-result-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-bottom: 10px; align-items: start; }
+.map-sidebar .cmp-result-actions > button { width: 100%; min-width: 0; min-height: 30px; }
+.cmp-export-menu { position: relative; }
+.map-sidebar .cmp-export-menu > summary { border: 1px solid #455266; border-radius: 6px; padding: 5px 8px; min-height: 30px; color: #eef3f8; }
+.map-sidebar .cmp-export-menu .cmp-downloads { position: absolute; right: 0; top: calc(100% + 4px); z-index: 110; display: grid; gap: 3px; width: 150px; padding: 5px; margin: 0; background: #17212c; border: 1px solid #455266; border-radius: 7px; box-shadow: 0 6px 18px #0006; }
+.map-sidebar .cmp-downloads button { width: 100%; text-align: left; }
+.map-sidebar .cmp-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 9px; }
+.map-sidebar .cmp-tabs button { flex: 1 1 auto; padding: 5px 6px; font-size: 10px; min-width: 0; }
+.map-sidebar .cmp-card { margin: 10px 0; padding: 10px; border-radius: 8px; }
+.map-sidebar .cmp-card-top { display: block; }
+.map-sidebar .cmp-card-top > img, .map-sidebar .cmp-card-top > .cmp-photo-empty {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    max-height: 190px;
+    object-fit: contain;
+    background: #0d141d;
+    border-radius: 5px;
+    margin-bottom: 9px;
+}
+.map-sidebar .cmp-card-top > .cmp-photo-empty { display: grid; place-items: center; }
+.map-sidebar .cmp-card-title { display: block; -webkit-line-clamp: unset; overflow: visible; font-size: 13px; line-height: 1.4; }
+.map-sidebar .cmp-card-sub { font-size: 10px; line-height: 1.45; }
+.map-sidebar .cmp-card-price { font-size: 20px; line-height: 1.35; }
+.map-sidebar .cmp-card-top > label { display: flex; align-items: center; gap: 5px; margin-top: 7px; }
+.map-sidebar .cmp-card input[type="checkbox"] { width: 13px; height: 13px; margin: 0; }
+.map-sidebar .cmp-card-areas { gap: 6px; margin: 8px 0; }
+.map-sidebar .cmp-card-areas span { min-width: 0; padding: 5px 7px; font-size: 10px; }
+.map-sidebar .cmp-card-areas strong { font-size: 13px; }
+.map-sidebar .cmp-precision, .map-sidebar .cmp-publication-state { font-size: 9px; padding: 1px 4px; margin-top: 4px; }
+.map-sidebar .cmp-similarity-visible { font-size: 10px; gap: 3px; }
+.map-sidebar .cmp-similarity-visible span { padding: 1px 4px; }
+.map-sidebar .cmp-card-calculation { margin: 8px 0; }
+.map-sidebar .cmp-breakdown { padding: 8px; margin: 6px 0; }
+.map-sidebar .cmp-breakdown-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.map-sidebar .cmp-breakdown-grid strong { font-size: 15px; }
+.map-sidebar .cmp-card-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 7px; }
+.map-sidebar .cmp-card-footer button { padding: 4px 7px; font-size: 11px; }
+.map-sidebar .cmp-card-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; }
+.map-sidebar .cmp-card-actions label { display: flex; gap: 5px; align-items: center; margin: 0; }
+.map-sidebar .cmp-badge { font-size: 9px; padding: 2px 4px; }
+.map-sidebar .cmp-locate { padding: 5px 7px; margin-top: 7px; font-size: 11px; }
+.map-sidebar .cmp-card.cmp-card-used { border: 1px solid #68c98c; animation: none; box-shadow: none; }
+.map-sidebar .cmp-used-label { padding: 4px 6px; margin-bottom: 7px; background: #193d2a; color: #a7efbf; font-size: 10px; font-weight: 600; }
+.map-sidebar .cmp-calculation-access { margin-top: 12px; padding-top: 9px; border-top: 1px solid #303b49; }
+.map-sidebar .cmp-calculation-access p { margin-bottom: 6px; color: #93a4b7; font-size: 10px; }
+.map-sidebar .cmp-calculation-access button { padding: 5px 8px; font-size: 11px; }
+.cmp-calculation-dialog { width: min(1100px, calc(100vw - 24px)); }
+#cmp-calculation-explanation { padding: 16px; }
+#cmp-calculation-explanation h3 { font-size: 14px; margin: 14px 0 7px; color: #8ce3c3; }
+#cmp-calculation-explanation p { margin: 7px 0; line-height: 1.55; color: #c2ced9; }
+.cmp-calculation-dialog .cmp-calc-table { min-width: 560px; font-size: 11px; }
+.cmp-resizer { flex: 0 0 8px; cursor: col-resize; position: relative; background: #111923; touch-action: none; outline: none; }
+.cmp-resizer::after { content: ''; position: absolute; top: 50%; left: 3px; width: 2px; height: 38px; margin-top: -19px; border-radius: 2px; background: #536476; }
+.cmp-resizer:hover, .cmp-resizer:focus-visible, .cmp-resizing .cmp-resizer { background: #223c50; }
+.cmp-resizer:focus-visible::after { background: #80d8ff; }
+.cmp-resizing, .cmp-resizing * { cursor: col-resize !important; user-select: none !important; }
+@container acm-results (min-width: 400px) {
+    .map-sidebar .cmp-breakdown-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .map-sidebar .cmp-total { font-size: 30px; }
+}
+.components-acm .cmp-stack-layout { flex-direction: column; height: auto; min-height: 0; }
+.cmp-stack-layout .cmp-resizer { display: none; }
+.components-acm .cmp-stack-layout .map-main { flex: none; height: clamp(380px, 65dvh, 560px); }
+.components-acm .cmp-stack-layout #cmp-map { min-height: 0; }
+.components-acm .cmp-stack-layout .map-sidebar { flex: none; width: 100%; min-width: 0; max-height: none; border-left: 0; border-top: 1px solid #30363d; overflow: visible; }
+@media (max-width: 768px) {
+    .components-acm .map-layout { flex-direction: column; height: auto; min-height: 0; }
+    .cmp-resizer { display: none; }
+    .components-acm .map-main { flex: none; height: clamp(380px, 65dvh, 560px); }
+    .components-acm #cmp-map { min-height: 0; }
+    .components-acm .map-sidebar { flex: none; width: 100%; min-width: 0; max-height: none; overflow: visible; }
+}
+
+/* Comparación flotante: columnas ajustadas al texto, sin anchos mínimos heredados. */
+.cmp-floating-card {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    z-index: 120;
+    width: max-content;
+    max-width: calc(100% - 16px);
+    border: 1px solid #526275;
+    border-radius: 7px;
+    background: #121b25;
+    color: #e6edf3;
+    box-shadow: 0 3px 12px #0007;
+    overflow: hidden;
+}
+.cmp-floating-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 6px;
+    border-bottom: 1px solid #36495b;
+    background: #1b2b3a;
+    cursor: move;
+    touch-action: none;
+    user-select: none;
+}
+.cmp-floating-header:focus-visible { outline: 2px solid #80d8ff; outline-offset: -2px; }
+.cmp-floating-header h2 { font-size: 11px; line-height: 1.3; font-weight: 600; margin: 0; }
+.components-acm .cmp-floating-header button { padding: 0; width: 22px; height: 22px; border: 0; border-radius: 3px; background: transparent; font-size: 18px; line-height: 1; }
+.cmp-floating-header button:hover { background: #3b5164; }
+.cmp-floating-card .cmp-calc-scroll { margin: 0; max-height: min(240px, 35dvh); overflow: auto; }
+.cmp-floating-card .cmp-calc-table { width: max-content; min-width: 0; font-size: 10px; line-height: 1.25; }
+.cmp-floating-card .cmp-calc-table th, .cmp-floating-card .cmp-calc-table td { padding: 3px 4px; border: 1px solid #ffffff; vertical-align: middle; }
+.cmp-floating-card .cmp-calc-table th { white-space: pre-line; font-size: 9px; font-weight: 600; position: sticky; top: 0; z-index: 1; background: #203347; }
+.cmp-floating-card .cmp-calc-table td { white-space: nowrap; background: transparent; }
+.cmp-floating-card .cmp-calc-table td:last-child { white-space: normal; max-width: 90px; }
+.cmp-floating-card .cmp-comparison-used td { background: #16372b; color: #bcf3d7; }
+.cmp-floating-card .cmp-area-similarity.is-close { color: #80caff; }
+.cmp-floating-card .cmp-area-similarity.is-far { color: #ff8585; }
+.cmp-floating-card .cmp-area-similarity.is-medium { color: #ffdc73; }
+.cmp-floating-minimized { width: 170px; }
+.cmp-floating-minimized .cmp-floating-header { border-bottom: 0; }
+.cmp-floating-dragging { user-select: none; }
+#cmp-map { isolation: isolate; }
+.map-sidebar .cmp-comparison-access { margin-top: 8px; padding: 5px 7px; font-size: 11px; width: 100%; }
+.cmp-floating-empty { padding: 7px; font-size: 10px; max-width: 320px; }
+
+/* Capas en una tarjeta independiente, compacta y movible dentro del mapa. */
+#cmp-plan-layers { width: 260px; }
+#cmp-plan-layers.cmp-floating-minimized { width: 190px; }
+#cmp-plan-layers-content { padding: 5px 7px; max-height: min(280px, 40dvh); overflow: auto; }
+#cmp-plan-layers .capa-raster-toggle { display: flex; justify-content: flex-start; align-items: center; gap: 5px; min-height: 18px; margin: 0; padding: 1px 0; border: 0; background: transparent; font-size: 10px; line-height: 1.3; }
+#cmp-plan-layers input[type="checkbox"] { flex: 0 0 12px; width: 12px; height: 12px; margin: 0; }
+#cmp-plan-layers .capa-vectorial-bloque { margin: 0 0 2px; padding: 0; border: 0; }
+#cmp-plan-layers .capa-raster-control { margin: 5px 0; }
+#cmp-plan-layers .capa-raster-control > label { margin-bottom: 1px; font-size: 10px; }
+#cmp-plan-layers input[type="range"] { height: 18px; margin: 0; padding: 0; border: 0; background: transparent; }
+#cmp-plan-layers .form-control { min-height: 26px; margin: 0; padding: 3px 5px; font-size: 10px; }
+#cmp-plan-layers .map-quality-help { margin: 5px 0 0; font-size: 10px; line-height: 1.35; }

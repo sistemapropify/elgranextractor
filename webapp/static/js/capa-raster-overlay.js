@@ -21,6 +21,22 @@
     var map = null;
     var capas = [];
     var activa = 0;
+    var listeners = [], idleListener = null;
+    function bind(el, name, handler) {
+        if (!el) return;
+        el.addEventListener(name, handler);
+        listeners.push([el, name, handler]);
+    }
+    function clear() {
+        listeners.forEach(function (entry) { entry[0].removeEventListener(entry[1], entry[2]); });
+        listeners = [];
+        if (idleListener) google.maps.event.removeListener(idleListener);
+        idleListener = null;
+        capas.forEach(function (capa) { capa.overlayInstance.setMap(null); });
+        capas = [];
+        var selector = $('capa-raster-select');
+        if (selector) selector.replaceChildren();
+    }
 
     /* ----------------------------- utilidades ---------------------------- */
 
@@ -48,12 +64,12 @@
 
     function alClic(id, manejador) {
         var el = $(id);
-        if (el) el.addEventListener('click', manejador);
+        bind(el, 'click', manejador);
     }
 
     function alCambiar(id, manejador) {
         var el = $(id);
-        if (el) el.addEventListener('change', manejador);
+        bind(el, 'change', manejador);
     }
 
     function mulMatrix(m, n) {
@@ -299,6 +315,7 @@
         setValor('capa-raster-escala', ajuste.escala);
         setTexto('capa-raster-escala-val', ajuste.escala.toFixed(3));
         setChecked('capa-raster-visible', this.visible);
+        setTexto('capa-raster-label-name', this.datos.nombre || 'Mostrar capa seleccionada');
         setChecked('capa-raster-bloqueo', this.bloqueado);
 
         controles.forEach(function (id) {
@@ -364,7 +381,7 @@
     function bindRango(id, alCambiar, formato) {
         var input = $(id);
         if (!input) return;
-        input.addEventListener('input', function () {
+        bind(input, 'input', function () {
             var capa = capaActiva();
             if (!capa || capa.bloqueado) return;
             alCambiar(capa, parseFloat(input.value));
@@ -379,6 +396,7 @@
 
         bindRango('capa-raster-transparencia', function (c, valor) {
             c.ajuste.opacidad = clamp(1 - valor / 100, 0, 1);
+            if (window.CapasMapa) window.CapasMapa.setOpacity(c.ajuste.opacidad);
         }, function (valor) { return Math.round(valor) + '%'; });
 
         bindRango('capa-raster-rotacion', function (c, valor) {
@@ -390,23 +408,26 @@
         }, function (valor) { return valor.toFixed(3); });
 
         alCambiar('capa-raster-visible', function (event) {
+            capa = capaActiva();
             capa.visible = event.target.checked;
             capa.draw();
         });
 
         alCambiar('capa-raster-bloqueo', function (event) {
+            capa = capaActiva();
             capa.bloqueado = event.target.checked;
             capa.draw();
         });
 
-        alClic('capa-raster-norte', function () { capa.moverMetros(0, 5); });
-        alClic('capa-raster-sur', function () { capa.moverMetros(0, -5); });
-        alClic('capa-raster-este', function () { capa.moverMetros(5, 0); });
-        alClic('capa-raster-oeste', function () { capa.moverMetros(-5, 0); });
+        alClic('capa-raster-norte', function () { capaActiva().moverMetros(0, 5); });
+        alClic('capa-raster-sur', function () { capaActiva().moverMetros(0, -5); });
+        alClic('capa-raster-este', function () { capaActiva().moverMetros(5, 0); });
+        alClic('capa-raster-oeste', function () { capaActiva().moverMetros(-5, 0); });
 
-        alClic('capa-raster-guardar', function () { guardar(capa); });
+        alClic('capa-raster-guardar', function () { guardar(capaActiva()); });
 
         alClic('capa-raster-restablecer', function () {
+            capa = capaActiva();
             if (capa.bloqueado) return;
             capa.ajuste = Object.assign({}, capa.guardado);
             capa.draw();
@@ -415,7 +436,7 @@
 
         var selector = $('capa-raster-select');
         if (selector) {
-            selector.addEventListener('change', function (event) {
+            bind(selector, 'change', function (event) {
                 activa = parseInt(event.target.value, 10) || 0;
                 capaActiva().draw();
             });
@@ -429,6 +450,7 @@
             selector.parentNode.style.display = 'none';
             return;
         }
+        selector.parentNode.style.display = '';
         capas.forEach(function (capa, indice) {
             var opcion = document.createElement('option');
             opcion.value = String(indice);
@@ -440,6 +462,8 @@
     /* ------------------------------- arranque ---------------------------- */
 
     function init(googleMap) {
+        clear();
+        activa = 0;
         map = googleMap;
         var nodo = $(DATA_ID);
         var datos = [];
@@ -461,11 +485,15 @@
         capas = datos.map(function (item) { return new CapaRaster(item, googleMap); });
         initSelector();
         initPanel();
-        google.maps.event.addListener(googleMap, 'idle', function () {
+        idleListener = google.maps.event.addListener(googleMap, 'idle', function () {
             capas.forEach(function (capa) { capa.draw(); });
         });
         capas.forEach(function (capa) { capa.draw(); });
     }
 
-    window.CapaRasterOverlay = { init: init };
+    function setOpacity(opacidad) {
+        capas.forEach(function (capa) { capa.ajuste.opacidad = opacidad; capa.draw(); });
+        if (capaActiva()) capaActiva().refreshPanel();
+    }
+    window.CapaRasterOverlay = { init: init, clear: clear, setOpacity: setOpacity };
 })();

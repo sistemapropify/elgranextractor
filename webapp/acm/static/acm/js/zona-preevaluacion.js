@@ -3,7 +3,7 @@
  *
  * Cuando se ubica el marcador (clic, arrastre del pin o dirección), consulta al
  * clasificador de zonificación del PDM qué zona de uso corresponde a ese punto
- * y la muestra en el panel de evaluación por componentes, antes de ejecutar la
+ * y la muestra en una tarjeta flotante del mapa, antes de ejecutar la
  * búsqueda de comparables.
  * ==========================================================================*/
 (function () {
@@ -28,10 +28,17 @@
         if (!panel) return;
         panel.innerHTML = html;
         panel.hidden = false;
+        if ($('cmp-pdm-zone')) $('cmp-pdm-zone').hidden = false;
     }
 
     function pintarVacio(mensaje) {
-        pintar('<h2>Zona de uso (PDM)</h2><p class="cmp-muted">' + escapar(mensaje) + '</p>');
+        pintar('<p class="cmp-muted">' + escapar(mensaje) + '</p>');
+    }
+
+    function pedirSesion() {
+        pintar('<p class="cmp-muted">' +
+            '<a href="/login/?next=' + encodeURIComponent(window.location.pathname) + '">Inicia sesión</a>' +
+            ' para consultar la zonificación de esta ubicación.</p>');
     }
 
     function pintarZona(zona) {
@@ -44,8 +51,8 @@
                   'conviene confirmar en campo">a confirmar</span>'
         };
         var confianza = etiquetas[zona.confianza] || etiquetas.media;
+        var ficha = tablaParametros(zona.parametros);
         pintar(
-            '<h2>Zona de uso (PDM)</h2>' +
             '<div class="cmp-zona-linea">' +
                 '<span class="cmp-zona-swatch" style="background:' + escapar(color) + '"></span>' +
                 '<strong class="cmp-zona-codigo">' + escapar(zona.codigo) + '</strong>' +
@@ -55,9 +62,11 @@
                 confianza +
             '</div>' +
             '<p class="cmp-zona-nombre">' + escapar(zona.uso || zona.nombre || '') + '</p>' +
-            tablaParametros(zona.parametros) +
+            '<details class="cmp-zone-parameters"><summary>' +
+            (ficha ? 'Parámetros, usos compatibles y notas' : 'Referencia del plano') + '</summary>' +
+            '<div class="cmp-zone-parameters-body" tabindex="0" aria-label="Parámetros, usos compatibles y notas">' + ficha +
             '<p class="cmp-muted cmp-zona-nota">Pre-evaluación según el plano de zonificación. ' +
-            'Sirve de contexto antes de calcular; no reemplaza la verificación en campo.</p>'
+            'Sirve de contexto antes de calcular; no reemplaza la verificación en campo.</p></div></details>'
         );
     }
 
@@ -74,11 +83,11 @@
     ];
 
     function tablaParametros(parametros) {
-        if (!parametros || !parametros.bloques || !parametros.bloques.length) {
+        if (!parametros) {
             return '';
         }
         var html = '';
-        parametros.bloques.forEach(function (bloque) {
+        (parametros.bloques || []).forEach(function (bloque) {
             var filas = '';
             ETIQUETAS.forEach(function (par) {
                 var valor = bloque[par[0]];
@@ -123,6 +132,10 @@
         ultimo = { lat: lat, lng: lng };
         contador += 1;
         var marca = contador;
+        if ($('cmp-form') && $('cmp-form').dataset.authenticated === 'false') {
+            pedirSesion();
+            return;
+        }
         pintarVacio('Consultando la zona del plano…');
         fetch(ENDPOINT + '?lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng), {
             credentials: 'same-origin',
@@ -132,7 +145,9 @@
             .then(function (r) {
                 // Si la sesión venció, Django redirige al login y devuelve HTML:
                 // hay que avisarlo, no confundirlo con "sin zona".
-                if (r.redirected && /\/login\//.test(r.url)) return null;
+                if (r.status === 401 || (r.redirected && /\/login\//.test(r.url))) {
+                    return { requiere_sesion: true };
+                }
                 if (!r.ok) return null;
                 if ((r.headers.get('content-type') || '').indexOf('application/json') === -1) {
                     return null;
@@ -142,7 +157,9 @@
             .then(function (datos) {
                 if (marca !== contador) return;   // llegó tarde: hay un punto más nuevo
                 var fila = datos && datos.resultados && datos.resultados[0];
-                if (fila && fila.codigo) {
+                if (datos && datos.requiere_sesion) {
+                    pedirSesion();
+                } else if (fila && fila.codigo) {
                     pintarZona(fila);
                 } else if (datos && datos.sin_plano) {
                     pintarVacio('La capa de zonificación no está disponible.');
@@ -162,6 +179,7 @@
     function limpiar() {
         if (!panel) panel = $('cmp-zona');
         if (panel) panel.hidden = true;
+        if ($('cmp-pdm-zone')) $('cmp-pdm-zone').hidden = true;
     }
 
     window.ACMZona = {

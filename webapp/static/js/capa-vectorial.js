@@ -3,8 +3,7 @@
  *
  * Dibuja GeoJSON como vectores: polígonos de zonificación (relleno sólido),
  * estructura vial (líneas negras con el grosor de cada nivel) y rótulos con
- * los códigos de zona. Cada capa tiene su propio control de visibilidad y
- * transparencia.
+ * los códigos de zona. El color y los códigos del PDM comparten control.
  *
  * Al ser vectores, los límites se mantienen como líneas exactas a cualquier
  * zoom, igual que las calles de Google Maps.
@@ -17,6 +16,14 @@
 
     var map = null;
     var capas = [];
+    function clear() {
+        capas.forEach(function (capa) {
+            capa.descartada = true;
+            if (capa.data) capa.data.setMap(null);
+            if (capa.overlay) capa.overlay.setMap(null);
+        });
+        capas = [];
+    }
 
     function $(id) { return document.getElementById(id); }
 
@@ -34,10 +41,11 @@
             if (datos.tipo === 'lineas') {
                 var ancho = numero(feature.getProperty('ancho'), 1);
                 return {
-                    strokeColor: feature.getProperty('color') || datos.color_borde || '#000000',
+                    strokeColor: String(feature.getProperty('color') || datos.color_borde || '#000000'),
                     strokeOpacity: opacidad,
                     strokeWeight: Math.max(0.6, ancho * numero(datos.escala_ancho, 0.8)),
-                    clickable: false
+                    clickable: false,
+                    zIndex: 10000 + numero(datos.orden, 0)
                 };
             }
             var color = feature.getProperty(datos.propiedad_color) || '#8b949e';
@@ -46,15 +54,16 @@
                 fillColor: color,
                 fillOpacity: opacidad,
                 strokeColor: borde || color,
-                strokeOpacity: borde ? Math.min(1, opacidad + 0.25) : 0,
+                strokeOpacity: borde && opacidad > 0 ? Math.min(1, opacidad + 0.25) : 0,
                 strokeWeight: numero(datos.grosor_borde, 0.4),
                 clickable: false,
-                zIndex: numero(feature.getProperty('orden'), 0)
+                zIndex: numero(datos.orden, 0) * 10000 + numero(feature.getProperty('orden'), 0)
             };
         };
     }
 
     function repintar(capa) {
+        if (capa.descartada) return;
         if (capa.data) capa.data.setStyle(estiloDe(capa));
         if (capa.actualizarEtiquetas) capa.actualizarEtiquetas();
     }
@@ -62,10 +71,18 @@
     function montarDataLayer(capa) {
         capa.data = new google.maps.Data({ map: map });
         capa.data.setStyle(estiloDe(capa));
-        capa.data.loadGeoJson(capa.datos.geojson_url, null, function (features) {
-            console.info('capa.vectorial.lista', capa.datos.nombre, features.length);
-            repintar(capa);
-        });
+        fetch(capa.datos.geojson_url, { credentials: 'same-origin', cache: 'no-store' })
+            .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(function (datos) {
+                if (capa.descartada) return;
+                var features = capa.data.addGeoJson(datos);
+                console.info('capa.vectorial.lista', capa.datos.nombre, features.length);
+                repintar(capa);
+            })
+            .catch(function (error) {
+                console.error('capa.vectorial.error', capa.datos.nombre, error);
+                document.dispatchEvent(new CustomEvent('capas-mapa:error', {detail: {nombre: capa.datos.nombre}}));
+            });
     }
 
     /* ------------------------------ rótulos --------------------------- */
@@ -74,16 +91,17 @@
         var divs = [];
         var puntos = [];
         var contenedor = document.createElement('div');
-        // z-index dentro del panel de superposición: los rótulos quedan por
-        // encima de los polígonos y de las líneas, pero por debajo de los pines.
+        // floatPane queda por encima del relleno vectorial de Google Maps.
         contenedor.style.cssText =
-            'position:absolute;left:0;top:0;pointer-events:none;z-index:10';
+            'position:absolute;left:0;top:0;pointer-events:none;z-index:1000';
+        contenedor.className = 'capa-codigos-overlay';
 
         var overlay = new google.maps.OverlayView();
+        capa.overlay = overlay;
         var tamanoBase = numero(capa.datos.tamano_rotulo, 13);
         var ultimoZoom = null;
         overlay.onAdd = function () {
-            this.getPanes().overlayLayer.appendChild(contenedor);
+            this.getPanes().floatPane.appendChild(contenedor);
         };
         overlay.draw = function () {
             var proyeccion = this.getProjection();
@@ -92,7 +110,7 @@
             var mostrar = capa.visible && zoom >= numero(capa.datos.zoom_minimo, 0);
             contenedor.style.display = mostrar ? 'block' : 'none';
             contenedor.style.opacity = capa.opacidad;
-            if (!mostrar) return;
+            if (!mostrar || capa.descartada) return;
             // El rótulo crece con el zoom para mantener la proporción con el mapa.
             if (zoom !== ultimoZoom) {
                 var tamano = Math.round(tamanoBase * (1 + Math.max(0, zoom - 14) * 0.12));
@@ -121,7 +139,7 @@
         fetch(capa.datos.geojson_url, { credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (datos) {
-                if (!datos || !datos.features) return;
+                if (capa.descartada || !datos || !datos.features) return;
                 var tamano = numero(capa.datos.tamano_rotulo, 10);
                 datos.features.forEach(function (feature) {
                     var coordenadas = feature.geometry && feature.geometry.coordinates;
@@ -131,7 +149,7 @@
                     div.style.cssText =
                         'position:absolute;transform:translate(-50%,-50%);' +
                         'font:' + tamano + 'px/1.1 system-ui,-apple-system,Segoe UI,sans-serif;' +
-                        'font-weight:600;color:' + (capa.datos.color_borde || '#111') + ';' +
+                        'font-weight:600;color:' + (capa.padreZonificacion ? '#000000' : capa.datos.color_borde || '#111') + ';' +
                         'text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 2px #fff;' +
                         'white-space:nowrap';
                     div.textContent = feature.properties[capa.datos.propiedad_codigo] || '';
@@ -153,8 +171,9 @@
         if (!contenedor) return;
         contenedor.innerHTML = '';
 
-        // Una casilla por capa y un único control de transparencia para todas.
+        // Los rótulos del PDM pertenecen a la casilla de su zonificación.
         capas.forEach(function (capa) {
+            if (capa.padreZonificacion) return;
             var bloque = document.createElement('div');
             bloque.className = 'capa-vectorial-bloque';
 
@@ -169,8 +188,12 @@
             etiqueta.appendChild(texto);
 
             casilla.addEventListener('change', function () {
-                capa.visible = casilla.checked;
-                repintar(capa);
+                capas.forEach(function (item) {
+                    if (item === capa || item.padreZonificacion === capa) {
+                        item.visible = casilla.checked;
+                        repintar(item);
+                    }
+                });
             });
 
             bloque.appendChild(etiqueta);
@@ -205,16 +228,15 @@
         rango.addEventListener('input', function () {
             var opacidad = Math.max(0, Math.min(1, 1 - parseFloat(rango.value) / 100));
             valor.textContent = Math.round(parseFloat(rango.value)) + '%';
-            capas.forEach(function (capa) {
-                capa.opacidad = opacidad;
-                repintar(capa);
-            });
+            if (window.CapasMapa) window.CapasMapa.setOpacity(opacidad);
+            else setOpacity(opacidad);
         });
     }
 
     /* ------------------------------ arranque -------------------------- */
 
     function init(googleMap) {
+        clear();
         map = googleMap;
         var nodo = $(DATA_ID);
         var datos = [];
@@ -230,10 +252,6 @@
         }
         if (panel) panel.style.display = '';
 
-        // Con capas vectoriales activas, el panel de la imagen no se usa.
-        var panelRaster = $('panel-capa-raster');
-        if (panelRaster) panelRaster.style.display = 'none';
-
         capas = datos
             .slice()
             .sort(function (a, b) { return numero(a.orden, 0) - numero(b.orden, 0); })
@@ -244,6 +262,17 @@
                     opacidad: numero(capa.opacidad, 0.65),
                 };
             });
+        window.CapaVectorial.capas = capas;
+        var zonificacion = capas.find(function (capa) {
+            return capa.datos.tipo === 'poligonos' && /(?:^|\/)zonificacion_pdm_poligonos\.geojson(?:[?#]|$)/i.test(capa.datos.geojson_url);
+        });
+        if (zonificacion) capas.forEach(function (capa) {
+            if (capa.datos.tipo === 'etiquetas' && /(?:^|\/)zonificacion_pdm_codigos\.geojson(?:[?#]|$)/i.test(capa.datos.geojson_url)) {
+                capa.padreZonificacion = zonificacion;
+                capa.visible = zonificacion.visible;
+                capa.opacidad = zonificacion.opacidad;
+            }
+        });
 
         construirPanel();
         capas.forEach(function (capa) {
@@ -252,5 +281,12 @@
         });
     }
 
-    window.CapaVectorial = { init: init, capas: capas };
+    function setOpacity(opacidad) {
+        capas.forEach(function (capa) { capa.opacidad = opacidad; repintar(capa); });
+        var rango = $('capas-vectoriales-transparencia');
+        if (rango) rango.value = String(Math.round((1 - opacidad) * 100));
+        var valor = rango && rango.previousElementSibling && rango.previousElementSibling.querySelector('.capa-raster-valor');
+        if (valor) valor.textContent = Math.round((1 - opacidad) * 100) + '%';
+    }
+    window.CapaVectorial = { init: init, clear: clear, setOpacity: setOpacity, capas: capas };
 })();

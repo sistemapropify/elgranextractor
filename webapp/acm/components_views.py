@@ -48,33 +48,20 @@ def page(request):
     # Capa de zonificación (misma que cuadrantización): si algo falla, la página
     # del ACM debe seguir funcionando sin el plano superpuesto.
     try:
-        from cuadrantizacion.views import _capa_raster_para_mapa
-        from cuadrantizacion.models import CapaRasterMapa
-        capas_raster = [
-            _capa_raster_para_mapa(capa)
-            for capa in CapaRasterMapa.objects.filter(activo=True)
-        ]
+        from cuadrantizacion.map_layers import map_layers_config
+        config_capas = map_layers_config(include_zones=session_user(request) is not None)
     except Exception:
         logger.warning('No se pudo cargar la capa de zonificación para el ACM', exc_info=True)
-        capas_raster = []
-
-    try:
-        from cuadrantizacion.views import _capa_vectorial_para_mapa
-        from cuadrantizacion.models import CapaVectorialMapa
-        capas_vectoriales = [
-            _capa_vectorial_para_mapa(capa)
-            for capa in CapaVectorialMapa.objects.filter(activo=True)
-        ]
-    except Exception:
-        logger.warning('No se pudo cargar la capa vectorial para el ACM', exc_info=True)
-        capas_vectoriales = []
+        config_capas = {'raster': [], 'vectoriales': [], 'zonas': []}
 
     response = render(request,'acm/components.html',{
         'sources':SOURCES,
+        'acm_is_authenticated': session_user(request) is not None,
         'test_mode':'analisis-pruebas' in request.path,
         'google_maps_api_key':getattr(settings,'GOOGLE_MAPS_API_KEY',None) or 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',
-        'capas_raster':capas_raster,
-        'capas_vectoriales':capas_vectoriales,
+        'capas_raster':config_capas['raster'],
+        'capas_vectoriales':config_capas['vectoriales'],
+        'zonas_mapa':config_capas['zonas'],
     })
     response['Cache-Control'] = 'no-store'
     from .components_engine import VERSION
@@ -107,7 +94,7 @@ def scraped_rows(p):
             'precio_usd','precio_soles','area_terreno','area_construida','latitud','longitud',
             'precision_ubicacion','estado_publicacion','primera_vez_vista','ultima_vez_vista',
             'fecha_primera_ausencia','fecha_retiro_confirmado','ausencias_consecutivas',
-            'distrito','url','imagen_url','descripcion','dormitorios','banos').iterator(chunk_size=500):
+            'distrito','url','imagen_url','descripcion','dormitorios','banos','antiguedad_anios').iterator(chunk_size=500):
         usd=positive(row['precio_usd']);pen=positive(row['precio_soles'])
         lifecycle_state = row['estado_publicacion'] or 'sin_verificar'
         yield {'id':f"{row['fuente']}-{row['id']}",'record_id':row['id'],
@@ -115,6 +102,7 @@ def scraped_rows(p):
             'title':row['titulo'] or row['id_origen'],'kind':row['tipo_inmueble'],
             'description':row['descripcion'] or '',
             'rooms':row['dormitorios'],'baths':row['banos'],'floor':None,
+            'age':number(row['antiguedad_anios']),
             'price':usd or (pen/3.44 if pen else None),'converted':not bool(usd) and bool(pen),
             'land':positive(row['area_terreno']),'built':positive(row['area_construida']),
             'lat':float(row['latitud']),'lng':float(row['longitud']),
@@ -140,6 +128,7 @@ def propify_rows():
             'source':'propify','code':row['code'],
             'title':row['title'],'kind':row['property_type'],
             'rooms':number(row.get('bedrooms')),
+            'age':number(row.get('antiquity_years')),
             'baths':(number(row.get('bathrooms')) or 0)+(number(row.get('half_bathrooms')) or 0)*.5 if row.get('bathrooms') is not None else None,
             # unit_location is not a verified floor number; do not guess it.
             'floor':None,

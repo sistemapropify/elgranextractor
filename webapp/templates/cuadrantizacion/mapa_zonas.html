@@ -1295,8 +1295,9 @@ window.onGoogleMapsLoaded = function() {
 <script src="{% static 'js/ml-map-context.js' %}"></script>
 {{ capas_raster|json_script:"capas-raster-data" }}
 {{ capas_vectoriales|json_script:"capas-vectoriales-data" }}
-<script src="{% static 'js/capa-raster-overlay.js' %}?v=4"></script>
-<script src="{% static 'js/capa-vectorial.js' %}?v=3"></script>
+<script src="{% static 'js/capa-raster-overlay.js' %}?v=5"></script>
+<script src="{% static 'js/capa-vectorial.js' %}?v=6"></script>
+<script src="{% static 'js/capas-mapa.js' %}?v=1"></script>
 <script src="{% static 'js/zonificacion-marcadores.js' %}"></script>
 <script>
 // ============================================================
@@ -1529,8 +1530,7 @@ function initMap() {
 
     // Capa raster georreferenciada (zonificación PDM): opacidad, giro y escala.
     try {
-        if (window.CapaRasterOverlay) window.CapaRasterOverlay.init(map);
-        if (window.CapaVectorial) window.CapaVectorial.init(map);
+        if (window.CapasMapa) window.CapasMapa.init(map, {renderZones: false, getZoneOverlays: function () { return renderedZoneOverlays; }});
     } catch (error) {
         console.error('capa.raster.initialization.failed', error);
     }
@@ -2712,9 +2712,10 @@ function renderExistingZones(zones) {
                 var polygon = new google.maps.Polygon({
                     paths: path,
                     fillColor: zone.color_fill || ZONE_COLORS.fill,
-                    fillOpacity: parseFloat(zone.opacidad || 0.3),
+                    fillOpacity: zone.opacidad == null ? 0.3 : parseFloat(zone.opacidad),
                     strokeColor: zone.color_borde || ZONE_COLORS.default,
                     strokeWeight: 1.5,
+                    zIndex: 100000,
                     map: map,
                     zoneId: zone.id,
                     clickable: true
@@ -2740,6 +2741,7 @@ function renderExistingZones(zones) {
                     'z-index: 1000;';
 
                 var labelOverlay = new google.maps.OverlayView();
+                labelOverlay.labelDiv = labelDiv;
                 labelOverlay.onAdd = function() {
                     var panes = this.getPanes();
                     panes.floatPane.appendChild(labelDiv);
@@ -2773,6 +2775,7 @@ function renderExistingZones(zones) {
             }
         }
     });
+    if (window.CapasMapa) window.CapasMapa.applyOpacity();
 }
 
 function flyToZone(zone) {

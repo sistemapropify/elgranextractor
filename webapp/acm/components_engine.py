@@ -5,7 +5,8 @@ from statistics import median
 VERSION = 'componentes-4-proximidad'
 MIN_LANDS = 1
 MIN_HOUSES = 1
-SOURCES = ('propify', 'remax', 'properati', 'adondevivir', 'urbania', 'facebook_marketplace')
+# Portales habilitados en el ACM. La selección se administra aquí, no en el mapa.
+SOURCES = ('propify', 'remax', 'properati')
 
 
 def number(value):

@@ -593,22 +593,16 @@ def mapa_zonas_valor(request):
     zonas_raiz = zonas.filter(parent__isnull=True)
     
     # Capas raster georreferenciadas (ej. Zonificación PDM 2016-2025)
-    from .models import CapaRasterMapa
-    capas_raster = [
-        _capa_raster_para_mapa(capa)
-        for capa in CapaRasterMapa.objects.filter(activo=True)
-    ]
+    from .map_layers import map_layers_config
+    config_capas = map_layers_config(include_zones=False)
+    capas_raster = config_capas['raster']
 
     # Leyenda de usos de suelo (para pintar el código y el color de cada marcador)
     from .models import ZonaUso
     zonas_uso = [zona.a_diccionario() for zona in ZonaUso.objects.filter(activo=True)]
 
     # Capas vectoriales (zonificación en polígonos, con líneas exactas a todo zoom)
-    from .models import CapaVectorialMapa
-    capas_vectoriales = [
-        _capa_vectorial_para_mapa(capa)
-        for capa in CapaVectorialMapa.objects.filter(activo=True)
-    ]
+    capas_vectoriales = config_capas['vectoriales']
 
     # Preparar datos para el template
     context = {
@@ -761,7 +755,7 @@ def _available_propify_properties():
             with connections['propifai'].cursor() as cursor:
                 cursor.execute(
                     f"""
-                        SELECT property_id, land_area, built_area, bedrooms, bathrooms, half_bathrooms, unit_location
+                        SELECT property_id, land_area, built_area, bedrooms, bathrooms, half_bathrooms, unit_location, antiquity_years
                         FROM property_specs
                         WHERE property_id IN ({placeholders})
                     """,
@@ -769,7 +763,7 @@ def _available_propify_properties():
                 )
                 specs_map.update({
                     row[0]: {'land_area': row[1], 'built_area': row[2],
-                             'bedrooms':row[3], 'bathrooms':row[4], 'half_bathrooms':row[5], 'unit_location':row[6]}
+                             'bedrooms':row[3], 'bathrooms':row[4], 'half_bathrooms':row[5], 'unit_location':row[6], 'antiquity_years':row[7]}
                     for row in cursor.fetchall()
                 })
     except Exception:
@@ -839,6 +833,7 @@ def _available_propify_properties():
             'bathrooms': specs.get('bathrooms'),
             'half_bathrooms': specs.get('half_bathrooms'),
             'unit_location': specs.get('unit_location'),
+            'antiquity_years': specs.get('antiquity_years'),
             'source_key': 'propify',
             'code': row['code'] or '',
             'title': row['title'] or row['code'] or 'Propiedad Propify',

@@ -183,6 +183,8 @@ class ComponentsEngineTests(SimpleTestCase):
 class ComponentsEndpointTests(SimpleTestCase):
     def setUp(self):
         self.factory=RequestFactory();self.user=SimpleNamespace(pk=1,is_active=True,is_authenticated=True)
+        layers=patch('cuadrantizacion.map_layers.map_layers_config',return_value={'vectoriales':[],'raster':[],'zonas':[]})
+        layers.start();self.addCleanup(layers.stop)
 
     def request(self,data):
         req=self.factory.post('/',json.dumps(data),content_type='application/json');req.current_user=self.user
@@ -234,13 +236,16 @@ class ComponentsEndpointTests(SimpleTestCase):
         self.assertFalse(body['created'])
         self.assertEqual(body['code'],'ACM7654321')
 
-    def test_page_has_old_and_new_panels(self):
+    def test_page_has_current_result_and_floating_map_cards(self):
         req=self.factory.get('/');req.current_user=self.user
         response=page(req)
         self.assertEqual(response.status_code,200)
-        self.assertContains(response,'cmp-old')
+        self.assertContains(response,'id="cmp-new"')
+        self.assertNotContains(response,'id="cmp-old"')
+        for card in ('cmp-comparison','cmp-plan-layers','cmp-pdm-zone'):
+            self.assertContains(response,f'id="{card}"')
         self.assertContains(response,'Referencias incompletas',count=0)
-        self.assertContains(response,'Solo referencia')
+        self.assertContains(response,'Casas solo referencia')
 
     def test_main_dashboard_uses_components_and_detail_modal(self):
         self.assertEqual(reverse('acm:acm_analisis'),'/acm/analisis/')
@@ -251,7 +256,8 @@ class ComponentsEndpointTests(SimpleTestCase):
         self.assertContains(response,'data-report-url="/acm/componentes/informe-word/"')
         self.assertContains(response,'data-save-url="/acm/componentes/guardar/"')
         self.assertContains(response,'Guardar en historial')
-        self.assertContains(response,'Descargar informe Word')
+        self.assertContains(response,'id="cmp-word"')
+        self.assertContains(response,'>Informe Word</button>')
         self.assertContains(response,'id="cmp-detail"')
         self.assertContains(response,'Cerrar detalle')
         self.assertContains(response,'Casas comparables')
@@ -268,6 +274,23 @@ class ComponentsEndpointTests(SimpleTestCase):
 
 
 class ComponentsDatabaseTests(TestCase):
+    def test_comparable_age_preserves_unknown_zero_and_years(self):
+        from ingestas.models import PropiedadesCompetencia
+        prop=PropiedadesCompetencia.objects.create(fuente='remax',id_origen='age',tipo_inmueble='Casa',
+            tipo_operacion='Venta',precio_usd=350000,area_terreno=150,area_construida=200,
+            latitud=-16.4,longitud=-71.5,precision_ubicacion='exacta',estado_publicacion='activa')
+        for years in (None,0,12):
+            prop.antiguedad_anios=years;prop.save(update_fields=['antiguedad_anios'])
+            self.assertEqual(list(scraped_rows(params()))[0]['age'],years)
+
+    @patch('cuadrantizacion.views._available_propify_properties')
+    def test_propify_age_preserves_unknown_zero_and_years(self,load):
+        for years in (None,0,12):
+            load.return_value=[{'id':1,'code':'P1','title':'Casa','price':344000,'currency_symbol':'S/.',
+                'operation_type':'Venta','property_type':'Casa','land_area_m2':150,'built_area_m2':200,
+                'lat':-16.4,'lng':-71.5,'district':'Cayma','antiquity_years':years}]
+            self.assertEqual(list(propify_rows())[0]['age'],years)
+
     def test_fresh_scraper_records_are_read_on_each_search(self):
         from ingestas.models import PropiedadesCompetencia
         prop=PropiedadesCompetencia.objects.create(fuente='remax',id_origen='direct',tipo_inmueble='Casa',
@@ -310,6 +333,8 @@ def _pdf_text(pdf):
 class ComponentsPdfReportTests(SimpleTestCase):
     def setUp(self):
         self.factory=RequestFactory();self.user=SimpleNamespace(pk=1,is_active=True,is_authenticated=True)
+        layers=patch('cuadrantizacion.map_layers.map_layers_config',return_value={'vectoriales':[],'raster':[],'zonas':[]})
+        layers.start();self.addCleanup(layers.stop)
 
     def request(self,data):
         req=self.factory.post('/',json.dumps(data),content_type='application/json');req.current_user=self.user
@@ -337,7 +362,8 @@ class ComponentsPdfReportTests(SimpleTestCase):
 
     def test_dashboard_exposes_the_pdf_download(self):
         response=page(self.factory.get('/acm/analisis/'))
-        self.assertContains(response,'Descargar informe PDF')
+        self.assertContains(response,'id="cmp-pdf"')
+        self.assertContains(response,'>Informe PDF</button>')
         self.assertContains(response,'data-pdf-url="/acm/componentes/informe-pdf/"')
         self.assertContains(response,'id="cmp-pdf"')
 
