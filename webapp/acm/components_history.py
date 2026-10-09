@@ -7,6 +7,7 @@ from statistics import median
 from django.db import transaction
 
 from .models import ACMLink, generar_codigo_acm
+from .report_selection import report_records, report_total
 
 
 def _decimal(value):
@@ -41,6 +42,8 @@ def persist_component_history(user, params, records, result, excluded=()):
     excluded = sorted(set(excluded))
     selected_ids = set(result.get('land_ids', ())) | set(result.get('house_ids', ()))
     selected_records = [row for row in records if row['id'] in selected_ids and row['id'] not in excluded]
+    if 'report_ids' in params:
+        selected_records = report_records(params,records,excluded)
     stored_result = dict(result)
     stored_result['excluded_ids'] = excluded
     stored_result['reference_summary'] = _reference_summary(records, result, excluded)
@@ -54,7 +57,7 @@ def persist_component_history(user, params, records, result, excluded=()):
     units = [float(value) for value in units if value is not None]
     unit_mid = median(units) if units else 0
     area = params.get('land') if params['property_type'] == 'Terreno' else params.get('built')
-    total = result['new']['total']
+    total = report_total(params,result)
     defaults = {
         'codigo': generar_codigo_acm(), 'origen': 'componentes', 'metodo': 'componentes',
         'tipo_propiedad': params['property_type'], 'area_m2': _decimal(area),

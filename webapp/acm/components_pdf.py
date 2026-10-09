@@ -16,6 +16,7 @@ import time
 from datetime import datetime
 from functools import lru_cache
 from statistics import mean
+from concurrent.futures import ThreadPoolExecutor
 from xml.sax.saxutils import escape
 
 logger = logging.getLogger(__name__)
@@ -131,9 +132,12 @@ def _logo_bytes():
             return None
 
 
-def _maps_key():
+def _maps_key(static=True):
     try:
         from django.conf import settings
+        if static:
+            key=getattr(settings,'GOOGLE_MAPS_STATIC_API_KEY','') or os.environ.get('GOOGLE_MAPS_STATIC_API_KEY','')
+            if key:return key
         return (getattr(settings, 'GOOGLE_MAPS_API_KEY', '')
                 or getattr(settings, 'google_maps_api_key', '')
                 or DEFAULT_MAPS_KEY)
@@ -141,7 +145,6 @@ def _maps_key():
         return DEFAULT_MAPS_KEY
 
 
-_MAP_FAILURES = {'count': 0}
 _GEOCODE_CACHE = {}
 
 
@@ -152,14 +155,11 @@ def _static_map(center, markers, key, size=(640, 420), zoom=15, fetch=True,
         return None
     if deadline is not None and time.monotonic() > deadline:
         return None
-    # Si el servicio no responde, no se insiste con cada comparable.
-    if _MAP_FAILURES['count'] >= 2:
-        return None
     try:
         import requests
         params = {
             'center': f'{center[0]},{center[1]}', 'zoom': zoom,
-            'size': f'{size[0]}x{size[1]}', 'scale': 2, 'maptype': 'roadmap',
+            'size': f'{min(size[0],640)}x{min(size[1],640)}', 'scale': 2, 'maptype': 'roadmap',
             'language': 'es', 'key': key,
         }
         if markers:
@@ -169,10 +169,8 @@ def _static_map(center, markers, key, size=(640, 420), zoom=15, fetch=True,
         content_type = response.headers.get('Content-Type', '')
         if response.status_code == 200 and response.content and content_type.startswith('image'):
             return response.content
-        _MAP_FAILURES['count'] += 1
-        logger.warning('ACM PDF: mapa no disponible (HTTP %s)', response.status_code)
+        logger.warning('ACM PDF: mapa no disponible (HTTP %s). Comprueba Maps Static API y su clave de servidor.', response.status_code)
     except Exception:
-        _MAP_FAILURES['count'] += 1
         logger.warning('ACM PDF: no se pudo descargar el mapa', exc_info=True)
     return None
 
@@ -313,6 +311,8 @@ def _selection(records, result, excluded):
 def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
                   user=None, fetch_images=True):
     """Construye el informe PDF (A4) con la identidad de Propify."""
+    from .report_selection import report_records, report_total
+    records=report_records(params,records,excluded)
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_RIGHT
     from reportlab.lib.pagesizes import A4
@@ -327,7 +327,7 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     new = result.get('new')
     used = _selection(records, result, excluded)
     target_kind = params.get('property_type', 'Casa')
-    excluded_set = set(excluded or ())
+    excluded_set = set() if 'report_ids' in params else set(excluded or ())
     # Comparables completos del tipo analizado: la evidencia de mercado del informe.
     market = sorted(
         (row for row in records
@@ -342,7 +342,13 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
                  if row['kind'] == target_kind and row['id'] not in used_ids
                  and row['id'] not in market_ids and row['id'] not in excluded_set]
     key = _maps_key()
-    deadline = time.monotonic() + 14 if fetch_images else None
+    deadline = time.monotonic() + 45 if fetch_images else None
+    location_maps={}
+    if fetch_images:
+        def location_image(row):
+            return row['id'],_static_map((row['lat'],row['lng']),[f'color:red|{row["lat"]},{row["lng"]}'],key,size=(320,240),zoom=16,deadline=deadline)
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            location_maps=dict(pool.map(location_image,records))
 
     styles = {
         'band': ParagraphStyle('band', fontName='Helvetica-Bold', fontSize=23,
@@ -413,7 +419,7 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
                                        ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
 
     def zona():
-        return escape(_zona_text(params['lat'], params['lng'], key, fetch_images))
+        return escape(_zona_text(params['lat'], params['lng'], _maps_key(static=False), fetch_images))
 
     def squared(text, style):
         """Párrafo con el cuadro teal de la referencia (sin glifos de símbolos)."""
@@ -447,15 +453,16 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     story.append(Spacer(1, 12 * mm))
 
     subject_center = (params['lat'], params['lng'])
-    used_points = [(row['lat'], row['lng']) for row in used]
+    used_points = [(row['lat'], row['lng']) for row in (records if 'report_ids' in params else used)]
     cover_markers = [f'color:0x047d7d|label:P|{params["lat"]},{params["lng"]}']
     cover_image = _static_map(subject_center, cover_markers, key, size=(700, 460),
                               zoom=16, fetch=fetch_images, deadline=deadline)
     if not cover_image:
         cover_image = _croquis(subject_center, [], params['radius'])
     if cover_image:
+        iw,ih=ImageReader(io.BytesIO(cover_image)).getSize()
         image = Image(io.BytesIO(cover_image), width=120 * mm,
-                      height=120 * mm * 470 / 740)
+                      height=120 * mm * ih / iw)
         image.hAlign = 'CENTER'
         story.append(image)
     story.append(Spacer(1, 10 * mm))
@@ -502,10 +509,11 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     # ------------------------------------------------------------ Ubicación
     story.append(Paragraph('UBICACIÓN DE LAS PROPIEDADES', styles['section']))
     markers = [f'color:0x047d7d|label:P|{params["lat"]},{params["lng"]}']
-    numbered = [row for row in used if row['kind'] != 'Terreno'][:9]
+    map_rows=records if 'report_ids' in params else used
+    numbered = [row for row in map_rows if row['kind'] != 'Terreno'][:9]
     for index, row in enumerate(numbered):
         markers.append(f'color:red|label:{index + 1}|{row["lat"]},{row["lng"]}')
-    others = [row for row in used if row not in numbered]
+    others = [row for row in map_rows if row not in numbered]
     if others:
         markers.append('size:mid|color:blue|' + '|'.join(f'{row["lat"]},{row["lng"]}' for row in others))
     map_image = _static_map(subject_center, markers, key, size=(640, 500), zoom=15,
@@ -514,7 +522,8 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     if croquis_fallback:
         map_image = _croquis(subject_center, used_points, params['radius'])
     if map_image:
-        image = Image(io.BytesIO(map_image), width=width, height=width * 470 / 740)
+        iw,ih=ImageReader(io.BytesIO(map_image)).getSize()
+        image = Image(io.BytesIO(map_image), width=width, height=width * ih / iw)
         image.hAlign = 'CENTER'
         story.append(image)
         if croquis_fallback:
@@ -524,13 +533,12 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
                 styles['center_small']))
     story.append(Spacer(1, 8 * mm))
     story.append(squared(f'<b>Propiedad Sujeto :</b> {zona()}', styles['value']))
-    story.append(squared(f'<b>Propiedades Comparables :</b> '
-                         f'{len(used)} propiedades usadas en la estimación', styles['value']))
+    story.append(squared(f'<b>Propiedades Comparables :</b> ' +
+                         (f'{len(records)} propiedades seleccionadas para el informe' if 'report_ids' in params else f'{len(used)} propiedades usadas en la estimación'), styles['value']))
     story.append(PageBreak())
 
     # --------------------------------------------------------- Comparables
     def comparable_block(row, thumb):
-        code = row.get('code') or row['id']
         address = (_clean(row.get('district') or '')
                    or _clean(row.get('title') or '', 'Sin dirección'))
         facts = [
@@ -563,7 +571,6 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
                                   ('RIGHTPADDING', (0, 0), (0, 0), 6)]))
         return KeepTogether([
             Spacer(1, 5 * mm),
-            centered(Paragraph(f'<b>CÓDIGO :</b> {escape(str(code))}', styles['center']), 2),
             centered(Paragraph(f'<b>DIRECCIÓN :</b> {escape(address)}', styles['center']), 2),
             Spacer(1, 3 * mm),
             body,
@@ -573,13 +580,10 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
         if not rows:
             return
         story.append(Paragraph(title, styles['section']))
-        for index, row in enumerate(rows[:limit]):
-            thumb = None
-            if fetch_images and index < 4:
-                thumb = _static_map((row['lat'], row['lng']),
-                                    [f'color:red|label:{index + 1}|{row["lat"]},{row["lng"]}'],
-                                    key, size=(320, 240), zoom=16,
-                                    fetch=fetch_images, deadline=deadline)
+        for index, row in enumerate(rows if 'report_ids' in params else rows[:limit]):
+            thumb=location_maps.get(row['id'])
+            if fetch_images and not thumb:
+                thumb=_croquis((params['lat'],params['lng']),[(row['lat'],row['lng'])],params['radius'])
             story.append(comparable_block(row, thumb))
         story.append(PageBreak())
 
@@ -607,7 +611,7 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
         story.append(squared(text, styles['body']))
     story.append(Spacer(1, 8 * mm))
     if new:
-        comercial = new['total']
+        comercial = report_total(params,result)
         result_table = Table([
             [Paragraph('VALOR COMERCIAL', styles['result_label']),
              Paragraph(_money(comercial), styles['result_value'])],

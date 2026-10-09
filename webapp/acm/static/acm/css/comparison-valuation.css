@@ -1,0 +1,34 @@
+/* Solo añade la selección y el pie de valorización; conserva la grilla existente. */
+#cmp-comparison .cmp-calc-scroll { max-height: none; overflow: visible; }
+#cmp-comparison .cmp-calc-table td:nth-child(8) { white-space: normal; max-width: 90px; }
+#cmp-comparison .cmp-calc-table td:last-child { white-space: nowrap; max-width: none; }
+#cmp-comparison .cmp-comparison-select { width: 12px; height: 12px; margin: 0; accent-color: #58a6ff; }
+#cmp-comparison .cmp-comparison-ad { display: inline-block; padding: 3px 5px; border: 1px solid #b84242; border-radius: 3px; background: #a52d2d; color: #ffffff; font-size: 10px; text-decoration: none; }
+.cmp-comparison-valuation { padding: 7px 8px; color: #e6edf3; font-size: 11px; }
+.cmp-valuation-line { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 5px 10px; padding: 3px 0; }
+.cmp-valuation-line>span:first-child { color: #b5c4d3; }
+.cmp-valuation-adjustment { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 5px; padding-top: 8px; border-top: 1px solid #405062; }
+.cmp-valuation-summary { display: grid; gap: 5px; color: #80e9b7; }
+#cmp-adjusted-value { font-size: 24px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.cmp-valuation-controls { display: flex; align-items: center; gap: 12px; }
+.cmp-valuation-dial { position: relative; width: 104px; height: 104px; flex: 0 0 104px; }
+.cmp-valuation-leds { position: absolute; inset: 0; pointer-events: none; }
+.cmp-valuation-led { position: absolute; left: calc(50% - 2px); top: calc(50% - 2px); width: 4px; height: 4px; border-radius: 50%; background: #171b20; transform: rotate(var(--led-angle)) translateY(-47px); }
+.cmp-valuation-led.lit { background: var(--led-color); box-shadow: 0 0 5px var(--led-color); }
+.cmp-valuation-face { position: absolute; inset: 15px; border: 2px solid #17191b; border-radius: 50%; background: radial-gradient(circle at 40% 25%,#424549,#25272a 65%); box-shadow: 0 5px 9px #0007,inset 0 1px 2px #8b8e93; pointer-events: none; }
+.cmp-valuation-face::before { content: ''; position: absolute; inset: 8px; border: 2px solid #191b1e; border-radius: 50%; }
+.cmp-valuation-pointer { position: absolute; inset: 0; transform: rotate(var(--dial-angle,0deg)); }
+.cmp-valuation-pointer::after { content: ''; position: absolute; top: 12px; left: calc(50% - 2px); width: 4px; height: 4px; border-radius: 50%; background: #ffea70; box-shadow: 0 0 5px #fce361; }
+#cmp-comparison #cmp-valuation-knob { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: grab; touch-action: none; }
+.cmp-valuation-dial:focus-within { outline: 2px solid #80caff; outline-offset: 2px; border-radius: 50%; }
+.cmp-valuation-round-control { display: grid; justify-items: center; gap: 5px; }
+.cmp-valuation-round-control>span { color: #e6edf3; font-size: 11px; font-weight: 600; }
+.cmp-valuation-round-control small { color: #aebdcd; font-size: 10px; }
+#cmp-comparison .cmp-valuation-rocker { display: block; position: relative; width: 48px; height: 70px; margin: 0; border-radius: 8px; background: linear-gradient(125deg,#55595e,#181a1d 42%,#373b40); box-shadow: 0 4px 7px #0009,inset 0 1px 2px #9996; }
+.cmp-valuation-rocker-face { position: absolute; inset: 6px; display: flex; flex-direction: column; align-items: center; justify-content: space-around; border: 1px solid #661011; border-radius: 3px; background: linear-gradient(#c93133,#8f1518 38%,#a41e21 85%,#de484b); box-shadow: inset 0 2px 3px #ff92925e,inset 0 -3px 5px #3e0507; transform: perspective(100px) rotateX(-12deg); pointer-events: none; }
+.cmp-valuation-rocker-face::before { content: ''; position: absolute; inset: 1px 0 auto; height: 7px; border-radius: 2px 2px 0 0; background: linear-gradient(#ff9696b3,#ff969608); }
+.cmp-valuation-rocker-i { width: 3px; height: 12px; border-radius: 2px; background: #f1d9cd; }
+.cmp-valuation-rocker-o { width: 11px; height: 11px; border: 3px solid #f1d9cd; border-radius: 50%; box-sizing: border-box; }
+#cmp-comparison #cmp-round-value { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.cmp-valuation-rocker:has(input:checked) .cmp-valuation-rocker-face { transform: perspective(100px) rotateX(12deg); background: linear-gradient(#ef4b4e,#b81f23 45%,#9b1619 90%,#e34d50); box-shadow: inset 0 2px 3px #ff9e9e9e,inset 0 -3px 5px #580b0d,0 0 8px #eb36333b; }
+.cmp-valuation-rocker:focus-within { outline: 2px solid #80caff; outline-offset: 3px; }

@@ -1,4 +1,68 @@
-# Scraping worker — preparation
+# ACM valuation controls — release 2026-10-09
+
+Status: Validated — ACM code release only; deployment pending
+
+## 1. Authorized scope
+The user approved publishing the locally reviewed ACM changes on 2026-10-09.
+Release the comparison table selection, distance and publication columns, manual
+valuation dial, rounding switch, and selected-only property reports without codes.
+Preserve the existing dark table styling and inline similarity percentages.
+
+## 2. Deployment recipe and existing target
+Recipe: CI/CD, existing `.github/workflows/main_granextractorservice.yml`.
+Push the reviewed release commit to `main` to use the existing federated Azure login,
+build, collectstatic, App Service deployment and verification pipeline.
+Target: `granextractorservice`, resource group `rg-elgranextractor`, Brazil South.
+Public page: https://acm.propifai.com/acm/analisis/
+No infrastructure, runtime credentials, dependency or database schema changes.
+The scraping-worker preparation below is independent and retains its original gates.
+
+## 3. Integration and local preview
+Origin main and shared local HEAD are both `5b0f2aa1626e995b2769f5b9c9d809a241702113`.
+The previous production workflow for that revision completed successfully.
+The requested application files are already identical in this worktree and
+`D:/PROMETEO`, which serves the local preview. Preserve unrelated local edits.
+
+## 4. Validation steps
+- [x] Fetch and compare the latest production revision.
+- [x] Run selected report and manual valuation regression tests.
+- [x] Validate both changed JavaScript modules.
+- [x] Collect and inspect the new static assets.
+- [x] Run final Git whitespace and staged scope checks.
+- [x] Read the existing deployment workflow and verify Azure target availability.
+Infrastructure and role-assignment template checks do not apply: this release
+uses the existing pipeline and changes no resources or roles.
+
+## 5. Execution and rollback
+Commit only the ACM release files and this release record. Push without force.
+If `main` advances first, integrate that revision before publishing.
+After a successful push, provide the Actions run link. The user requested to
+monitor deployment personally; do not wait or report it as live before completion.
+Rollback, if needed, is a new revert commit through the same pipeline.
+
+## 6. Known limitation
+The current server map key returns HTTP 403 because Maps Static API is disabled.
+This release supports a separate `GOOGLE_MAPS_STATIC_API_KEY` and corrects PDF
+image sizing and selected-property maps, but does not claim to enable Google APIs.
+Google key configuration remains pending and is outside this code publication.
+
+## 7. Validation proof
+2026-10-09:
+- `manage.py test acm.test_report_selection --settings=acm.components_test_settings
+  --noinput`: 6 tests passed, including seven selected property pages and map requests.
+- `node --check` for `components.js` and `comparison-valuation.js`: passed.
+- Local page and new CSS/JavaScript HTTP checks: 200.
+- Native browser fixture: selection/pins/report IDs, manual total, wheel and rounding,
+  white text and inline percentages passed. PDF layout rendering inspected.
+- Azure read-only target query: existing App Service is Running.
+- GitHub run `37953595379` for the base revision: completed successfully.
+- Isolated Django `collectstatic`: all three release CSS/JavaScript files collected.
+- `git diff --check` and `git diff --cached --check`: passed; staged scope contains
+  only ten ACM files and this release record. Unrelated shared edits are preserved.
+
+---
+
+# Scraping worker — preparation (independent scope; original record preserved)
 
 Status: Ready for Validation — local preparation complete; not production validated
 

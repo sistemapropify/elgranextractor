@@ -194,6 +194,16 @@ def _signed_selection(request):
     ids={r['id'] for r in state['records']}
     if not isinstance(excluded,list) or len(excluded)>4000 or any(not isinstance(i,str) or i not in ids for i in excluded):
         raise ValueError('selection')
+    if 'report_ids' in data:
+        selected=data['report_ids']
+        if not isinstance(selected,list) or len(selected)>4000 or any(not isinstance(i,str) or i not in ids for i in selected):
+            raise ValueError('report selection')
+        state['params']['report_ids']=list(dict.fromkeys(selected))
+    if 'manual_valuation' in data:
+        total=number(data['manual_valuation'])
+        if total is None or not 0<=total<=1000000000:
+            raise ValueError('manual valuation')
+        state['params']['manual_valuation']=round(total,2)
     target=data.get('target_areas')
     if target is not None:
         if state['params'].get('property_type','Casa')!='Casa' or not isinstance(target,dict):
@@ -254,6 +264,8 @@ def explain_ai(request):
 def word_report(request):
     try:
         state,excluded=_signed_selection(request)
+        if state['params'].get('report_ids')==[]:
+            return JsonResponse({'error':'Marca al menos una propiedad para incluirla en el informe.'},status=422)
         result=calculate(state['records'],state['params'],excluded)
         history,_=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
         from .components_report import build_acm_docx
@@ -279,6 +291,8 @@ def pdf_report(request):
     """Informe PDF con la estructura del ACM de Propify (solo identidad Propify)."""
     try:
         state,excluded=_signed_selection(request)
+        if state['params'].get('report_ids')==[]:
+            return JsonResponse({'error':'Marca al menos una propiedad para incluirla en el informe.'},status=422)
         result=calculate(state['records'],state['params'],excluded)
         history,_=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
         from .components_pdf import build_acm_pdf
@@ -303,6 +317,8 @@ def pdf_report(request):
 def save_history(request):
     try:
         state,excluded=_signed_selection(request)
+        if state['params'].get('report_ids')==[]:
+            return JsonResponse({'error':'Marca al menos una propiedad para incluirla en el informe.'},status=422)
         result=calculate(state['records'],state['params'],excluded)
         history,created=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
         return JsonResponse({'status':'ok','created':created,'id':str(history.id),'code':history.codigo_display})

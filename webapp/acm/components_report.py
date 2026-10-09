@@ -41,6 +41,8 @@ def _median_text(values):
 
 
 def build_acm_docx(params, records, result, excluded=(), generated_at=None):
+    from .report_selection import report_records, report_total
+    records = report_records(params,records,excluded)
     from docx import Document
     from docx.enum.section import WD_ORIENT
     from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
@@ -50,7 +52,7 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
     from docx.shared import Inches, Pt, RGBColor
 
     generated_at = generated_at or datetime.now()
-    excluded = set(excluded)
+    excluded = set() if 'report_ids' in params else set(excluded)
     by_id = {row['id']: row for row in records}
     doc = Document()
     section = doc.sections[0]
@@ -132,6 +134,8 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
 
     heading('Resultado')
     new = result.get('new')
+    if new and 'manual_valuation' in params:
+        doc.add_paragraph('Valorización ajustada manualmente: '+_money(report_total(params,result)))
     if new:
         if result['model'] == 'components':
             result_rows = [('Valor del terreno objetivo', _money(new['land_value'])),
@@ -161,7 +165,10 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
             doc.add_paragraph(_median_text(land_units))
             paragraph = doc.add_paragraph(); paragraph.add_run('Valor de suelo adoptado: ').bold = True; paragraph.add_run(_unit(result['land_unit']))
         else:
-            doc.add_paragraph('No hubo terrenos aptos. Sin una referencia de suelo el método no puede separar el valor del terreno del valor de la construcción.')
+            if result.get('land_unit') is not None:
+                doc.add_paragraph('Valor de suelo adoptado: '+_unit(result['land_unit']))
+            else:
+                doc.add_paragraph('No hubo terrenos aptos. Sin una referencia de suelo el método no puede separar el valor del terreno del valor de la construcción.')
 
         heading('Paso 2 Valor que cada casa atribuye a construcción y mejoras')
         doc.add_paragraph('A cada casa se le descuenta el valor estimado de su terreno. El dinero restante se divide entre el área construida. Ese remanente incluye construcción, antigüedad, estado, distribución, piscina y otras mejoras; no es un costo de obra certificado.')
@@ -200,7 +207,7 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
                     table(('Comparable','Ajuste terreno','Ajuste construcción','Precio ajustado','Peso aplicado','Aporte al resultado'),[
                         (d['id'],_money(d.get('land_adjustment')),_money(d.get('built_adjustment')),
                          _money(d['target_estimate']),f"{_number(d['similarity_weight'],2)}%",_money(d['weighted_contribution']))
-                        for d in sorted(breakdown.values(),key=lambda d:-(d.get('similarity_weight') or 0)) if d['usable']])
+                        for d in sorted(breakdown.values(),key=lambda d:-(d.get('similarity_weight') or 0)) if d['usable'] and d['id'] in by_id])
                     if params.get('weight_reference'):
                         doc.add_paragraph('Escenario con la misma muestra y los mismos pesos de la búsqueda inicial; solo cambian las superficies objetivo.')
                 elif result.get('built_unit_method') == 'closest_built_similarity':

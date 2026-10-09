@@ -4,6 +4,7 @@
   let snapshot=null, result=null, excluded=new Set(), tab='Casa', map=null, pin=null, circles=[], markers=[], sequence=0, controller=null, detailId=null;
   let aiController=null, aiExplanation=null, aiProposal=null;
   const locatedIds=new Set();
+  const unselected=new Set();
   let pulseMarkers=[],pulseTimer=null;
   const money=n=>n==null?'—':new Intl.NumberFormat('es-PE',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
   const decimals=n=>n==null?'Sin informar':new Intl.NumberFormat('es-PE',{maximumFractionDigits:2}).format(n);
@@ -105,12 +106,13 @@
     $('cmp-comparison').hidden=true;
     $('cmp-comparison-open').hidden=true;
     $('cmp-comparison-content').replaceChildren();
+    window.ACMComparisonValuation?.reset();
     $('cmp-warnings').replaceChildren();$('cmp-notices').hidden=true;
     if($('cmp-calculation').open)$('cmp-calculation').close();
     if(snapshot){renderCards();renderDetail();}else{$('cmp-cards').innerHTML='<p class="cmp-muted">Busca comparables para aplicar el análisis.</p>';$('cmp-counts').textContent='Sin comparables';['house','land','ref'].forEach(k=>$('cmp-'+k+'-count').textContent='');}
   }
   function invalidate(){
-    sequence++;if(controller)controller.abort();snapshot=null;excluded.clear();locatedIds.clear();if($('cmp-detail').open)$('cmp-detail').close();
+    sequence++;if(controller)controller.abort();snapshot=null;excluded.clear();unselected.clear();locatedIds.clear();if($('cmp-detail').open)$('cmp-detail').close();
     clearResult('Parámetros modificados: vuelve a buscar.');$('cmp-warnings').replaceChildren();$('cmp-status').textContent='Listo para una nueva búsqueda.';$('cmp-search').disabled=false;
   }
   function setLocation(lat,lng){form.elements.lat.value=lat.toFixed(7);form.elements.lng.value=lng.toFixed(7);invalidate();if(map)map.panTo({lat,lng});if(window.ACMZona)window.ACMZona.actualizar(lat,lng);}
@@ -147,7 +149,9 @@
     if (bWeight!==aWeight) return bWeight-aWeight;
     return (a.distance||0)-(b.distance||0) || String(a.id).localeCompare(String(b.id));
   });}
-  function visibleMapRows(){const layers=new Set(Array.from(document.querySelectorAll('[name=map_layer]:checked'),x=>x.value));return visibleRows().filter(r=>layers.has(mapGroup(r)));}
+  function layerRows(){const layers=new Set(Array.from(document.querySelectorAll('[name=map_layer]:checked'),x=>x.value));return visibleRows().filter(r=>layers.has(mapGroup(r)));}
+  function comparisonRows(){return layerRows().filter(r=>r.kind===snapshot?.params.property_type);}
+  function visibleMapRows(){return layerRows().filter(r=>!unselected.has(r.id));}
   function renderMap(){
     if(!map||!result)return;clearMap();drawCircles();
     const icons={propify:'Pin-propify.png',remax:'pin-remax.png',properati:'pin-properati.png'};
@@ -203,7 +207,7 @@
   function componentSimilarity(detail){return (detail.land_similarity||0)+(detail.built_similarity||0);}
   function renderComparison(){
     const type=snapshot?.params.property_type;
-    const rows=snapshot&&result?visibleMapRows().filter(row=>row.kind===type):[],show=!!snapshot&&!!result;
+    const rows=snapshot&&result?comparisonRows():[],show=!!snapshot&&!!result;
     $('cmp-comparison').hidden=!show;
     $('cmp-comparison-open').hidden=!show;
     if(!show){$('cmp-comparison-content').replaceChildren();return;}
@@ -214,10 +218,12 @@
     const used=row=>{const v=value(row);return v.recommended||v.status==='area'||(v.status==='land'&&v.selected);};
     const usage=row=>{const v=value(row);if(used(row))return 'Usada para valorar';if(v.status==='reference'&&!v.referenceOnly)return 'Solo referencia';if(v.status==='excluded')return 'Desmarcada';return result.new?'Comparable no usado':'Sin valoración';};
     $('cmp-comparison-content').innerHTML=calculationTable(
-      ['Portal','Precio\nanunciado','Terreno','Construcción','Antigüedad','Uso'],
-      ordered.map(row=>[escape(row.source.toUpperCase()),money(row.price),surface(row.land,row.land_similarity),surface(row.built,row.built_similarity),age(row.age),usage(row)]),
+      ['Seleccionar','Portal','Precio\nanunciado','Terreno','Construcción','Antigüedad','Distancia','Uso','Publicación'],
+      ordered.map(row=>['<input class="cmp-comparison-select" type="checkbox" data-map-select="'+escape(row.id)+'" '+(unselected.has(row.id)?'':'checked')+' aria-label="Mostrar en el mapa e incluir en el informe: '+escape(row.source.toUpperCase()+' · '+row.title)+'">',escape(row.source.toUpperCase()),money(row.price),surface(row.land,row.land_similarity),surface(row.built,row.built_similarity),age(row.age),decimals(Math.round(row.distance))+' m',usage(row),row.url?'<a class="cmp-comparison-ad" href="'+escape(row.url)+'" target="_blank" rel="noopener noreferrer">Ver anuncio</a>':'<span>Sin enlace</span>']),
       ordered.map(row=>used(row)?'cmp-comparison-used':'')
-    )+(ordered.length?'':'<p class="cmp-floating-empty">No hay propiedades de este tipo en las capas visibles del mapa.</p>');
+    )+(ordered.length?'':'<p class="cmp-floating-empty">No hay propiedades de este tipo en las capas visibles del mapa.</p>')+(window.ACMComparisonValuation?.markup(snapshot.params,result)||'');
+    window.ACMComparisonValuation?.mount();
+    updateReportButtons();
     document.dispatchEvent(new CustomEvent('acm:comparison-updated'));
   }
   function renderCalculationExplanation(){
@@ -304,7 +310,10 @@
     fixImages($('cmp-detail-content'));
   }
   function openDetail(id){detailId=id;renderDetail();if(!$('cmp-detail').open)$('cmp-detail').showModal();}
-  function selection(){return {token:snapshot.token,excluded:[...excluded],...(snapshot.params.weight_reference?{target_areas:{land:snapshot.params.land,built:snapshot.params.built}}:{})};}
+  function selection(){const manual=window.ACMComparisonValuation?.value();return {token:snapshot.token,excluded:[...excluded],report_ids:comparisonRows().filter(row=>!unselected.has(row.id)).map(row=>row.id),...(manual==null?{}:{manual_valuation:manual}),...(snapshot.params.weight_reference?{target_areas:{land:snapshot.params.land,built:snapshot.params.built}}:{})};}
+  function updateReportButtons(){const none=!result?.new||!comparisonRows().some(row=>!unselected.has(row.id));$('cmp-word').disabled=none;$('cmp-pdf').disabled=none;$('cmp-save').disabled=none;}
+  $('cmp-comparison-content').addEventListener('change',event=>{const id=event.target.dataset.mapSelect;if(!id||!snapshot)return;event.target.checked?unselected.delete(id):unselected.add(id);renderMap();updateReportButtons();$('cmp-save').textContent='Guardar en historial';$('cmp-status').textContent='Marcadores e informe actualizados con las propiedades marcadas.';});
+  document.addEventListener('acm:valuation-adjusted',()=>{const total=window.ACMComparisonValuation?.value();const displayed=$('cmp-new').querySelector('.cmp-total');if(displayed&&total!=null)displayed.textContent=money(total);updateReportButtons();$('cmp-save').textContent='Guardar en historial';});
   function renderSimple(){
     const host=$('cmp-simple');host.hidden=!aiExplanation;
     $('cmp-ai-title').textContent=aiProposal?'Propuesta de la IA · pendiente de aplicar':'Explicación del resultado';
@@ -351,6 +360,7 @@
     aiProposal=null;$('cmp-proposal').hidden=true;
     result.breakdown.forEach(d=>{const row=snapshot.records.find(r=>r.id===d.id);if(row)for(const key of ['land_similarity','built_similarity','distance_similarity','overall_similarity'])if(d[key]!=null)row[key]=d[key];});
     renderSummary();renderCalculationExplanation();renderComparison();renderCards();renderMap();renderDetail();renderSimple();$('cmp-export').disabled=false;$('cmp-word').disabled=!result.new;$('cmp-pdf').disabled=!result.new;$('cmp-save').disabled=!result.new;
+    updateReportButtons();
     $('cmp-calculation-open').disabled=false;
     $('cmp-scenario').hidden=result.model!=='components'||!result.new;
     $('cmp-scenario-land').value=snapshot.params.land;$('cmp-scenario-built').value=snapshot.params.built;
@@ -370,7 +380,7 @@
   });
   form.addEventListener('submit',async e=>{
     e.preventDefault();if(form.dataset.authenticated==='false'){requestLogin();return;}const p=input();if(!p.sources.length){$('cmp-status').textContent='Selecciona al menos una fuente.';return;}
-    const seq=++sequence;snapshot=null;excluded.clear();locatedIds.clear();if($('cmp-detail').open)$('cmp-detail').close();clearResult('Buscando comparables…');$('cmp-search').disabled=true;$('cmp-status').textContent='Buscando comparables del tipo seleccionado…';
+    const seq=++sequence;snapshot=null;excluded.clear();unselected.clear();locatedIds.clear();if($('cmp-detail').open)$('cmp-detail').close();clearResult('Buscando comparables…');$('cmp-search').disabled=true;$('cmp-status').textContent='Buscando comparables del tipo seleccionado…';
     try{const data=await post('buscar',p);if(seq!==sequence)return;snapshot=data;result=data.result;tab=p.property_type==='Terreno'?'Terreno':'Casa';render();$('cmp-status').textContent='Análisis actualizado. Desmarca comparables para recalcular el mapa, las tarjetas y el resultado.';}
     catch(error){if(seq===sequence){snapshot=null;clearResult('La búsqueda no terminó. Reintenta.');$('cmp-status').textContent=error.message;}}
     finally{if(seq===sequence)$('cmp-search').disabled=false;}
