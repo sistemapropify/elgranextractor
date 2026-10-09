@@ -872,6 +872,7 @@ def _available_scraped_properties(sources=('remax', 'properati'), include_inacti
     inspect a possible or confirmed withdrawal without deleting the record.
     """
     from ingestas.models import PropiedadesCompetencia, RevisionPropiedadScraping
+    from .remax_agency import remax_agency
 
     reviews = {r.propiedad_id: r.motivo for r in RevisionPropiedadScraping.objects.filter(excluida=True)}
 
@@ -881,6 +882,7 @@ def _available_scraped_properties(sources=('remax', 'properati'), include_inacti
         'tipo_operacion', 'precio_soles', 'precio_usd', 'area_m2',
         'area_terreno', 'area_construida', 'distrito', 'direccion_texto',
         'latitud', 'longitud', 'precision_ubicacion', 'imagen_url', 'url',
+        'agencia_agente', 'datos_crudos',
     ]
     lifecycle_fields = [
         'estado_publicacion', 'primera_vez_vista', 'ultima_vez_vista',
@@ -1006,6 +1008,7 @@ def _available_scraped_properties(sources=('remax', 'properati'), include_inacti
             },
             'source': source,
             'source_key': source_key,
+            'agency': remax_agency(row.get('datos_crudos'), row.get('agencia_agente')) if source_key == 'remax' else None,
             'code': row['id_origen'] or '',
             'title': row['titulo'] or row['id_origen'] or f'Propiedad {source}',
             'price': str(price) if price is not None else None,

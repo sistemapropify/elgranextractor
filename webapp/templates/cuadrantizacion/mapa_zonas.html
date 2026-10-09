@@ -4,6 +4,7 @@
 {% block title %}Mapa de Zonas - Cuadrantización{% endblock %}
 
 {% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/remax-agencies.css' %}?v=1">
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
 <link rel="stylesheet" href="{% static 'css/zonificacion-marcadores.css' %}">
@@ -1108,6 +1109,18 @@ window.onGoogleMapsLoaded = function() {
                 <div class="propify-floating-card__body" id="propify-floating-card-body"></div>
             </section>
 
+            <section id="remax-agencies-card" hidden aria-labelledby="remax-agencies-title">
+                <header id="remax-agencies-handle" tabindex="0" aria-label="Mover agencias Remax" title="Arrastra para mover; también puedes usar las flechas">
+                    <h2 id="remax-agencies-title">Agencias Remax</h2>
+                </header>
+                <div class="remax-agencies-actions">
+                    <button id="remax-agencies-all" type="button">Marcar todas</button>
+                    <button id="remax-agencies-none" type="button">Desmarcar todas</button>
+                </div>
+                <p id="remax-agencies-status" role="status">Cargando agencias…</p>
+                <div id="remax-agencies-list" role="group" aria-label="Agencias Remax visibles en el mapa"></div>
+            </section>
+
             <!-- Panel de información de zona -->
             <div class="zone-info-panel" id="zone-info-panel" style="display: none;">
                 <h4 id="zone-info-title">Zona</h4>
@@ -1293,6 +1306,7 @@ window.onGoogleMapsLoaded = function() {
 {% block extra_scripts %}
 {{ block.super }}
 <script src="{% static 'js/ml-map-context.js' %}"></script>
+<script src="{% static 'js/remax-agencies.js' %}?v=1"></script>
 {{ capas_raster|json_script:"capas-raster-data" }}
 {{ capas_vectoriales|json_script:"capas-vectoriales-data" }}
 <script src="{% static 'js/capa-raster-overlay.js' %}?v=5"></script>
@@ -1320,6 +1334,7 @@ let propifyPropertiesLoaded = false;
 let propertyFilterFacetsLoaded = false;
 let propifyProperties = [];
 let propifyPropertiesRequest = null;
+let remaxAgencyFilter = null;
 let propertyAreaProjection = null;
 let propertyAreaSelectionBounds = null;
 let propertyAreaSelectionRectangle = null;
@@ -1932,6 +1947,7 @@ function setupPropifyPropertyLayer() {
     if (!toggle) return;
 
     setupDraggablePropifyCard();
+    if (window.RemaxAgencies) remaxAgencyFilter = RemaxAgencies.init(renderPropifyPropertyMarkers);
 
     toggle.addEventListener('change', function() {
         if (typeFilter) typeFilter.disabled = !toggle.checked;
@@ -2096,6 +2112,7 @@ function filteredPropifyProperties() {
     var quality = document.getElementById('property-quality-filter').value;
     return propifyProperties.filter(function(property) {
         return selectedSources.indexOf(property.source_key) !== -1 &&
+            (!remaxAgencyFilter || remaxAgencyFilter.accepts(property)) &&
             (!precision || property.location_precision === precision) &&
             (!operation || property.operation_type === operation) &&
             (!type || property.property_type === type) &&
@@ -2515,6 +2532,7 @@ function initializePropifyPriceLabelOverlayPrototype() {
 }
 
 function renderPropifyPropertyMarkers() {
+    if (remaxAgencyFilter) remaxAgencyFilter.sync();
     clearPropifyPropertyMarkers();
     var count = document.getElementById('propify-properties-count');
     var toggle = document.getElementById('toggle-propify-properties');
@@ -2572,6 +2590,7 @@ function renderPropifyPropertyMarkers() {
 }
 
 function loadPropifyProperties() {
+    if (remaxAgencyFilter) remaxAgencyFilter.loading();
     var count = document.getElementById('propify-properties-count');
     var selectedSources = Array.from(document.querySelectorAll('input[name="property-source"]:checked'))
         .map(function(filter) { return filter.value; });
@@ -2603,6 +2622,7 @@ function loadPropifyProperties() {
         .then(parseJsonResponse)
         .then(function(data) {
             propifyProperties = data.properties || [];
+            if (remaxAgencyFilter) remaxAgencyFilter.update(propifyProperties);
             if (!propertyFilterFacetsLoaded) {
                 // Respaldo: si el pedido de opciones falló, se llenan con lo
                 // que trajo este portal para no dejar los filtros vacíos.
@@ -2638,6 +2658,7 @@ function loadPropifyProperties() {
         })
         .catch(function(error) {
             if (error.name === 'AbortError') return;
+            if (remaxAgencyFilter) remaxAgencyFilter.failed();
             propifyPropertiesLoaded = false;
             if (count) count.textContent = '!';
             console.error('Error loading available properties:', error);
