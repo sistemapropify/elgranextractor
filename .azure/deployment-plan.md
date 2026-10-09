@@ -1,12 +1,15 @@
 # ACM valuation controls — release 2026-10-09
 
-Status: Validated — ACM code release only; deployment pending
+Status: Validated — restore button follow-up release; deployment pending
 
 ## 1. Authorized scope
 The user approved publishing the locally reviewed ACM changes on 2026-10-09.
 Release the comparison table selection, distance and publication columns, manual
 valuation dial, rounding switch, and selected-only property reports without codes.
 Preserve the existing dark table styling and inline similarity percentages.
+The user also approved deploying the follow-up Restablecer button on 2026-10-09.
+It restores the exact computed total, clears manual report overrides and rounding,
+and preserves property selection. Publish the four reviewed UI files for this update.
 
 ## 2. Deployment recipe and existing target
 Recipe: CI/CD, existing `.github/workflows/main_granextractorservice.yml`.
@@ -14,11 +17,12 @@ Push the reviewed release commit to `main` to use the existing federated Azure l
 build, collectstatic, App Service deployment and verification pipeline.
 Target: `granextractorservice`, resource group `rg-elgranextractor`, Brazil South.
 Public page: https://acm.propifai.com/acm/analisis/
-No infrastructure, runtime credentials, dependency or database schema changes.
+This code release changes no infrastructure, dependencies or database schema.
+The PDF server map key was separately configured through runtime settings, not Git.
 The scraping-worker preparation below is independent and retains its original gates.
 
 ## 3. Integration and local preview
-Origin main and shared local HEAD are both `5b0f2aa1626e995b2769f5b9c9d809a241702113`.
+Origin main and shared local HEAD are both `fb8720dd7405f174bbe0915c6f31da66d5cf661d`.
 The previous production workflow for that revision completed successfully.
 The requested application files are already identical in this worktree and
 `D:/PROMETEO`, which serves the local preview. Preserve unrelated local edits.
@@ -40,11 +44,12 @@ After a successful push, provide the Actions run link. The user requested to
 monitor deployment personally; do not wait or report it as live before completion.
 Rollback, if needed, is a new revert commit through the same pipeline.
 
-## 6. Known limitation
-The current server map key returns HTTP 403 because Maps Static API is disabled.
-This release supports a separate `GOOGLE_MAPS_STATIC_API_KEY` and corrects PDF
-image sizing and selected-property maps, but does not claim to enable Google APIs.
-Google key configuration remains pending and is outside this code publication.
+## 6. PDF maps runtime configuration
+Maps Static API is now enabled and a working server key is configured through
+`GOOGLE_MAPS_STATIC_API_KEY` locally and in Azure. The secret is excluded from Git.
+Real Google requests returned HTTP 200 from local and Azure execution environments.
+The generated PDF was rendered and inspected: all four requested map images appeared.
+This existing runtime configuration must be preserved by the code deployment.
 
 ## 7. Validation proof
 2026-10-09:
@@ -59,6 +64,16 @@ Google key configuration remains pending and is outside this code publication.
 - Isolated Django `collectstatic`: all three release CSS/JavaScript files collected.
 - `git diff --check` and `git diff --cached --check`: passed; staged scope contains
   only ten ACM files and this release record. Unrelated shared edits are preserved.
+
+Follow-up release validation (2026-10-09):
+- Base deployment `37970833325` completed successfully on `fb8720dd`.
+- Native browser fixture for Restablecer passed: footer/sidebar original totals,
+  no manual override in the report, rounding cleared, selection preserved,
+  placement beside the switch, white text and inline percentages preserved.
+- Local application, map layers endpoint and updated script: HTTP 200.
+- Repeated JavaScript syntax, Git whitespace and native browser checks passed.
+- Updated static assets collected successfully; all four UI files match the shared
+  local checkout. Commit scope is those four files and this release record.
 
 ---
 

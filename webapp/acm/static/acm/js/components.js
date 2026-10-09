@@ -313,7 +313,7 @@
   function selection(){const manual=window.ACMComparisonValuation?.value();return {token:snapshot.token,excluded:[...excluded],report_ids:comparisonRows().filter(row=>!unselected.has(row.id)).map(row=>row.id),...(manual==null?{}:{manual_valuation:manual}),...(snapshot.params.weight_reference?{target_areas:{land:snapshot.params.land,built:snapshot.params.built}}:{})};}
   function updateReportButtons(){const none=!result?.new||!comparisonRows().some(row=>!unselected.has(row.id));$('cmp-word').disabled=none;$('cmp-pdf').disabled=none;$('cmp-save').disabled=none;}
   $('cmp-comparison-content').addEventListener('change',event=>{const id=event.target.dataset.mapSelect;if(!id||!snapshot)return;event.target.checked?unselected.delete(id):unselected.add(id);renderMap();updateReportButtons();$('cmp-save').textContent='Guardar en historial';$('cmp-status').textContent='Marcadores e informe actualizados con las propiedades marcadas.';});
-  document.addEventListener('acm:valuation-adjusted',()=>{const total=window.ACMComparisonValuation?.value();const displayed=$('cmp-new').querySelector('.cmp-total');if(displayed&&total!=null)displayed.textContent=money(total);updateReportButtons();$('cmp-save').textContent='Guardar en historial';});
+  document.addEventListener('acm:valuation-adjusted',()=>{const total=window.ACMComparisonValuation?.value()??result?.new?.total;const displayed=$('cmp-new').querySelector('.cmp-total');if(displayed&&total!=null)displayed.textContent=money(total);updateReportButtons();$('cmp-save').textContent='Guardar en historial';});
   function renderSimple(){
     const host=$('cmp-simple');host.hidden=!aiExplanation;
     $('cmp-ai-title').textContent=aiProposal?'Propuesta de la IA · pendiente de aplicar':'Explicación del resultado';

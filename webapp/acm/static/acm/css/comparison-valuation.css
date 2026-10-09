@@ -11,6 +11,10 @@
 .cmp-valuation-summary { display: grid; gap: 5px; color: #80e9b7; }
 #cmp-adjusted-value { font-size: 24px; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .cmp-valuation-controls { display: flex; align-items: center; gap: 12px; }
+#cmp-comparison .cmp-valuation-restore { padding: 6px 9px; border: 1px solid #50565e; border-radius: 5px; background: linear-gradient(#343a42,#20252b); box-shadow: 0 2px 4px #0006,inset 0 1px #ffffff16; color: #e6edf3; font-size: 11px; line-height: 1.2; cursor: pointer; }
+#cmp-comparison .cmp-valuation-restore:hover:enabled { border-color: #80caff; background: linear-gradient(#404955,#29313b); }
+#cmp-comparison .cmp-valuation-restore:disabled { opacity: .5; cursor: default; }
+#cmp-comparison .cmp-valuation-restore:focus-visible { outline: 2px solid #80caff; outline-offset: 2px; }
 .cmp-valuation-dial { position: relative; width: 104px; height: 104px; flex: 0 0 104px; }
 .cmp-valuation-leds { position: absolute; inset: 0; pointer-events: none; }
 .cmp-valuation-led { position: absolute; left: calc(50% - 2px); top: calc(50% - 2px); width: 4px; height: 4px; border-radius: 50%; background: #171b20; transform: rotate(var(--led-angle)) translateY(-47px); }
