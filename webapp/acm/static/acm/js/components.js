@@ -353,6 +353,7 @@
     renderSelectedCard();
     setSelectedCardOpen(true);
     applySelectedRow();
+    setSidePanel(true);
     if(map)map.panTo({lat:row.lat,lng:row.lng});
   }
   function clearSelectedRecord(){
@@ -361,6 +362,17 @@
     setSelectedCardOpen(false);
     applySelectedRow();
     const card=$('cmp-selected-card');if(card)card.hidden=true;
+    setSidePanel(false);
+  }
+  // El panel derecho solo existe cuando hay un pin elegido, y muestra solo esa propiedad.
+  function setSidePanel(show){
+    const sidebar=$('cmp-results'),resizer=$('cmp-resizer');
+    if(sidebar){sidebar.hidden=!show;sidebar.classList.toggle('cmp-only-selection',!!show);}
+    if(resizer)resizer.hidden=!show;
+    if(map&&typeof google!=='undefined'&&google.maps){
+      google.maps.event.trigger(map,'resize');
+      window.dispatchEvent(new Event('resize'));
+    }
   }
   function selection(){const manual=window.ACMComparisonValuation?.value();return {token:snapshot.token,excluded:[...excluded],report_ids:comparisonRows().filter(row=>!unselected.has(row.id)).map(row=>row.id),...(manual==null?{}:{manual_valuation:manual}),...(snapshot.params.weight_reference?{target_areas:{land:snapshot.params.land,built:snapshot.params.built}}:{})};}
   function updateReportButtons(){const none=!result?.new||!comparisonRows().some(row=>!unselected.has(row.id));$('cmp-word').disabled=none;$('cmp-pdf').disabled=none;$('cmp-save').disabled=none;}

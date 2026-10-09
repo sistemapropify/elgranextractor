@@ -1372,3 +1372,9 @@
 /* La fila de "Casas comparables" que corresponde al pin, en verde fosforescente. */
 .cmp-calc-table tr.cmp-row-selected td { background: #39ff14; color: #04240a; font-weight: 700; }
 .cmp-calc-table tr.cmp-row-selected td a { color: #04240a; text-decoration: underline; }
+
+/* El panel derecho no existe hasta que se elige un pin, y entonces muestra solo esa propiedad.
+   (Sin el !important, el display:flex de .map-sidebar gana al [hidden] del navegador.) */
+.map-sidebar[hidden] { display: none !important; }
+.cmp-resizer[hidden] { display: none !important; }
+#cmp-results.cmp-only-selection > :not(#cmp-selected-card) { display: none !important; }
