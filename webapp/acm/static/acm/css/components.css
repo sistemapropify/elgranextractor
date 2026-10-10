@@ -1029,6 +1029,10 @@
 .components-acm .cmp-search-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; margin: 0 0 8px; padding: 3px 0 7px; border: 0; border-bottom: 1px solid #36495b; background: transparent; text-align: left; font-size: 11px; font-weight: 600; }
 .components-acm .cmp-search-toggle span { font-size: 16px; }
 .cmp-search-message { margin: 0; color: #ffb4a9; font-size: 11px; }
+.components-acm .cmp-search-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin-bottom: 8px; }
+.components-acm .cmp-search-actions button { width: 100%; min-height: 32px; padding: 6px 10px; text-align: left; font-size: 11px; }
+.components-acm #cmp-move-pin { background: #193957; border-color: #3978aa; }
+.components-acm #cmp-new-acm { background: transparent; border-color: #526476; }
 
 #cmp-form {
     display: grid;

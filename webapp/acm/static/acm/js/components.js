@@ -22,7 +22,16 @@
   function setSearchFormCollapsed(collapsed){
     form.hidden=collapsed;const toggle=$('cmp-form-toggle');toggle.disabled=searching;
     toggle.setAttribute('aria-expanded',String(!collapsed));
-    toggle.innerHTML=(searching?'Buscando comparables…':collapsed?'Modificar búsqueda':'Parámetros de búsqueda')+' <span aria-hidden="true">'+(collapsed?'+':'−')+'</span>';
+    toggle.innerHTML=(searching?'Buscando comparables…':collapsed?'Buscar y calcular':'Parámetros de búsqueda')+' <span aria-hidden="true">'+(collapsed?'+':'−')+'</span>';
+    $('cmp-search-actions').hidden=!collapsed||searching;
+    $('cmp-move-pin').disabled=searching;$('cmp-new-acm').disabled=searching;
+  }
+  function reopenSearch(){
+    if(searching)return;
+    setSearchFormCollapsed(false);
+    if(locationLocked){setLocationLocked(false);invalidate();}
+    $('cmp-search-message').hidden=true;
+    $('cmp-status').textContent='Mueve el pin o modifica los datos y vuelve a pulsar Buscar y calcular.';
   }
   function configureType(){
     const type=form.elements.property_type.value,house=type==='Casa',land=type==='Terreno';
@@ -478,8 +487,14 @@
   });
   $('cmp-form-toggle').addEventListener('click',()=>{
     if(searching)return;
-    if(form.hidden){setSearchFormCollapsed(false);if(locationLocked){setLocationLocked(false);invalidate();}$('cmp-search-message').hidden=true;}
+    if(form.hidden)reopenSearch();
     else setSearchFormCollapsed(true);
+  });
+  $('cmp-move-pin').addEventListener('click',reopenSearch);
+  $('cmp-new-acm').addEventListener('click',()=>{
+    if(searching)return;
+    // Restablecer antes de recargar evita recuperar los campos anteriores del navegador.
+    form.reset();$('cmp-address').value='';window.location.reload();
   });
   form.addEventListener('input',e=>{if(e.target.name){if(e.target.name==='property_type')configureType();$('cmp-radius-label').textContent=form.elements.radius.value+' m';invalidate();}});
   form.addEventListener('change',e=>{if(e.target.name){if(e.target.name==='property_type')configureType();invalidate();}});

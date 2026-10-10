@@ -1,3 +1,56 @@
+# ACM move pin and new analysis — release 2026-10-10
+
+Status: Validated — deployment pending
+
+## 1. Authorized scope
+The user explicitly authorized production deployment of the locally tested
+Mover pin y recalcular and Nuevo ACM buttons on 2026-10-10.
+The buttons are stacked beneath the collapsed search card. Reopening preserves
+all entered parameters and unlocks the target pin; Nuevo ACM clears parameters,
+analysis, selections and map state by restoring defaults and reloading.
+
+## 2. Deployment recipe and existing target
+CI/CD: .github/workflows/main_granextractorservice.yml, non-forced push to main.
+Existing Azure App Service granextractorservice, resource group
+rg-elgranextractor, subscription 0219eecc-9920-4789-9929-3091a2f09daf,
+Brazil South. Endpoint: https://acm.propifai.com/acm/analisis/
+No infrastructure, dependencies, roles, schema or runtime settings changes.
+
+## 3. Integration and local preview
+Base, origin/main and shared local HEAD: 61710d8765b97b01bb712162164c86f712272baa.
+Base deployment run 38068208504 completed successfully.
+The three UI files match D:/PROMETEO byte-for-byte. Preserve unrelated shared
+Cuadrantizacion edits and all untracked files. Fetch immediately before push,
+integrate any newer revision, and never force-push.
+
+## 4. Validation
+Azure Validate applied to the current release:
+- Eight isolated ComponentsEndpointTests passed; system check clean.
+- node --check components.js and Git whitespace checks passed.
+- Isolated collectstatic produced matching CSS and JavaScript.
+- Local HTTP page and versioned assets returned 200 and matched source.
+- Existing Azure target verified Running under the intended subscription.
+- Native local browser verified collapse, both stacked buttons, reopening with
+  preserved values, target-pin movement, another search/collapse, and Nuevo ACM
+  returning blank fields, default Casa/500 m, no result and no selected cards.
+Infrastructure, what-if and RBAC change checks do not apply to this UI-only update.
+
+## 5. Execution and rollback
+Commit only components.html, components.css, components.js and this record.
+Push main, monitor CI/CD to completion, verify public HTML, exact updated static
+content and health, then report live. Rollback is a revert through the pipeline.
+
+## 6. Runtime configuration
+Preserve all existing Azure application settings and secrets.
+
+## 7. Validation proof
+All checks above passed on 2026-10-10. New assets: components.css?v=32 and
+components.js?v=51. Browser screenshot: acm-mover-pin-nuevo-acm.jpg.
+
+---
+
+# Previous release record (preserved)
+
 # ACM comparables and reports — release 2026-10-10
 
 Status: Validated — deployment pending
