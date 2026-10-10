@@ -9,6 +9,7 @@ urlpatterns = [
     path('componentes/explicar/', views.explain_ai, name='componentes_explicar'),
     path('componentes/informe-word/', views.word_report, name='componentes_informe_word'),
     path('componentes/informe-pdf/', views.pdf_report, name='componentes_informe_pdf'),
+    path('componentes/informe-html/', views.html_report, name='componentes_informe_html'),
     path('componentes/guardar/', views.save_history, name='componentes_guardar'),
     path('componentes/historial/<uuid:uuid>/informe-word/', views.history_word_report, name='componentes_historial_word'),
     path('componentes/historial/<uuid:uuid>/informe-pdf/', views.history_pdf_report, name='componentes_historial_pdf'),

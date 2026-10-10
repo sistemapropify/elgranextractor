@@ -28,6 +28,19 @@ def sample():
 
 
 class ComponentsEngineTests(SimpleTestCase):
+    def test_apartment_radius_is_a_distance_limit_not_a_count_limit(self):
+        p=parameters({**params(),'property_type':'Departamento','built':120,'land':0})
+        raw=[record(f'inside-{i}',kind='Departamento',built=120,
+                    lat=p['lat']+(100+i*9)/111195) for i in range(43)]
+        raw.append(record('outside',kind='Departamento',built=120,
+                          lat=p['lat']+501/111195))
+        rows=candidates(raw,p)
+        self.assertEqual(len(rows),43)
+        self.assertTrue(all(row['distance']<=500 for row in rows))
+        self.assertNotIn('outside',[row['id'] for row in rows])
+        result=calculate(rows,p)
+        self.assertEqual(len(result['breakdown']),43)
+
     def test_three_lands_produce_house_breakdown_and_estimate(self):
         raw=sample()[:6]
         result=calculate(candidates(raw,params()),params())
@@ -246,6 +259,15 @@ class ComponentsEndpointTests(SimpleTestCase):
             self.assertContains(response,f'id="{card}"')
         self.assertContains(response,'Referencias incompletas',count=0)
         self.assertContains(response,'Casas solo referencia')
+
+    def test_comparable_card_offers_pdf_word_and_html_downloads(self):
+        req=self.factory.get('/acm/analisis/');req.current_user=self.user
+        response=page(req)
+        self.assertContains(response,'>Descargar informe</button>')
+        self.assertContains(response,'aria-controls="cmp-comparison-downloads"')
+        for format_name in ('pdf','word','html'):
+            self.assertContains(response,f'data-report-format="{format_name}"')
+        self.assertContains(response,'data-html-url="/acm/componentes/informe-html/"')
 
     def test_main_dashboard_uses_components_and_detail_modal(self):
         self.assertEqual(reverse('acm:acm_analisis'),'/acm/analisis/')

@@ -46,12 +46,30 @@
     return precision(record).short + ' · ' + markerValue(record, value, mode) + similarity;
   }
   function group(record, value) {
-    if (value.referenceOnly) return 'property';
     if (value.status === 'land' && value.selected) return 'land';
     if (value.status === 'house' || value.status === 'area') return 'property';
     return record.kind === 'Terreno' ? 'other_reference' : 'property_reference';
   }
-  const api = {property, marker, precision, group};
+  function comparisonRows(records, params, result, excluded = new Set()) {
+    const targetGroup = params.property_type === 'Terreno' ? 'land' : 'property';
+    return records.filter(record => record.kind === params.property_type &&
+      group(record, property(record, result, excluded)) === targetGroup);
+  }
+  function mapRadius(params, result, layer) {
+    return params.property_type === 'Casa' && layer === 'land'
+      ? (result?.land_radius || params.radius) : params.radius;
+  }
+  function inMapRadius(record, params, result, layer) {
+    return Number.isFinite(record.distance) && record.distance <= mapRadius(params, result, layer);
+  }
+  function mapRings(params, result, layers = new Set()) {
+    const rings = [{radius:params.radius, color:'#00bfff', label:'Radio de comparables'}];
+    if (params.property_type === 'Casa' && layers.has('land') && result?.land_radius && result.land_radius !== params.radius) {
+      rings.push({radius:result.land_radius, color:'#ffb347', label:'Radio de suelo'});
+    }
+    return rings;
+  }
+  const api = {property, marker, precision, group, comparisonRows, mapRadius, inMapRadius, mapRings};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ACMComponentsPresentation = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Informe ACM · {{ property_type }} · Propify</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#f3f6f7;color:#1f2933;font:15px/1.5 Arial,sans-serif}
+    main{max-width:1100px;margin:32px auto;padding:32px;background:white;border-radius:12px}
+    header{border-bottom:3px solid #279896;padding-bottom:18px;margin-bottom:24px}
+    .brand{color:#047d7d;font-size:24px;font-weight:bold}h1{margin:8px 0;font-size:28px}h2{font-size:20px;color:#047d7d;margin-top:28px}
+    .muted{color:#6b7280;font-size:13px}.values{display:flex;gap:14px;flex-wrap:wrap}
+    .value{flex:1;min-width:200px;padding:16px;border:1px solid #d9e5e5;border-radius:8px}.value strong{display:block;font-size:24px;color:#047d7d}
+    dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}dt{font-size:13px;color:#6b7280}dd{margin:0;font-weight:bold}
+    .table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:10px;border:1px solid #d9e5e5;text-align:left}th{background:#eaf4f4}td{vertical-align:top}
+    a{color:#047d7d}.operation{padding:14px;border-left:3px solid #279896;background:#f3f8f8;margin:12px 0;break-inside:avoid}.operation p{margin:6px 0}
+    footer{border-top:1px solid #d9e5e5;margin-top:28px;padding-top:16px}
+    @media(max-width:600px){main{margin:0;padding:18px;border-radius:0}dl{grid-template-columns:1fr 1fr}h1{font-size:23px}}
+    @media print{@page{size:A4 landscape;margin:15mm}body{background:white}main{margin:0;padding:0;max-width:none}.table-scroll{overflow:visible}.value{break-inside:avoid}a{color:inherit}h2{break-after:avoid}}
+  </style>
+</head>
+<body>
+<main>
+  <header><div class="brand">Propify</div><h1>Análisis comparativo de mercado</h1><p>{{ property_type }} · Informe de valoración</p><p class="muted">Generado el {{ generated_at }}</p></header>
+  <section aria-label="Valores del inmueble" class="values">
+    <div class="value">Valor de salida al mercado<strong>{{ values.market_entry }}</strong></div>
+    <div class="value">Valor comercial<strong>{{ values.commercial }}</strong></div>
+    <div class="value">Valor de realización inmediata<strong>{{ values.immediate }}</strong></div>
+  </section>
+  <h2>Inmueble a valorar</h2>
+  <dl>
+    <div><dt>Tipo de propiedad</dt><dd>{{ property_type }}</dd></div>
+    {% if property_type == 'Casa' or property_type == 'Terreno' %}<div><dt>Terreno</dt><dd>{{ land }}</dd></div>{% endif %}
+    {% if property_type != 'Terreno' %}<div><dt>Construcción</dt><dd>{{ built }}</dd></div>{% endif %}
+    <div><dt>Radio de búsqueda</dt><dd>{{ radius }}</dd></div>
+    <div><dt>Coordenadas</dt><dd>{{ lat }}, {{ lng }}</dd></div>
+  </dl>
+  <h2>Comparables incluidos en el informe · {{ rows|length }}</h2>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Propiedad</th><th>Ubicación</th><th>Precio anunciado</th><th>Terreno</th><th>Construcción</th><th>Distancia</th><th>Publicación</th></tr></thead>
+    <tbody>{% for row in rows %}<tr><td>{{ row.title }}</td><td>{{ row.district }}</td><td>{{ row.price }}</td><td>{{ row.land }}</td><td>{{ row.built }}</td><td>{{ row.distance }}</td><td>{% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener noreferrer">Ver anuncio</a>{% else %}Sin enlace{% endif %}</td></tr>{% empty %}<tr><td colspan="7">No hay comparables marcados.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <h2>Valoración y operaciones</h2>
+  <p><strong>{{ method }}</strong></p><p>{{ calculation }}</p>
+  {% if manual_value %}<p>Valor comercial ajustado en la tarjeta: <strong>{{ manual_value }}</strong>.</p>{% endif %}
+  {% for row in rows %}<article class="operation"><strong>{{ row.title }}</strong><p>{{ row.operation }}</p></article>{% endfor %}
+  {% if messages %}<h2>Observaciones del análisis</h2><ul>{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}
+  <footer class="muted">Estimación de precios de oferta, no de ventas cerradas. El valor de salida al mercado es el valor comercial +5%; el valor de realización inmediata es el valor comercial −5%. Puedes abrir este archivo en un navegador o imprimirlo.</footer>
+</main>
+</body>
+</html>

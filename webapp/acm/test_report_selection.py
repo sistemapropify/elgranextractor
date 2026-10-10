@@ -6,9 +6,40 @@ from .test_components import params, record, sample, _pdf_text
 from .components_engine import candidates, calculate
 from .components_pdf import build_acm_pdf, _static_map, _maps_key
 from .report_selection import report_records, report_total, report_values
+from .components_html import build_acm_html
 
 
 class ReportSelectionTests(SimpleTestCase):
+    def test_html_contains_only_selected_records_and_manual_value(self):
+        p=params();rows=candidates(sample(),p)
+        selected=rows[0]
+        selected['title']='Casa seleccionada <script>alert(1)</script>'
+        selected['url']='javascript:alert(1)'
+        for row in rows[1:]:
+            row['title']='NO INCLUIR EN INFORME'
+        result=calculate(rows,p)
+        p.update(report_ids=[selected['id']],manual_valuation=234000)
+        html=build_acm_html(p,rows,result)
+        self.assertIn('USD 234,000.00',html)
+        self.assertIn('USD 245,700.00',html)
+        self.assertIn('USD 222,300.00',html)
+        self.assertIn('Casa seleccionada &lt;script&gt;',html)
+        self.assertNotIn('<script>',html)
+        self.assertNotIn('javascript:',html)
+        self.assertNotIn('NO INCLUIR EN INFORME',html)
+        self.assertIn('ajuste por terreno',html)
+
+    def test_html_supports_apartment_and_land_operations(self):
+        for kind,area in [('Departamento','built'),('Terreno','land')]:
+            p={**params(),'property_type':kind}
+            rows=candidates([record('only',kind=kind,built=100 if kind=='Departamento' else None)],p)
+            result=calculate(rows,p)
+            p['report_ids']=['only']
+            html=build_acm_html(p,rows,result)
+            self.assertIn('Mediana del precio por m²',html)
+            self.assertIn(f"{p[area]:,.2f} m²",html)
+            self.assertIn('Ver anuncio',build_acm_html(p,[{**rows[0],'url':'https://example.com/propiedad'}],result))
+
     def test_only_checked_records_and_manual_total_are_reported(self):
         p=params();rows=candidates(sample(),p);p['report_ids']=[rows[0]['id']]
         self.assertEqual(report_records(p,rows),[rows[0]])
@@ -91,6 +122,33 @@ class SelectedReportEndpointTests(SimpleTestCase):
         request=self.factory.post('/',json.dumps(data),content_type='application/json')
         request.current_user=self.user;request._dont_enforce_csrf_checks=True
         return request
+
+    @patch('acm.components_views._persist_history')
+    @patch('acm.components_views.load_records')
+    def test_html_download_uses_signed_selection_and_rejects_invalid_requests(self,load,persist):
+        import json
+        from django.urls import reverse
+        from .components_views import search,html_report
+        self.assertEqual(reverse('acm:componentes_informe_html'),'/acm/componentes/informe-html/')
+        p=params();load.return_value=(candidates(sample(),p),[])
+        persist.return_value=(SimpleNamespace(codigo_display='ACM-html-test'),True)
+        snapshot=json.loads(search(self.request(p)).content)
+        selected=[snapshot['records'][0]['id']]
+        response=html_report(self.request({'token':snapshot['token'],'report_ids':selected,'manual_valuation':234000}))
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response['Content-Type'],'text/html; charset=utf-8')
+        self.assertIn('attachment',response['Content-Disposition'])
+        self.assertEqual(response['X-ACM-History-Code'],'ACM-html-test')
+        self.assertIn(b'USD 234,000.00',response.content)
+        self.assertEqual(persist.call_args.args[1]['report_ids'],selected)
+        for payload,status in [({'token':snapshot['token'],'report_ids':[]},422),
+                               ({'token':snapshot['token'],'report_ids':['foreign']},400),
+                               ({'token':'tampered'},400)]:
+            self.assertEqual(html_report(self.request(payload)).status_code,status)
+        request=self.request({'token':snapshot['token']});request.current_user=None
+        self.assertEqual(html_report(request).status_code,401)
+        request=self.request({'token':snapshot['token']});request._dont_enforce_csrf_checks=False
+        self.assertEqual(html_report(request).status_code,403)
 
     @patch('acm.components_views._persist_history')
     @patch('acm.components_pdf.build_acm_pdf',return_value=b'%PDF-selection')

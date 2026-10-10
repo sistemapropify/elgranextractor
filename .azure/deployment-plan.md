@@ -1,3 +1,77 @@
+# ACM comparables and reports — release 2026-10-10
+
+Status: Validated — deployment pending
+
+## 1. Authorized scope
+The user explicitly requested deployment on 2026-10-10.
+Publish the locally reviewed comparable-card filtering, selected-radius map pins
+and visible circle, PDF/Word/HTML report dropdown, HTML export, target-pin lock
+and collapsible search form, and removal of portal codes from property cards.
+Automatic selection of the nearest 3–5 properties was proposed but is not
+implemented in this release. Preserve the existing calculation engine.
+
+## 2. Deployment recipe and existing target
+Recipe: CI/CD via `.github/workflows/main_granextractorservice.yml` and a
+non-forced push to main. Existing Azure subscription
+0219eecc-9920-4789-9929-3091a2f09daf; App Service granextractorservice;
+resource group rg-elgranextractor; Brazil South.
+Public endpoint: https://acm.propifai.com/acm/analisis/
+No infrastructure, role assignments, dependencies, or database schema changes.
+Existing runtime secrets and independently prepared worker infrastructure remain
+outside the release scope.
+
+## 3. Integration and local preview
+Production revision, origin/main, worktree base, and shared local HEAD:
+1c282e076f358a31cc8e06c26e11252831e8655c.
+Base production Actions run 38004027726 completed successfully.
+All 11 requested application files are identical in this worktree and
+D:/PROMETEO. Preserve the shared checkout's unrelated Cuadrantizacion edits
+and untracked files. Fetch again immediately before publication; integrate any
+new upstream revision before pushing. Never force-push.
+
+## 4. Validation steps
+- [x] Compare latest main and successful production revision.
+- [x] Run 45 isolated Django regression tests.
+- [x] JavaScript syntax and comparable/radius presentation tests.
+- [x] Isolated collectstatic; byte-match all three changed assets.
+- [x] Confirm Azure authentication and existing App Service Running.
+- [x] Final local HTTP page and static byte checks.
+- [x] Final staged scope and whitespace checks.
+Resource-template, what-if, policy and RBAC-change validation do not apply to
+this application-only release through the configured pipeline.
+
+## 5. Execution and rollback
+Commit only the 11 requested ACM files and this release record. Push to main,
+monitor the existing build/deploy pipeline, then verify the public page, updated
+static content, and health endpoint before reporting the release live.
+Rollback, if needed, is a new revert commit through the same pipeline.
+
+## 6. Runtime configuration
+Preserve the existing Maps Static API key and all runtime app settings.
+No secret values are included in the release artifact or validation output.
+
+## 7. Validation proof
+Azure Validate applied on 2026-10-10:
+- manage.py test acm.test_components.ComponentsEngineTests
+  acm.test_components.ComponentsEndpointTests acm.test_report_selection
+  acm.test_primary_reference --settings=acm.components_test_settings --noinput:
+  45 passed; system checks passed. Expected mocked PDF 403 cases passed.
+- node --check components.js and components-presentation.js: passed.
+- components-presentation.test.cjs: passed, including comparable-only cards
+  and target/reference/house-soil radius rules.
+- Isolated Django collectstatic: components.css, components.js and
+  components-presentation.js collected and byte-matched to source.
+- Azure read-only target query: Running, correct subscription and region.
+- git diff --check and git diff --cached --check: passed; only the 11 ACM
+  files and this release record are staged.
+- Final local page and all three versioned assets: HTTP 200 and byte matches.
+- Prior local native browser checks passed: dropdown PDF/Word/HTML,
+  actual HTML download, visible circle, form collapse and pin lock/unlock.
+
+---
+
+# Previous release record (preserved)
+
 # ACM valuation controls — release 2026-10-09
 
 Status: Validated — restore button follow-up release; deployment pending

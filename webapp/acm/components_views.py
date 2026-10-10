@@ -314,6 +314,34 @@ def pdf_report(request):
 @require_POST
 @csrf_protect
 @authenticated
+def html_report(request):
+    try:
+        state,excluded=_signed_selection(request)
+        if state['params'].get('report_ids')==[]:
+            return JsonResponse({'error':'Marca al menos una propiedad para incluirla en el informe.'},status=422)
+        result=calculate(state['records'],state['params'],excluded)
+        if not result.get('new'):
+            return JsonResponse({'error':'Primero completa un cálculo ACM.'},status=422)
+        from .components_html import build_acm_html
+        content=build_acm_html(state['params'],state['records'],result,excluded)
+        history,_=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
+        response=HttpResponse(content,content_type='text/html; charset=utf-8')
+        response['Content-Disposition']='attachment; filename="informe-acm.html"'
+        response['X-ACM-History-Code']=history.codigo_display
+        response['Cache-Control']='no-store'
+        return response
+    except signing.SignatureExpired:
+        return JsonResponse({'error':'La búsqueda venció (30 minutos). Busca nuevamente para descargar el informe.'},status=409)
+    except (signing.BadSignature,ValueError,TypeError,KeyError,AttributeError):
+        return JsonResponse({'error':'Búsqueda o selección inválida. Busca nuevamente.'},status=400)
+    except Exception:
+        logger.exception('ACM componentes: no se pudo generar el informe HTML')
+        return JsonResponse({'error':'No se pudo generar el informe HTML. El error quedó registrado.'},status=503)
+
+
+@require_POST
+@csrf_protect
+@authenticated
 def save_history(request):
     try:
         state,excluded=_signed_selection(request)

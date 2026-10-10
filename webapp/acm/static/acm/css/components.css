@@ -1026,6 +1026,9 @@
     width: min(280px, calc(100% - 20px));
     padding: 10px;
 }
+.components-acm .cmp-search-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; margin: 0 0 8px; padding: 3px 0 7px; border: 0; border-bottom: 1px solid #36495b; background: transparent; text-align: left; font-size: 11px; font-weight: 600; }
+.components-acm .cmp-search-toggle span { font-size: 16px; }
+.cmp-search-message { margin: 0; color: #ffb4a9; font-size: 11px; }
 
 #cmp-form {
     display: grid;
@@ -1138,6 +1141,9 @@
     display: grid;
     gap: 2px;
 }
+.cmp-radius-note { display: grid; gap: 3px; margin: 6px 0 0; color: #d3deeb; font-size: 10px; line-height: 1.4; }
+.cmp-radius-note span { display: flex; align-items: center; gap: 5px; }
+.cmp-radius-note i { flex: 0 0 12px; height: 3px; border: 1px solid #fff; }
 
 #cmp-controls .cmp-visible-layers .property-layer-toggle,
 #cmp-controls .cmp-map-settings .capa-raster-toggle {
@@ -1336,6 +1342,17 @@
 .cmp-floating-card .cmp-area-similarity.is-medium { color: #ffdc73; }
 .cmp-floating-minimized { width: 170px; }
 .cmp-floating-minimized .cmp-floating-header { border-bottom: 0; }
+#cmp-comparison { overflow: visible; }
+#cmp-comparison .cmp-floating-header { border-radius: 6px 6px 0 0; }
+.cmp-comparison-report-footer { position: relative; display: flex; justify-content: flex-end; padding: 6px; border-top: 1px solid #36495b; }
+.components-acm .cmp-comparison-report-footer button { padding: 5px 9px; font-size: 11px; }
+#cmp-comparison-report::after { content: '▾'; margin-left: 7px; }
+#cmp-comparison-downloads { position: absolute; top: calc(100% + 4px); right: 6px; z-index: 140; display: grid; width: 145px; gap: 2px; padding: 5px; background: #17212c; border: 1px solid #526275; border-radius: 6px; box-shadow: 0 6px 18px #0008; }
+#cmp-comparison-downloads.opens-up { top: auto; bottom: calc(100% + 4px); }
+.components-acm #cmp-comparison-downloads button { width: 100%; text-align: left; border: 0; background: transparent; border-radius: 3px; padding: 7px 9px; }
+.components-acm #cmp-comparison-downloads button:hover, .components-acm #cmp-comparison-downloads button:focus-visible { background: #30465b; }
+#cmp-comparison-downloads[hidden] { display: none; }
+.cmp-floating-minimized .cmp-comparison-report-footer { display: none; }
 .cmp-floating-dragging { user-select: none; }
 #cmp-map { isolation: isolate; }
 .map-sidebar .cmp-comparison-access { margin-top: 8px; padding: 5px 7px; font-size: 11px; width: 100%; }
