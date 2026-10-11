@@ -1,3 +1,73 @@
+# Publication capture — release 2026-10-11
+
+Status: Validated — deployment pending
+
+## 1. Authorized scope
+The user explicitly authorized production publication on 2026-10-11 and asked
+not to monitor: the user will follow the pipeline and verify production.
+Publish full-page capture for Properati, Remax, Urbania, Adondevivir and
+Facebook Marketplace, opening inline maps when necessary, private Blob archive,
+capture URL/date in each record and the table/viewer, preservation of earlier
+captures, and the scraper table's Estreno label for age zero.
+Captures apply to new jobs; preview and listing-only do not archive a detail.
+
+## 2. Deployment recipe and existing target
+Existing CI/CD: .github/workflows/main_granextractorservice.yml, push to main.
+App Service granextractorservice, rg-elgranextractor, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Endpoint: https://acm.propifai.com/ingestas/scraping/dashboard/
+No new infrastructure, dependencies, roles or database schema. Capture metadata
+uses existing datos_crudos; files use propiedadesimagenes/capturas/.
+
+## 3. Integration and preview
+Base/latest origin/main/shared HEAD: 9528326376442f81187abde0ba7aa4778fd54125.
+All 18 release application/test files match the served D:/PROMETEO checkout.
+Preserve unrelated Cuadrantizacion changes and untracked files.
+Non-forced push only; fetch immediately before dispatch.
+
+## 4. Validation
+- [x] 98 isolated Django tests passed: capture across all five adapters, map
+  click order, auth, SAS expiry, persistence, cancellation, gallery and recovery.
+- [x] Two capture-view tests passed after final URL validation tightening.
+- [x] Python AST and embedded browser JavaScript syntax checks passed.
+- [x] makemigrations ingestas --check --dry-run: no schema changes.
+- [x] Rendered table has 36 columns, capture link/date, and Estreno for zero.
+- [x] Capture viewer escapes titles; unavailable map/scroll status is visible.
+- [x] Local HTTP page and static assets 200; served JavaScript matches source.
+- [x] Native browser: capture checkbox checked, Capture column, authenticated
+  capture view, existing-record empty state verified.
+Infrastructure provisioning, what-if and role changes are not applicable to this
+code-only update using the existing storage configuration and deployment identity.
+
+## 5. Execution and verification handoff
+Commit only the 18 release files and this record, then push main to trigger the
+existing pipeline. At the user's explicit request, do not monitor its progress
+or report the new functionality live without verification. Supply the Actions
+workflow link; user will monitor and verify the public page/assets. The pipeline
+itself builds, collects static files and checks production startup and health.
+Rollback is a revert through the same pipeline.
+
+## 6. Runtime configuration
+Preserve all existing settings and secrets. Viewer generates 30-minute SAS
+access on demand; responses are private/no-store. No signed URLs are stored.
+
+## 7. Validation proof
+Azure Validate applied actual checks on 2026-10-11:
+manage.py test ingestas.tests.test_publication_capture ingestas.tests.test_photo_gallery
+ ingestas.tests.test_scraping_integrity ingestas.tests.test_scraping_job_reporting
+ ingestas.tests.test_scraping_recovery ingestas.tests.test_facebook_marketplace_scraper
+ scrapi.test_properati_age --settings=ingestas.scraping_test_settings --noinput:
+98 tests passed; system checks clean. Final CaptureViewTests: 2 passed.
+makemigrations --check --dry-run: no changes. AST and node script checks passed.
+Local HTTP 200 and authenticated browser checks passed; screenshot
+scraper-captura-opcion-local.jpg. Real Properati map opened and full-page image
+verified; other adapter flows tested with mocked pages and Blob uploads.
+No new bulk live scrape or production data backfill was started.
+
+---
+
+# Previous release record (preserved)
+
 # Scraper galleries and Properati construction age — release 2026-10-11
 
 Status: Validated — deployment pending

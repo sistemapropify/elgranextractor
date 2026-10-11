@@ -2068,6 +2068,7 @@ class ScrapingControlView(ScrapingLoginRequiredMixin, View):
                         'urls': urls,
                         'limits': {'max_items': max_items},
                         'photo_mode': photos,
+                        'capture_publication': request.POST.get('capture_publication', '1') != '0',
                         'mode': 'preview' if action == 'preview' else 'scrape',
                     },
                 )
@@ -2397,6 +2398,33 @@ class ScrapingPropiedadesView(ListView):
             self.request.GET.get('estado'),
         ])
         return ctx
+
+
+class ScrapingCaptureView(ScrapingLoginRequiredMixin, TemplateView):
+    template_name = 'ingestas/scraping_captura.html'
+
+    def get_context_data(self, **kwargs):
+        from scrapi.publication_capture import capture_metadata
+        from urllib.parse import urlsplit
+        context = super().get_context_data(**kwargs)
+        obj = get_object_or_404(PropiedadesCompetencia, pk=self.kwargs['pk'])
+        capture = capture_metadata(obj.datos_crudos)
+        from scrapi.photo_gallery import image_url
+        url = image_url(capture.get('url'))
+        signed = None
+        if url and urlsplit(url).scheme == 'https' and (urlsplit(url).hostname or '').endswith('.blob.core.windows.net'):
+            try:
+                signed = generate_read_sas_url(url, expiry_minutes=30)
+            except AzureStorageError:
+                pass
+        context.update(propiedad=obj, captura=capture, captura_url=signed)
+        return context
+
+    def render_to_response(self, context, **kwargs):
+        response = super().render_to_response(context, **kwargs)
+        response['Cache-Control'] = 'private, no-store'
+        response['Referrer-Policy'] = 'no-referrer'
+        return response
 
 
 class ScrapingGalleryView(ScrapingLoginRequiredMixin, TemplateView):

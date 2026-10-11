@@ -436,6 +436,7 @@ async def scrape_marketplace(
     progress_callback: Callable[[dict[str, Any]], bool] | None = None,
     batch_callback: Callable[[list[dict[str, Any]]], dict[str, int]] | None = None,
     photo_mode: str = 'all',
+    capture_enabled: bool = True,
 ) -> list[dict[str, Any]]:
     from camoufox.async_api import AsyncCamoufox
     search_url = validate_url('facebook_marketplace', search_url)
@@ -672,6 +673,9 @@ async def scrape_marketplace(
                     from .photo_gallery import store_photos
                     await store_photos(row, item.get('photos') or [item.get('image_url')],
                                        'facebook_marketplace', emit, mode=photo_mode)
+                if batch_callback and capture_enabled:
+                    from .publication_capture import capture_publication
+                    await capture_publication(row, detail_page, 'facebook_marketplace', emit)
                 standardized.append(row)
                 if batch_callback:
                     saved = await asyncio.to_thread(batch_callback, [row])

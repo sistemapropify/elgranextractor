@@ -32,6 +32,8 @@ def execute_paged_skill(skill, portal, runner, saver, params, context=None):
         )
         if 'photo_mode' in inspect.signature(runner).parameters:
             runner_kwargs['photo_mode'] = params.get('photo_mode', 'cover')
+        if 'capture_enabled' in inspect.signature(runner).parameters:
+            runner_kwargs['capture_enabled'] = params.get('capture_publication', True)
         if portal == 'adondevivir' and context.get('native_verification'):
             runner_kwargs['native_verification'] = True
         elif portal in ('properati', 'adondevivir') and run_id and context.get('execution_token'):

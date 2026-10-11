@@ -380,6 +380,7 @@
         </div>
 
         <div class="portal-checkboxes">
+            <label><input type="checkbox" id="capturePublication" checked> Guardar captura completa de la publicación (con mapa)</label>
             <label for="photoMode">Fotos en Azure Blob Storage
                 <select id="photoMode">
                     <option value="all" selected>Todas las fotos</option>
@@ -646,6 +647,7 @@
                     <th>Agente</th>
                     <th>URL</th>
                     <th>Imagen</th>
+                    <th>Captura</th>
                     <th>ID Origen</th>
                     <th>Título</th>
                     <th>Operación</th>
@@ -659,7 +661,7 @@
                 </tr>
             </thead>
             <tbody id="tablaBody">
-                <tr><td colspan="35" style="text-align:center;color:var(--terminal-info);padding:20px;">Cargando...</td></tr>
+                <tr><td colspan="36" style="text-align:center;color:var(--terminal-info);padding:20px;">Cargando...</td></tr>
             </tbody>
         </table>
     </div>
@@ -944,6 +946,7 @@ function control(action) {
         formData.append('portales', checked.join(','));
         formData.append('urls', JSON.stringify(recogerUrls()));
         formData.append('max_items', document.getElementById('maxMarketplaceItems').value);
+        formData.append('capture_publication', document.getElementById('capturePublication').checked ? '1' : '0');
         formData.append('photo_mode', document.getElementById('photoMode').value);
         appendLog('info', 'Portales seleccionados: ' + checked.join(', '));
     } else {

@@ -45,6 +45,7 @@ urlpatterns = [
     path('scraping/status/<int:job_id>/', views.ScrapingStatusView.as_view(), name='scraping_status'),
     path('scraping/verificacion/<int:job_id>/', views.ScrapingVerificationView.as_view(), name='scraping_verificacion'),
     path('scraping/propiedades/', views.ScrapingPropiedadesView.as_view(), name='scraping_propiedades'),
+    path('scraping/propiedades/<int:pk>/captura/', views.ScrapingCaptureView.as_view(), name='scraping_captura'),
     path('scraping/propiedades/<int:pk>/galeria/', views.ScrapingGalleryView.as_view(), name='scraping_galeria'),
     path('scraping/propiedades/exportar/', views.ScrapingPropiedadesExportView.as_view(), name='scraping_propiedades_exportar'),
     path('scraping/historial/', views.ScrapingHistorialView.as_view(), name='scraping_historial'),

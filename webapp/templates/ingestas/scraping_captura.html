@@ -1,0 +1,17 @@
+{% extends 'propifai_base.html' %}
+{% block title %}Captura · {{ propiedad.titulo|default:'Publicación' }}{% endblock %}
+{% block content %}
+<div style="max-width:1280px;margin:24px auto;padding:16px;">
+  <h1 style="font-size:24px;">Captura de la publicación</h1>
+  <p>{{ propiedad.titulo|default:'Propiedad' }} · {{ propiedad.fuente }}</p>
+  {% if captura_url %}
+  <p>Capturada el {{ propiedad.captura_publicacion_fecha|date:'d/m/Y H:i' }}. El enlace de acceso tiene una duración de 30 minutos.</p>
+  {% if captura.map_status != 'visible' %}<p role="status" style="color:#d29922;">El mapa no estaba disponible o no terminó de cargar en esta captura.</p>{% endif %}
+  {% if not captura.scroll_complete %}<p role="status" style="color:#d29922;">El recorrido de la página quedó incompleto; puede faltar contenido que se carga al desplazarse.</p>{% endif %}
+  <p><a href="{{ captura_url }}" target="_blank" rel="noopener noreferrer" style="color:#58a6ff;">Abrir imagen original para descargar</a> · <a href="{% url 'ingestas:scraping_dashboard' %}" style="color:#58a6ff;">Volver al scraper</a></p>
+  <img src="{{ captura_url }}" alt="Captura completa de {{ propiedad.titulo|default:'la publicación' }}" style="display:block;width:100%;height:auto;border:1px solid #30363d;border-radius:8px;" referrerpolicy="no-referrer">
+  {% else %}
+  <p>No hay una captura disponible. Active «Guardar captura completa» en una nueva extracción.</p>
+  {% endif %}
+</div>
+{% endblock %}

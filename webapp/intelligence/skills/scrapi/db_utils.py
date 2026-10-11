@@ -95,6 +95,8 @@ def guardar_propiedades(propiedades, fuente, lifecycle_run_id=None, execution_to
                     from scrapi.photo_gallery import preserve_gallery, gallery_photos
                     defaults['datos_crudos'] = preserve_gallery(defaults.get('datos_crudos'),
                                                                existing.datos_crudos, existing.imagen_url)
+                    from scrapi.publication_capture import preserve_capture
+                    defaults['datos_crudos'] = preserve_capture(defaults['datos_crudos'], existing.datos_crudos)
                     archived = [photo for photo in gallery_photos(defaults['datos_crudos']) if photo.get('stored')]
                     if archived and not any(photo['url'] == defaults.get('imagen_url') for photo in archived):
                         defaults['imagen_url'] = archived[0]['url']

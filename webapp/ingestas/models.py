@@ -397,6 +397,21 @@ class PropiedadesCompetencia(models.Model):
         verbose_name='URL de imagen'
     )
 
+    @property
+    def captura_publicacion_url(self):
+        from scrapi.publication_capture import capture_metadata
+        return capture_metadata(self.datos_crudos).get('url')
+
+    @property
+    def captura_publicacion_fecha(self):
+        from django.utils.dateparse import parse_datetime
+        from scrapi.publication_capture import capture_metadata
+        value = capture_metadata(self.datos_crudos).get('captured_at')
+        try:
+            return parse_datetime(value) if value else None
+        except (ValueError, TypeError):
+            return None
+
     # ── Metadata ──
     antiguedad_anios = models.IntegerField(
         null=True, blank=True,

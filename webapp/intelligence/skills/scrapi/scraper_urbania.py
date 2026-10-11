@@ -8,11 +8,11 @@ from scrapi.normalization import urbania_row as _estandarizar_urbania
 
 
 def _ejecutar_scraping(max_paginas=0, start_page=1, source_url=None, url=None,
-                       progress_callback=None, batch_callback=None, resume_state=None, photo_mode='cover',
+                       progress_callback=None, batch_callback=None, resume_state=None, photo_mode='cover', capture_enabled=True,
                        listing_only=False):
     return run_paged('urbania', max_paginas=max_paginas, start_page=start_page,
         source_url=requested_url('urbania', {'source_url': source_url or url}),
-        progress_callback=progress_callback, batch_callback=batch_callback, photo_mode=photo_mode,
+        progress_callback=progress_callback, batch_callback=batch_callback, photo_mode=photo_mode, capture_enabled=capture_enabled,
         resume_state=resume_state, listing_only=listing_only)
 
 

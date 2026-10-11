@@ -1,6 +1,6 @@
 {% if page_obj %}
 <tr>
-    <td colspan="35" style="padding:7px 10px;color:var(--terminal-info);background:rgba(56,139,253,.06);">
+    <td colspan="36" style="padding:7px 10px;color:var(--terminal-info);background:rgba(56,139,253,.06);">
         Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }}
         de {{ page_obj.paginator.count }} propiedades, ordenadas por extracción reciente.
     </td>
@@ -44,7 +44,7 @@
         <span style="color:#8b949e;">—</span>
         {% endif %}
     </td>
-    <td>{{ p.antiguedad_anios|default:'—' }}</td>
+    <td>{% if p.antiguedad_anios == 0 %}Estreno{% else %}{{ p.antiguedad_anios|default_if_none:'—' }}{% endif %}</td>
     <td>{{ p.departamento|default:'—' }}</td>
     <td>{{ p.provincia|default:'—' }}</td>
     <td style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;">{{ p.direccion_texto|default:'—' }}</td>
@@ -70,6 +70,7 @@
         —
         {% endif %}
     </td>
+    <td style="min-width:110px;">{% if p.captura_publicacion_url %}<a href="{% url 'ingestas:scraping_captura' p.pk %}" target="_blank" rel="noopener noreferrer">Ver captura</a><br><small>{{ p.captura_publicacion_fecha|date:'d/m/Y H:i' }}</small>{% else %}—{% endif %}</td>
     <td style="font-size:10px;">{{ p.id_origen|default:'—' }}</td>
     <td style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;" title="{{ p.titulo|default:'' }}">{{ p.titulo|default:'—' }}</td>
     <td>{{ p.tipo_operacion|default:'—' }}</td>
@@ -83,7 +84,7 @@
 </tr>
 {% empty %}
 <tr>
-    <td colspan="35" style="text-align:center;color:var(--terminal-info);padding:20px;">
+    <td colspan="36" style="text-align:center;color:var(--terminal-info);padding:20px;">
         <i class="bi bi-inbox" style="font-size:20px;display:block;margin-bottom:4px;"></i>
         No hay propiedades scrapeadas aún
     </td>

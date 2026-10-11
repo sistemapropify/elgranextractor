@@ -74,6 +74,7 @@ class ScraperFacebookMarketplaceSkill(BaseSkill):
                 progress_callback=progress_callback,
                 batch_callback=save_batch,
                 photo_mode=params.get('photo_mode', 'all'),
+                capture_enabled=params.get('capture_publication', True),
             )
         except Exception as exc:
             import logging
