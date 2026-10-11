@@ -1,0 +1,59 @@
+{% extends 'propifai_base.html' %}
+{% block title %}Galería · {{ propiedad.titulo|default:'Propiedad' }}{% endblock %}
+{% block extra_head %}
+<style>
+.photo-gallery{max-width:1050px;margin:24px auto;padding:20px;color:#e6edf3;background:#161b22;border:1px solid #30363d;border-radius:12px}
+.photo-gallery h1{font-size:22px;margin:8px 0}.photo-gallery p{color:#a8b5c5}.photo-gallery a{color:#8dc8ff}
+.photo-gallery-stage{background:#0d1117;border-radius:10px;margin:20px 0;padding:12px;min-height:260px;text-align:center}
+.photo-gallery-stage img{width:100%;height:clamp(260px,55vh,600px);object-fit:contain}.photo-gallery-nav{display:flex;justify-content:center;align-items:center;gap:20px;margin-top:10px}
+.photo-gallery button{background:#202b38;border:1px solid #455266;border-radius:6px;color:#e6edf3;padding:8px 12px;cursor:pointer}
+.photo-gallery-thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px}.photo-gallery-thumbs button{padding:3px}.photo-gallery-thumbs img{width:100%;height:85px;object-fit:cover;border-radius:4px}.photo-gallery-thumbs button[aria-pressed=true]{outline:2px solid #58a6ff}.photo-gallery-empty{padding:40px 0;text-align:center}
+</style>
+{% endblock %}
+{% block content %}
+<main class="photo-gallery">
+  <a href="{% url 'ingestas:scraping_propiedades' %}">← Propiedades scrapeadas</a>
+  <h1>{{ propiedad.titulo|default:'Galería de la propiedad' }}</h1>
+  <p>{{ propiedad.fuente|upper }} · {{ fotos|length }} fotos disponibles · {{ fotos_guardadas }} guardadas en Azure</p>
+  {% if fotos_no_disponibles %}<p role="alert">No se pudo habilitar el acceso a {{ fotos_no_disponibles }} fotos archivadas. Vuelve a cargar la galería.</p>{% endif %}
+  {% if galeria_incompleta %}<p>La última extracción leyó solo el listado. Para completar las fotos se necesita visitar la ficha del anuncio.</p>{% endif %}
+  {% if fotos %}
+  <section class="photo-gallery-stage" aria-label="Foto de la propiedad">
+    <img id="gallery-main" src="{{ fotos.0.url }}" alt="Foto 1 de {{ fotos|length }}" referrerpolicy="no-referrer">
+    <p id="gallery-error" role="status" hidden>Esta foto no pudo cargar. Prueba otra imagen o vuelve a abrir la galería.</p>
+    <div class="photo-gallery-nav"><button id="gallery-prev" type="button" aria-label="Foto anterior">←</button><span id="gallery-position" aria-live="polite">1 / {{ fotos|length }}</span><button id="gallery-next" type="button" aria-label="Foto siguiente">→</button><a id="gallery-original" href="{{ fotos.0.url }}" target="_blank" rel="noopener noreferrer">Abrir foto</a></div>
+  </section>
+  <div class="photo-gallery-thumbs" role="group" aria-label="Elegir foto">
+    {% for foto in fotos %}<button type="button" data-gallery-index="{{ forloop.counter0 }}" aria-label="Ver foto {{ forloop.counter }}" aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}"><img src="{{ foto.url }}" alt="Foto {{ forloop.counter }}" loading="lazy" referrerpolicy="no-referrer"></button>{% endfor %}
+  </div>
+  <p>Las fotos guardadas en Azure se conservan aunque el anuncio deje de publicarse. Las demás dependen del enlace original del portal.</p>
+  {% else %}<p class="photo-gallery-empty">Esta propiedad todavía no tiene fotos guardadas. Las próximas extracciones pueden completar su galería eligiendo “Todas las fotos”.</p>{% endif %}
+</main>
+{% endblock %}
+{% block extra_scripts %}{{ block.super }}
+<script>
+(() => {
+  const buttons=Array.from(document.querySelectorAll('[data-gallery-index]'));
+  if(!buttons.length)return;
+  let index=0;
+  function show(next){
+    index=(next+buttons.length)%buttons.length;
+    const url=buttons[index].querySelector('img').getAttribute('src');
+    document.getElementById('gallery-main').src=url;
+    document.getElementById('gallery-main').alt='Foto '+(index+1)+' de '+buttons.length;
+    document.getElementById('gallery-error').hidden=true;
+    document.getElementById('gallery-position').textContent=(index+1)+' / '+buttons.length;
+    document.getElementById('gallery-original').href=url;
+    buttons.forEach((button,i)=>button.setAttribute('aria-pressed',String(i===index)));
+  }
+  buttons.forEach((button,i)=>button.addEventListener('click',()=>show(i)));
+  document.getElementById('gallery-main').addEventListener('error',()=>document.getElementById('gallery-error').hidden=false);
+  document.getElementById('gallery-prev').addEventListener('click',()=>show(index-1));
+  document.getElementById('gallery-next').addEventListener('click',()=>show(index+1));
+  document.querySelector('.photo-gallery').addEventListener('keydown',event=>{
+    if(!['ArrowLeft','ArrowRight'].includes(event.key))return;
+    event.preventDefault();show(index+(event.key==='ArrowRight'?1:-1));
+  });
+})();
+</script>
+{% endblock %}

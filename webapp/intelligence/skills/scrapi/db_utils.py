@@ -92,6 +92,12 @@ def guardar_propiedades(propiedades, fuente, lifecycle_run_id=None, execution_to
                             and k not in {'id', 'fuente', 'id_origen'} and v is not None}
                 existing = PropiedadesCompetencia.objects.select_for_update().filter(fuente=fuente, id_origen=key).first()
                 if existing:
+                    from scrapi.photo_gallery import preserve_gallery, gallery_photos
+                    defaults['datos_crudos'] = preserve_gallery(defaults.get('datos_crudos'),
+                                                               existing.datos_crudos, existing.imagen_url)
+                    archived = [photo for photo in gallery_photos(defaults['datos_crudos']) if photo.get('stored')]
+                    if archived and not any(photo['url'] == defaults.get('imagen_url') for photo in archived):
+                        defaults['imagen_url'] = archived[0]['url']
                     from ingestas.models import RevisionPropiedadScraping
                     revision = RevisionPropiedadScraping.objects.filter(propiedad=existing).first()
                     if revision:

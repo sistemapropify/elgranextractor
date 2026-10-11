@@ -380,6 +380,14 @@
         </div>
 
         <div class="portal-checkboxes">
+            <label for="photoMode">Fotos en Azure Blob Storage
+                <select id="photoMode">
+                    <option value="all" selected>Todas las fotos</option>
+                    <option value="cover">Solo la portada</option>
+                    <option value="none">No copiar fotos</option>
+                </select>
+            </label>
+            <small>La galería guarda las fotos disponibles en cada ficha. En vista previa no se suben imágenes. Los registros anteriores conservan las fotos que ya tienen.</small>
             {% if scraping_worker %}<p>{{ scraping_worker.message }} · {{ scraping_worker.heartbeat_at|default:'sin registro' }}</p>{% endif %}
             <small>Vista previa prueba los portales seleccionados y muestra datos en los logs, sin guardar propiedades.</small>
             <label><input type="checkbox" class="portal-cb" value="remax" checked> Remax</label>
@@ -936,6 +944,7 @@ function control(action) {
         formData.append('portales', checked.join(','));
         formData.append('urls', JSON.stringify(recogerUrls()));
         formData.append('max_items', document.getElementById('maxMarketplaceItems').value);
+        formData.append('photo_mode', document.getElementById('photoMode').value);
         appendLog('info', 'Portales seleccionados: ' + checked.join(', '));
     } else {
         formData.append('job_id', currentJobId);

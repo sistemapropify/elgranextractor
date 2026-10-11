@@ -2006,6 +2006,8 @@ class ScrapingControlView(ScrapingLoginRequiredMixin, View):
                 adon_executor = request.POST.get('adon_executor', 'local_pc')
                 if adon_executor not in ('local_pc', 'azure'):
                     raise ValueError('Ejecutor de Adondevivir no admitido.')
+                from scrapi.photo_gallery import photo_mode as validate_photo_mode
+                photos = validate_photo_mode(request.POST.get('photo_mode', 'cover'))
             except (ValueError, TypeError) as exc:
                 return JsonResponse({'success': False, 'error': str(exc)}, status=400)
             except Exception:
@@ -2065,6 +2067,7 @@ class ScrapingControlView(ScrapingLoginRequiredMixin, View):
                         'sources': sources,
                         'urls': urls,
                         'limits': {'max_items': max_items},
+                        'photo_mode': photos,
                         'mode': 'preview' if action == 'preview' else 'scrape',
                     },
                 )
@@ -2394,6 +2397,37 @@ class ScrapingPropiedadesView(ListView):
             self.request.GET.get('estado'),
         ])
         return ctx
+
+
+class ScrapingGalleryView(ScrapingLoginRequiredMixin, TemplateView):
+    template_name = 'ingestas/scraping_galeria.html'
+
+    def get_context_data(self, **kwargs):
+        from scrapi.photo_gallery import gallery_photos
+        from urllib.parse import urlsplit
+        context = super().get_context_data(**kwargs)
+        obj = get_object_or_404(PropiedadesCompetencia, pk=self.kwargs['pk'])
+        photos = []
+        unavailable = 0
+        for photo in gallery_photos(obj.datos_crudos, obj.imagen_url):
+            url = photo['url']
+            if (urlsplit(url).hostname or '').endswith('.blob.core.windows.net'):
+                try:
+                    url = generate_read_sas_url(url, expiry_minutes=30)
+                except AzureStorageError:
+                    unavailable += 1
+                    continue
+            photos.append({'url': url, 'stored': photo.get('stored', False)})
+        context.update(propiedad=obj, fotos=photos, fotos_no_disponibles=unavailable,
+                       fotos_guardadas=sum(photo['stored'] for photo in photos),
+                       galeria_incompleta=bool((obj.datos_crudos or {}).get('_gallery_incomplete')))
+        return context
+
+    def render_to_response(self, context, **kwargs):
+        response = super().render_to_response(context, **kwargs)
+        response['Cache-Control'] = 'private, no-store'
+        response['Referrer-Policy'] = 'no-referrer'
+        return response
 
 
 class ScrapingPropiedadesExportView(ScrapingLoginRequiredMixin, View):

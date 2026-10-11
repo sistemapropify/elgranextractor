@@ -15,6 +15,8 @@ from urllib.error import URLError, HTTPError
 from camoufox.async_api import AsyncCamoufox
 from scrapi.camoufox_launcher import camoufox_kwargs
 from scrapi.areas import calcular_areas
+from scrapi.normalization import construction_age
+from scrapi.properati_age import construction_features_from_html
 from scrapi.contracts import ScrapingInterrupted
 from captura.azure_storage import upload_bytes
 # ============================================================
@@ -274,7 +276,7 @@ def estandarizar(prop, fecha_extraccion, fuente="Properati"):
         "longitud": prop.get("Longitud") or None,
         "url": prop.get("URL Propiedad") or None,
         "imagen_url": prop.get("Imagen URL") or None,
-        "antiguedad_anios": parsear_antiguedad(prop.get("Antiguedad")),
+        "antiguedad_anios": construction_age(prop, fecha_extraccion)[0],
         "agencia_agente": construir_agencia_agente(prop),
         "precision_ubicacion": _normalizar_precision(prop.get("Precision Ubicacion")),
     }
@@ -435,7 +437,9 @@ def mapear_a_formato_remax(prop):
         "Energia Electrica": "",
         "Serv. Drenaje": "",
         "Serv. Gas": "",
-        "Antiguedad": "",
+        "Antiguedad": prop.get("Antiguedad", ""),
+        "Anio Construccion": prop.get("Anio Construccion", ""),
+        "Caracteristicas Extra": prop.get("Caracteristicas Extra", ""),
         "Pisos": "",
         "Google Maps Link": f"https://www.google.com/maps?q={lat},{lng}" if lat and lng else "",
         # Campos extra para QA
@@ -938,6 +942,9 @@ async def extraer_detalle(page, prop):
         # se prefiere el HTML servidor (con cookies del navegador) para leer
         # mapData.coordinates y mapData.visibility de forma confiable.
         html_content = await _html_servidor(page, url)
+        year_features = construction_features_from_html(html_content)
+        if year_features:
+            prop["Anio Construccion"] = year_features
         # Priorizar la imagen obtenida en el listado y usar el detalle como respaldo.
         imagen_url = prop.get('Imagen URL') or extraer_imagen_desde_html(html_content)
         if imagen_url:
@@ -1001,7 +1008,7 @@ async def extraer_detalle(page, prop):
                 if (descEl) result.descripcion = descEl.textContent.replace(/\\s+/g, ' ').trim();
 
                 const facilities = [];
-                document.querySelectorAll('.facilities__item span, .facilities__options li span').forEach(el => {
+                document.querySelectorAll('.facilities__item, .facilities__options li').forEach(el => {
                     const txt = el.textContent.trim();
                     if (txt) facilities.push(txt);
                 });
@@ -1015,6 +1022,10 @@ async def extraer_detalle(page, prop):
                 return result;
             }
         """)
+
+        rendered_years = construction_features_from_html(await page.content())
+        if rendered_years:
+            prop["Anio Construccion"] = rendered_years
 
         if detalles:
             if detalles.get('descripcion') and not prop.get('Descripcion'):

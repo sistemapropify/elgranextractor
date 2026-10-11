@@ -581,6 +581,7 @@ def _run_scraping(job_id: int, stop_event=None):
                             'resume_state': resume_state(portal_run),
                             'max_items': (parametros.get('limits') or {}).get('max_items', 1500),
                             'solo_listado': bool(parametros.get('solo_listado')),
+                            'photo_mode': parametros.get('photo_mode', 'all' if portal == 'facebook_marketplace' else 'cover'),
                         },
                         context={
                             'progress_callback': reportar_progreso,

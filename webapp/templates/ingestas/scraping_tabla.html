@@ -58,6 +58,7 @@
         {% else %}—{% endif %}
     </td>
     <td style="min-width:96px;">
+        <a href="{% url 'ingestas:scraping_galeria' p.pk %}" target="_blank" rel="noopener noreferrer" style="display:block;font-size:11px;margin-bottom:4px;color:#58a6ff;">Ver galería</a>
         {% if p.imagen_display_url %}
         <a href="{{ p.imagen_display_url }}" target="_blank" title="Abrir imagen" style="text-decoration:none;">
             <img src="{{ p.imagen_display_url }}" alt="{{ p.titulo|default:'Propiedad' }}" loading="lazy" style="width:84px;height:58px;object-fit:cover;border-radius:6px;border:1px solid rgba(47,129,95,.7);display:block;">

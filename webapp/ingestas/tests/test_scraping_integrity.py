@@ -187,6 +187,26 @@ class DurableScrapingTests(TestCase):
         self.assertEqual(saved.antiguedad_anios, 7)
         self.assertEqual(saved.datos_crudos['_age_evidence']['value'], '7 años')
 
+    def test_properati_construction_year_updates_empty_property_age(self):
+        from datetime import datetime, timezone
+        from scrapi import properati_scraper as source
+        from scrapi.paged_engine import normalize
+        token = uuid.uuid4()
+        job = ScrapingJob.objects.create(estado='running', execution_token=token,
+            parametros={'portales': ['properati']})
+        run = start_or_resume_portal_run(job, 'properati')
+        guardar_propiedades([{'id_origen': 'properati-age', 'titulo': 'Departamento'}],
+            'properati', lifecycle_run_id=run.pk, execution_token=token)
+        with patch('scrapi.paged_engine.datetime') as clock:
+            clock.now.return_value = datetime(2026, 10, 11, tzinfo=timezone.utc)
+            row = normalize('properati', source, {'ID': 'properati-age',
+                'Tipo': 'Departamento', 'Anio Construccion': [2006]})
+        guardar_propiedades([row], 'properati', lifecycle_run_id=run.pk, execution_token=token)
+        saved = PropiedadesCompetencia.objects.get(id_origen='properati-age')
+        self.assertEqual(saved.antiguedad_anios, 20)
+        self.assertEqual(saved.datos_crudos['Anio Construccion'], [2006])
+        self.assertEqual(saved.datos_crudos['_age_evidence']['reference_year'], 2026)
+
     def test_superseded_owner_cannot_write_or_checkpoint(self):
         job, run, token = self.make_run()
         ScrapingJob.objects.filter(pk=job.pk).update(execution_token=uuid.uuid4())

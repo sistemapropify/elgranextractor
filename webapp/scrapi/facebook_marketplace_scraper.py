@@ -435,6 +435,7 @@ async def scrape_marketplace(
     discovery_only: bool = False,
     progress_callback: Callable[[dict[str, Any]], bool] | None = None,
     batch_callback: Callable[[list[dict[str, Any]]], dict[str, int]] | None = None,
+    photo_mode: str = 'all',
 ) -> list[dict[str, Any]]:
     from camoufox.async_api import AsyncCamoufox
     search_url = validate_url('facebook_marketplace', search_url)
@@ -666,25 +667,11 @@ async def scrape_marketplace(
                         ),
                     )
                     continue
-                blob_photos = []
-                for image_position, image_url in enumerate(
-                    (item.get("photos") or [item.get("image_url")])[
-                        :MAX_IMAGES_PER_ITEM
-                    ]
-                ):
-                    blob_url = await asyncio.to_thread(
-                        upload_image, image_url, item["id"], image_position
-                    )
-                    if blob_url:
-                        blob_photos.append(blob_url)
-                    if image_url:
-                        await emit(event='image.saved' if blob_url else 'image.failed',
-                                   level='info' if blob_url else 'warning', property_id=item['id'],
-                                   image_position=image_position,
-                                   message='Marketplace: imagen almacenada' if blob_url else 'Marketplace: imagen no almacenada; URL original conservada')
-                item["blob_photos"] = blob_photos
-                item["blob_image_url"] = blob_photos[0] if blob_photos else None
                 row = validate_row(standardize(item))
+                if batch_callback:
+                    from .photo_gallery import store_photos
+                    await store_photos(row, item.get('photos') or [item.get('image_url')],
+                                       'facebook_marketplace', emit, mode=photo_mode)
                 standardized.append(row)
                 if batch_callback:
                     saved = await asyncio.to_thread(batch_callback, [row])

@@ -243,7 +243,7 @@ async def guarded_navigation(page, portal):
     await page.route('**/*', guard)
 
 
-async def prepare_detail(portal, source, page, raw, emit, *, store_images=False):
+async def prepare_detail(portal, source, page, raw, emit, *, store_images=False, photo_mode='cover'):
     """Use the same bounded retries, normalization and images on initial/resumed work."""
     key = stable_id(raw)
     for attempt in range(1, 7):
@@ -292,19 +292,19 @@ async def prepare_detail(portal, source, page, raw, emit, *, store_images=False)
                     raise RuntimeError('portal.paused: Properati mantiene un bloqueo de acceso; cola conservada') from exc
                 raise
             await wait_for_retry(delay, emit, property_id=key, attempt=attempt)
-    if portal in ('adondevivir', 'properati', 'remax') and store_images and row.get('imagen_url'):
-        try:
-            blob_image = await asyncio.wait_for(asyncio.to_thread(
-                source.subir_imagen_a_blob, row['imagen_url'], raw), timeout=60)
-        except Exception as exc:
-            blob_image = None
-            await emit(event='image.failed', level='warning', property_id=key,
-                       error_type=type(exc).__name__, message=str(exc))
-        if blob_image:
-            row['imagen_url'] = blob_image
-        await emit(event='image.saved' if blob_image else 'image.failed',
-                   level='info' if blob_image else 'warning', property_id=key,
-                   message=f'{portal}: imagen {"almacenada" if blob_image else "no almacenada; URL original conservada"}')
+    if store_images:
+        from .photo_gallery import extract_photos, store_photos
+        urls = [row.get('imagen_url')]
+        if photo_mode == 'all':
+            try:
+                urls = extract_photos(await page.content(), page.url, row.get('imagen_url'))
+            except Exception as exc:
+                await emit(event='gallery.extraction_failed', level='warning', property_id=key,
+                           error_type=type(exc).__name__, message=f'{portal}: no se pudo leer la galería completa')
+        uploader = None
+        if photo_mode == 'cover' and hasattr(source, 'subir_imagen_a_blob'):
+            uploader = lambda url, *_: source.subir_imagen_a_blob(url, raw)
+        await store_photos(row, urls, portal, emit, mode=photo_mode, uploader=uploader)
     await emit(event='detail.extracted', property_id=key, effective_url=page.url,
                message=f'{portal}: ficha {key} analizada',
                fields_present=[k for k, v in row.items() if v is not None and k != 'datos_crudos'],
@@ -356,7 +356,7 @@ async def navigate(page, source, portal, url, emit):
 async def crawl_pages(portal, source_url, source, page, detail_page, *, emit,
                       batch_callback=None, start_page=1, max_pages=300,
                       known_ids=(), saved_ids=(), failed_ids=(), discovery=None,
-                      listing_only=False):
+                      listing_only=False, photo_mode='cover'):
     result = ScrapeRows(discovery=discovery)
     stats = result.discovery
     seen = set(known_ids)
@@ -434,7 +434,7 @@ async def crawl_pages(portal, source_url, source, page, detail_page, *, emit,
             if not listing_only:
                 try:
                     row = await prepare_detail(portal, source, detail_page, raw, emit,
-                                               store_images=bool(batch_callback))
+                                               store_images=bool(batch_callback), photo_mode=photo_mode)
                     failed.discard(key)
                     redirect_streak = 0
                 except ScrapingInterrupted:
@@ -468,6 +468,14 @@ async def crawl_pages(portal, source_url, source, page, detail_page, *, emit,
                     continue
             else:
                 row = normalize(portal, source, raw)
+                if batch_callback:
+                    from .photo_gallery import store_photos
+                    await store_photos(row, [row.get('imagen_url')], portal, emit,
+                                       mode='cover' if photo_mode == 'all' else photo_mode)
+                    if photo_mode == 'all':
+                        row['datos_crudos']['_gallery_incomplete'] = 'listing_only'
+                        await emit(event='gallery.incomplete', level='warning', property_id=key,
+                                   message=f'{portal}: solo listado; la galería completa requiere visitar la ficha')
             if batch_callback:
                 counters = await asyncio.to_thread(batch_callback, [row])
                 await emit(event='persistence.saved', message=f'{portal}: ficha {key} guardada',
@@ -506,7 +514,10 @@ async def crawl_pages(portal, source_url, source, page, detail_page, *, emit,
 
 def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
               progress_callback=None, batch_callback=None, resume_state=None,
-              listing_only=False, manual_verification=None, native_verification=False):
+              listing_only=False, manual_verification=None, native_verification=False,
+              photo_mode='cover'):
+    from .photo_gallery import photo_mode as validate_photo_mode
+    validate_photo_mode(photo_mode)
     if native_verification and (portal != 'adondevivir' or os.name != 'nt' or manual_verification):
         raise ValueError('La verificación nativa requiere Adondevivir en Windows, sin panel remoto.')
     source = importlib.import_module(f'scrapi.{portal}_scraper')
@@ -598,9 +609,15 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
                         # detalle y colgaba el proceso); la propiedad se conserva
                         # con los datos del listado en lugar de perderse.
                         row = normalize(portal, source, raw)
+                        if batch_callback:
+                            from .photo_gallery import store_photos
+                            await store_photos(row, [row.get('imagen_url')], portal, emit,
+                                               mode='cover' if photo_mode == 'all' else photo_mode)
+                            if photo_mode == 'all':
+                                row['datos_crudos']['_gallery_incomplete'] = 'listing_only'
                     else:
                         row = await prepare_detail(portal, source, detail_page, raw, emit,
-                                                   store_images=bool(batch_callback))
+                                                   store_images=bool(batch_callback), photo_mode=photo_mode)
                 except ScrapingInterrupted:
                     raise
                 except Exception as exc:
@@ -631,7 +648,7 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
                 emit=emit, batch_callback=batch_callback, start_page=start_page,
                 max_pages=int(max_paginas or os.environ.get('SCRAPING_MAX_PAGES', '300')),
                 known_ids=state.get('known_ids', []), saved_ids=state.get('saved_ids', []),
-                failed_ids=failed, listing_only=listing_only,
+                failed_ids=failed, listing_only=listing_only, photo_mode=photo_mode,
                 discovery=Discovery(invalid=int(previous.get('invalid', 0)),
                                     pages=int(previous.get('pages', 0)),
                                     duplicates=int(previous.get('duplicates', 0))))

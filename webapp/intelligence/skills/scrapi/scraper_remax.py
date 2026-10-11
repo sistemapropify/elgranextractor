@@ -7,10 +7,10 @@ from .paged_skill import execute_paged_skill
 
 
 def _ejecutar_scraping(max_paginas=0, start_page=1, source_url=None, url=None,
-                       progress_callback=None, batch_callback=None, resume_state=None):
+                       progress_callback=None, batch_callback=None, resume_state=None, photo_mode='cover'):
     return run_paged('remax', max_paginas=max_paginas, start_page=start_page,
         source_url=requested_url('remax', {'source_url': source_url or url}),
-        progress_callback=progress_callback, batch_callback=batch_callback, resume_state=resume_state)
+        progress_callback=progress_callback, batch_callback=batch_callback, photo_mode=photo_mode, resume_state=resume_state)
 
 
 class ScraperRemaxSkill(BaseSkill):

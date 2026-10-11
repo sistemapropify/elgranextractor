@@ -122,6 +122,15 @@ def construction_age(raw, extracted_at=None):
                     r'\b(?:construid[oa]|edificad[oa])\s+en\s+(19\d{2}|20\d{2})\b',
                     r'\bano\s+en\s+que\s+fue\s+construid[oa]\s*[:=\-]?\s*(19\d{2}|20\d{2})\b'):
         years.update(int(m.group(1)) for m in re.finditer(pattern, normalized))
+    # Dedicated construction-year fields must not be treated as an age.
+    for key in ('Anio Construccion', 'Año de construcción', 'Ano de construccion',
+                'anio_construccion', 'yearBuilt', 'constructionYear'):
+        values = raw.get(key)
+        values = values if isinstance(values, (list, tuple)) else [values]
+        for value in values:
+            match = re.fullmatch(r'\s*(18\d{2}|19\d{2}|20\d{2})\s*', str(value or ''))
+            if match:
+                years.add(int(match.group(1)))
     evidence = {'source': 'description_age', 'values': sorted(ages), 'construction_years': sorted(years)}
     reference_year = None
     if years:

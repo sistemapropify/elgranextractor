@@ -1,3 +1,72 @@
+# Scraper galleries and Properati construction age — release 2026-10-11
+
+Status: Validated — deployment pending
+
+## 1. Authorized scope
+The user explicitly requested production deployment on 2026-10-11.
+Publish the local all/cover/none photo modes, Azure Blob photo archive,
+authenticated on-demand gallery in the scraper and ACM detail, preservation of
+previously archived photos, and Properati construction-year conversion to age.
+For extraction in 2026, 2006 becomes 20 years and 2010 becomes 16 years.
+Existing records require re-extraction to fill previously missing photos or age.
+No bulk scraping or data backfill is included in this deployment.
+
+## 2. Deployment recipe and target
+CI/CD: .github/workflows/main_granextractorservice.yml, non-forced push to main.
+Existing App Service granextractorservice, resource group rg-elgranextractor,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf, Brazil South.
+Public endpoints: https://acm.propifai.com/acm/analisis/ and
+https://acm.propifai.com/ingestas/scraping/dashboard/ (authenticated).
+Use existing private Blob container and configured storage helper.
+No infrastructure, role, dependency, schema or runtime-setting changes.
+Existing CI/CD federated identity and previously authorized target remain valid.
+
+## 3. Integration and local preview
+Base / origin/main / shared HEAD: 85fcd53de2c3972c3347826f84c2bbeae3a0b2d5.
+Base Actions run 38082400130 succeeded. All 24 application and test files match
+D:/PROMETEO byte-for-byte. Preserve unrelated shared Cuadrantizacion edits and
+untracked files; fetch again before push and never force-push.
+
+## 4. Validation steps
+- [x] Fetch and compare production base and successful pipeline.
+- [x] 97 isolated Django tests: gallery, persistence, access, job recovery,
+  dashboard, Facebook, Properati age and location, existing detail age.
+- [x] Parse changed Python files; node --check components.js; diff --check.
+- [x] Isolated collectstatic; changed JavaScript matches collected output.
+- [x] Local HTTP ACM and versioned JavaScript 200 and source match.
+- [x] Existing Azure target Running in the intended subscription / region.
+Infrastructure, template what-if, new-role and provisioning checks are not
+applicable to this code-only CI/CD release. Storage uses the existing helper.
+
+## 5. Execution and rollback
+Commit the 24 release files and this record. Push main; monitor build/deploy to
+completion. Verify public HTML, versioned assets, authenticated gallery route,
+health and deployed Properati/gallery source before reporting success.
+Rollback is a revert commit through the same pipeline.
+
+## 6. Runtime configuration
+Preserve all existing application settings and secrets. Gallery SAS URLs are
+created on demand with 30-minute expiry and are not saved in records.
+
+## 7. Validation proof
+Azure Validate performed actual checks on 2026-10-11:
+manage.py test ingestas.tests.test_photo_gallery ingestas.tests.test_scraping_integrity
+ ingestas.tests.test_facebook_marketplace_scraper ingestas.tests.test_scraping_recovery
+ ingestas.tests.test_scraping_dashboard_state scrapi.test_properati_age
+ scrapi.test_detail_age scrapi.test_properati_location
+ --settings=ingestas.scraping_test_settings --noinput: 97 passed; system check clean.
+Python ast.parse for every changed Python file and node --check: passed.
+Isolated django collectstatic: passed; components.js byte match.
+Local /acm/analisis/ and /static/acm/js/components.js?v=52: HTTP 200.
+Azure webapp show: Running, Brazil South, intended target.
+Earlier native local gallery verification loaded all 7 archived images and
+verified next/thumbnail navigation; screenshot scraper-galeria-local.jpg.
+Photo uploads tested with real PNG bytes and mocked SDK; no bulk live scrape.
+
+---
+
+# Previous release record (preserved)
+
 # ACM move pin and new analysis — release 2026-10-10
 
 Status: Validated — deployment pending
