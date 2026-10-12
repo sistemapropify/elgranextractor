@@ -124,6 +124,11 @@
         const element = node('div', null, 'geollaqta-field');
         element.append(node('span', label), node('strong', value == null || value === '' ? 'Sin dato' : value)); parent.append(element);
     }
+    function facadeUrl(lotId, index = 0) {
+        if (typeof lotId !== 'string' || !/^040126\d{8}$/.test(lotId) || !Number.isInteger(index) || index < 0 || index > 11) return null;
+        // Paths verified in COFOPRI's reports, including the numbered extra photos.
+        return 'https://catastro.cofopri.gob.pe/img_catastro/040126/' + lotId.slice(6) + (index ? '_' + index : '') + '.jpg';
+    }
     function init(map, options = {}) {
         if (!$('geollaqta-visible') || map.__geollaqtaPilot) return;
         map.__geollaqtaPilot = true;
@@ -167,23 +172,47 @@
         }
         function gallery(data) {
             const section = $('geollaqta-gallery'); section.replaceChildren(node('strong', 'Galería de imágenes'));
-            if (data.gallery_status === 'direct') {
-                const frame = node('iframe'); frame.src=data.gallery_url;frame.title='Ficha y galería COFOPRI del lote '+data.properties.ID_LOTE;
-                frame.className='geollaqta-gallery-frame';frame.loading='lazy';frame.referrerPolicy='no-referrer';
-                frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
-                section.append(frame,link('Abrir ficha y galería COFOPRI ↗',data.gallery_url));return;
+            const version = detailSerial, lotId = data.properties.ID_LOTE;
+            const current = () => version === detailSerial && !card.hidden && toggle.checked;
+            const notice = node('p', 'Cargando fotografías de la fachada…'), images = node('div');
+            section.append(notice, images);
+            let loaded = 0, pending = 0;
+            function requestPhoto(url, next) {
+                pending++;
+                const image = node('img'); let settled = false, timeout;
+                image.alt = 'Fachada del lote ' + lotId; image.loading = 'eager'; image.referrerPolicy = 'no-referrer';
+                function finish(ok) {
+                    if (settled) return;
+                    settled = true; clearTimeout(timeout);
+                    if (!current()) return;
+                    pending--;
+                    if (ok) {
+                        loaded++; notice.hidden = true;
+                        const anchor = link('', url); anchor.className = 'geollaqta-photo';
+                        anchor.append(image, node('span', 'Abrir fachada ↗')); images.append(anchor);
+                    }
+                    next?.(ok);
+                    if (!pending && !loaded) notice.textContent = 'No se pudo cargar una fotografía de la fachada en COFOPRI.';
+                }
+                image.addEventListener('load', () => finish(true));
+                image.addEventListener('error', () => finish(false));
+                timeout = setTimeout(() => finish(false),20000);
+                image.src = url;
             }
-            if (data.gallery_status === 'unavailable') section.append(node('p', 'La galería de COFOPRI no respondió. Puedes abrir la ficha original.'));
-            else if (!data.images?.length) section.append(node('p', 'COFOPRI no publica imágenes para este lote.'));
-            for (const url of data.images || []) {
-                const anchor = link('', url), image = node('img'); image.src = url;
-                image.alt = 'Fotografía catastral del lote ' + data.properties.ID_LOTE; image.loading = 'lazy'; image.referrerPolicy = 'no-referrer';
-                image.addEventListener('error', () => { anchor.replaceChildren(node('span', 'Imagen no disponible · abrir original')); });
-                anchor.className = 'geollaqta-photo'; anchor.append(image); section.append(anchor);
-            }
+            if (['direct','unavailable'].includes(data.gallery_status)) {
+                const first = facadeUrl(lotId);
+                if (first) {
+                    requestPhoto(first);
+                    // Only continue through extra photos when the previous one exists.
+                    const extra = index => requestPhoto(facadeUrl(lotId,index), ok => { if (ok && index < 11) extra(index+1); });
+                    extra(1);
+                } else notice.textContent = 'No hay una ruta de fotografía disponible para este código catastral.';
+            } else if (data.images?.length) data.images.slice(0,12).forEach(url => requestPhoto(url));
+            else notice.textContent = 'COFOPRI no publica imágenes para este lote.';
+            const records = $('geollaqta-records'); records.replaceChildren(node('strong', 'Ficha catastral'));
             const actions = node('div', null, 'geollaqta-actions');
             (data.records || []).forEach((url, index) => actions.append(link('Ficha individual' + (data.records.length > 1 ? ' ' + (index + 1) : '') + ' ↗', url)));
-            actions.append(link('Ficha y galería COFOPRI ↗', data.gallery_url)); section.append(actions);
+            actions.append(link('Consultar ficha catastral COFOPRI ↗', data.gallery_url)); records.append(actions);
         }
         async function choose(event) {
             event.stop?.();
@@ -206,7 +235,8 @@
             row(fields, 'Pisos', format(selected.getProperty('NIVELES')));
             row(fields, 'Unidades', format(selected.getProperty('NRO_UNIDADES')));
             const zoneSection = node('div', null, 'geollaqta-section'); zoneSection.id = 'geollaqta-zones'; card.append(zoneSection); zones();
-            const photos = node('div', 'Consultando ficha y galería…', 'geollaqta-section'); photos.id = 'geollaqta-gallery'; card.append(photos);
+            const photos = node('div', 'Cargando fachada…', 'geollaqta-section'); photos.id = 'geollaqta-gallery'; card.append(photos);
+            const records = node('div', null, 'geollaqta-section'); records.id = 'geollaqta-records'; card.append(records);
             card.append(node('p', 'Fuente: COFOPRI. La fotografía y los datos corresponden al levantamiento publicado; pueden ser antiguos.', 'map-quality-help'));
             if (coverageData?.transport === 'browser') {
                 const lotId = String(selected.getProperty('ID_LOTE') || '').trim();
@@ -315,5 +345,5 @@
         else toggle.addEventListener('change', () => { if (toggle.checked && !coverageData) coverage().catch(()=>{}); });
         if (!options.acm && new URLSearchParams(location.search).get('catastro') === 'yanahuara') focus();
     }
-    window.GeollaqtaMap = {init, relation, esriGeometry};
+    window.GeollaqtaMap = {init, relation, esriGeometry, facadeUrl};
 })();

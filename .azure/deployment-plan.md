@@ -1,3 +1,48 @@
+# Catastros gallery facade correction - release 2026-10-12
+
+Status: Validated - correction of production explicitly requested
+Recipe: CI/CD, existing GitHub Actions pipeline
+
+## Authorized scope and target
+The gallery previously embedded and linked the COFOPRI report, displaying its
+cadastral record table before the photo. Show verified facade images directly;
+photo clicks open the image URL. Put report and individual-record links in a
+separate Ficha catastral section. Preserve vector navigation and ACM defaults.
+Base: published main b56173a3; successful workflow 38317158997. Preserve all
+other local ACM work in D:/PROMETEO. Existing granextractorservice target and
+federation retained; no database, dependency, role or infrastructure changes.
+Existing WEBSITES_CONTAINER_START_TIME_LIMIT=900 verified and preserved.
+
+## 7. Validation Proof
+azure-validate completed on 2026-10-12, America/Lima:
+- node --check webapp/static/js/geollaqta-map.js passed.
+- test_geollaqta_geometry.cjs: 12 geometry/transport checks passed.
+- test_geollaqta_loading.cjs: 10 navigation/failure checks passed.
+- test_geollaqta_gallery.cjs: 8 gallery regression cases passed, including
+  image-only gallery links, separated records, missing images, multiple photos
+  and late events from a previously selected lot.
+- Production WSGI and both page templates compile with isolated SQLite;
+  collectstatic succeeds and both changed assets byte-match their sources.
+- Shared local HTTP serves JS v5 / CSS v4; unrelated local changes preserved.
+- Browser transport shows the real sample 04012607042018 facade (448 pixels
+  wide); gallery href is its JPG and the report resides in Ficha catastral.
+- COFOPRI reports verified for 04012607042018, 04012607042017 (two photos),
+  and the user's open report 04012607041008. Primary and numbered image paths
+  match the published report URLs. Photos are displayed only after successful
+  image loading; extra discovery stops at the first missing suffix, maximum 12.
+- Azure subscription and existing Running App Service verified. No new RBAC
+  assignments or provisioning; existing startup timeout remains 900 seconds.
+
+## Execution and verification
+Commit the seven scoped files and push to main without force, after rechecking
+main. Monitor CI and verify public JS v5, CSS v4 and their release hashes,
+page markup, application health, and real facade links if the browser's public
+session is available. Never create production users or sessions for testing.
+Rollback via a revert through the same pipeline. Keep other shared local work
+unpublished. Verification evidence lives in outputs/geollaqta-release-validation.
+
+---
+
 # Catastros COFOPRI Yanahuara - release 2026-10-12
 
 Status: Validated - production publication explicitly authorized

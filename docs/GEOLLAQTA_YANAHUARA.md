@@ -1,7 +1,8 @@
 # Catastros COFOPRI · piloto de Yanahuara
 
-Preparado y probado localmente el 12 de octubre de 2026. Publicación autorizada
-por el usuario; seguir el registro de despliegue para la confirmación en vivo.
+La capa inicial se publicó el 12 de octubre de 2026 (b56173a3).
+Corrección de la galería: las fotografías de fachada se muestran directamente,
+y el reporte de fichas queda en su propia sección Ficha catastral.
 
 ## Uso
 
@@ -39,8 +40,15 @@ Los servicios siguen protegidos por la autenticación existente de PROMETEO.
 En Azure, PROMETEO autoriza la configuración y el navegador consulta las capas
 públicas mediante el CORS permitido por COFOPRI. Este transporte evita los
 timeouts observados desde los IP de salida de Azure. La ficha y galería
-originales se incrustan en un iframe de la tarjeta, solicitado solo al elegir
-el lote. El acceso al documento original conserva su propio enlace.
+se muestran por separado. La galería carga las imágenes públicas del lote
+directamente, sin incrustar el reporte. Las rutas de fachada se verificaron en
+dos reportes originales, incluido uno con una fotografía adicional `_1.jpg`.
+La foto solo se muestra y enlaza tras cargar correctamente; si no responde
+en 20 segundos se informa su indisponibilidad. Se consulta la foto principal
+y la primera adicional; se continúa la secuencia adicional únicamente si
+existe la anterior, con un máximo de 12 fotos por selección. La sección Ficha
+catastral contiene el enlace al reporte original y las fichas individuales
+cuando están disponibles.
 El modo puede probarse localmente con `&catastro_transport=browser`.
 
 En el área de muestra se verificaron vías, lotes, manzanas, comercios,
@@ -61,6 +69,8 @@ la disponibilidad del servicio externo que genera la ficha.
   límites y cruces de aristas sin vértices contenidos.
 - 10 comprobaciones de regresión de desplazamiento, zoom, actualización,
   errores y desactivación con respuestas tardías.
+- 8 casos de regresión de galería: URLs de fachada, separación de la ficha,
+  imágenes adicionales, fotos no disponibles y cambio de lote durante la carga.
 - Compilación de plantillas y comprobación de sintaxis de JavaScript.
 - Verificación de las capas reales de COFOPRI y de la ficha/galería de muestra.
 - Verificación HTTP y visual en el servidor `127.0.0.1:8000` servido desde

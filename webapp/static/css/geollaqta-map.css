@@ -16,7 +16,7 @@
 .geollaqta-section p{margin:7px 0;line-height:1.5}
 .geollaqta-photo{display:block;margin-top:8px;border-radius:6px;overflow:hidden}
 .geollaqta-photo img{display:block;width:100%;height:auto;max-height:240px;object-fit:contain;background:#fff}
-.geollaqta-gallery-frame{display:block;width:100%;height:520px;border:0;border-radius:6px;background:#fff;margin:8px 0}
+.geollaqta-photo span{display:block;padding:7px 0;font-size:12px}
 .geollaqta-actions{display:grid;gap:8px;margin-top:10px}
 #panel-geollaqta a{color:#42cbbf}
 .geollaqta-layer-options{display:grid;gap:7px;margin:10px 0}
