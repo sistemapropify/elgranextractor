@@ -1,3 +1,42 @@
+# ACM nearest comparables - release 2026-10-12
+
+Status: Validated - deployment dispatch authorized
+
+## Authorized scope
+The user explicitly requested production deployment on 2026-10-12.
+Apartments, offices and land now use the nearest eligible properties by default:
+all for 1-3 candidates, 3 for 4-15, 4 for 16-30, and 5 for more than 30.
+Radius, quality and exclusion filters apply before selection. Recalculation
+selects the next nearest eligible records. The table and valuation use only
+selected comparables; the remaining properties belong to the reference layer.
+
+## Existing deployment recipe
+Push to main triggers .github/workflows/main_granextractorservice.yml.
+App Service: granextractorservice; resource group: rg-elgranextractor;
+region: Brazil South; subscription: 0219eecc-9920-4789-9929-3091a2f09daf.
+Public endpoint: https://acm.propifai.com/acm/analisis/
+No infrastructure, dependencies, permissions or database schema changes.
+
+## Integration and validation
+Base/latest origin/main and served shared checkout:
+f6a3d086d8a9699d43f26e234cb2bc62ad19ad36.
+All six application/test files match D:/PROMETEO byte for byte.
+Preserve unrelated Cuadrantizacion changes and untracked files.
+- 56 relevant Django tests passed (components, report selection, references).
+- Node presentation tests, JavaScript syntax and git diff checks passed.
+- Served local page and both JavaScript assets return HTTP 200.
+- Local page loads components.js v53 and presentation.js v11.
+- Real local browser: 91 apartments found, 5 selected, 86 references at 500 m.
+  Both map layers enabled; comparable table retains only the five selected rows.
+
+## Deployment handoff
+Fetch latest main before the non-forced push. The user explicitly asked to
+handle monitoring and production verification themselves. Do not poll the
+workflow or claim confirmed live status after dispatch. CI includes deployment
+and public health/static checks. Report the workflow link and pending status.
+
+---
+
 # Publication capture — release 2026-10-11
 
 Status: Validated — deployment pending

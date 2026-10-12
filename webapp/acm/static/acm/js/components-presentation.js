@@ -13,8 +13,17 @@
         selected:result.land_ids.includes(record.id)};
     }
     const detail = result.breakdown.find(row => row.id === record.id);
-    if (!detail) return {status:'pending', reason:result.messages.join(' ') || 'Referencia de suelo pendiente'};
-    if (detail.method === 'built') return {status:'area', offerUnit:detail.offer_unit, adjustedTotal:detail.adjusted_total};
+    const nearestReference = {status:'reference', referenceOnly:true,
+      reason:'Solo referencia: fuera de los comparables más cercanos usados para valorar'};
+    if (!detail) {
+      if (result.model === 'built' && result.selection_method === 'nearest') return nearestReference;
+      return {status:'pending', reason:result.messages.join(' ') || 'Referencia de suelo pendiente'};
+    }
+    if (detail.method === 'built') {
+      if (detail.reference_only || detail.usable === false ||
+          (Array.isArray(result.house_ids) && !result.house_ids.includes(record.id))) return nearestReference;
+      return {status:'area', offerUnit:detail.offer_unit, adjustedTotal:detail.adjusted_total};
+    }
     return {status:detail.reference_only ? 'reference' : detail.usable ? 'house' : 'review', landUnit:detail.land_unit,
       landValue:detail.land_value, remainder:detail.remainder, builtUnit:detail.built_unit,
       targetEstimate:detail.target_estimate,
@@ -52,7 +61,9 @@
   }
   function comparisonRows(records, params, result, excluded = new Set()) {
     const targetGroup = params.property_type === 'Terreno' ? 'land' : 'property';
+    const usedIds = params.property_type === 'Terreno' ? result?.land_ids : result?.house_ids;
     return records.filter(record => record.kind === params.property_type &&
+      (!Array.isArray(usedIds) || usedIds.includes(record.id)) &&
       group(record, property(record, result, excluded)) === targetGroup);
   }
   function mapRadius(params, result, layer) {

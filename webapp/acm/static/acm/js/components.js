@@ -245,7 +245,7 @@
     $('cmp-comparison-open').hidden=!show;
     if(!show){$('cmp-comparison-content').replaceChildren();return;}
     $('cmp-comparison-title').textContent=(type||'Propiedad')+'s comparables';
-    const ordered=similarityOrder(rows);
+    const ordered=result.selection_method==='nearest'?[...rows].sort((a,b)=>a.distance-b.distance||String(a.id).localeCompare(String(b.id))):similarityOrder(rows);
     const surface=(area,similarity)=>area==null?'—':decimals(area)+' m²'+(similarity==null?'':' <span class="cmp-area-similarity '+(similarity<=70?'is-far':similarity<=90?'is-medium':'is-close')+'">('+decimals(similarity)+'%)</span>');
     const age=n=>n==null||!Number.isFinite(Number(n))||Number(n)<0?'—':Number(n)===0?'Estreno':decimals(n)+(Number(n)===1?' año':' años');
     const used=row=>{const v=value(row);return v.recommended||v.status==='area'||(v.status==='land'&&v.selected);};

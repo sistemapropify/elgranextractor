@@ -2,7 +2,7 @@
 import math
 from statistics import median
 
-VERSION = 'componentes-4-proximidad'
+VERSION = 'componentes-5-comparables-cercanos'
 MIN_LANDS = 1
 MIN_HOUSES = 1
 # Portales habilitados en el ACM. La selección se administra aquí, no en el mapa.
@@ -293,13 +293,18 @@ def _similarity_metrics(row,p):
 
 def calculate_same_type(records,p,excluded=()):
     target=p['property_type'];is_land=target=='Terreno';area='land' if is_land else 'built'
-    rows=[r for r in records if r['kind']==target and not r['issues'] and r['id'] not in set(excluded) and r['distance']<=p['radius']]
+    excluded=set(excluded)
+    eligible=[r for r in records if r['kind']==target and not r['issues'] and r['id'] not in excluded and r['distance']<=p['radius']]
+    count=len(eligible)
+    limit=count if count<=3 else 3 if count<=15 else 4 if count<=30 else 5
+    rows=sorted(eligible,key=lambda r:(r['distance'],str(r['id'])))[:limit]
     units=sorted(r['price']/r[area] for r in rows)
     result={'version':VERSION,'model':'land' if is_land else 'built','property_type':target,
         'status':'insufficient','messages':[],'land_radius':p['radius'],'land_count':len(rows) if is_land else 0,
         'house_count':0 if is_land else len(rows),'land_ids':[r['id'] for r in rows] if is_land else [],
         'house_ids':[] if is_land else [r['id'] for r in rows], 'min_lands':MIN_LANDS,'min_houses':MIN_HOUSES,
-        'new':None,'old':None,'land_unit':None,'breakdown':[]}
+        'new':None,'old':None,'land_unit':None,'breakdown':[],
+        'eligible_count':count,'selection_count':len(rows),'selection_method':'nearest'}
     if rows:
         weights=[1/((r['distance'] or 1)+1) for r in rows]
         old_unit=sum(w*r['price']/r[area] for w,r in zip(weights,rows))/sum(weights)

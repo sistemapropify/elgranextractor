@@ -64,3 +64,21 @@ assert.equal(mapRings(houseParams,expandedResult,new Set(['property'])).length,1
 assert.deepEqual(mapRings(houseParams,expandedResult,new Set(['land'])).map(r=>r.radius),[500,1000]);
 assert.equal(mapRings({property_type:'Terreno',radius:500},expandedResult,new Set(['land'])).length,1);
 console.log('Map radii: target and reference pins stay in the selected radius; house soil uses its own labelled circle.');
+
+// Apartments beyond the chosen nearest set stay references even with a built-method detail.
+const nearestResult={model:'built',property_type:'Departamento',selection_method:'nearest',
+  house_ids:['apartment'],land_ids:[],messages:[],breakdown:[
+    {id:'apartment',method:'built',usable:true,offer_unit:1750},
+    {id:'unused',method:'built',usable:true,offer_unit:2000},
+    {id:'explicit-reference',method:'built',reference_only:true,usable:true,offer_unit:2200}]};
+const unusedApartment={...apartment,id:'unused'};
+const missingApartment={...apartment,id:'missing'};
+const explicitReference={...apartment,id:'explicit-reference'};
+for(const row of [unusedApartment,missingApartment,explicitReference]) {
+  assert.equal(property(row,nearestResult).status,'reference');
+  assert.equal(group(row,property(row,nearestResult)),'property_reference');
+}
+assert.deepEqual(comparisonRows([apartment,unusedApartment,missingApartment,explicitReference],
+  {property_type:'Departamento'},nearestResult).map(row=>row.id),['apartment']);
+assert.equal(property(explicitReference,{...nearestResult,house_ids:['apartment','explicit-reference']}).status,'reference');
+console.log('Nearest apartment selection: table excludes both unused and explicit reference records.');

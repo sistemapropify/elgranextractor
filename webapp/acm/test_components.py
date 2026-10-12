@@ -39,7 +39,37 @@ class ComponentsEngineTests(SimpleTestCase):
         self.assertTrue(all(row['distance']<=500 for row in rows))
         self.assertNotIn('outside',[row['id'] for row in rows])
         result=calculate(rows,p)
-        self.assertEqual(len(result['breakdown']),43)
+        self.assertEqual(len(result['breakdown']),5)
+        self.assertEqual(result['eligible_count'],43)
+        self.assertEqual(len(result['house_ids']),5)
+
+    def test_same_type_defaults_use_only_nearest_three_to_five(self):
+        for target in ('Departamento','Oficina','Terreno'):
+            for count, expected in ((0,0),(1,1),(3,3),(4,3),(10,3),(15,3),(16,4),(30,4),(31,5),(40,5)):
+                with self.subTest(target=target,count=count):
+                    p=parameters({**params(),'property_type':target})
+                    rows=[record(str(i),kind=target,built=200,issues=[],distance=10+i*5,
+                                 price=200000+i*10000) for i in reversed(range(count))]
+                    result=calculate(rows,p)
+                    ids=result['land_ids'] if target=='Terreno' else result['house_ids']
+                    self.assertEqual(ids,[str(i) for i in range(expected)])
+                    self.assertEqual(result['eligible_count'],count)
+                    self.assertEqual(len(result['breakdown']),expected)
+                    if expected:
+                        area=150 if target=='Terreno' else 200
+                        self.assertEqual(result['new']['unit'],median((200000+i*10000)/area for i in range(expected)))
+
+    def test_nearest_selection_recalculates_after_exclusion_and_ignores_references(self):
+        p=parameters({**params(),'property_type':'Departamento'})
+        rows=[record(str(i),kind='Departamento',built=200,issues=[],distance=i*10,price=200000+i*10000)
+              for i in range(10)]
+        rows.extend([record('reference',kind='Departamento',built=200,issues=['Ubicación no exacta'],distance=0),
+                     record('outside',kind='Departamento',built=200,issues=[],distance=501)])
+        before=calculate(rows,p);after=calculate(rows,p,['0'])
+        self.assertEqual(before['house_ids'],['0','1','2'])
+        self.assertEqual(after['house_ids'],['1','2','3'])
+        self.assertEqual(after['eligible_count'],9)
+        self.assertNotEqual(before['new']['total'],after['new']['total'])
 
     def test_three_lands_produce_house_breakdown_and_estimate(self):
         raw=sample()[:6]
@@ -291,7 +321,7 @@ class ComponentsEndpointTests(SimpleTestCase):
     def test_page_shell_remains_visible_before_login(self):
         response=page(self.factory.get('/acm/analisis/'))
         self.assertEqual(response.status_code,200)
-        self.assertEqual(response['X-ACM-Model'],'componentes-4-proximidad')
+        self.assertEqual(response['X-ACM-Model'],'componentes-5-comparables-cercanos')
         self.assertEqual(response['Cache-Control'],'no-store')
 
 
