@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
 from .map_layers import map_layers_api
+from . import geollaqta
 
 router = DefaultRouter()
 router.register(r'zonas', views.ZonaValorViewSet, basename='zona')
@@ -34,6 +35,10 @@ urlpatterns = [
     path('jerarquia/', views.configurar_jerarquia, name='configurar_jerarquia'),
     path('capas-raster/', views.api_capas_raster, name='api_capas_raster'),
     path('capas-mapa/', map_layers_api, name='api_capas_mapa'),
+    path('geollaqta/cobertura/', geollaqta.coverage, name='geollaqta_coverage'),
+    path('geollaqta/lotes/', geollaqta.lots, name='geollaqta_lots'),
+    path('geollaqta/lotes/<int:object_id>/', geollaqta.detail, name='geollaqta_detail'),
+    path('geollaqta/capas/<slug:layer_key>/', geollaqta.layer, name='geollaqta_layer'),
     path('zonificacion/leyenda/', views.api_zonificacion_leyenda, name='api_zonificacion_leyenda'),
     path(
         'zonificacion/clasificar/',

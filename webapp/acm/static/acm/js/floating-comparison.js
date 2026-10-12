@@ -18,7 +18,7 @@
   }
   function fit() {
     if (card.hidden) return;
-    move(position ? position.x : anchor === 'bottom-left' ? margin : host.clientWidth - card.offsetWidth - margin,
+    move(position ? position.x : anchor.endsWith('left') ? margin : anchor.endsWith('center') ? (host.clientWidth - card.offsetWidth) / 2 : host.clientWidth - card.offsetWidth - margin,
          position ? position.y : anchor.startsWith('bottom') ? host.clientHeight - card.offsetHeight - 32 : margin);
   }
   function schedule() {
@@ -81,5 +81,6 @@
   }
   initialize('cmp-comparison', 'comparación', 'top-right', 'acm:comparison-updated');
   initialize('cmp-plan-layers', 'capas del plano', 'bottom-left');
+  initialize('cmp-catastros', 'Catastros', 'bottom-center');
   initialize('cmp-pdm-zone', 'zona de uso', 'bottom-right');
 })();

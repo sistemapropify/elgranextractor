@@ -1,0 +1,44 @@
+<section class="map-panel geollaqta-panel" id="panel-geollaqta" aria-labelledby="geollaqta-title">
+    <div class="map-panel-header" id="geollaqta-title">Catastros · Yanahuara <span class="panel-badge">COFOPRI</span></div>
+    <div class="map-panel-body">
+        <label class="capa-raster-toggle" for="geollaqta-visible">
+            <input type="checkbox" id="geollaqta-visible"><span>Mostrar catastro de Yanahuara</span>
+        </label>
+        <div id="geollaqta-options"{% if geollaqta_acm %} hidden{% endif %}>
+            <p id="geollaqta-coverage" class="map-quality-help">Cobertura publicada por COFOPRI.</p>
+            <div class="geollaqta-layer-options" role="group" aria-label="Capas del catastro de Yanahuara">
+                <label><input type="checkbox" name="geollaqta-layer" value="ejes-vias"><span class="geollaqta-swatch" style="background:#e6a224"></span>Ejes de vías <span data-geollaqta-count="ejes-vias"></span></label>
+                <label><input type="checkbox" name="geollaqta-layer" value="lotes" checked><span class="geollaqta-swatch" style="background:#00b8a9"></span>Lotes <span data-geollaqta-count="lotes"></span></label>
+                <label><input type="checkbox" name="geollaqta-layer" value="manzanas"><span class="geollaqta-swatch" style="background:#388cff"></span>Manzanas <span data-geollaqta-count="manzanas"></span></label>
+                <label><input type="checkbox" name="geollaqta-layer" value="comercios"><span class="geollaqta-swatch" style="background:#e05fa4"></span>Comercios <span data-geollaqta-count="comercios"></span></label>
+                <details class="geollaqta-buildings">
+                    <summary>Construcciones · pisos</summary>
+                    <label><input type="checkbox" id="geollaqta-constructions">Mostrar construcciones</label>
+                    <fieldset id="geollaqta-floors" disabled>
+                        <legend class="geollaqta-sr-only">Elegir pisos de las construcciones</legend>
+                        <label><input type="checkbox" name="geollaqta-layer" value="piso-1" checked>Piso 01 <span data-geollaqta-count="piso-1"></span></label>
+                        <label><input type="checkbox" name="geollaqta-layer" value="piso-2">Piso 02 <span data-geollaqta-count="piso-2"></span></label>
+                        <label><input type="checkbox" name="geollaqta-layer" value="piso-3">Piso 03 <span data-geollaqta-count="piso-3"></span></label>
+                        <label><input type="checkbox" name="geollaqta-layer" value="piso-4">Piso 04 <span data-geollaqta-count="piso-4"></span></label>
+                        <label><input type="checkbox" name="geollaqta-layer" value="piso-5">Piso 05 <span data-geollaqta-count="piso-5"></span></label>
+                        <label><input type="checkbox" name="geollaqta-layer" value="piso-6">Piso 06 <span data-geollaqta-count="piso-6"></span></label>
+                    </fieldset>
+                </details>
+                <details class="geollaqta-more">
+                    <summary>Más capas</summary>
+                    <label><input type="checkbox" name="geollaqta-layer" value="ingresos">Ingresos <span data-geollaqta-count="ingresos"></span></label>
+                    <label><input type="checkbox" name="geollaqta-layer" value="habilitaciones">Habilitaciones urbanas <span data-geollaqta-count="habilitaciones"></span></label>
+                    <label><input type="checkbox" name="geollaqta-layer" value="sectores">Sectores <span data-geollaqta-count="sectores"></span></label>
+                </details>
+            </div>
+            <label class="geollaqta-opacity" for="geollaqta-opacity">Opacidad de catastro <input type="range" id="geollaqta-opacity" min="20" max="100" value="85"></label>
+            <div class="geollaqta-controls">
+                <button type="button" id="geollaqta-focus">Ir a Yanahuara</button>
+                <button type="button" id="geollaqta-refresh">Actualizar capas</button>
+            </div>
+            <p class="map-quality-help">Acércate y selecciona un lote para ver su ficha, galería y relación con las zonas.{% if not geollaqta_acm %} Para seleccionar zonas, desactiva el catastro.{% endif %}</p>
+        </div>
+        <p id="geollaqta-status" role="status" aria-live="polite">Activa el catastro para consultar las capas de Yanahuara.</p>
+        <div id="geollaqta-detail" class="geollaqta-detail" hidden></div>
+    </div>
+</section>

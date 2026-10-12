@@ -3,6 +3,7 @@
   'use strict';
   let map, options = {}, zones = [], timer, pending = false, opacity = null;
   let signatures = {}, zoneVisible = true;
+  let zoneRows = [];
   const $ = id => document.getElementById(id);
   function read(id) { try { return JSON.parse($(id)?.textContent || '[]'); } catch (_) { return []; } }
   function write(id, data) {
@@ -75,7 +76,11 @@
       signatures[kind] = signature;
       if (kind === 'vectoriales') { write('capas-vectoriales-data', data); window.CapaVectorial?.init(map); }
       if (kind === 'raster') { write('capas-raster-data', data); window.CapaRasterOverlay?.init(map); }
-      if (kind === 'zonas' && options.renderZones !== false) renderZones(data);
+      if (kind === 'zonas') {
+        zoneRows = data;
+        if (options.renderZones !== false) renderZones(data);
+        document.dispatchEvent(new Event('geollaqta:zones-updated'));
+      }
     }
     if (opacity != null) setOpacity(opacity);
   }
@@ -98,5 +103,5 @@
   window.addEventListener('focus', refresh);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   document.addEventListener('capas-mapa:error', event => status('No se pudo cargar la capa «' + event.detail.nombre + '».'));
-  window.CapasMapa = {init, refresh, setOpacity, zones, applyOpacity: () => { if (opacity != null) setOpacity(opacity); }};
+  window.CapasMapa = {init, refresh, setOpacity, zones, getZoneRows: () => zoneRows, applyOpacity: () => { if (opacity != null) setOpacity(opacity); }};
 })();

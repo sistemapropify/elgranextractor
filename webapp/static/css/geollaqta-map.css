@@ -1,0 +1,41 @@
+#panel-geollaqta .map-panel-body{display:grid;gap:9px}
+.map-sidebar>#panel-geollaqta{order:-1}
+.geollaqta-controls{display:flex;flex-wrap:wrap;gap:7px}
+#panel-geollaqta button{padding:7px 10px;border:1px solid var(--border-color,#30363d);border-radius:6px;background:var(--bg-secondary,#161b22);color:var(--text-primary,#f0f6fc);font:inherit;font-size:12px;cursor:pointer}
+#panel-geollaqta button:focus-visible,#panel-geollaqta a:focus-visible{outline:2px solid #00b8a9;outline-offset:2px}
+#geollaqta-focus{border-color:#008d82!important}
+#geollaqta-status,#geollaqta-coverage{margin:0;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+#geollaqta-status{color:var(--text-primary,#f0f6fc)}
+.geollaqta-detail{border-top:1px solid var(--border-color,#30363d);padding-top:10px;font-size:12px;overflow-wrap:anywhere}
+.geollaqta-detail[hidden]{display:none}
+.geollaqta-detail-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
+.geollaqta-field{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:4px 0}
+.geollaqta-field span{color:var(--text-secondary,#8b949e)}
+.geollaqta-field strong{text-align:right;font-weight:500}
+.geollaqta-section{border-top:1px solid var(--border-color,#30363d);margin-top:9px;padding-top:9px}
+.geollaqta-section p{margin:7px 0;line-height:1.5}
+.geollaqta-photo{display:block;margin-top:8px;border-radius:6px;overflow:hidden}
+.geollaqta-photo img{display:block;width:100%;height:auto;max-height:240px;object-fit:contain;background:#fff}
+.geollaqta-gallery-frame{display:block;width:100%;height:520px;border:0;border-radius:6px;background:#fff;margin:8px 0}
+.geollaqta-actions{display:grid;gap:8px;margin-top:10px}
+#panel-geollaqta a{color:#42cbbf}
+.geollaqta-layer-options{display:grid;gap:7px;margin:10px 0}
+.geollaqta-layer-options label{display:flex;align-items:center;gap:6px;font-size:12px;line-height:1.4;cursor:pointer}
+.geollaqta-layer-options input[type=checkbox]{margin:0;flex:0 0 auto}
+.geollaqta-swatch{width:10px;height:10px;border-radius:2px;flex:0 0 auto}
+.geollaqta-buildings,.geollaqta-more{padding:5px 0;border-top:1px solid var(--border-color,#30363d)}
+.geollaqta-layer-options summary{cursor:pointer;font-size:12px;margin-bottom:5px}
+.geollaqta-layer-options fieldset{margin:7px 0 0 16px;padding:0;border:0;display:grid;gap:7px}
+.geollaqta-layer-options fieldset:disabled{opacity:.5}
+.geollaqta-opacity{display:grid;gap:4px;font-size:12px;margin:8px 0}
+.geollaqta-opacity input{width:100%}
+.geollaqta-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+#geollaqta-options[hidden]{display:none}
+.components-acm #panel-geollaqta{margin-top:10px}
+.components-acm #panel-geollaqta .map-panel-body{padding:10px}
+.components-acm #panel-geollaqta .map-panel-header{padding:10px;font-size:12px}
+.components-acm #panel-geollaqta{margin:0;border:0}
+.components-acm #panel-geollaqta>.map-panel-header{display:none}
+#cmp-catastros{width:280px;max-width:calc(100% - 16px)}
+#cmp-catastros.cmp-floating-minimized{width:200px}
+#cmp-catastros-content{max-height:min(440px,60dvh);overflow:auto}

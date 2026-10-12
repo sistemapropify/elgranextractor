@@ -1,3 +1,65 @@
+# Catastros COFOPRI Yanahuara - release 2026-10-12
+
+Status: Validated - production publication explicitly authorized
+Recipe: CI/CD, existing GitHub Actions pipeline
+
+## Authorized scope and existing target
+Publish the reviewed Catastros card in Cuadrantizacion and the optional,
+default-off floating card in ACM. Include roads, lots, blocks, commerce and
+construction floors 01-06, plus the original COFOPRI report/gallery links.
+Scope all layers to Yanahuara UBIGEO 040126. Preserve other local ACM work.
+Use existing granextractorservice / rg-elgranextractor, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf. No new resources, roles,
+dependencies, configuration secrets or database migrations.
+
+## Integration and validation steps
+Latest production and origin/main: c31f75bf7699ee45f4f927366713b7790ea405a5,
+successful workflow 38302615909. Publish only this task's changes on that base.
+Other shared-checkout ACM edits are unpublished and must remain local.
+- [x] Confirm Azure subscription, Running target and latest successful pipeline.
+- [x] Compare release scope with main and preserve shared checkout changes.
+- [x] Run isolated backend, geometry and ACM replication regression tests.
+- [x] Compile production WSGI with isolated build databases and collect assets.
+- [x] Verify the production browser transport in the served local preview.
+- [x] Final whitespace, scoped source, static asset and JavaScript checks.
+
+## Runtime integration
+Azure's outbound IP times out connecting to both COFOPRI hosts, while an
+independent GitHub control request succeeds. COFOPRI reflects the public
+application Origin in its CORS response and its report allows framing.
+Production therefore authorizes configuration through PROMETEO, reads public
+geometry from the user's browser, and embeds the original report/gallery in
+the selected lot card. The existing server transport remains available locally.
+Both transports retain district filtering, viewport limits, 500-record batches,
+1,000 features per layer, partial-load and missing-geometry messages.
+
+## 7. Validation Proof
+Validation completed under azure-validate on 2026-10-12:
+- 24 isolated backend/ACM replication tests passed (acm.history_test_settings).
+- 12 geometry/transport cases and 10 pan/zoom/failure regression checks passed
+  in the Node test runner. Existing vectors remain during reloads and at zoom
+  below 17. Buffered viewport cache avoids repeated small-pan/zoom-in queries.
+- JavaScript syntax checks passed for all four changed modules.
+- Production WSGI imports and collectstatic passed with isolated SQLite build
+  databases; five release assets byte-match their collected versions.
+- Served browser transport displays 519 real lots; panning and zooming in
+  retains the loaded vectors. The sample original report and photo load in the
+  iframe (image naturalWidth 448). ACM starts with its checkbox disabled.
+- The user will verify the authenticated public map personally after release;
+  verify public HTTP, assets and default-off ACM card without creating sessions.
+- Azure reports the authorized App Service Running. No RBAC or infrastructure
+  templates change; the existing workflow federation and settings are preserved.
+
+## Execution and rollback
+After validation, commit the scoped release and push to main without force.
+If main advances, integrate and revalidate first. Monitor the workflow and verify
+the public ACM page, protected-route authentication and static hashes before
+declaring the change live. The real lot/gallery are verified locally using the
+production browser transport; the user will check the public map in their session. Rollback is a revert through the
+same existing pipeline. No production SQL fixtures or sessions are created.
+
+---
+
 # ACM history replication - release 2026-10-12
 
 Status: Validated - publication explicitly authorized

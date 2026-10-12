@@ -1,0 +1,310 @@
+"""Read-only Yanahuara pilot over COFOPRI's public cadastral service.
+
+No properties, zones or upstream data are written. Gallery URLs come from the
+lot's actual report; we never infer a photograph URL from a cadastral code.
+"""
+import math
+import re
+import json
+import os
+from html.parser import HTMLParser
+from urllib.parse import urlencode, urljoin, urlsplit
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, HTTPRedirectHandler, build_opener
+
+from django.core.cache import cache
+from django.http import JsonResponse
+from django.views.decorators.http import require_GET
+
+DISTRICT = '040126'
+DISTRICT_NAME = 'Yanahuara'
+SERVICE = 'https://geoportal.cofopri.gob.pe/giscofopri/rest/services/Cofopri/Catastro_PCDPI/MapServer/10'
+SERVICE_BASE = SERVICE.rsplit('/', 1)[0]
+PORTAL = 'https://catastro.cofopri.gob.pe/geollaqta/'
+FIELDS = 'OBJECTID,ID_LOTE,ID_DIST,COD_LOTE,COD_MZNA,COD_SECT,AREA_TER,AREA_CON,NIVELES,ANIO_CAT,NRO_UNIDADES'
+LIMIT = 1000
+LAYERS = {
+    'ejes-vias': {'id': 0, 'name': 'Ejes de vías', 'kind': 'line', 'district_field': 'ID_UBI_GEO', 'fields': 'OBJECTID,ID_UBI_GEO,COD_VIA,TIP_VIA,NOM_VIA'},
+    'ingresos': {'id': 1, 'name': 'Ingresos', 'kind': 'point', 'fields': 'OBJECTID,ID_LOTE,ID_DIST,COD_INGRES,TIPO'},
+    'lotes': {'id': 10, 'name': 'Lotes', 'kind': 'polygon', 'fields': FIELDS},
+    'manzanas': {'id': 11, 'name': 'Manzanas', 'kind': 'polygon', 'fields': 'OBJECTID,ID_DIST,COD_MZNA,COD_SECT,ID_MZNA,ANIO_CAT'},
+    'comercios': {'id': 9, 'name': 'Comercios', 'kind': 'polygon', 'fields': 'OBJECTID,ID_DIST,ID_LOTE,COD_USO,DESC_USO,COD_PISO,ANIO_CAT'},
+    'habilitaciones': {'id': 12, 'name': 'Habilitaciones urbanas', 'kind': 'polygon', 'fields': 'OBJECTID,ID_DIST,NOM_HAB_UR,NOM_PUEBLO,ID_HABILITACION'},
+    'sectores': {'id': 13, 'name': 'Sectores', 'kind': 'polygon', 'fields': 'OBJECTID,ID_DIST,COD_SECTOR,ID_SECTOR'},
+}
+for floor in range(1, 7):
+    LAYERS[f'piso-{floor}'] = {'id': 9 - floor, 'name': f'Construcciones · piso {floor}', 'kind': 'polygon',
+                             'fields': 'OBJECTID,ID_DIST,ID_LOTE,COD_EDIFICACION,COD_PISO,ANIO_CAT'}
+
+
+class UpstreamError(Exception):
+    pass
+
+
+def _authenticated(request):
+    return any(user and getattr(user, 'is_active', False) and
+               getattr(user, 'is_authenticated', False)
+               for user in (getattr(request, 'current_user', None), getattr(request, 'user', None)))
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _download(url, params=None):
+    """Use Python's system trust store, including Windows enterprise roots."""
+    try:
+        request = Request(url, data=urlencode(params).encode() if params is not None else None)
+        with build_opener(_NoRedirect()).open(request, timeout=15) as response:
+            body = response.read(2_000_001)
+        if len(body) > 2_000_000:
+            raise UpstreamError('La respuesta de COFOPRI es demasiado grande. Acércate al mapa.')
+        return body
+    except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        raise UpstreamError('COFOPRI no está disponible. Intenta actualizar en unos minutos.') from exc
+
+
+def _query(layer=10, **params):
+    try:
+        data = json.loads(_download(SERVICE_BASE + f'/{layer}/query', {'f': 'json', **params}))
+        if not isinstance(data, dict) or data.get('error'):
+            raise UpstreamError('COFOPRI no pudo completar la consulta.')
+        return data
+    except (ValueError, UnicodeError) as exc:
+        raise UpstreamError('COFOPRI no está disponible. Intenta actualizar en unos minutos.') from exc
+
+
+def _bbox(value):
+    try:
+        box = tuple(float(part) for part in value.split(','))
+    except (ValueError, AttributeError):
+        raise ValueError('Indica un área válida del mapa.')
+    if len(box) != 4 or not all(math.isfinite(number) for number in box):
+        raise ValueError('Indica un área válida del mapa.')
+    west, south, east, north = box
+    if not (-180 <= west < east <= 180 and -90 <= south < north <= 90):
+        raise ValueError('Indica un área válida del mapa.')
+    if east - west > .05 or north - south > .05:
+        raise ValueError('Acércate al mapa para consultar los lotes.')
+    # Quantization improves reuse while slightly expanding the requested bounds.
+    return (math.floor(west * 1e5) / 1e5, math.floor(south * 1e5) / 1e5,
+            math.ceil(east * 1e5) / 1e5, math.ceil(north * 1e5) / 1e5)
+
+
+def _in_ring(point, ring):
+    inside = False
+    x, y = point
+    for a, b in zip(ring, ring[1:]):
+        if (a[1] > y) != (b[1] > y) and x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]:
+            inside = not inside
+    return inside
+
+
+def _geometry(geometry):
+    """Convert Esri rings by containment, preserving holes and disjoint parts."""
+    rings = []
+    for raw in geometry.get('rings', []):
+        if not isinstance(raw, list) or not 3 <= len(raw) <= 2000:
+            raise ValueError('Invalid ring')
+        ring = []
+        for point in raw:
+            x, y = float(point[0]), float(point[1])
+            if not (math.isfinite(x) and math.isfinite(y) and -180 <= x <= 180 and -90 <= y <= 90):
+                raise ValueError('Invalid coordinate')
+            ring.append([x, y])
+        if ring[0] != ring[-1]:
+            ring.append(ring[0][:])
+        area = abs(sum((a[0] - ring[0][0]) * (b[1] - ring[0][1]) -
+                       (b[0] - ring[0][0]) * (a[1] - ring[0][1])
+                       for a, b in zip(ring, ring[1:])))
+        if not area:
+            raise ValueError('Empty polygon')
+        rings.append((area, ring))
+    if not rings or len(rings) > 64:
+        raise ValueError('Invalid polygon')
+    rings.sort(key=lambda item: item[0], reverse=True)
+    parents, depths, polygons, owners = [], [], [], {}
+    for index, (_, ring) in enumerate(rings):
+        enclosing = [i for i in range(index) if _in_ring(ring[0], rings[i][1])]
+        parent = enclosing[-1] if enclosing else None
+        parents.append(parent)
+        depth = depths[parent] + 1 if parent is not None else 0
+        depths.append(depth)
+        if depth % 2 == 0:
+            owners[index] = len(polygons)
+            polygons.append([ring])
+        else:
+            polygons[owners[parent]].append(ring)
+    if len(polygons) == 1:
+        return {'type': 'Polygon', 'coordinates': polygons[0]}
+    return {'type': 'MultiPolygon', 'coordinates': polygons}
+
+
+def _esri_geometry(geometry, kind):
+    if kind == 'polygon':
+        return _geometry(geometry)
+    def point(raw):
+        x, y = float(raw[0]), float(raw[1])
+        if not (math.isfinite(x) and math.isfinite(y) and -180 <= x <= 180 and -90 <= y <= 90):
+            raise ValueError('Invalid coordinate')
+        return [x, y]
+    if kind == 'point':
+        return {'type': 'Point', 'coordinates': point([geometry['x'], geometry['y']])}
+    paths = geometry.get('paths', [])
+    if not paths or any(not 2 <= len(path) <= 2000 for path in paths):
+        raise ValueError('Invalid path')
+    lines = [[point(raw) for raw in path] for path in paths]
+    return {'type': 'LineString', 'coordinates': lines[0]} if len(lines) == 1 else {'type': 'MultiLineString', 'coordinates': lines}
+
+
+def _properties(attributes, fields=FIELDS):
+    return {key: value.strip() if isinstance(value, str) else value
+            for key, value in attributes.items() if key in fields.split(',')}
+
+
+class GalleryParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.images, self.records = [], []
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        if tag == 'img':
+            url = urljoin(PORTAL, attributes.get('src', ''))
+            parsed = urlsplit(url)
+            if (parsed.scheme == 'https' and parsed.netloc == 'catastro.cofopri.gob.pe'
+                    and re.fullmatch(r'/img_catastro/040126/[A-Za-z0-9_.-]+\.(?:jpg|jpeg|png)', parsed.path, re.I)
+                    and not parsed.query and url not in self.images):
+                self.images.append(url)
+        if tag == 'a':
+            url = urljoin(PORTAL, attributes.get('href', ''))
+            parsed = urlsplit(url)
+            if (parsed.scheme == 'https' and parsed.netloc == 'catastro.cofopri.gob.pe'
+                    and parsed.path == '/geollaqta/reportefichas/vistapdf/fichain.php'
+                    and re.fullmatch(r'id=040126\d{13}', parsed.query)
+                    and url not in self.records):
+                self.records.append(url)
+
+
+def _gallery(lot_id):
+    key = 'geollaqta-gallery-v1:' + lot_id
+    result = cache.get(key)
+    if result is not None:
+        return result
+    url = PORTAL + 'reportefichas/vistadetalle.php?' + urlencode({'id_lote': lot_id})
+    try:
+        parser = GalleryParser()
+        parser.feed(_download(url).decode('utf-8', errors='replace'))
+        result = {'images': parser.images[:12], 'records': parser.records[:12], 'gallery_status': 'available'}
+        cache.set(key, result, 3600)
+        return result
+    except (ValueError, UnicodeError) as exc:
+        raise UpstreamError('No se pudo consultar la galería de COFOPRI.') from exc
+
+
+@require_GET
+def coverage(request):
+    if not _authenticated(request):
+        return JsonResponse({'error': 'Inicia sesión para consultar el catastro.'}, status=401)
+    # COFOPRI's service accepts browser CORS, while the Azure outbound IP
+    # cannot currently connect. Authorize the UI and provide the same fixed
+    # layer allowlist; the browser queries public geometry and embeds reports.
+    if os.environ.get('WEBSITE_SITE_NAME') or request.GET.get('transport') == 'browser':
+        return JsonResponse({'district': DISTRICT_NAME, 'ubigeo': DISTRICT,
+                             'transport': 'browser', 'service_base': SERVICE_BASE,
+                             'center': {'lat': -16.40707, 'lng': -71.56604},
+                             'layers': LAYERS})
+    try:
+        result = cache.get('geollaqta-yanahuara-coverage-v2')
+        if result is None:
+            data = _query(where=f"ID_DIST='{DISTRICT}'", returnCountOnly='true')
+            if not isinstance(data.get('count'), int):
+                raise UpstreamError('No se pudo verificar la cobertura de COFOPRI.')
+            result = {'district': DISTRICT_NAME, 'ubigeo': DISTRICT, 'total': data['count'],
+                      'source': SERVICE, 'center': {'lat': -16.40707, 'lng': -71.56604},
+                      'layers': [{'key': key, 'name': value['name']} for key, value in LAYERS.items()]}
+            cache.set('geollaqta-yanahuara-coverage-v2', result, 900)
+        return JsonResponse(result)
+    except UpstreamError as exc:
+        return JsonResponse({'error': str(exc)}, status=502)
+
+
+@require_GET
+def lots(request):
+    return layer(request, 'lotes')
+
+
+@require_GET
+def layer(request, layer_key):
+    if not _authenticated(request):
+        return JsonResponse({'error': 'Inicia sesión para consultar el catastro.'}, status=401)
+    config = LAYERS.get(layer_key)
+    if not config:
+        return JsonResponse({'error': 'Capa no disponible en el piloto.'}, status=404)
+    district_field = config.get('district_field', 'ID_DIST')
+    try:
+        box = _bbox(request.GET.get('bbox'))
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+    key = f'geollaqta-yanahuara-layer-v2:{layer_key}:' + ','.join(map(str, box))
+    result = cache.get(key)
+    if result is not None:
+        return JsonResponse(result)
+    try:
+        # ArcGIS 10.3 does not support pagination: enumerate IDs in the viewport
+        # first, then fetch explicit, bounded batches instead of silently truncating.
+        data = _query(layer=config['id'], where=f"{district_field}='{DISTRICT}'", geometry=','.join(map(str, box)),
+                      geometryType='esriGeometryEnvelope', inSR=4326,
+                      spatialRel='esriSpatialRelIntersects', returnIdsOnly='true')
+        ids = sorted(set(data.get('objectIds') or []))
+        selected, features, skipped = ids[:LIMIT], [], 0
+        for start in range(0, len(selected), 500):
+            batch = _query(layer=config['id'], objectIds=','.join(map(str, selected[start:start + 500])),
+                           outFields=config['fields'], returnGeometry='true', outSR=4326)
+            if 'features' not in batch:
+                raise UpstreamError('COFOPRI devolvió una respuesta incompleta.')
+            for row in batch['features']:
+                attrs = _properties(row.get('attributes', {}), config['fields'])
+                if attrs.get(district_field) != DISTRICT:
+                    continue
+                try:
+                    geometry = _esri_geometry(row.get('geometry') or {}, config['kind'])
+                except (ValueError, TypeError, IndexError, KeyError):
+                    skipped += 1
+                    continue
+                features.append({'type': 'Feature', 'id': attrs['OBJECTID'],
+                                 'properties': attrs, 'geometry': geometry})
+        result = {'type': 'FeatureCollection', 'features': features, 'district': DISTRICT_NAME,
+                  'total_in_view': len(ids), 'truncated': len(ids) > LIMIT, 'skipped': skipped,
+                  'source': SERVICE_BASE + '/' + str(config['id']), 'layer': layer_key, 'name': config['name']}
+        cache.set(key, result, 300)
+        return JsonResponse(result)
+    except UpstreamError as exc:
+        return JsonResponse({'error': str(exc)}, status=502)
+
+
+@require_GET
+def detail(request, object_id):
+    if not _authenticated(request):
+        return JsonResponse({'error': 'Inicia sesión para consultar el catastro.'}, status=401)
+    try:
+        data = _query(where=f"OBJECTID={int(object_id)} AND ID_DIST='{DISTRICT}'",
+                      outFields=FIELDS, returnGeometry='false')
+        rows = data.get('features', [])
+        if not rows:
+            return JsonResponse({'error': 'El lote no pertenece al piloto de Yanahuara.'}, status=404)
+        attrs = _properties(rows[0]['attributes'])
+        lot_id = attrs.get('ID_LOTE', '')
+        if not re.fullmatch(r'040126\d{8,12}', lot_id):
+            raise UpstreamError('COFOPRI no devolvió un código de lote válido.')
+        result = {'properties': attrs, 'district': DISTRICT_NAME,
+                  'gallery_url': PORTAL + 'reportefichas/vistadetalle.php?' + urlencode({'id_lote': lot_id})}
+        try:
+            result.update(_gallery(lot_id))
+        except UpstreamError as exc:
+            # Keep cadastral metadata useful when the separate report service fails.
+            result.update(images=[], records=[], gallery_status='unavailable', gallery_error=str(exc))
+        return JsonResponse(result)
+    except UpstreamError as exc:
+        return JsonResponse({'error': str(exc)}, status=502)
