@@ -18,6 +18,28 @@ class PhotoExtractionTests(SimpleTestCase):
         self.assertEqual(extract_photos(html, 'https://portal.test/property/1', '/a.jpg'),
                          ['https://portal.test/a.jpg', 'https://portal.test/b.jpg', 'https://portal.test/c.jpg'])
 
+    def test_remax_slider_reads_loaded_and_lazy_full_size_photos_in_order(self):
+        html = '''<div id="sliderRemax" class="sliderRemax slider-pro"><div class="sp-slides">
+          <div class="sp-slide"><img class="sp-image" src="/cover.jpg" data-large="/cover.jpg"></div>
+          <div class="sp-slide"><img class="sp-image" src="/loaded-small.jpg" data-large="/two.jpg?sig=valid"></div>
+          <div class="sp-slide"><img class="sp-image" src="/static/web/img/blank.gif" data-src="/three.jpg?sig=valid"></div>
+          <div class="sp-slide"><img class="sp-image" src="/static/web/img/blank.gif" data-large="/four.jpg?sig=valid"></div>
+          <div class="sp-slide"><img class="sp-image" src="/five.jpg" data-default="/five.jpg"></div>
+          <div class="sp-slide"><img class="sp-image" data-large="/two.jpg?sig=duplicate"></div>
+          </div><div class="sp-thumbnails"><img src="/unwanted-thumb.jpg"></div></div>
+          <div class="agent-photo"><img src="/avatar.jpg"></div>
+          <div class="related gallery"><img src="/other-property.jpg"></div>
+          <meta property="og:image" content="/small-cover.jpg">'''
+        self.assertEqual(extract_photos(html, 'https://www.remax.pe/property/1', '/small-cover.jpg'),
+                         ['https://www.remax.pe/cover.jpg', 'https://www.remax.pe/two.jpg?sig=valid',
+                          'https://www.remax.pe/three.jpg?sig=valid', 'https://www.remax.pe/four.jpg?sig=valid',
+                          'https://www.remax.pe/five.jpg'])
+
+    def test_empty_remax_slider_keeps_cover_fallback_without_blank_image(self):
+        html = '<div id="sliderRemax"><div class="sp-slide"><img class="sp-image" src="/static/web/img/blank.gif"></div></div>'
+        self.assertEqual(extract_photos(html, 'https://www.remax.pe/', '/cover.jpg'),
+                         ['https://www.remax.pe/cover.jpg'])
+
     def test_legacy_marketplace_and_archived_cover_do_not_duplicate(self):
         raw = {'blob_photos': ['https://a.blob.core.windows.net/p/1.jpg',
                               'https://a.blob.core.windows.net/p/2.jpg'],
@@ -94,6 +116,24 @@ class PhotoStorageTests(IsolatedAsyncioTestCase):
             row=await prepare_detail('remax',source,page,{'ID':'1'},AsyncMock(),store_images=True,photo_mode='all')
             self.assertEqual(upload.call_count,2)
             self.assertEqual(len(row['datos_crudos']['_photo_gallery']),2)
+
+
+    async def test_remax_all_mode_archives_each_slider_photo_including_lazy_images(self):
+        from scrapi.paged_engine import prepare_detail
+        html = '<div id="sliderRemax"><div class="sp-slides">' + ''.join(
+            f'<div class="sp-slide"><img class="sp-image" src="/static/web/img/blank.gif" data-large="/photo-{i}.jpg?sig=valid"></div>'
+            for i in range(5)) + '</div></div>'
+        page = SimpleNamespace(url='https://www.remax.pe/propiedad/1', content=AsyncMock(return_value=html))
+        row = {'id_origen': '1', 'datos_crudos': {}, 'url': page.url, 'imagen_url': 'https://www.remax.pe/cover-small.jpg'}
+        with patch('scrapi.paged_engine.enrich', AsyncMock()), patch('scrapi.paged_engine.normalize', return_value=row), \
+             patch('scrapi.photo_gallery.upload_photo', side_effect=lambda url, *args: url.replace('www.remax.pe', 'blob.test')) as upload:
+            saved = await prepare_detail('remax', SimpleNamespace(), page, {'ID': '1'}, AsyncMock(),
+                                         store_images=True, photo_mode='all', capture_enabled=False)
+        self.assertEqual(upload.call_count, 5)
+        self.assertEqual(len(saved['datos_crudos']['_photo_gallery']), 5)
+        self.assertTrue(all(photo['stored'] for photo in saved['datos_crudos']['_photo_gallery']))
+        self.assertEqual([call.args[0] for call in upload.call_args_list],
+                         [f'https://www.remax.pe/photo-{i}.jpg?sig=valid' for i in range(5)])
 
 
 class GalleryPersistenceTests(TestCase):

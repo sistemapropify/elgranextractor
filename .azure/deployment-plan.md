@@ -1,3 +1,51 @@
+# Remax complete gallery extraction - release 2026-10-12
+
+Status: Validated - production dispatch authorized
+Recipe: CI/CD, existing GitHub Actions pipeline
+
+## 1. Authorized scope
+The user explicitly requested production publication of the Remax photo fix.
+Read every Slider Pro property image, including lazy image URLs, in gallery
+order. Prefer full-sized photos; exclude placeholders, thumbnails, agents,
+related properties and duplicate URLs for the same source image path.
+Existing cover/none modes, Blob persistence and publication captures remain.
+Existing fichas with only two photos require reprocessing after publication.
+
+## 2. Existing target and recipe
+Non-forced push to main triggers .github/workflows/main_granextractorservice.yml.
+App Service granextractorservice; rg-elgranextractor; Brazil South;
+subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Public dashboard: https://acm.propifai.com/ingestas/scraping/dashboard/
+Existing deployment federation and configuration. No infrastructure, roles,
+database schema, dependencies or static asset changes.
+
+## 3. Integration
+Latest main/worktree/shared checkout base:
+595daf1b366158d208f99a18d26f56d633c05300.
+Both application/test files match D:/PROMETEO byte for byte.
+Preserve unrelated Cuadrantizacion edits and untracked/private files.
+
+## 7. Validation Proof
+Validated at 2026-10-12T16:58:15.753958+00:00 under azure-validate.
+- 47 Django tests passed in the preceding implementation turn using
+  ingestas.scraping_test_settings: gallery, Remax data/areas and captures.
+- Regression coverage verifies lazy/full-size URLs, order, duplicate removal,
+  cover fallback and that all five photos reach the mocked Blob uploader.
+- Two current publications from job 221 (1200778, 1200727) each expose five
+  slider photos; the corrected extractor retrieved five of five in each.
+- Python AST, shared-checkout byte comparison and git whitespace checks pass.
+- Local ACM page, gallery route and static JavaScript return HTTP 200.
+- Current patch reviewed: only Remax gallery parsing and its tests changed.
+- Existing pipeline performs build, static collection, startup validation,
+  deployment and public health/static checks.
+
+## 8. Dispatch and handoff
+Fetch latest main immediately before the non-forced push. The user handles
+monitoring under their standing instruction. Stop after dispatch, provide the
+workflow link and do not claim confirmed live status without verification.
+
+---
+
 # ACM agent adjustment KPIs and gallery access - release 2026-10-12
 
 Status: Validated - production dispatch authorized

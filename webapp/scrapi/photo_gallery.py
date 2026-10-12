@@ -40,6 +40,25 @@ def extract_photos(html, base, cover=None):
             photos.append(url)
     add(cover)
     soup = BeautifulSoup(html or '', 'html.parser')
+    # Remax uses Slider Pro rather than gallery/carousel class names. Read its
+    # lazy URLs even before a slide is shown, and ignore agent/related photos.
+    remax_slider = soup.select_one('#sliderRemax')
+    if remax_slider:
+        slider_photos = []
+        seen_paths = set()
+        for img in remax_slider.select('.sp-slide .sp-image'):
+            value = next((img.get(attr) for attr in
+                          ('data-original', 'data-full', 'data-large', 'data-src', 'data-default', 'src')
+                          if img.get(attr)), None)
+            url = image_url(value, base)
+            if not url or urlsplit(url).path.endswith('/blank.gif'):
+                continue
+            identity = (urlsplit(url).netloc, urlsplit(url).path)
+            if identity not in seen_paths:
+                seen_paths.add(identity)
+                slider_photos.append(url)
+        if slider_photos:
+            return slider_photos
     def related(node):
         return any(re.search(r'related|similar|recommend|sugerid|snippet|posting-card|agent',
                              ' '.join(parent.get('class', [])), re.I)
