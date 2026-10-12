@@ -14,7 +14,10 @@ respuestas de IA, datos de leads ni historial de ACM.
   crecimiento de SQL. La edad mínima es configurable si se necesita.
 - Contenedor privado `ml-dataset-archives` en la cuenta Azure ya configurada.
 - Archivos JSONL comprimidos con gzip, uno por corte, con metadatos del corte,
-  todos los campos de sus entradas, evidencia de observación y regla espacial.
+  todos los campos de sus entradas, secuencia/fecha de observación, primera
+  aparición y regla espacial. Las observaciones fuente completas siguen en SQL.
+- Leer mediante consultas de hasta 200 registros por ID de candidata: limita
+  cada consulta en SQL Basic, además de limitar la memoria del proceso.
 - Nombre por ID y SHA-256; no sobrescribir copias existentes.
 - Descargar, comprobar SHA-256, descomprimir y verificar el número de filas
   antes de retirar entradas SQL. La retirada y su manifiesto son atómicos.

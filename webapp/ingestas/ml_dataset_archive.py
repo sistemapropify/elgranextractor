@@ -16,6 +16,7 @@ from types import SimpleNamespace
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
+from django.db.models.fields.json import KeyTransform
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -93,22 +94,37 @@ def _digest(stream):
 
 
 def _write_archive(dataset, stream):
-    from .models import MLDatasetEntry
+    from .models import MLDatasetEntry, MLObservation, MLSpatialAssessment
     snapshot = {field.attname: getattr(dataset, field.attname) for field in dataset._meta.concrete_fields}
     snapshot['coverage'] = {key: value for key, value in (dataset.coverage or {}).items() if key != ARCHIVE_KEY}
     count = 0
     with gzip.GzipFile(fileobj=stream, mode='wb', filename='', mtime=0) as compressed:
         compressed.write(_json_line({'format': FORMAT, 'snapshot': snapshot}))
-        entries = MLDatasetEntry.objects.filter(dataset=dataset).select_related(
-            'observation', 'spatial_assessment').order_by('candidate_id')
-        for entry in entries.iterator(chunk_size=200):
-            row = {field.attname: getattr(entry, field.attname) for field in entry._meta.concrete_fields}
-            row['_observation'] = {'sequence': entry.observation.sequence,
-                                   'snapshot': entry.observation.snapshot,
-                                   'created_at': entry.observation.created_at.isoformat()}
-            row['_spatial_rule'] = entry.spatial_assessment.rule_version if entry.spatial_assessment_id else ''
-            compressed.write(_json_line(row))
-            count += 1
+        fields = [field.attname for field in MLDatasetEntry._meta.concrete_fields]
+        entries = MLDatasetEntry.objects.filter(dataset=dataset).values(*fields)
+        last_candidate = 0
+        while True:
+            # iterator() only limits fetch buffers; TOP/LIMIT bounds the SQL
+            # query itself so Basic SQL never scans/sorts a whole cut at once.
+            batch = list(entries.filter(candidate_id__gt=last_candidate).order_by('candidate_id')[:200])
+            if not batch:
+                break
+            observations = {item['id']: item for item in MLObservation.objects.filter(
+                pk__in={row['observation_id'] for row in batch}).annotate(
+                    archive_first_seen=KeyTransform('first_seen', 'snapshot')).values(
+                        'id', 'sequence', 'created_at', 'archive_first_seen')}
+            spatial = dict(MLSpatialAssessment.objects.filter(
+                pk__in={row['spatial_assessment_id'] for row in batch if row['spatial_assessment_id']}
+                ).values_list('pk', 'rule_version'))
+            for row in batch:
+                observation = observations[row['observation_id']]
+                row['_observation'] = {'sequence': observation['sequence'],
+                    'snapshot': {'first_seen': observation['archive_first_seen']},
+                    'created_at': observation['created_at'].isoformat()}
+                row['_spatial_rule'] = spatial.get(row['spatial_assessment_id'], '')
+                compressed.write(_json_line(row))
+                count += 1
+            last_candidate = batch[-1]['candidate_id']
     size = stream.tell()
     return count, size, _digest(stream)
 

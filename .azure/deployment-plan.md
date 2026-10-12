@@ -21,11 +21,15 @@ shared D:/PROMETEO preview. Preserve unrelated Cuadrantizacion edits.
 
 ## 7. Validation Proof
 Validated at 2026-10-12T19:07:45.561485+00:00 under azure-validate for existing CI/CD recipe.
-- 23 targeted isolated Django archive tests pass in the shared checkout.
+- 24 targeted isolated Django archive tests pass in the shared checkout.
 - SQL rollback, corrupt or missing Blob, retention, restore, immutable upload,
   private container, historical CSV equality and training reader are covered.
 - 3 older unrelated spatial/candidate test failures reproduce on the base.
 - Current Python AST and git whitespace checks pass.
+- Bounded 200-row keyset reads, separate observation/spatial lookups and
+  minimal observation evidence avoid whole-cut SQL joins and repeated source
+  descriptions. The original observations remain intact in SQL.
+- Regression verifies complete archiving/restoration across the 200-row boundary.
 - Local authenticated /acm/modelos/ displays 111 eligible cuts, archive disabled.
 - Local /acm/analisis/ and its CSS static assets return HTTP 200.
 - Azure account matches the existing subscription; App Service is Running.

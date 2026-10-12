@@ -145,7 +145,9 @@ class DatasetArchiveTests(TestCase):
             self.assertEqual(getattr(before, field.attname), getattr(after, field.attname))
         self.assertEqual(after.features['antiguedad_anios'], 0)
         self.assertEqual(after.observation.sequence, self.obs.sequence)
-        self.assertEqual(after.observation.snapshot, self.obs.snapshot)
+        self.assertEqual(after.observation.snapshot.get('first_seen'), self.obs.snapshot.get('first_seen'))
+        self.obs.refresh_from_db()
+        self.assertIn('descripcion', self.obs.snapshot)
 
     def test_restores_sql_rows_with_original_ids_and_keeps_blob_backup(self):
         self.archive()
@@ -260,6 +262,27 @@ class DatasetArchiveTests(TestCase):
         self.assertEqual(summary['archived'], 1)
         self.assertEqual(summary['archived_rows'], 1)
         self.assertEqual(summary['pending'], 1)
+
+    def test_large_cut_crosses_read_batch_boundary_without_losing_rows(self):
+        properties = PropiedadesCompetencia.objects.bulk_create([
+            PropiedadesCompetencia(**{**valid(), 'id_origen': 'archive-page-%d' % index})
+            for index in range(200)])
+        observations = MLObservation.objects.bulk_create([
+            MLObservation(propiedad=prop, sequence=1, content_hash='b' * 64,
+                          rule_version='test', snapshot={'first_seen': '2026-01-01'})
+            for prop in properties])
+        candidates = MLCandidate.objects.bulk_create([
+            MLCandidate(propiedad=prop, latest=obs) for prop, obs in zip(properties, observations)])
+        MLDatasetEntry.objects.bulk_create([
+            MLDatasetEntry(dataset=self.old, candidate=candidate, observation=obs,
+                included=True, reason='Oferta válida', reason_code='included.offer',
+                features={'tipo_inmueble': 'Casa'}, target_price_usd=Decimal('200000.00'))
+            for candidate, obs in zip(candidates, observations)])
+        expected = list(self.old.entries.order_by('candidate_id').values_list('pk', 'candidate_id'))
+        self.assertEqual(self.archive()['archived_rows'], 201)
+        recovered = list(iter_dataset_entries(self.old, store=self.store))
+        self.assertEqual([(entry.pk, entry.candidate_id) for entry in recovered], expected)
+        self.assertEqual(restore_dataset(self.old.pk, store=self.store)['restored_rows'], 201)
 
     def test_invalid_policy_cannot_archive_current_or_previous_snapshot(self):
         for keep, age in ((0, 0), (1, 0), (5, -1)):
