@@ -10,16 +10,14 @@ from django.db import transaction
 from django.utils import timezone
 
 from .ml_pricing import TYPES, VERSION, evaluate, features, fit_knn, fit_ridge, metrics, predict, split
+from .ml_dataset_archive import iter_dataset_entries
 
 logger = logging.getLogger(__name__)
 
 
 def _rows(dataset, kind):
-    from .models import MLDatasetEntry
-    entries = MLDatasetEntry.objects.filter(dataset=dataset, included=True).select_related(
-        'observation').order_by('candidate_id')
     rows = []
-    for entry in entries.iterator(chunk_size=200):
+    for entry in iter_dataset_entries(dataset, included=True):
         item = entry.features
         if item.get('tipo_inmueble') != kind or item.get('tipo_operacion') != 'Venta':
             continue
@@ -160,10 +158,10 @@ def publish(run, actor, reason):
 
 def _record_contribution(dataset, previous):
     from .models import MLPipelineState
-    current = {key: (observation, fields) for key, observation, fields in
-               dataset.entries.filter(included=True).values_list('candidate_id', 'observation_id', 'features')}
-    older = {key: (observation, fields) for key, observation, fields in
-             previous.entries.filter(included=True).values_list('candidate_id', 'observation_id', 'features')} if previous else {}
+    current = {entry.candidate_id: (entry.observation_id, entry.features)
+               for entry in iter_dataset_entries(dataset, included=True)}
+    older = {entry.candidate_id: (entry.observation_id, entry.features)
+             for entry in iter_dataset_entries(previous, included=True)} if previous else {}
     added = sorted(set(current) - set(older))
     changed = sorted(key for key in set(current) & set(older) if current[key][0] != older[key][0])
     removed = sorted(set(older) - set(current))
@@ -208,7 +206,8 @@ def monitor_dataset(dataset):
     previous = MLDatasetSnapshot.objects.filter(pk__lt=dataset.pk).order_by('-pk').first()
     previous_versions = {}
     if previous:
-        previous_versions = dict(previous.entries.filter(included=True).values_list('candidate_id', 'observation_id'))
+        previous_versions = {entry.candidate_id: entry.observation_id
+                             for entry in iter_dataset_entries(previous, included=True)}
     output = [{'contribution': _record_contribution(dataset, previous)}]
     for kind in TYPES:
         run = active_run(kind)

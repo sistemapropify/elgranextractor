@@ -1,12 +1,16 @@
 """Export a frozen training-candidate snapshot, with one audit row per record."""
 import csv
+import logging
 
 from django.http import HttpResponse
 from django.views.decorators.http import require_GET
 
 from .ml_candidate_views import authorized, safe_cell
 from .ml_dataset import schema_ready
-from .models import MLDatasetSnapshot, MLDatasetEntry
+from .models import MLDatasetSnapshot
+from .ml_dataset_archive import iter_dataset_entries
+
+logger = logging.getLogger(__name__)
 
 
 @require_GET
@@ -18,6 +22,17 @@ def dataset_export(request, pk):
     dataset = MLDatasetSnapshot.objects.filter(pk=pk).first()
     if not dataset:
         return HttpResponse('No existe esa versión del conjunto.', status=404)
+    try:
+        return _export_csv(dataset)
+    except Exception:
+        logger.exception('ml.dataset.export_failed dataset=%s', dataset.pk)
+        response = HttpResponse('No se pudo recuperar el conjunto completo. Intenta la descarga nuevamente.', status=503)
+        response['Cache-Control'] = 'private, no-store'
+        return response
+
+
+def _export_csv(dataset):
+    pk = dataset.pk
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = 'attachment; filename="ofertas-ml-v%d.csv"' % pk
     response['Cache-Control'] = 'private, no-store'
@@ -28,9 +43,7 @@ def dataset_export(request, pk):
         'Construcción m²', 'Antigüedad', 'Dormitorios', 'Baños', 'Latitud', 'Longitud',
         'Precisión fuente', 'Microzona', 'Versión microzona', 'Hash grupo identidad',
         'Versión observación', 'Regla espacial', 'Fecha de corte'])
-    entries = MLDatasetEntry.objects.filter(dataset=dataset).select_related(
-        'observation', 'spatial_assessment').order_by('candidate_id')
-    for entry in entries.iterator(chunk_size=200):
+    for entry in iter_dataset_entries(dataset):
         item = entry.features
         writer.writerow([safe_cell(v) for v in (
             dataset.pk, 'sí' if entry.included else 'no', entry.reason, entry.candidate_id,

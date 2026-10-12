@@ -26,6 +26,15 @@
 <p><a href="/ingestas/scraping/ml/conjuntos/{{ item.dataset_id }}/exportar.csv">Ver cada registro y motivo en CSV</a></p></details>
 {% empty %}<p>El primer aporte se mostrará tras el próximo corte del conjunto.</p>{% endfor %}
 </section>
+{% if can_manage and dataset_archives %}
+<section style="padding:16px;background:#172839;border-radius:10px;margin:16px 0">
+<h2>Archivo de conjuntos en Azure Blob</h2>
+<p>{{ dataset_archives.archived }} versiones archivadas · {{ dataset_archives.archived_rows }} registros retirados de SQL · {{ dataset_archives.compressed_bytes|filesizeformat }} en archivos comprimidos.</p>
+<p>Se conservan en SQL las {{ dataset_archives.keep }} versiones más recientes y todos los conjuntos vinculados a entrenamientos. {% if dataset_archives.min_age_days %}Las versiones restantes pueden archivarse después de {{ dataset_archives.min_age_days }} días.{% else %}Las versiones restantes pueden trasladarse al archivo privado.{% endif %}</p>
+<p>{{ dataset_archives.pending }} versiones pendientes de archivar. {% if dataset_archives.enabled %}Archivado automático activado.{% else %}Archivado automático desactivado; pendiente de activación.{% endif %}</p>
+<p>Los archivos son privados y se verifican antes de retirar las filas de SQL. Las descargas del historial siguen disponibles. Las conversaciones de leads, agentes e IA se conservan.</p>
+</section>
+{% endif %}
 <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px">
 {% for card in cards %}<article style="padding:16px;background:#172839;border:1px solid #3c536c;border-radius:10px">
 <h2>{{ card.kind }}</h2>

@@ -9,6 +9,7 @@ from ingestas.ml_candidates import process_pending, reconcile_chunk, schema_read
 from ingestas.ml_context import process_spatial, process_identity
 from ingestas.ml_dataset import freeze_dataset, schema_ready as dataset_schema_ready
 from ingestas.ml_training import process_queue, monitor_dataset
+from ingestas.ml_dataset_archive import maybe_archive_datasets
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,7 @@ class Command(BaseCommand):
                     MLObservation.objects.filter(status='error').update(status='pending', attempts=0)
                     MLCandidate.objects.filter(status='error').update(status='pending')
                     retried = True
+                archives = maybe_archive_datasets() if dataset_schema_ready() else []
                 progress = reconcile_chunk(batch, force=options['reconcile'])
                 result = process_pending(batch)
                 context = process_spatial(batch)
@@ -95,7 +97,7 @@ class Command(BaseCommand):
                 training = process_queue() if dataset_schema_ready() else {"training_queue": "schema_pending"}
                 for key in totals:
                     totals[key] += progress.get(key, 0) + result.get(key, 0)
-                self.stdout.write(json.dumps({'event': 'ml.pipeline.progress', **progress, **result, **context, **identity, **dataset, 'monitoring': monitoring, 'training': training}))
+                self.stdout.write(json.dumps({'event': 'ml.pipeline.progress', **progress, **result, **context, **identity, **dataset, 'monitoring': monitoring, 'training': training, 'archives': archives}))
                 if options['once'] and (not options['reconcile'] or progress['complete']):
                     while options['reconcile'] and MLObservation.objects.filter(status='pending').exists():
                         drained = process_pending(batch)

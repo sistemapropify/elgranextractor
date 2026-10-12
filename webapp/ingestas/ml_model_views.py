@@ -13,6 +13,7 @@ from django.views.decorators.http import require_GET, require_POST
 from .ml_candidate_views import authorized
 from .ml_context import LOCATION_RULE_VERSION, current_catalog_hash, load_zones
 from .ml_dataset import schema_ready
+from .ml_dataset_archive import archive_summary
 from .ml_pricing import TYPES, VERSION, predict
 from .ml_training import active_run, publish
 from .models import MLDatasetSnapshot, MLPipelineState, MLTrainingRun
@@ -109,6 +110,7 @@ def dashboard(request):
     response = render(request, 'ingestas/ml_models.html', {
         'ready': ready, 'dataset': dataset, 'runs': runs, 'cards': cards,
         'contributions': contributions, 'reconciliation': reconciliation, 'progress': progress,
+        'dataset_archives': archive_summary() if ready else None,
         'can_manage': _admin(request)})
     response['Cache-Control'] = 'private, no-store'
     return response

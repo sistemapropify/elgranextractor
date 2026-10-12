@@ -351,6 +351,12 @@ AZURE_STORAGE_CONTAINER_NAME = env('AZURE_STORAGE_CONTAINER_NAME', default='docu
 AZURE_STORAGE_ACCOUNT_NAME = env('AZURE_STORAGE_ACCOUNT_NAME', default='granextractormedia')
 AZURE_STORAGE_ACCOUNT_KEY = env('AZURE_STORAGE_ACCOUNT_KEY', default='')
 
+# Keep recent ML cuts in SQL; verify private compressed archives before pruning.
+ML_DATASET_ARCHIVE_CONTAINER = env('ML_DATASET_ARCHIVE_CONTAINER', default='ml-dataset-archives')
+ML_DATASET_ARCHIVE_ENABLED = env.bool('ML_DATASET_ARCHIVE_ENABLED', default=False)
+ML_DATASET_KEEP_RECENT = env.int('ML_DATASET_KEEP_RECENT', default=5)
+ML_DATASET_ARCHIVE_MIN_AGE_DAYS = env.int('ML_DATASET_ARCHIVE_MIN_AGE_DAYS', default=0)
+
 # External API Configuration for Property Integration
 API_EXTERNA_URL = env('API_EXTERNA_URL', default='http://localhost/dashboard/api/properties/with-docs/')
 API_EXTERNA_KEY = env('API_EXTERNA_KEY', default='ItBJSnE6F7gIG5uhnPh0mtXmQ9yjE8ZgqtIjTU')
