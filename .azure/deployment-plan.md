@@ -1,3 +1,46 @@
+# Private ML dataset Blob archives - release 2026-10-12
+
+Status: Validated - execution and publication authorized
+Recipe: CI/CD, existing GitHub Actions pipeline
+
+## Authorized scope and target
+The user explicitly requested execution of the locally reviewed archive in
+production. Keep the five latest cuts and every training-linked cut in SQL.
+Copy older entries to private Azure Blob, download and verify SHA-256,
+complete decompression and row count before atomic SQL pruning plus manifest.
+No business conversations, lead/agent/bot records, source observations,
+properties or ACM histories are pruned. No SQL SKU or quota changes.
+Use existing granextractorservice / rg-elgranextractor, subscription
+0219eecc-9920-4789-9929-3091a2f09daf. Storage uses existing app credentials and
+private ml-dataset-archives container. No new schema or production dependency.
+
+## Integration
+Base origin/main 66ef58a01cea355b8869728b716f569176b738fc.
+Application commit 2e501703 is reviewed and integrated byte-for-byte in the
+shared D:/PROMETEO preview. Preserve unrelated Cuadrantizacion edits.
+
+## 7. Validation Proof
+Validated at 2026-10-12T19:07:45.561485+00:00 under azure-validate for existing CI/CD recipe.
+- 23 targeted isolated Django archive tests pass in the shared checkout.
+- SQL rollback, corrupt or missing Blob, retention, restore, immutable upload,
+  private container, historical CSV equality and training reader are covered.
+- 3 older unrelated spatial/candidate test failures reproduce on the base.
+- Current Python AST and git whitespace checks pass.
+- Local authenticated /acm/modelos/ displays 111 eligible cuts, archive disabled.
+- Local /acm/analisis/ and its CSS static assets return HTTP 200.
+- Azure account matches the existing subscription; App Service is Running.
+- One-off Azure maintenance uses production credentials in memory, TLS,
+  release codec and private Blob implementation, SQL dataset-worker locking,
+  retention recheck, full read-back verification and per-cut transaction.
+
+## 8. Execution and handoff
+Execute initial backlog in bounded batches from Azure; record actual SQL page
+usage before/after. Enable ML_DATASET_ARCHIVE_ENABLED=True for ongoing upkeep.
+Non-forced push to main dispatches existing workflow. User handles deployment
+monitoring; do not poll CI after dispatch or claim verified live code.
+
+---
+
 # Remax complete gallery extraction - release 2026-10-12
 
 Status: Validated - production dispatch authorized
