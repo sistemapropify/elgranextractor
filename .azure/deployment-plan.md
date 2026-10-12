@@ -1,3 +1,49 @@
+# ACM history replication - release 2026-10-12
+
+Status: Validated - publication explicitly authorized
+Recipe: CI/CD, existing GitHub Actions pipeline
+
+## Authorized scope and target
+Publish the locally reviewed Replicar ACM history action. Restore saved target
+GPS coordinates, property type, areas, radius, sources and optional features;
+load an editable form and search current comparables only after user submission.
+Keep the original history unchanged and reject records without valid inputs.
+Owner-scoped authenticated access protects saved coordinates. Nuevo ACM returns
+to a clean form. No database migrations, dependencies or infrastructure changes.
+Target: granextractorservice / rg-elgranextractor, Brazil South, subscription
+0219eecc-9920-4789-9929-3091a2f09daf. Preserve existing federation and app settings.
+Public history: https://acm.propifai.com/acm/historial/
+
+## Integration and validation checks
+Latest origin/main e1f53af1 has no changes beyond the base of application commit
+d37ad4bf. The nine application files match the served D:/PROMETEO preview.
+Preserve unrelated Cuadrantizacion edits and untracked files in that checkout.
+- [x] Fetch and compare main; review exact release scope.
+- [x] Run isolated history, valuation, component and report tests.
+- [x] Check JavaScript syntax and collect the updated static asset.
+- [x] Verify local history-to-form navigation and Nuevo ACM reset.
+- [x] Confirm the existing Azure target and deployment pipeline.
+
+## 7. Validation Proof
+Azure Validate applied on 2026-10-12 at 15:10 America/Lima:
+- 64 isolated tests passed with acm.history_test_settings.
+- node --check webapp/acm/static/acm/js/components.js passed.
+- Production settings static collection passed; collected components.js
+  byte-matches source. WSGI imports with an isolated in-memory build database.
+- Local HTTP page and components.js?v=55 returned 200; native browser confirmed
+  restored areas/radius, map center matching saved GPS and clean Nuevo ACM reset.
+- Azure CLI confirms the authorized subscription and Running App Service.
+- Existing workflow collects static files, validates startup and deploys to the
+  Production slot. No new roles or infrastructure templates are introduced.
+
+## Execution and handoff
+Push non-forced to main to dispatch main_granextractorservice.yml. The user
+handles monitoring: do not poll CI or claim the new button is live before it
+finishes. Provide the workflow link and public history URL. Rollback uses a
+revert commit through the same pipeline.
+
+---
+
 # Private ML dataset Blob archives - release 2026-10-12
 
 Status: Validated - execution and publication authorized
