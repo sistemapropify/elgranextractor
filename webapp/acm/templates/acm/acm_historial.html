@@ -188,6 +188,15 @@
                             </td>
                             <td class="acciones-cell text-center">
                                 <div class="d-flex gap-1 justify-content-center">
+                                    {% if acm.can_replicate %}
+                                    <a href="{% url 'acm:componentes_historial_replicar' acm.id %}"
+                                       class="btn btn-outline-primary btn-sm" title="Cargar ubicación y datos para un nuevo ACM">
+                                        <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Replicar ACM
+                                    </a>
+                                    {% else %}
+                                    <span class="btn btn-outline-secondary btn-sm disabled" aria-disabled="true"
+                                          title="Este ACM antiguo no guardó los datos completos de la propiedad objetivo">Replicar ACM</span>
+                                    {% endif %}
                                     {% if acm.metodo == 'componentes' %}
                                     <a href="{% url 'acm:componentes_historial_word' acm.id %}"
                                        class="btn btn-outline-success btn-sm" title="Descargar informe Word">

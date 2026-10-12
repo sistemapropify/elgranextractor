@@ -58,6 +58,8 @@ def parameters(data):
         elif value is None or not 0<=value<=200 or (key!='baths' and value!=int(value)):
             raise ValueError(f'{key}: valor inválido')
         else: output[key]=value
+    if isinstance(data.get('address'), str):
+        output['address'] = data['address'].strip()[:500]
     return output
 
 

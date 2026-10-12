@@ -961,10 +961,12 @@ def historial_acm(request):
         })
     
     from .valuation_metrics import history_comparison, adjustment_kpis
+    from .components_history import replication_parameters
     acms = list(ACMLink.objects.filter(user=current_user))
     historial_count = len(acms)
     for acm in acms:
         acm.valuation_comparison = history_comparison(acm)
+        acm.can_replicate = replication_parameters(acm) is not None
     kpis = adjustment_kpis([acm.valuation_comparison for acm in acms])
     
     context = {

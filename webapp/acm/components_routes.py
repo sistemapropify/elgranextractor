@@ -13,6 +13,7 @@ urlpatterns = [
     path('componentes/guardar/', views.save_history, name='componentes_guardar'),
     path('componentes/historial/<uuid:uuid>/informe-word/', views.history_word_report, name='componentes_historial_word'),
     path('componentes/historial/<uuid:uuid>/informe-pdf/', views.history_pdf_report, name='componentes_historial_pdf'),
+    path('componentes/historial/<uuid:uuid>/replicar/', views.replicate_history, name='componentes_historial_replicar'),
     # Keep requests from already-open test dashboards working.
     path('pruebas/componentes/buscar/', views.search),
     path('pruebas/componentes/calcular/', views.recalculate),

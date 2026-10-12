@@ -12,7 +12,7 @@
   const decimals=n=>n==null?'Sin informar':new Intl.NumberFormat('es-PE',{maximumFractionDigits:2}).format(n);
   const formatDate=value=>{if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?String(value):date.toLocaleString('es-PE',{dateStyle:'short',timeStyle:'short'});};
   const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  function input(){return {property_type:form.elements.property_type.value,rooms:form.elements.rooms.disabled?null:form.elements.rooms.value,baths:form.elements.baths.disabled?null:form.elements.baths.value,floor:form.elements.floor.disabled?null:form.elements.floor.value,lat:Number(form.elements.lat.value),lng:Number(form.elements.lng.value),land:Number(form.elements.land.value),built:Number(form.elements.built.value),radius:Number(form.elements.radius.value),max_radius:Number(form.elements.max_radius.value),sources:Array.from(form.querySelectorAll('[name=source]'),x=>x.value)};}
+  function input(){return {property_type:form.elements.property_type.value,address:$('cmp-address').value,rooms:form.elements.rooms.disabled?null:form.elements.rooms.value,baths:form.elements.baths.disabled?null:form.elements.baths.value,floor:form.elements.floor.disabled?null:form.elements.floor.value,lat:Number(form.elements.lat.value),lng:Number(form.elements.lng.value),land:Number(form.elements.land.value),built:Number(form.elements.built.value),radius:Number(form.elements.radius.value),max_radius:Number(form.elements.max_radius.value),sources:Array.from(form.querySelectorAll('[name=source]:not(:disabled)'),x=>x.value)};}
   function requestLogin(){
     $('cmp-status').textContent='Inicia sesión para consultar la zonificación y calcular comparables.';
     const modal=$('login-modal');
@@ -496,7 +496,7 @@
   $('cmp-new-acm').addEventListener('click',()=>{
     if(searching)return;
     // Restablecer antes de recargar evita recuperar los campos anteriores del navegador.
-    form.reset();$('cmp-address').value='';window.location.reload();
+    form.reset();$('cmp-address').value='';window.location.assign(window.location.pathname.includes('analisis-pruebas')?'/acm/analisis-pruebas/':'/acm/analisis/');
   });
   form.addEventListener('input',e=>{if(e.target.name){if(e.target.name==='property_type')configureType();$('cmp-radius-label').textContent=form.elements.radius.value+' m';invalidate();}});
   form.addEventListener('change',e=>{if(e.target.name){if(e.target.name==='property_type')configureType();invalidate();}});
@@ -565,4 +565,15 @@
     const format=formats[button.dataset.reportFormat];if(format)downloadReport(...format);
   });
   configureType();
+  const replicationNode=$('cmp-replication-data');
+  if(replicationNode){
+    const saved=JSON.parse(replicationNode.textContent),p=saved.params;
+    for(const name of ['property_type','lat','lng','land','built','rooms','baths','floor','radius','max_radius'])form.elements[name].value=p[name]??'';
+    // API/history radii may fall between the slider's ordinary 100 m steps.
+    if(p.radius%100!==0){form.elements.radius.step='any';form.elements.radius.value=p.radius;}
+    $('cmp-address').value=p.address||'';
+    form.querySelectorAll('[name=source]').forEach(source=>{source.disabled=!p.sources.includes(source.value);});
+    configureType();$('cmp-radius-label').textContent=p.radius+' m';
+    $('cmp-status').textContent='Datos de '+saved.code+' cargados. Revisa el formulario y pulsa Buscar y calcular.';
+  }
 })();

@@ -10,7 +10,7 @@ from django.core import signing
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from .components_engine import candidates, calculate, parameters, positive, number, SOURCES
 
@@ -42,7 +42,7 @@ def user_key(request):
 
 
 @ensure_csrf_cookie
-def page(request):
+def page(request, replication=None):
     # The page shell exposes no records and retains the site's login dialog.
     # Both data endpoints still require an authenticated, active session.
     # Capa de zonificación (misma que cuadrantización): si algo falla, la página
@@ -56,6 +56,7 @@ def page(request):
 
     response = render(request,'acm/components.html',{
         'sources':SOURCES,
+        'replication': replication,
         'acm_is_authenticated': session_user(request) is not None,
         'test_mode':'analisis-pruebas' in request.path,
         'google_maps_api_key':getattr(settings,'GOOGLE_MAPS_API_KEY',None) or 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',
@@ -67,6 +68,20 @@ def page(request):
     from .components_engine import VERSION
     response['X-ACM-Model'] = VERSION
     return response
+
+
+@require_GET
+@authenticated
+def replicate_history(request, uuid):
+    from .models import ACMLink
+    from .components_history import replication_parameters
+    history = get_object_or_404(ACMLink.objects.only('id', 'codigo', 'metodo', 'parametros_json'),
+                               id=uuid, user=session_user(request))
+    params = replication_parameters(history)
+    if params is None:
+        return HttpResponse('Este ACM antiguo no guardó los datos completos de la propiedad objetivo. '
+                            'Crea un nuevo análisis indicando su ubicación y metraje.', status=409)
+    return page(request, replication={'code': history.codigo_display, 'params': params})
 
 
 def clean_link(value):

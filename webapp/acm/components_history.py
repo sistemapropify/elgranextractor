@@ -11,6 +11,17 @@ from .report_selection import report_records, report_values
 from .valuation_metrics import valuation_comparison
 
 
+def replication_parameters(history):
+    """Restore target inputs only; a fresh search chooses current comparables."""
+    from .components_engine import parameters
+    if history.metodo != 'componentes' or not isinstance(history.parametros_json, dict):
+        return None
+    try:
+        return parameters(history.parametros_json)
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
 def _decimal(value):
     return Decimal(str(round(float(value or 0), 2)))
 
