@@ -30,6 +30,12 @@ Validated at 2026-10-12T19:07:45.561485+00:00 under azure-validate for existing 
   minimal observation evidence avoid whole-cut SQL joins and repeated source
   descriptions. The original observations remain intact in SQL.
 - Regression verifies complete archiving/restoration across the 200-row boundary.
+- SQL pruning also uses 200-row statements within the same atomic transaction;
+  verified count and rollback guarantees are unchanged. 24 tests pass.
+- Production synchronous auto-statistics caused timeouts; SQL now updates
+  statistics asynchronously at low priority (no price or capacity changes).
+- First six cuts verified and archived: 31,590 SQL rows relocated; a current
+  FILEPROPERTY reading confirms 59.562 MB reusable within the 2 GB data file.
 - Local authenticated /acm/modelos/ displays 111 eligible cuts, archive disabled.
 - Local /acm/analisis/ and its CSS static assets return HTTP 200.
 - Azure account matches the existing subscription; App Service is Running.

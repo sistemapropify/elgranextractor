@@ -176,7 +176,14 @@ def archive_dataset(dataset_id, keep=5, min_age_days=0, store=None):
             # Fully decompress and parse before removing even one row.
             for _ in _read_archive(recovered, dataset, count):
                 pass
-            removed, _ = MLDatasetEntry.objects.filter(dataset=dataset).delete()
+            removed = 0
+            query = MLDatasetEntry.objects.filter(dataset=dataset)
+            while True:
+                ids = list(query.order_by('pk').values_list('pk', flat=True)[:200])
+                if not ids:
+                    break
+                batch_removed, _ = query.filter(pk__in=ids).delete()
+                removed += batch_removed
             if removed != count:
                 raise DatasetArchiveError('Cambió el dataset durante el archivado; se revierte SQL.')
             coverage = dict(dataset.coverage or {})
