@@ -16,7 +16,7 @@
     }
     .historial-header h4 {
         margin: 0;
-        color: #1a1a2e;
+        color: var(--acm-text-primary,#f0f6fc);
         font-weight: 600;
     }
     .codigo-badge {
@@ -50,24 +50,24 @@
         background: #e0f2fe;
         color: #075985;
     }
-    .table-acm th {
-        background: #f8fafc;
-        color: #475569;
+    .acm-container .table-acm th {
+        background: var(--acm-header-bg,#21262d);
+        color: var(--acm-text-primary,#f0f6fc);
         font-size: 12px;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        border-bottom: 2px solid #e2e8f0;
+        border-bottom: 2px solid var(--acm-border,#30363d);
         padding: 10px 12px;
     }
     .table-acm td {
         padding: 10px 12px;
         vertical-align: middle;
         font-size: 13px;
-        border-bottom: 1px solid #f1f5f9;
+        border-bottom: 1px solid var(--acm-border,#30363d);
     }
     .table-acm tr:hover {
-        background: #f8fafc;
+        background: var(--acm-header-bg,#21262d);
     }
     .acciones-cell .btn {
         padding: 4px 10px;
@@ -91,6 +91,14 @@
         font-size: 14px;
         margin-bottom: 20px;
     }
+    .acm-adjustment-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:14px; }
+    .acm-adjustment-kpi { background:var(--acm-card-bg,#161b22); border:1px solid var(--acm-border,#30363d); border-radius:8px; padding:14px; }
+    .acm-adjustment-kpi span,.acm-adjustment-kpi small { display:block; color:var(--acm-text-secondary,#c9d1d9); font-size:12px; }
+    .acm-adjustment-kpi strong { display:block; color:var(--acm-text-primary,#f0f6fc); font-size:25px; margin:5px 0; }
+    .acm-adjustment-note { color:var(--acm-text-secondary,#c9d1d9); font-size:12px; margin-bottom:16px; }
+    .acm-container .table-acm .origen-componentes { background:#153d51; color:#bde7ff; }
+    .table-acm td:nth-child(4),.table-acm td:nth-child(5),.table-acm th { white-space:nowrap; }
+    .acm-variation { font-weight:600; white-space:nowrap; }
 </style>
 
 <div class="container-fluid py-3 px-2 px-md-3">
@@ -104,6 +112,16 @@
         </a>
     </div>
 
+    {% if adjustment_kpis %}
+    <section class="acm-adjustment-kpis" aria-label="Indicadores de ajuste del agente">
+        <div class="acm-adjustment-kpi"><span>ACM con ajuste del agente</span><strong>{{ adjustment_kpis.reviewed_count }} / {{ adjustment_kpis.available_count }}</strong><small>Comparaciones válidas / ACM calculados</small></div>
+        <div class="acm-adjustment-kpi"><span>Variación absoluta media</span><strong>{% if adjustment_kpis.mean_absolute_variation != None %}{{ adjustment_kpis.mean_absolute_variation|floatformat:2 }}%{% else %}—{% endif %}</strong><small>Magnitud media del ajuste</small></div>
+        <div class="acm-adjustment-kpi"><span>Ajuste medio con signo</span><strong>{% if adjustment_kpis.mean_signed_variation != None %}{% if adjustment_kpis.mean_signed_variation > 0 %}+{% endif %}{{ adjustment_kpis.mean_signed_variation|floatformat:2 }}%{% else %}—{% endif %}</strong><small>Positivo: el agente sube el valor</small></div>
+        <div class="acm-adjustment-kpi"><span>Ajustes dentro de ±10%</span><strong>{% if adjustment_kpis.within_ten_pct != None %}{{ adjustment_kpis.within_ten_pct|floatformat:1 }}%{% else %}—{% endif %}</strong><small>Sobre los ACM con ajuste válido</small></div>
+    </section>
+    <p class="acm-adjustment-note">Indicadores de tu historial: variación = (valor del agente − valor ACM) / valor ACM × 100. Solo incluyen ajustes manuales guardados; los análisis sin ajuste no se cuentan como revisados. Miden diferencias de criterio, no el error frente a un precio de cierre.</p>
+    {% endif %}
+
     {% if acms %}
     <div class="card border-0 shadow-sm">
         <div class="card-body p-0">
@@ -114,7 +132,9 @@
                             <th>Código</th>
                             <th>Tipo</th>
                             <th>Área</th>
-                            <th>Valor Comercial</th>
+                            <th>Valor ACM calculado</th>
+                            <th>Valor del agente</th>
+                            <th>Variación vs. ACM</th>
                             <th>Comparables</th>
                             <th>Origen</th>
                             <th>Fecha</th>
@@ -134,7 +154,13 @@
                                 {% else %}{{ acm.area_m2|floatformat:0 }} m²{% endif %}
                             </td>
                             <td>
-                                <strong>US$ {{ acm.valor_comercial|floatformat:2|intcomma }}</strong>
+                                <strong>US$ {% if acm.valuation_comparison.calculated_total != None %}{{ acm.valuation_comparison.calculated_total|floatformat:"2g" }}{% else %}{{ acm.valor_comercial|floatformat:"2g" }}{% endif %}</strong>
+                            </td>
+                            <td>
+                                {% if acm.valuation_comparison.agent_total != None %}<strong>US$ {{ acm.valuation_comparison.agent_total|floatformat:"2g" }}</strong>{% else %}<span title="No se guardó un ajuste manual">—</span>{% endif %}
+                            </td>
+                            <td class="acm-variation">
+                                {% if acm.valuation_comparison.variation_pct != None %}{% if acm.valuation_comparison.variation_pct > 0 %}+{% endif %}{{ acm.valuation_comparison.variation_pct|floatformat:2 }}%{% else %}—{% endif %}
                             </td>
                             <td>{{ acm.num_comparables }}</td>
                             <td>

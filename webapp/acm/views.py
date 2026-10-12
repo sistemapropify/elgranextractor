@@ -960,12 +960,17 @@ def historial_acm(request):
             'error': 'Usuario no autenticado'
         })
     
-    acms = ACMLink.objects.filter(user=current_user)
-    historial_count = acms.count()
+    from .valuation_metrics import history_comparison, adjustment_kpis
+    acms = list(ACMLink.objects.filter(user=current_user))
+    historial_count = len(acms)
+    for acm in acms:
+        acm.valuation_comparison = history_comparison(acm)
+    kpis = adjustment_kpis([acm.valuation_comparison for acm in acms])
     
     context = {
         'acms': acms,
         'historial_count': historial_count,
+        'adjustment_kpis': kpis,
         'user_id': str(current_user.id),
         'user_phone': current_user.phone or '',
     }

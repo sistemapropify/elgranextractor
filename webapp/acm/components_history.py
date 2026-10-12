@@ -8,6 +8,7 @@ from django.db import transaction
 
 from .models import ACMLink, generar_codigo_acm
 from .report_selection import report_records, report_values
+from .valuation_metrics import valuation_comparison
 
 
 def _decimal(value):
@@ -45,6 +46,7 @@ def persist_component_history(user, params, records, result, excluded=()):
     if 'report_ids' in params:
         selected_records = report_records(params,records,excluded)
     stored_result = dict(result)
+    stored_result['valuation_comparison'] = valuation_comparison(params, result)
     stored_result['excluded_ids'] = excluded
     stored_result['reference_summary'] = _reference_summary(records, result, excluded)
     values = report_values(params,result)

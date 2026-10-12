@@ -1,3 +1,61 @@
+# ACM agent adjustment KPIs and gallery access - release 2026-10-12
+
+Status: Validated - production dispatch authorized
+Recipe: CI/CD, existing GitHub Actions pipeline
+
+## 1. Authorized scope
+The user explicitly requested production publication of the locally tested ACM
+changes on 2026-10-12. Publish original calculated value, agent-adjusted value,
+signed percentage variation and adjustment KPIs in the agent's own history;
+live original value/variation beside the adjustment knob; and gallery access
+on comparable cards. Preserve original calculations and existing reports.
+These measure adjustments relative to the ACM, not observed sale-price errors.
+
+## 2. Existing target and recipe
+Non-forced push to main triggers .github/workflows/main_granextractorservice.yml.
+App Service granextractorservice; resource group rg-elgranextractor;
+Brazil South; subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Public pages: https://acm.propifai.com/acm/analisis/ and
+https://acm.propifai.com/acm/historial/.
+Existing OIDC federation, deployment credentials and startup configuration.
+No new infrastructure, dependencies, roles or database schema changes.
+Metrics use existing immutable result/parameter JSON. Earlier history with
+both values derives metrics without rewriting records. Untouched analyses
+are excluded from adjustment averages.
+
+## 3. Integration
+Latest main/worktree/served checkout base:
+887445f8c83c7cc8849fc2a31982c9bf9939764a.
+Ten application/test files match the served D:/PROMETEO checkout byte for byte.
+Keep unrelated Cuadrantizacion edits and untracked/private files intact.
+
+## 7. Validation Proof
+Validated at 2026-10-12T16:31:39.361125+00:00 under azure-validate for the existing CI/CD recipe.
+- 61 Django tests passed using acm.history_test_settings: valuation metrics,
+  signed component calculations, report selection and primary references.
+- Five metrics/history tests passed after final history formatting changes.
+- Tests use an isolated SQLite database, with no production fixture writes.
+- Python AST, node --check (components.js, comparison-valuation.js), existing
+  Node presentation suite and git diff whitespace checks passed.
+- Isolated collectstatic passed; JS components/valuation and valuation CSS
+  output byte-match the release sources.
+- Azure account show confirms the configured subscription above.
+- Local ACM page and valuation JS/CSS assets return HTTP 200 and versions
+  components.js v54, comparison-valuation.js/css v3; served assets match source.
+- Browser history displays actual saved original/agent values and percentages;
+  4 comparisons among 10 component ACMs, mean absolute variation 12.65%.
+- Browser knob: USD 144,000 original -> USD 144,100 adjusted (+0.07%);
+  original stays unchanged; Restore clears the manual adjustment.
+- Gallery link from a real local ACM card opened its matching property viewer.
+
+## 8. Dispatch and verification handoff
+Fetch main immediately before the non-forced push. CI performs build,
+collectstatic, startup validation, deployment and public endpoint/static checks.
+The user's standing instruction is to handle monitoring themselves: stop after
+dispatch, provide the workflow link, and do not claim confirmed live status.
+
+---
+
 # ACM nearest comparables - release 2026-10-12
 
 Status: Validated - deployment dispatch authorized

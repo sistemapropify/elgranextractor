@@ -36,3 +36,6 @@
 #cmp-comparison #cmp-round-value { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .cmp-valuation-rocker:has(input:checked) .cmp-valuation-rocker-face { transform: perspective(100px) rotateX(12deg); background: linear-gradient(#ef4b4e,#b81f23 45%,#9b1619 90%,#e34d50); box-shadow: inset 0 2px 3px #ff9e9e9e,inset 0 -3px 5px #580b0d,0 0 8px #eb36333b; }
 .cmp-valuation-rocker:focus-within { outline: 2px solid #80caff; outline-offset: 3px; }
+
+.cmp-valuation-baseline { flex-basis:100%; color:#b5c4d3; font-size:11px; }
+.cmp-valuation-baseline span { display:block; margin-top:3px; color:#e6edf3; }
