@@ -276,10 +276,11 @@ def collect(ubigeo, max_lotes=None, lot_id=None, retry_missing=False, upload=Tru
                     path = folder / filename
                 body = path.read_bytes() if path.is_file() else None
                 key = 'geollaqta/' + ubigeo + '/' + code + '/' + filename
-                if body is None and previous and upload and state.uploaded_hash(key) == previous['sha256']:
+                if body is None and previous and upload and (state.uploaded_hash(key) == previous['sha256'] or (stored_lot and stored_lot['uploaded'])):
                     body, _ = r2.get(key)
                     if hashlib.sha256(body).hexdigest() != previous['sha256']:
                         raise StorageError('El original archivado en R2 no coincide con su hash.')
+                    state.save_upload(key, previous['sha256'], len(body))
                     atomic_write(path, body)
                     disk_bytes += len(body)
                 cached = body is not None and previous and previous['source_url'] == url and previous['sha256'] == hashlib.sha256(body).hexdigest()

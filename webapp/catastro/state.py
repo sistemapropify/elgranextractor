@@ -43,6 +43,15 @@ class State:
                 except sqlite3.OperationalError:
                     if column not in {r['name'] for r in self.db.execute('PRAGMA table_info(jobs)')}:
                         raise
+        for column, definition in [('executor', "TEXT NOT NULL DEFAULT 'server'"), ('lease', "TEXT DEFAULT ''")]:
+            if column not in {r['name'] for r in self.db.execute('PRAGMA table_info(jobs)')}:
+                try:
+                    self.db.execute(f'ALTER TABLE jobs ADD COLUMN {column} {definition}')
+                except sqlite3.OperationalError:
+                    if column not in {r['name'] for r in self.db.execute('PRAGMA table_info(jobs)')}:
+                        raise
+        self.db.execute('CREATE TABLE IF NOT EXISTS collector_presence (id INTEGER PRIMARY KEY CHECK(id=1), heartbeat REAL NOT NULL)')
+        self.db.execute('CREATE INDEX IF NOT EXISTS lots_updated ON lots(updated)')
         self.db.commit()
 
     def close(self):
@@ -52,18 +61,20 @@ class State:
         row = self.db.execute('SELECT * FROM lots WHERE lot_id=?', (lot_id,)).fetchone()
         return dict(row) if row else None
 
-    def save_lot(self, lot_id, ubigeo, **values):
+    def save_lot(self, lot_id, ubigeo, commit=True, **values):
         base = dict(object_id=None, status='failed', uploaded=0, missing=0, reports=0,
                     photos=0, bytes=0, error='', updated=time.time())
         base.update(values)
         self.db.execute('INSERT OR REPLACE INTO lots VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                         (lot_id, ubigeo, *(base[k] for k in ('object_id','status','uploaded','missing',
                                                          'reports','photos','bytes','updated','error'))))
-        self.db.commit()
+        if commit:
+            self.db.commit()
 
-    def save_upload(self, key, digest, size):
+    def save_upload(self, key, digest, size, commit=True):
         self.db.execute('INSERT OR REPLACE INTO uploads VALUES (?,?,?)', (key, digest, size))
-        self.db.commit()
+        if commit:
+            self.db.commit()
 
     def uploaded_hash(self, key):
         row = self.db.execute('SELECT sha256 FROM uploads WHERE object_key=?', (key,)).fetchone()
@@ -72,17 +83,18 @@ class State:
     def upload_bytes(self):
         return self.db.execute('SELECT COALESCE(SUM(bytes),0) FROM uploads').fetchone()[0]
 
-    def create_job(self, ubigeo, limit_lots, lot_id=None, retry_missing=False):
+    def create_job(self, ubigeo, limit_lots, lot_id=None, retry_missing=False, executor='server'):
         self.db.execute('BEGIN IMMEDIATE')
         try:
             active = self.db.execute("SELECT * FROM jobs WHERE status IN ('queued','running') ORDER BY created DESC LIMIT 1").fetchone()
             if active:
-                if active['heartbeat'] > time.time() - 300:
+                if active['heartbeat'] > time.time() - 300 or (active['executor'] == 'external' and active['status'] == 'queued'):
                     raise ValueError('Ya hay una descarga en curso. Espera o detenla antes de iniciar otra.')
                 self.db.execute("UPDATE jobs SET status='interrupted',message='Ejecución interrumpida; puede reanudarse.' WHERE id=?", (active['id'],))
             job_id = uuid.uuid4().hex
             self.db.execute('INSERT INTO jobs (id,ubigeo,limit_lots,lot_id,retry_missing,status,created,heartbeat) VALUES (?,?,?,?,?,?,?,?)',
                             (job_id, ubigeo, limit_lots, lot_id, int(retry_missing), 'queued', time.time(), time.time()))
+            self.db.execute('UPDATE jobs SET executor=? WHERE id=?', (executor, job_id))
             self.db.commit()
             return job_id
         except Exception:
@@ -110,7 +122,8 @@ class State:
         lots = [dict(r) for r in self.db.execute('SELECT * FROM lots ' + where + ' ORDER BY updated DESC LIMIT 50', args)]
         jobs = [dict(r) for r in self.db.execute('SELECT * FROM jobs ORDER BY created DESC LIMIT 10')]
         for job in jobs:
-            if job['status'] in ('queued', 'running') and job['heartbeat'] < time.time() - 300:
+            job.pop('lease', None)
+            if job['status'] in ('queued', 'running') and job['heartbeat'] < time.time() - 300 and not (job['executor'] == 'external' and job['status'] == 'queued'):
                 self.update_job(job['id'], status='interrupted', message='Ejecución interrumpida; puede reanudarse.')
                 job['status'] = 'interrupted'
         return {'totals': dict(totals), 'lots': lots, 'jobs': jobs, 'r2_bytes': self.upload_bytes()}

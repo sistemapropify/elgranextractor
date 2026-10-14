@@ -12,10 +12,19 @@ from scrapi.geollaqta_scraper import collect, validate, Stopped
 def start_job(ubigeo, limit=None, lot_id=None, retry_missing=False, launch=True):
     validate(ubigeo, limit, lot_id)
     credentials()  # Fail before queuing when this machine has no R2 configuration.
+    executor = os.environ.get('CATASTRO_EXECUTION_MODE', 'server')
+    if executor not in ('server', 'external'):
+        raise ValueError('Modo de recolector no válido.')
+    if executor == 'external':
+        from .worker_api import worker_token
+        if not worker_token():
+            raise ValueError('El recolector externo está pendiente de configuración.')
     state = State()
     try:
-        job_id = state.create_job(ubigeo, int(limit) if limit is not None else 0, lot_id, retry_missing)
-        if launch:
+        job_id = state.create_job(ubigeo, int(limit) if limit is not None else 0, lot_id, retry_missing, executor=executor)
+        if executor == 'external':
+            state.update_job(job_id, message='Esperando conexión del recolector. La descarga comenzará cuando esté disponible.')
+        if launch and executor == 'server':
             command = [sys.executable, str(ROOT / 'scripts/collect_geollaqta.py'), '--job-id', job_id]
             try:
                 kwargs = {'cwd': str(ROOT), 'stdin': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL,
@@ -40,6 +49,9 @@ def run_job(job_id):
     if not job:
         state.close()
         raise ValueError('Ejecución no encontrada.')
+    if job['executor'] == 'external':
+        state.close()
+        raise ValueError('Esta ejecución debe atenderla el recolector externo.')
     claimed = state.db.execute("UPDATE jobs SET status='running' WHERE id=? AND status='queued'", (job_id,)).rowcount
     state.db.commit()
     if not claimed:

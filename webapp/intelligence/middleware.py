@@ -16,6 +16,8 @@ from .authentication import get_authenticated_user
 
 # Rutas que no requieren autenticación
 PUBLIC_PATHS = [
+    # Collector endpoints enforce their own scoped bearer token and job lease.
+    r'^/catastro/api/worker/(?:claim|[a-f0-9]{32}/(?:seed|heartbeat|progress|lot|finish))/$',
     r'^/$',                      # Página principal (landing page pública)
     r'^/login/?$',
     r'^/accounts/login/?$',   # Alias del login (LOGIN_URL por defecto de Django)

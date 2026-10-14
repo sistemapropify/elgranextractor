@@ -24,6 +24,7 @@
   function render(data) {
     for (const key of ['uploaded','reports','photos','missing']) el('metric-' + key).textContent = data.totals[key];
     configured = data.storage.configured;
+    el('collector-status').textContent = data.collector?.external ? (data.collector.connected ? 'Recolector conectado.' : 'Recolector sin conexión. Las descargas quedarán en espera hasta que se conecte.') + ' El equipo recolector debe permanecer encendido y conectado.' : '';
     el('storage-status').textContent = configured ? 'R2 configurado · acceso privado' : 'R2 pendiente de configuración';
     el('storage-status').classList.toggle('warn',!configured);
     el('storage-detail').textContent = configured ? 'Bucket: ' + data.storage.bucket + '. Los archivos se guardan por distrito y predio.' : 'Configura las credenciales de R2 en este equipo para iniciar la descarga.';
@@ -36,7 +37,7 @@
     if (!data.jobs.length) jobs.append(node('p','No hay descargas todavía.'));
     data.jobs.forEach(job => {
       const article = node('article','');
-      article.append(node('strong',job.district_name + ' · ' + (labels[job.status] || job.status) + ' · ' + job.processed + ' predios'));
+      article.append(node('strong',job.district_name + ' · ' + (labels[job.status] || job.status) + ' · ' + (!job.source_objects && !job.processed && job.status !== 'completed' ? 'inventario pendiente' : job.processed + (job.processed === 1 ? ' predio' : ' predios'))));
       article.append(node('p',job.message || 'Preparando el inventario de lotes de COFOPRI.'));
       if (job.source_objects) {
         // Remaining also includes records outside an old bounded test scope.

@@ -1,3 +1,53 @@
+# External cadastral collector - release 2026-10-14
+
+Status: Validated - user explicitly requests production publication and correction
+Recipe: CI/CD through existing .github/workflows/main_granextractorservice.yml
+
+## Scope and existing target
+Deploy the reviewed external collector control and dashboard. Azure keeps its
+private archive ledger and administrative dashboard; a collector in a network
+with normal COFOPRI access fetches originals and uploads directly to private R2.
+Activate CATASTRO_EXECUTION_MODE=external and the scoped CATASTRO_WORKER_TOKEN
+from the existing local private token file, without disclosing it or modifying
+other settings. Start the collector against https://acm.propifai.com and verify
+an actual Alto Selva Alegre archive and dashboard progress before reporting fixed.
+Base main and last successful production: 441329ecc88323f2f7a91e156a138bd0917425a4,
+workflow 38644680628. Existing target granextractorservice / rg-elgranextractor,
+Brazil South, subscription 0219eecc-9920-4789-9929-3091a2f09daf. No new cloud
+resources, role assignments, package dependencies or SQL Server migrations.
+SQLite additions preserve existing jobs, lots and uploads. Keep R2 credentials
+and originals, existing runtime configuration and unrelated local changes.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-14, America/Lima:
+- 36 isolated Django/collector tests passed: scoped Bearer and lease validation,
+  administrative CSRF, precise middleware exception, stop/resume, lost progress
+  acknowledgement, paginated seeds and fresh-machine retry without redownload.
+- Real local dashboard-to-worker-to-R2 trial archived 04010206058015, reflected
+  its summary and one pending individual form. PDF measurements were 200/20.5.
+- Local anonymous collector endpoint returned HTTP 403. Dashboard and current
+  JavaScript served over HTTP; asset bytes exactly match the shared source.
+- Production WSGI and dashboard template compiled with isolated SQLite;
+  collectstatic passed and the release JavaScript exactly matches its source.
+- JavaScript syntax and Git whitespace checks passed. Latest origin/main fetched;
+  previous production workflow confirmed successful. Shared D:/PROMETEO contains
+  the 13 scoped files; unrelated work is retained. Secrets remain outside Git.
+- Existing Azure subscription and target are unchanged; resource/role template
+  checks are inapplicable to this application-only release.
+
+## Execution and verification
+Push scoped source and this record to main without force. Configure only the two
+collector settings while preserving every other app setting. User now explicitly
+requests publication after learning the permanent collector was not active.
+The prior local background start was rejected by automatic approval review; do
+not bypass a renewed rejection. Production needs an active authorized collector;
+code dispatch alone is not a working fix. Confirm current public asset bytes,
+private API authentication, an archived test lot and full-district inventory/progress.
+Do not remain monitoring after that verification. Rollback preserves R2 and the
+ledger; stop the worker before changing execution mode or reverting the code.
+
+---
+
 # ACM calculation and cadastral measurements - release 2026-10-14
 
 Status: Validated - user explicitly requested publication of reviewed local changes

@@ -1,6 +1,8 @@
 import io
 import json
 import re
+import os
+import time
 from functools import wraps
 from pathlib import Path
 
@@ -45,6 +47,9 @@ def status(request):
     state = State()
     try:
         data = state.snapshot(ubigeo)
+        presence = state.db.execute('SELECT heartbeat FROM collector_presence WHERE id=1').fetchone()
+        data['collector'] = {'external': os.environ.get('CATASTRO_EXECUTION_MODE') == 'external',
+                             'connected': bool(presence and presence[0] > time.time() - 60)}
         for job in data['jobs']:
             job['district_name'] = DISTRICTS.get(job['ubigeo'], {}).get('name', job['ubigeo'])
     finally:
@@ -82,7 +87,7 @@ def stop(request, job_id):
         if not job:
             return JsonResponse({'error': 'Ejecución no encontrada.'}, status=404)
         if job['status'] in ('queued', 'running'):
-            state.update_job(job_id, stop=1, message='Se detendrá al terminar la solicitud en curso.')
+            state.update_job(job_id, stop=1, **({'status':'stopped','message':'Descarga detenida antes de comenzar.'} if job['status']=='queued' else {'message':'Se detendrá al terminar la solicitud en curso.'}))
         return JsonResponse({'stopping': True})
     finally:
         state.close()

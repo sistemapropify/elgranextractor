@@ -20,6 +20,7 @@
         <div class="catastro-actions"><button class="btn btn-success catastro-button" id="start-collection" type="submit">Descargar distrito completo</button><button class="btn btn-danger catastro-button" id="stop-collection" type="button" hidden>Detener</button></div>
       </form>
       <p id="collection-message" role="status" aria-live="polite"></p>
+      <p id="collector-status" class="catastro-help" role="status"></p>
     </section>
     <section class="catastro-card"><h2>Almacenamiento privado</h2><span class="catastro-badge" id="storage-status">Comprobando configuración</span><p id="storage-detail">Los documentos y las fotos se archivan en Cloudflare R2.</p><div class="catastro-storage"><strong id="storage-bytes">0 B</strong><span>archivados por este recolector</span></div><p class="catastro-help">Sin límite de cantidad de predios. En producción, los PDF, las fotos y los datos completos quedan en R2. Si COFOPRI no entrega algún documento, queda identificado para reintentar y la descarga continúa con los demás.</p></section>
   </div>
@@ -27,4 +28,4 @@
   <section class="catastro-card"><h2>Predios del archivo</h2><p class="catastro-help">Últimos 50 predios del distrito seleccionado. Abre un predio para revisar sus documentos y fotos.</p><div class="catastro-table-wrap"><table><thead><tr><th>Código del lote</th><th>Estado</th><th>Documentos</th><th>Fachadas</th><th>Pendientes</th><th>Archivo</th></tr></thead><tbody id="lots-list"><tr><td colspan="6">Todavía no hay predios archivados en este distrito.</td></tr></tbody></table></div></section>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=2" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=3" defer></script>{% endblock %}
