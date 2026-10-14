@@ -47,9 +47,11 @@ def status(request):
     state = State()
     try:
         data = state.snapshot(ubigeo)
-        presence = state.db.execute('SELECT heartbeat FROM collector_presence WHERE id=1').fetchone()
+        presence = state.db.execute('SELECT heartbeat,source_status FROM collector_presence WHERE id=1').fetchone()
         data['collector'] = {'external': os.environ.get('CATASTRO_EXECUTION_MODE') == 'external',
-                             'connected': bool(presence and presence[0] > time.time() - 60)}
+                             'connected': bool(presence and presence[0] > time.time() - 60),
+                             'source_status': presence[1] if presence else 'unchecked',
+                             'hosted': os.environ.get('CATASTRO_AZURE_WORKER_ENABLED') == '1'}
         for job in data['jobs']:
             job['district_name'] = DISTRICTS.get(job['ubigeo'], {}).get('name', job['ubigeo'])
     finally:

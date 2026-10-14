@@ -1,3 +1,43 @@
+# Permanent Azure cadastral collector - release 2026-10-14
+
+Status: Validated - user requires Azure only and operation with the PC powered off
+Recipe: existing serialized CI/CD workflow and existing App Service startup
+
+## Authorized scope and target
+Start and supervise the cadastral collector in startup.sh, following the existing
+scraping watchdog pattern. Use the same App Service granextractorservice,
+rg-elgranextractor, Brazil South and existing subscription. Activate only
+CATASTRO_AZURE_WORKER_ENABLED=1 after publishing this startup correction; preserve
+the configured external mode, scoped token, Always On and other app settings.
+The worker has a separate durable ledger /home/data/catastro-worker and a bounded
+rotating log. No local PC process, Hostinger changes, new Azure resources or new
+compute charges. Previous Hostinger access was read-only and is explicitly out
+of scope. The manual local worker request is superseded by the user's Azure-only
+requirement. Base main a4947029; its serialized publication is still in progress.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-14, America/Lima:
+- 38 isolated Django/collector tests passed, including unavailable-source wait
+  without claiming/failing the queued job, automatic continuation on recovery,
+  idle operation without COFOPRI requests, authentication, leases and resumption.
+- bash -n startup.sh and JavaScript syntax passed. Runtime/dependencies are the
+  existing production Python and installed PDF libraries; no infrastructure or
+  RBAC changes. Shared preview integrated surgically with backups.
+- Earlier real local one-property R2 trial verified original PDF areas 200/20.5.
+- Two distinct Azure App Service egress networks timed out on TCP/443 to both
+  COFOPRI hosts. Source reachability is unresolved; do not report real production
+  extraction successful merely because the worker is running.
+
+## Execution and verification
+Push scoped files without force, preserving newer main. Let serialized CI finish.
+Enable the Azure worker flag preserving all other settings. Verify the deployed
+asset, private API, Azure process, heartbeat, queued-job wait and bounded log.
+If COFOPRI still refuses connections, explicitly report the source connectivity
+blocker and that queued work will retry automatically. Do not use the PC or
+Hostinger as a fallback. No extended monitoring after verification.
+
+---
+
 # External cadastral collector - release 2026-10-14
 
 Status: Validated - user explicitly requests production publication and correction

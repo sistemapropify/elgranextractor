@@ -47,14 +47,21 @@ def private_worker(view):
 
 @private_worker
 def claim(request, data):
+    source_status = data.get('source_status','available')
+    may_claim = data.get('claim',True)
+    if source_status not in ('unchecked','available','unavailable') or not isinstance(may_claim,bool):
+        raise ValueError()
     state = State()
     try:
         state.db.execute('BEGIN IMMEDIATE')
-        state.db.execute('INSERT OR REPLACE INTO collector_presence VALUES (1,?)', (time.time(),))
+        state.db.execute('INSERT OR REPLACE INTO collector_presence (id,heartbeat,source_status) VALUES (1,?,?)', (time.time(),source_status))
         row = state.db.execute("SELECT * FROM jobs WHERE executor='external' AND status='queued' AND stop=0 ORDER BY created LIMIT 1").fetchone()
-        if not row:
+        if not row or not may_claim or source_status != 'available':
+            if row and source_status == 'unavailable':
+                state.db.execute('UPDATE jobs SET message=?,heartbeat=? WHERE id=?',
+                                 ('COFOPRI no responde. El recolector reintentará automáticamente; avance conservado.',time.time(),row['id']))
             state.db.commit()
-            return JsonResponse({'job':None})
+            return JsonResponse({'job':None,'pending':bool(row)})
         lease = secrets.token_hex(32)
         state.db.execute("UPDATE jobs SET status='running',lease=?,heartbeat=?,message=? WHERE id=?",
                          (lease,time.time(),'Recolector conectado. Consultando inventario de COFOPRI.',row['id']))
@@ -122,7 +129,7 @@ def job_action(request, data, job_id, action):
         if action != 'finish' and job['stop']:
             # Final in-flight archive may be acknowledged, then collector stops.
             values['message'] = 'Detención solicitada; conservando el avance.'
-        state.db.execute('INSERT OR REPLACE INTO collector_presence VALUES (1,?)',(time.time(),))
+        state.db.execute('UPDATE collector_presence SET heartbeat=? WHERE id=1',(time.time(),))
         state.update_job(job_id,**values)
         return JsonResponse({'stop':bool(job['stop'])})
     finally:

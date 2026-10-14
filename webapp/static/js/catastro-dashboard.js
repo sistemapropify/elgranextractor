@@ -24,7 +24,8 @@
   function render(data) {
     for (const key of ['uploaded','reports','photos','missing']) el('metric-' + key).textContent = data.totals[key];
     configured = data.storage.configured;
-    el('collector-status').textContent = data.collector?.external ? (data.collector.connected ? 'Recolector conectado.' : 'Recolector sin conexión. Las descargas quedarán en espera hasta que se conecte.') + ' El equipo recolector debe permanecer encendido y conectado.' : '';
+    const collector=data.collector;
+    el('collector-status').textContent = collector?.external ? (collector.connected ? (collector.source_status === 'unavailable' ? 'Recolector activo. COFOPRI no responde; la descarga se reintentará automáticamente.' : 'Recolector conectado.') : 'Recolector sin conexión. Las descargas quedarán en espera hasta que se conecte.') + (collector.hosted ? ' Funciona en Azure con tu computadora apagada.' : ' El equipo recolector debe permanecer encendido y conectado.') : '';
     el('storage-status').textContent = configured ? 'R2 configurado · acceso privado' : 'R2 pendiente de configuración';
     el('storage-status').classList.toggle('warn',!configured);
     el('storage-detail').textContent = configured ? 'Bucket: ' + data.storage.bucket + '. Los archivos se guardan por distrito y predio.' : 'Configura las credenciales de R2 en este equipo para iniciar la descarga.';

@@ -1,4 +1,30 @@
-# Recolector de catastro fuera de Azure
+# Recolector catastral permanente en Azure
+
+## Operación de producción: servicio permanente en Azure
+
+La configuración final usa exclusivamente Azure para ejecutar el recolector.
+No depende de PowerShell, de una PC encendida ni de Hostinger. `startup.sh`
+arranca y supervisa el recolector cuando `CATASTRO_EXECUTION_MODE=external` y
+`CATASTRO_AZURE_WORKER_ENABLED=1`. Usa el token privado ya configurado, el mismo
+App Service con Always On, su runtime Python y `/home/data/catastro-worker` como
+registro independiente de reanudación. No crea recursos ni costes de cómputo
+adicionales. La salida se rota a cuatro archivos de hasta 5 MiB.
+
+El argumento `--wait-source` comprueba la conexión con ambos servidores de
+COFOPRI solo cuando hay tareas pendientes. Si no responden, deja la tarea en
+cola y comunica el motivo al dashboard. Reintenta automáticamente sin marcar
+el distrito como vacío ni consumir la ejecución. Si se recupera la conexión,
+reclama el trabajo y continúa la descarga. Las respuestas de acceso denegado
+siguen deteniendo la extracción; no se eluden restricciones de COFOPRI.
+
+La independencia de la PC y la conectividad con COFOPRI son comprobaciones
+separadas: el servicio puede estar activo en Azure mientras COFOPRI no acepta
+sus conexiones. En ese caso el dashboard debe mostrar la espera explícitamente;
+no afirmar que una descarga está solucionada por estar el código publicado.
+
+Los comandos manuales de abajo sirven para diagnóstico. No son un requisito
+para que un usuario inicie descargas en producción. Hostinger quedó fuera del
+alcance por instrucción explícita; allí solo se hicieron consultas de diagnóstico.
 
 El 14/10/2026 Azure no alcanzó por TCP/443 a geoportal.cofopri.gob.pe ni
 catastro.cofopri.gob.pe; ambas solicitudes agotaron el tiempo de espera.
@@ -28,18 +54,16 @@ Arranque de prueba contra el dashboard local:
 D:/PROMETEO/elgranextractor/venv/Scripts/python.exe scripts/catastro_worker.py --url http://127.0.0.1:8000 --once
 ```
 
-Operación continua contra producción, después de publicar y configurar el modo
-externo y su credencial privada en el App Service:
+Diagnóstico puntual contra producción; la operación continua pertenece al
+proceso supervisado por `startup.sh` en Azure:
 
 ```powershell
-D:/PROMETEO/elgranextractor/venv/Scripts/python.exe scripts/catastro_worker.py --url https://acm.propifai.com
+D:/PROMETEO/elgranextractor/venv/Scripts/python.exe scripts/catastro_worker.py --url https://acm.propifai.com --once
 ```
 
-El equipo debe permanecer encendido, conectado y con el proceso ejecutándose.
-Esta implementación no instala inicio automático de Windows ni un servicio.
-En Windows, al arrancar en segundo plano usar `Start-Process -WindowStyle Hidden`
-y conservar los registros fuera de Git. Se recomienda un equipo dedicado para
-operación continua; cerrar o suspender el equipo interrumpe la ejecución.
+En la operación normal el usuario solo utiliza el dashboard. Azure mantiene
+el proceso y lo inicia de nuevo tras reiniciar su contenedor. La copia local
+no ejecuta el recolector de producción ni instala tareas de inicio en Windows.
 
 ## Protocolo y recuperación
 

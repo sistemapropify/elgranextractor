@@ -51,6 +51,12 @@ class State:
                     if column not in {r['name'] for r in self.db.execute('PRAGMA table_info(jobs)')}:
                         raise
         self.db.execute('CREATE TABLE IF NOT EXISTS collector_presence (id INTEGER PRIMARY KEY CHECK(id=1), heartbeat REAL NOT NULL)')
+        if 'source_status' not in {r['name'] for r in self.db.execute('PRAGMA table_info(collector_presence)')}:
+            try:
+                self.db.execute("ALTER TABLE collector_presence ADD COLUMN source_status TEXT DEFAULT 'unchecked'")
+            except sqlite3.OperationalError:
+                if 'source_status' not in {r['name'] for r in self.db.execute('PRAGMA table_info(collector_presence)')}:
+                    raise
         self.db.execute('CREATE INDEX IF NOT EXISTS lots_updated ON lots(updated)')
         self.db.commit()
 

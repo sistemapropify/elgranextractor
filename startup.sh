@@ -249,6 +249,21 @@ if [ "$DURABLE_EXECUTION_MODE" = "external" ] && [ "${DURABLE_WORKER_ENABLED:-1}
     ) >> /home/LogFiles/durable-worker.log 2>&1 &
 fi
 
+# Persistent cadastral collector. Azure owns this process and its restart;
+# no user computer or browser session is needed. Keep its ledger separate.
+if [ "${CATASTRO_EXECUTION_MODE:-server}" = "external" ] && [ "${CATASTRO_AZURE_WORKER_ENABLED:-0}" = "1" ]; then
+    (
+        set +e
+        cd "$APP_ROOT"
+        while true; do
+            echo "[$(date -u)] Starting Azure cadastral collector..."
+            python -u scripts/catastro_worker.py --url https://acm.propifai.com --data-dir /home/data/catastro-worker --wait-source
+            echo "[$(date -u)] Cadastral collector exited; restarting in 10s."
+            sleep 10
+        done
+    ) 2>&1 | python -u "$APP_ROOT/scripts/rotate_stream_log.py" /home/LogFiles/catastro-worker.log &
+fi
+
 # ── Start Gunicorn ──
 echo "[6/6] Starting Gunicorn..."
 echo "  Port: ${PORT:-8000}"

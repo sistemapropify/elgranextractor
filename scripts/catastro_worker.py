@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import os
+import socket
 from pathlib import Path
 import sys
 import time
@@ -11,10 +12,31 @@ from catastro.external_worker import Control, run_once, ControlError
 from catastro.storage import credentials
 
 
+def source_available():
+    for host in ('geoportal.cofopri.gob.pe','catastro.cofopri.gob.pe'):
+        try:
+            with socket.create_connection((host,443),timeout=5):
+                pass
+        except OSError:
+            return False
+    return True
+
+
+def service_once(control, root):
+    presence=control.call('claim',{'claim':False,'source_status':'unchecked'})
+    if not presence.get('pending'):
+        return None
+    if not source_available():
+        control.call('claim',{'claim':False,'source_status':'unavailable'})
+        return None
+    return run_once(control,root)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Recolector externo controlado por el dashboard catastral.')
     parser.add_argument('--url',required=True,help='Origen del dashboard, HTTPS en producción.')
     parser.add_argument('--once',action='store_true',help='Atender una ejecución y salir.')
+    parser.add_argument('--wait-source',action='store_true',help='Esperar y reintentar si COFOPRI no acepta conexiones.')
     parser.add_argument('--token-file',type=Path,default=Path.home()/'.codex/secrets/prometeo-catastro-worker.token')
     parser.add_argument('--data-dir',type=Path,help='Directorio privado de reanudación; no comparte la cola local.')
     args = parser.parse_args()
@@ -25,7 +47,7 @@ def main():
         root = args.data_dir or Path.home()/'.codex/catastro-workers'/hashlib.sha256(args.url.rstrip('/').encode()).hexdigest()[:16]
         while True:
             try:
-                result = run_once(control,root)
+                result = service_once(control,root) if args.wait_source else run_once(control,root)
                 if result:
                     print('Ejecución finalizada; avance comunicado al dashboard.',flush=True)
             except ControlError:

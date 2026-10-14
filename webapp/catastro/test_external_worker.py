@@ -148,6 +148,29 @@ class ExternalWorkerTests(SimpleTestCase):
             with self.assertRaises(ValueError):Control(url,TOKEN)
         Control('https://acm.propifai.com',TOKEN);Control('http://127.0.0.1:8000',TOKEN)
 
+    def test_azure_service_waits_without_claiming_or_failing_job_then_resumes(self):
+        import importlib.util
+        spec=importlib.util.spec_from_file_location('collector_cli_test',Path(__file__).resolve().parents[2]/'scripts/catastro_worker.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        job=self.queued();control=self.control()
+        with patch.object(module,'source_available',return_value=False):
+            self.assertIsNone(module.service_once(control,self.worker.name))
+        state=State();self.assertEqual(state.job(job)['status'],'queued')
+        self.assertIn('automáticamente',state.job(job)['message'])
+        self.assertEqual(state.db.execute('SELECT source_status FROM collector_presence').fetchone()[0],'unavailable');state.close()
+        with patch.object(module,'source_available',return_value=True),patch.object(module,'run_once',side_effect=lambda c,r:run_once(c,r,FakeSource(),FakeR2())):
+            result=module.service_once(control,self.worker.name)
+        self.assertEqual(result['uploaded'],1)
+        state=State();self.assertEqual(state.job(job)['status'],'completed');state.close()
+
+    def test_azure_service_does_not_probe_cofopri_without_pending_work(self):
+        import importlib.util
+        spec=importlib.util.spec_from_file_location('collector_cli_idle_test',Path(__file__).resolve().parents[2]/'scripts/catastro_worker.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        with patch.object(module,'source_available') as probe:
+            self.assertIsNone(module.service_once(self.control(),self.worker.name))
+            probe.assert_not_called()
+
     def test_session_middleware_exemption_only_covers_private_collector_actions(self):
         import importlib.util
         import sys
