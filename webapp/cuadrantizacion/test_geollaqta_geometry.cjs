@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const sandbox = {window: {}};
+for(const file of ['geollaqta-data.js','geollaqta-google.js']) vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../static/js/',file),'utf8'),sandbox);
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../static/js/geollaqta-map.js'), 'utf8'), sandbox);
 const relation = sandbox.window.GeollaqtaMap.relation;
 const ring = (x, y, s) => [[x,y],[x+s,y],[x+s,y+s],[x,y+s],[x,y]];

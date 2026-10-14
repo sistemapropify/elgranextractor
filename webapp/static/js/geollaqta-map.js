@@ -1,115 +1,10 @@
-/* Yanahuara cadastral pilot. Geometry and gallery are read-only context. */
+/* Shared cadastral controls; map rendering is supplied by an adapter. */
 (function () {
     'use strict';
-    const endpoint = '/cuadrantizacion/geollaqta/';
     const $ = id => document.getElementById(id);
     const number = value => value == null || value === '' ? null : Number(value);
     const format = value => number(value) == null ? 'Sin dato' : Number(value).toLocaleString('es-PE');
-    const orient = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
-    function onSegment(p, a, b) {
-        return Math.abs(orient(a, b, p)) < 1e-12 && p[0] >= Math.min(a[0], b[0]) - 1e-10 &&
-            p[0] <= Math.max(a[0], b[0]) + 1e-10 && p[1] >= Math.min(a[1], b[1]) - 1e-10 && p[1] <= Math.max(a[1], b[1]) + 1e-10;
-    }
-    function edges(ring) { return ring.map((point, index) => [point, ring[(index + 1) % ring.length]]); }
-    function pointInRing(p, ring) {
-        let inside = false;
-        for (const [a, b] of edges(ring)) {
-            if (onSegment(p, a, b)) return 2;
-            if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
-        }
-        return inside ? 1 : 0;
-    }
-    function pointInPolygon(p, rings) {
-        const outer = pointInRing(p, rings[0]);
-        if (!outer) return false;
-        return !rings.slice(1).some(ring => pointInRing(p, ring) === 1);
-    }
-    function segmentsIntersect(a, b, c, d) {
-        if ([c, d].some(p => onSegment(p, a, b)) || [a, b].some(p => onSegment(p, c, d))) return true;
-        return orient(a, b, c) * orient(a, b, d) < 0 && orient(c, d, a) * orient(c, d, b) < 0;
-    }
-    function relation(geometry, zoneRing) {
-        const parts = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
-        let overlaps = false, contained = true;
-        for (const rings of parts) {
-            const touches = rings.some(ring => edges(ring).some(([a, b]) =>
-                edges(zoneRing).some(([c, d]) => segmentsIntersect(a, b, c, d))));
-            const within = rings[0].every(p => pointInRing(p, zoneRing) === 1);
-            overlaps = overlaps || touches || rings[0].some(p => pointInRing(p, zoneRing)) || pointInPolygon(zoneRing[0], rings);
-            contained = contained && within && !touches;
-        }
-        return overlaps ? (contained ? 'Dentro' : 'Intersecta / toca') : null;
-    }
-    function esriGeometry(geometry, kind) {
-        const point = raw => {
-            const x = Number(raw[0]), y = Number(raw[1]);
-            if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 180 || Math.abs(y) > 90) throw new Error('Geometría inválida');
-            return [x, y];
-        };
-        if (kind === 'point') return {type:'Point',coordinates:point([geometry.x,geometry.y])};
-        if (kind === 'line') {
-            const paths = (geometry.paths || []).map(path => {if (path.length < 2 || path.length > 2000) throw new Error('Geometría inválida');return path.map(point);});
-            if (!paths.length) throw new Error('Geometría no disponible');
-            return paths.length === 1 ? {type:'LineString',coordinates:paths[0]} : {type:'MultiLineString',coordinates:paths};
-        }
-        const rings = (geometry.rings || []).map(raw => {
-            if (raw.length < 3 || raw.length > 2000) throw new Error('Geometría inválida');
-            const ring = raw.map(point);
-            if (ring[0][0] !== ring.at(-1)[0] || ring[0][1] !== ring.at(-1)[1]) ring.push([...ring[0]]);
-            const area = Math.abs(edges(ring).reduce((sum,[a,b]) => sum + (a[0]-ring[0][0])*(b[1]-ring[0][1])-(b[0]-ring[0][0])*(a[1]-ring[0][1]),0));
-            if (!area) throw new Error('Geometría inválida');
-            return {ring,area};
-        }).sort((a,b) => b.area-a.area);
-        if (!rings.length || rings.length > 64) throw new Error('Geometría no disponible');
-        const polygons = [], depths = [], owners = [];
-        rings.forEach(({ring},index) => {
-            let parent = null;
-            for (let i=0;i<index;i++) if (pointInRing(ring[0],rings[i].ring) === 1) parent=i;
-            const depth = parent === null ? 0 : depths[parent]+1; depths.push(depth);
-            if (depth%2===0) { owners[index]=polygons.length;polygons.push([ring]); }
-            else polygons[owners[parent]].push(ring);
-        });
-        return polygons.length===1 ? {type:'Polygon',coordinates:polygons[0]} : {type:'MultiPolygon',coordinates:polygons};
-    }
-    async function directQuery(info, config, params, signal) {
-        const controller = new AbortController(); let expired = false;
-        const abort = () => controller.abort();
-        if (signal?.aborted) controller.abort();
-        signal?.addEventListener('abort',abort,{once:true});
-        const timer = setTimeout(() => {expired=true;controller.abort();},20000);
-        try {
-            const response = await fetch(info.service_base+'/'+config.id+'/query', {method:'POST',credentials:'omit',
-                body:new URLSearchParams({f:'json',...params}),signal:controller.signal});
-            const data = await response.json();
-            if (!response.ok || data.error) throw new Error('COFOPRI no pudo completar la consulta.');
-            return data;
-        } catch(error) { if (expired) throw new Error('COFOPRI tardó demasiado en responder. Intenta actualizar.');throw error; }
-        finally { clearTimeout(timer);signal?.removeEventListener('abort',abort); }
-    }
-    async function directLayer(info,key,bbox,signal) {
-        const config = info.layers[key], field = config.district_field || 'ID_DIST';
-        const data = await directQuery(info,config,{where:field+"='040126'",geometry:bbox,geometryType:'esriGeometryEnvelope',inSR:'4326',spatialRel:'esriSpatialRelIntersects',returnIdsOnly:'true'},signal);
-        const ids = [...new Set(data.objectIds || [])].sort((a,b)=>a-b), selected=ids.slice(0,1000), features=[];
-        let skipped=0;
-        for (let start=0;start<selected.length;start+=500) {
-            const batch=await directQuery(info,config,{objectIds:selected.slice(start,start+500).join(','),outFields:config.fields,returnGeometry:'true',outSR:'4326'},signal);
-            if (!Array.isArray(batch.features)) throw new Error('COFOPRI devolvió una respuesta incompleta.');
-            for (const raw of batch.features) {
-                const properties={};config.fields.split(',').forEach(name=>{const value=raw.attributes?.[name];properties[name]=typeof value==='string'?value.trim():value;});
-                if (properties[field] !== '040126') continue;
-                try {features.push({type:'Feature',id:properties.OBJECTID,properties,geometry:esriGeometry(raw.geometry || {},config.kind)});}
-                catch (_) {skipped++;}
-            }
-        }
-        return {type:'FeatureCollection',features,total_in_view:ids.length,truncated:ids.length>1000,skipped,name:config.name};
-    }
-    async function read(path, signal) {
-        const response = await fetch(endpoint + path, {credentials: 'same-origin', signal, headers: {Accept: 'application/json'}});
-        if (response.redirected || !response.headers.get('content-type')?.includes('application/json')) throw new Error('Inicia sesión para consultar el catastro.');
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'No se pudo consultar COFOPRI.');
-        return data;
-    }
+    const {relation, esriGeometry, facadeUrl} = window.GeollaqtaData;
     function node(tag, text, className) {
         const element = document.createElement(tag);
         if (text != null) element.textContent = text;
@@ -124,27 +19,26 @@
         const element = node('div', null, 'geollaqta-field');
         element.append(node('span', label), node('strong', value == null || value === '' ? 'Sin dato' : value)); parent.append(element);
     }
-    function facadeUrl(lotId, index = 0) {
-        if (typeof lotId !== 'string' || !/^040126\d{8}$/.test(lotId) || !Number.isInteger(index) || index < 0 || index > 11) return null;
-        // Paths verified in COFOPRI's reports, including the numbered extra photos.
-        return 'https://catastro.cofopri.gob.pe/img_catastro/040126/' + lotId.slice(6) + (index ? '_' + index : '') + '.jpg';
-    }
     function init(map, options = {}) {
         if (!$('geollaqta-visible') || map.__geollaqtaPilot) return;
         map.__geollaqtaPilot = true;
+        const adapter = options.adapter || window.GeollaqtaGoogleAdapter.create(map);
+        const client = window.GeollaqtaData.createClient(options.data || {});
         const toggle = $('geollaqta-visible'), status = $('geollaqta-status'), card = $('geollaqta-detail');
-        const layers = new Map(), cache = new Map(), signatures = new WeakMap(), layer = new google.maps.Data(); layers.set('lotes', layer);
+        const districtSelect = $('geollaqta-district');
+        const layers = new Map(), cache = new Map(), signatures = new WeakMap(), layer = adapter.createLayer(); layers.set('lotes', layer);
         const colors = {'lotes':'#00b8a9','ejes-vias':'#e6a224','manzanas':'#388cff','comercios':'#e05fa4','ingresos':'#cf7fff','habilitaciones':'#965bd1','sectores':'#758aa4'};
         let opacity = .85;
         function paint(key, dataLayer) {
             const color = colors[key] || '#527af2';
             dataLayer.setStyle({fillColor: color, fillOpacity: (['manzanas','sectores','habilitaciones'].includes(key) ? .02 : .14) * opacity,
                 strokeColor: color, strokeOpacity: opacity, strokeWeight: key === 'ejes-vias' ? 2.5 : key === 'manzanas' ? 2 : 1.4,
-                icon: {path: google.maps.SymbolPath.CIRCLE, scale: 3, fillColor: color, fillOpacity: opacity, strokeColor: '#ffffff', strokeWeight: 1},
+                icon: {...adapter.pointIcon(opacity), fillColor: color},
                 zIndex: key === 'lotes' ? 120000 : ['manzanas','sectores','habilitaciones'].includes(key) ? 119999 : 120001, clickable: key === 'lotes'});
         }
         paint('lotes', layer);
-        let timer, request, detailRequest, serial = 0, detailSerial = 0, coverageData, coverageRequest, selected, selectedGeometry;
+        let timer, request, detailRequest, serial = 0, detailSerial = 0, coverageData, coverageRequest, coverageAbort, selected, selectedGeometry;
+        let catalogData, catalogRequest, districtEntry = {ubigeo:'040126',name:'Yanahuara',center:{lat:-16.40707,lng:-71.56604}};
         const message = text => { status.textContent = text; };
         function clear() {
             layers.forEach(dataLayer => { dataLayer.revertStyle(); dataLayer.forEach(feature => dataLayer.remove(feature)); dataLayer.setMap(null); signatures.delete(dataLayer); });
@@ -172,7 +66,7 @@
         }
         function gallery(data) {
             const section = $('geollaqta-gallery'); section.replaceChildren(node('strong', 'Galería de imágenes'));
-            const version = detailSerial, lotId = data.properties.ID_LOTE;
+            const version = detailSerial, lotId = data.properties.ID_LOTE, district = client.district;
             const current = () => version === detailSerial && !card.hidden && toggle.checked;
             const notice = node('p', 'Cargando fotografías de la fachada…'), images = node('div');
             section.append(notice, images);
@@ -200,12 +94,13 @@
                 image.src = url;
             }
             if (['direct','unavailable'].includes(data.gallery_status)) {
-                const first = facadeUrl(lotId);
+                const first = facadeUrl(lotId, 0, district);
                 if (first) {
                     requestPhoto(first);
-                    // Only continue through extra photos when the previous one exists.
-                    const extra = index => requestPhoto(facadeUrl(lotId,index), ok => { if (ok && index < 11) extra(index+1); });
-                    extra(1);
+                    // Published galleries can skip suffixes (e.g. _2 without _1).
+                    // Two bounded queues discover those photos without delaying the facade.
+                    const extra = index => requestPhoto(facadeUrl(lotId,index,district), () => { if (index+2 <= 11) extra(index+2); });
+                    extra(1); extra(2);
                 } else notice.textContent = 'No hay una ruta de fotografía disponible para este código catastral.';
             } else if (data.images?.length) data.images.slice(0,12).forEach(url => requestPhoto(url));
             else notice.textContent = 'COFOPRI no publica imágenes para este lote.';
@@ -223,7 +118,7 @@
             selected.toGeoJson(feature => { if (version === detailSerial) { selectedGeometry = feature.geometry; zones(); } });
             card.replaceChildren(); card.hidden = false;
             const top = node('div', null, 'geollaqta-detail-header');
-            top.append(node('strong', 'Yanahuara · lote ' + (selected.getProperty('COD_LOTE') || '')));
+            top.append(node('strong', districtEntry.name + ' · lote ' + (selected.getProperty('COD_LOTE') || '')));
             const close = node('button', 'Cerrar'); close.type = 'button'; close.addEventListener('click', () => { card.hidden = true; layer.revertStyle(); ++detailSerial; detailRequest?.abort(); });
             top.append(close); card.append(top);
             const fields = node('div'); card.append(fields);
@@ -238,13 +133,10 @@
             const photos = node('div', 'Cargando fachada…', 'geollaqta-section'); photos.id = 'geollaqta-gallery'; card.append(photos);
             const records = node('div', null, 'geollaqta-section'); records.id = 'geollaqta-records'; card.append(records);
             card.append(node('p', 'Fuente: COFOPRI. La fotografía y los datos corresponden al levantamiento publicado; pueden ser antiguos.', 'map-quality-help'));
-            if (coverageData?.transport === 'browser') {
-                const lotId = String(selected.getProperty('ID_LOTE') || '').trim();
-                if (!/^040126\d{8,12}$/.test(lotId)) {photos.textContent='COFOPRI no publicó un código de lote válido.';return;}
-                gallery({properties:{ID_LOTE:lotId},gallery_status:'direct',gallery_url:'https://catastro.cofopri.gob.pe/geollaqta/reportefichas/vistadetalle.php?id_lote='+encodeURIComponent(lotId)});
-                return;
-            }
-            try { const data = await read('lotes/' + selected.getId() + '/', detailRequest.signal); if (version === detailSerial) gallery(data); }
+            const feature = {type:'Feature',id:selected.getId(),geometry:selectedGeometry,properties:{}};
+            ['ID_LOTE','ID_DIST','COD_SECT','COD_MZNA','COD_LOTE','ANIO_CAT','AREA_TER','AREA_CON','NIVELES','NRO_UNIDADES'].forEach(key => { feature.properties[key] = selected.getProperty(key); });
+            options.onLotSelected?.({feature, district:client.district});
+            try { const data = await client.detail(feature, coverageData, detailRequest.signal); if (version === detailSerial) gallery(data); }
             catch (error) { if (version === detailSerial && error.name !== 'AbortError') photos.replaceChildren(node('p', error.message)); }
         }
         function activeLayers(keys) {
@@ -270,35 +162,36 @@
         async function load(force = false) {
             request?.abort(); const version = ++serial;
             if (options.acm) $('geollaqta-options').hidden = !toggle.checked;
-            if (!toggle.checked) { clear(); message('Activa el catastro para consultar las capas de Yanahuara.'); return; }
+            if (!toggle.checked) { coverageAbort?.abort(); coverageRequest=null; clear(); message('Activa el catastro para consultar las capas de ' + districtEntry.name + '.'); return; }
+            try { await catalog(); } catch(error) { if(version===serial)message(error.message); return; }
+            if(version!==serial || !toggle.checked)return;
             const keys = Array.from(document.querySelectorAll('[name="geollaqta-layer"]:checked'), input => input.value)
                 .filter(key => !key.startsWith('piso-') || $('geollaqta-constructions').checked);
             if (!keys.length) { clear(); message('Elige una capa del catastro.'); return; }
             activeLayers(keys);
-            const bounds = map.getBounds();
-            if (!bounds || map.getZoom() < 17) { message('Acércate al mapa (zoom 17 o mayor) para cargar más lotes. Se conservan las capas ya cargadas.'); return; }
-            const sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+            const view = adapter.getView();
+            if (!view.bbox || view.zoom < 17) { message('Acércate al mapa (zoom 17 o mayor) para cargar más lotes. Se conservan las capas ya cargadas.'); return; }
             request = new AbortController();
-            const rawBox = [sw.lng(), sw.lat(), ne.lng(), ne.lat()];
+            const rawBox = view.bbox, district = client.district;
             if (rawBox[2]-rawBox[0]>.05 || rawBox[3]-rawBox[1]>.05) {message('Acércate al mapa para consultar las capas.');return;}
             // A bounded margin avoids a fresh request for every small pan or zoom in.
             const dx = Math.min((rawBox[2]-rawBox[0])*.3, (.05-(rawBox[2]-rawBox[0]))/2);
             const dy = Math.min((rawBox[3]-rawBox[1])*.3, (.05-(rawBox[3]-rawBox[1]))/2);
             const box = [rawBox[0]-dx,rawBox[1]-dy,rawBox[2]+dx,rawBox[3]+dy], bbox = box.join(',');
             const reusable = key => {
-                const entry = cache.get(key);
+                const entry = cache.get(district + ':' + key);
                 return !force && entry && Date.now()-entry.time < 300000 && !entry.data.truncated &&
                     rawBox[0]>=entry.box[0] && rawBox[1]>=entry.box[1] && rawBox[2]<=entry.box[2] && rawBox[3]<=entry.box[3];
             };
-            if (keys.some(key => !reusable(key))) message('Actualizando capas de Yanahuara… Se conservan los vectores cargados.');
+            if (keys.some(key => !reusable(key))) message('Actualizando capas de ' + districtEntry.name + '… Se conservan los vectores cargados.');
             let info;
             try {info=await(coverageRequest || coverage());}
             catch(error) {if(version===serial)message(error.message);return;}
             if(version!==serial)return;
             const responses = await Promise.allSettled(keys.map(async key => {
-                if (reusable(key)) return cache.get(key).data;
-                const data = await (info.transport === 'browser' ? directLayer(info,key,bbox,request.signal) : read('capas/' + key + '/?bbox=' + encodeURIComponent(bbox), request.signal));
-                if (version === serial) cache.set(key,{box,data,time:Date.now()});
+                if (reusable(key)) return cache.get(district + ':' + key).data;
+                const data = await client.layer(info,key,bbox,request.signal);
+                if (version === serial) { cache.set(district + ':' + key,{box,data,time:Date.now()}); if(cache.size>26)cache.delete(cache.keys().next().value); }
                 return data;
             }));
             if (version !== serial || !toggle.checked) return;
@@ -307,7 +200,7 @@
                 const key = keys[index];
                 if (result.status === 'rejected') { if (result.reason.name !== 'AbortError') messages.push(key + ': ' + result.reason.message + ' Se conserva la carga anterior.'); return; }
                 const data = result.value;
-                if (!layers.has(key)) layers.set(key, new google.maps.Data());
+                if (!layers.has(key)) layers.set(key, adapter.createLayer());
                 const dataLayer = layers.get(key); paint(key, dataLayer); reconcile(dataLayer, data); dataLayer.setMap(map);
                 const count = document.querySelector('[data-geollaqta-count="' + key + '"]');
                 if (count) count.textContent = '(' + data.features.length.toLocaleString('es-PE') + ')';
@@ -316,10 +209,11 @@
             message('Capas cargadas · ' + messages.join(' · '));
         }
         function focus() {
-            toggle.checked = true; map.setCenter(coverageData?.center || {lat: -16.40707, lng: -71.56604}); map.setZoom(18); schedule();
+            if (!districtEntry.center) {message('No hay un lote de muestra publicado para ' + districtEntry.name + '. Puedes explorar el mapa y actualizar las capas.');return;}
+            toggle.checked = true; adapter.focus(districtEntry.center,18); schedule();
         }
         function schedule() { clearTimeout(timer); request?.abort(); ++serial; timer = setTimeout(load, 350); }
-        layer.addListener('click', choose); map.addListener('idle', schedule);
+        layer.addListener('click', choose); adapter.onIdle(schedule);
         toggle.addEventListener('change', () => { clearTimeout(timer); load(); });
         document.querySelectorAll('[name="geollaqta-layer"]').forEach(input => input.addEventListener('change', () => { clearTimeout(timer); load(); }));
         $('geollaqta-constructions').addEventListener('change', () => { $('geollaqta-floors').disabled = !$('geollaqta-constructions').checked; clearTimeout(timer); load(); });
@@ -328,22 +222,55 @@
         $('geollaqta-refresh').addEventListener('click', () => { clearTimeout(timer); load(true); });
         $('refresh-zones-btn')?.addEventListener('click', () => { clearTimeout(timer); schedule(); });
         document.addEventListener('geollaqta:zones-updated', zones);
-        function coverage() {
-            const browserPreview=new URLSearchParams(location.search).get('catastro_transport')==='browser';
-            coverageRequest=read('cobertura/'+(browserPreview?'?transport=browser':'')).then(async data => {
-                coverageData=data;
-                try {
-                    const total=data.transport==='browser' ? (await directQuery(data,data.layers.lotes,{where:"ID_DIST='040126'",returnCountOnly:'true'})).count : data.total;
-                    if(!Number.isInteger(total))throw new Error('Cobertura no disponible');
-                    $('geollaqta-coverage').textContent=total.toLocaleString('es-PE')+' lotes publicados · UBIGEO '+data.ubigeo;
-                } catch(error) {$('geollaqta-coverage').textContent='No se pudo verificar la cobertura: '+error.message;}
+        function updateLabels() {
+            if(districtSelect)districtSelect.value=client.district;
+            $('geollaqta-district-title').textContent=districtEntry.name;
+            $('geollaqta-focus').textContent='Ir a ' + districtEntry.name;
+            if($('cmp-catastros-title'))$('cmp-catastros-title').textContent='Catastros · ' + districtEntry.name;
+            $('geollaqta-coverage').textContent=districtEntry.published_lots===0 ? 'Sin lotes publicados en esta fuente · referencia ' + (catalogData?.checked_at || '') :
+                (districtEntry.published_lots ?? 5240).toLocaleString('es-PE')+' lotes · referencia '+(catalogData?.checked_at || '')+' · UBIGEO '+client.district;
+        }
+        function selectDistrict(code, move = true) {
+            const entry=catalogData?.districts.find(item=>item.ubigeo===code);
+            if(!entry){message('Distrito no disponible en el catálogo.');return;}
+            clearTimeout(timer); request?.abort(); coverageAbort?.abort(); ++serial; clear();
+            client.setDistrict(code);districtEntry=entry;coverageData=null;coverageRequest=null;updateLabels();
+            if(toggle.checked && move && entry.center)focus();else load();
+        }
+        function catalog() {
+            if(catalogData)return Promise.resolve(catalogData);
+            if(catalogRequest)return catalogRequest;
+            catalogRequest=client.catalog().then(data=>{
+                catalogData=data;
+                if(districtSelect){districtSelect.replaceChildren();data.districts.forEach(entry=>{
+                    const option=node('option',entry.name+(entry.published_lots ? ' · '+entry.published_lots.toLocaleString('es-PE')+' lotes' : ' · sin lotes publicados'));
+                    option.value=entry.ubigeo;districtSelect.append(option);
+                });}
+                const requested=new URLSearchParams(location.search).get('catastro');
+                districtEntry=data.districts.find(entry=>entry.ubigeo===requested || entry.slug===requested) || data.districts.find(entry=>entry.ubigeo===client.district);
+                client.setDistrict(districtEntry.ubigeo);updateLabels();
                 return data;
-            }).catch(error=>{coverageRequest=null;$('geollaqta-coverage').textContent=error.message;throw error;});
+            }).catch(error=>{catalogRequest=null;throw error;});
+            return catalogRequest;
+        }
+        districtSelect?.addEventListener('change',()=>selectDistrict(districtSelect.value));
+        function coverage() {
+            const district=client.district;
+            coverageAbort=new AbortController();const signal=coverageAbort.signal;
+            const browserPreview=new URLSearchParams(location.search).get('catastro_transport')==='browser';
+            coverageRequest=client.coverage(signal,browserPreview).then(data => {
+                if(district!==client.district || signal.aborted)throw new DOMException('Cambio de distrito','AbortError');
+                coverageData=data;
+                // Counting never delays the first geometry request or selecting a lot.
+                const counted=data.transport==='browser' ? window.GeollaqtaData.directQuery(data,data.layers.lotes,{where:"ID_DIST='"+district+"'",returnCountOnly:'true'},signal).then(result=>result.count) : Number.isInteger(data.total) ? Promise.resolve(data.total) : client.coverage(signal,false,false).then(result=>result.total);
+                counted.then(total=>{if(district===client.district && !signal.aborted){if(!Number.isInteger(total))throw new Error('Cobertura no disponible');$('geollaqta-coverage').textContent=total.toLocaleString('es-PE')+' lotes publicados · UBIGEO '+district;}})
+                    .catch(error=>{if(district===client.district && !signal.aborted)$('geollaqta-coverage').textContent='No se pudo actualizar el conteo: '+error.message;});
+                return data;
+            }).catch(error=>{if(district===client.district && !signal.aborted){coverageRequest=null;$('geollaqta-coverage').textContent=error.message;}throw error;});
             return coverageRequest;
         }
-        if (!options.acm) coverage().catch(()=>{});
-        else toggle.addEventListener('change', () => { if (toggle.checked && !coverageData) coverage().catch(()=>{}); });
-        if (!options.acm && new URLSearchParams(location.search).get('catastro') === 'yanahuara') focus();
+        if (!options.acm) catalog().then(()=>{if(new URLSearchParams(location.search).has('catastro'))focus();}).catch(error=>message(error.message));
+        return {setDistrict:selectDistrict,refresh:()=>load(true),getDistrict:()=>client.district};
     }
     window.GeollaqtaMap = {init, relation, esriGeometry, facadeUrl};
 })();

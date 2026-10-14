@@ -35,6 +35,7 @@ urlpatterns = [
     path('jerarquia/', views.configurar_jerarquia, name='configurar_jerarquia'),
     path('capas-raster/', views.api_capas_raster, name='api_capas_raster'),
     path('capas-mapa/', map_layers_api, name='api_capas_mapa'),
+    path('geollaqta/distritos/', geollaqta.districts, name='geollaqta_districts'),
     path('geollaqta/cobertura/', geollaqta.coverage, name='geollaqta_coverage'),
     path('geollaqta/lotes/', geollaqta.lots, name='geollaqta_lots'),
     path('geollaqta/lotes/<int:object_id>/', geollaqta.detail, name='geollaqta_detail'),

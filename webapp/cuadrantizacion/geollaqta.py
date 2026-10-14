@@ -1,4 +1,4 @@
-"""Read-only Yanahuara pilot over COFOPRI's public cadastral service.
+"""Read-only, district-scoped COFOPRI cadastral data for reusable map clients.
 
 No properties, zones or upstream data are written. Gallery URLs come from the
 lot's actual report; we never infer a photograph URL from a cadastral code.
@@ -7,6 +7,7 @@ import math
 import re
 import json
 import os
+from pathlib import Path
 from html.parser import HTMLParser
 from urllib.parse import urlencode, urljoin, urlsplit
 from urllib.error import HTTPError, URLError
@@ -18,6 +19,8 @@ from django.views.decorators.http import require_GET
 
 DISTRICT = '040126'
 DISTRICT_NAME = 'Yanahuara'
+CATALOG = json.loads(Path(__file__).with_name('geollaqta_districts.json').read_text(encoding='utf-8'))
+DISTRICTS = {entry['ubigeo']: entry for entry in CATALOG['districts']}
 SERVICE = 'https://geoportal.cofopri.gob.pe/giscofopri/rest/services/Cofopri/Catastro_PCDPI/MapServer/10'
 SERVICE_BASE = SERVICE.rsplit('/', 1)[0]
 PORTAL = 'https://catastro.cofopri.gob.pe/geollaqta/'
@@ -39,6 +42,22 @@ for floor in range(1, 7):
 
 class UpstreamError(Exception):
     pass
+
+
+def _district(request):
+    code = request.GET.get('ubigeo', DISTRICT)
+    if code not in DISTRICTS:
+        raise ValueError('Elige un distrito del catálogo catastral de Arequipa.')
+    return DISTRICTS[code]
+
+
+@require_GET
+def districts(request):
+    if not _authenticated(request):
+        return JsonResponse({'error': 'Inicia sesión para consultar el catastro.'}, status=401)
+    return JsonResponse({**CATALOG, 'layers': LAYERS,
+                         'districts_with_lots': sum(entry['published_lots'] > 0 for entry in DISTRICTS.values()),
+                         'total_lots': sum(entry['published_lots'] for entry in DISTRICTS.values())})
 
 
 def _authenticated(request):
@@ -164,8 +183,9 @@ def _properties(attributes, fields=FIELDS):
 
 
 class GalleryParser(HTMLParser):
-    def __init__(self):
+    def __init__(self, district=DISTRICT):
         super().__init__()
+        self.district = district
         self.images, self.records = [], []
 
     def handle_starttag(self, tag, attrs):
@@ -174,7 +194,7 @@ class GalleryParser(HTMLParser):
             url = urljoin(PORTAL, attributes.get('src', ''))
             parsed = urlsplit(url)
             if (parsed.scheme == 'https' and parsed.netloc == 'catastro.cofopri.gob.pe'
-                    and re.fullmatch(r'/img_catastro/040126/[A-Za-z0-9_.-]+\.(?:jpg|jpeg|png)', parsed.path, re.I)
+                    and re.fullmatch(rf'/img_catastro/{self.district}/[A-Za-z0-9_.-]+\.(?:jpg|jpeg|png)', parsed.path, re.I)
                     and not parsed.query and url not in self.images):
                 self.images.append(url)
         if tag == 'a':
@@ -182,7 +202,7 @@ class GalleryParser(HTMLParser):
             parsed = urlsplit(url)
             if (parsed.scheme == 'https' and parsed.netloc == 'catastro.cofopri.gob.pe'
                     and parsed.path == '/geollaqta/reportefichas/vistapdf/fichain.php'
-                    and re.fullmatch(r'id=040126\d{13}', parsed.query)
+                    and re.fullmatch(rf'id={self.district}\d{{13}}', parsed.query)
                     and url not in self.records):
                 self.records.append(url)
 
@@ -194,7 +214,7 @@ def _gallery(lot_id):
         return result
     url = PORTAL + 'reportefichas/vistadetalle.php?' + urlencode({'id_lote': lot_id})
     try:
-        parser = GalleryParser()
+        parser = GalleryParser(lot_id[:6])
         parser.feed(_download(url).decode('utf-8', errors='replace'))
         result = {'images': parser.images[:12], 'records': parser.records[:12], 'gallery_status': 'available'}
         cache.set(key, result, 3600)
@@ -207,24 +227,34 @@ def _gallery(lot_id):
 def coverage(request):
     if not _authenticated(request):
         return JsonResponse({'error': 'Inicia sesión para consultar el catastro.'}, status=401)
+    try:
+        entry = _district(request)
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+    district, name = entry['ubigeo'], entry['name']
+    metadata = {'district': name, 'ubigeo': district, 'center': entry['center'],
+                'sample_lot': entry['sample_lot'], 'reference_total': entry['published_lots'],
+                'checked_at': CATALOG['checked_at']}
     # COFOPRI's service accepts browser CORS, while the Azure outbound IP
     # cannot currently connect. Authorize the UI and provide the same fixed
     # layer allowlist; the browser queries public geometry and embeds reports.
     if os.environ.get('WEBSITE_SITE_NAME') or request.GET.get('transport') == 'browser':
-        return JsonResponse({'district': DISTRICT_NAME, 'ubigeo': DISTRICT,
+        return JsonResponse({**metadata,
                              'transport': 'browser', 'service_base': SERVICE_BASE,
-                             'center': {'lat': -16.40707, 'lng': -71.56604},
                              'layers': LAYERS})
+    if request.GET.get('metadata') == '1':
+        return JsonResponse({**metadata, 'transport': 'server', 'layers': LAYERS})
     try:
-        result = cache.get('geollaqta-yanahuara-coverage-v2')
+        key = f'geollaqta-coverage-v3:{district}'
+        result = cache.get(key)
         if result is None:
-            data = _query(where=f"ID_DIST='{DISTRICT}'", returnCountOnly='true')
+            data = _query(where=f"ID_DIST='{district}'", returnCountOnly='true')
             if not isinstance(data.get('count'), int):
                 raise UpstreamError('No se pudo verificar la cobertura de COFOPRI.')
-            result = {'district': DISTRICT_NAME, 'ubigeo': DISTRICT, 'total': data['count'],
-                      'source': SERVICE, 'center': {'lat': -16.40707, 'lng': -71.56604},
+            result = {**metadata, 'total': data['count'], 'transport': 'server',
+                      'source': SERVICE,
                       'layers': [{'key': key, 'name': value['name']} for key, value in LAYERS.items()]}
-            cache.set('geollaqta-yanahuara-coverage-v2', result, 900)
+            cache.set(key, result, 900)
         return JsonResponse(result)
     except UpstreamError as exc:
         return JsonResponse({'error': str(exc)}, status=502)
@@ -241,20 +271,22 @@ def layer(request, layer_key):
         return JsonResponse({'error': 'Inicia sesión para consultar el catastro.'}, status=401)
     config = LAYERS.get(layer_key)
     if not config:
-        return JsonResponse({'error': 'Capa no disponible en el piloto.'}, status=404)
+        return JsonResponse({'error': 'Capa catastral no disponible.'}, status=404)
     district_field = config.get('district_field', 'ID_DIST')
     try:
+        entry = _district(request)
         box = _bbox(request.GET.get('bbox'))
     except ValueError as exc:
         return JsonResponse({'error': str(exc)}, status=400)
-    key = f'geollaqta-yanahuara-layer-v2:{layer_key}:' + ','.join(map(str, box))
+    district = entry['ubigeo']
+    key = f'geollaqta-layer-v3:{district}:{layer_key}:' + ','.join(map(str, box))
     result = cache.get(key)
     if result is not None:
         return JsonResponse(result)
     try:
         # ArcGIS 10.3 does not support pagination: enumerate IDs in the viewport
         # first, then fetch explicit, bounded batches instead of silently truncating.
-        data = _query(layer=config['id'], where=f"{district_field}='{DISTRICT}'", geometry=','.join(map(str, box)),
+        data = _query(layer=config['id'], where=f"{district_field}='{district}'", geometry=','.join(map(str, box)),
                       geometryType='esriGeometryEnvelope', inSR=4326,
                       spatialRel='esriSpatialRelIntersects', returnIdsOnly='true')
         ids = sorted(set(data.get('objectIds') or []))
@@ -266,7 +298,7 @@ def layer(request, layer_key):
                 raise UpstreamError('COFOPRI devolvió una respuesta incompleta.')
             for row in batch['features']:
                 attrs = _properties(row.get('attributes', {}), config['fields'])
-                if attrs.get(district_field) != DISTRICT:
+                if attrs.get(district_field) != district:
                     continue
                 try:
                     geometry = _esri_geometry(row.get('geometry') or {}, config['kind'])
@@ -275,7 +307,7 @@ def layer(request, layer_key):
                     continue
                 features.append({'type': 'Feature', 'id': attrs['OBJECTID'],
                                  'properties': attrs, 'geometry': geometry})
-        result = {'type': 'FeatureCollection', 'features': features, 'district': DISTRICT_NAME,
+        result = {'type': 'FeatureCollection', 'features': features, 'district': entry['name'], 'ubigeo': district,
                   'total_in_view': len(ids), 'truncated': len(ids) > LIMIT, 'skipped': skipped,
                   'source': SERVICE_BASE + '/' + str(config['id']), 'layer': layer_key, 'name': config['name']}
         cache.set(key, result, 300)
@@ -289,22 +321,35 @@ def detail(request, object_id):
     if not _authenticated(request):
         return JsonResponse({'error': 'Inicia sesión para consultar el catastro.'}, status=401)
     try:
-        data = _query(where=f"OBJECTID={int(object_id)} AND ID_DIST='{DISTRICT}'",
+        entry = _district(request)
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+    district = entry['ubigeo']
+    key = f'geollaqta-detail-v2:{district}:{int(object_id)}'
+    saved = cache.get(key)
+    if saved is not None:
+        return JsonResponse(saved)
+    try:
+        data = _query(where=f"OBJECTID={int(object_id)} AND ID_DIST='{district}'",
                       outFields=FIELDS, returnGeometry='false')
         rows = data.get('features', [])
         if not rows:
-            return JsonResponse({'error': 'El lote no pertenece al piloto de Yanahuara.'}, status=404)
+            return JsonResponse({'error': 'El lote no pertenece al distrito seleccionado.'}, status=404)
         attrs = _properties(rows[0]['attributes'])
+        if attrs.get('ID_DIST') != district:
+            return JsonResponse({'error': 'El lote no pertenece al distrito seleccionado.'}, status=404)
         lot_id = attrs.get('ID_LOTE', '')
-        if not re.fullmatch(r'040126\d{8,12}', lot_id):
+        if not re.fullmatch(rf'{district}\d{{8,12}}', lot_id):
             raise UpstreamError('COFOPRI no devolvió un código de lote válido.')
-        result = {'properties': attrs, 'district': DISTRICT_NAME,
+        result = {'properties': attrs, 'district': entry['name'], 'ubigeo': district,
                   'gallery_url': PORTAL + 'reportefichas/vistadetalle.php?' + urlencode({'id_lote': lot_id})}
         try:
             result.update(_gallery(lot_id))
         except UpstreamError as exc:
             # Keep cadastral metadata useful when the separate report service fails.
             result.update(images=[], records=[], gallery_status='unavailable', gallery_error=str(exc))
+        if result.get('gallery_status') != 'unavailable':
+            cache.set(key, result, 900)
         return JsonResponse(result)
     except UpstreamError as exc:
         return JsonResponse({'error': str(exc)}, status=502)

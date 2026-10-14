@@ -123,7 +123,7 @@ class GeollaqtaTests(SimpleTestCase):
         response = b'{"error":{"code":400,"message":"Invalid query"}}'
         with patch.object(geo, '_download', return_value=response):
             self.assertEqual(geo.coverage(self.request()).status_code, 502)
-        self.assertIsNone(cache.get('geollaqta-yanahuara-coverage-v2'))
+        self.assertIsNone(cache.get('geollaqta-coverage-v3:040126'))
 
     def test_layer_allowlist_blocks_arbitrary_service_access(self):
         with patch.object(geo, '_query') as query:
@@ -151,3 +151,53 @@ class GeollaqtaTests(SimpleTestCase):
             self.assertEqual(data['layers']['lotes']['id'],10)
             query.assert_not_called()
             self.assertEqual(geo.coverage(self.request(authenticated=False)).status_code,401)
+
+    def test_catalog_is_authenticated_and_does_not_query_upstream(self):
+        with patch.object(geo, '_query') as query:
+            self.assertEqual(geo.districts(self.request(authenticated=False)).status_code, 401)
+            data = json.loads(geo.districts(self.request()).content)
+            self.assertEqual(len(data['districts']), 29)
+            self.assertEqual(data['districts_with_lots'], 10)
+            self.assertEqual(data['default_district'], '040126')
+            query.assert_not_called()
+
+    def test_metadata_does_not_wait_for_the_external_count(self):
+        with patch.object(geo, '_query') as query:
+            data = json.loads(geo.coverage(self.request({'ubigeo': '040104', 'metadata': '1'})).content)
+            self.assertEqual(data['transport'], 'server')
+            self.assertEqual(data['layers']['lotes']['id'], 10)
+            self.assertEqual(data['ubigeo'], '040104')
+            query.assert_not_called()
+
+    def test_district_allowlist_rejects_injection_before_query(self):
+        with patch.object(geo, '_query') as query:
+            for code in ["040126' OR 1=1", '0401', '150101', '040130']:
+                request = self.request({'ubigeo': code, 'bbox': '-71.57,-16.41,-71.56,-16.40'})
+                self.assertEqual(geo.coverage(request).status_code, 400)
+                self.assertEqual(geo.lots(request).status_code, 400)
+                self.assertEqual(geo.detail(request, 12343).status_code, 400)
+            query.assert_not_called()
+
+    def test_district_caches_are_isolated(self):
+        with patch.object(geo, '_query', side_effect=[{'count': 5240}, {'count': 15636}]) as query:
+            for code, expected in [('040126', 5240), ('040104', 15636), ('040126', 5240)]:
+                data = json.loads(geo.coverage(self.request({'ubigeo': code})).content)
+                self.assertEqual(data['total'], expected)
+                self.assertEqual(data['ubigeo'], code)
+            self.assertEqual(query.call_count, 2)
+            self.assertEqual(query.call_args.kwargs['where'], "ID_DIST='040104'")
+
+    def test_other_district_lot_and_gallery_are_scoped(self):
+        item = feature(12290, '040104')
+        item['attributes']['ID_LOTE'] = '04010484005007'
+        with patch.object(geo, '_query', return_value={'features': [item]}) as query, \
+                patch.object(geo, '_gallery', return_value={'images': [], 'records': [], 'gallery_status': 'available'}) as gallery:
+            response = geo.detail(self.request({'ubigeo': '040104'}), 12290)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(json.loads(response.content)['district'], 'Cerro Colorado')
+            self.assertEqual(query.call_args.kwargs['where'], "OBJECTID=12290 AND ID_DIST='040104'")
+            gallery.assert_called_once_with('04010484005007')
+            self.assertEqual(geo.detail(self.request(), 12290).status_code, 404)
+        parser = geo.GalleryParser('040104')
+        parser.feed('<img src="/img_catastro/040104/84005007.jpg"><img src="/img_catastro/040126/07042018.jpg">')
+        self.assertEqual(parser.images, ['https://catastro.cofopri.gob.pe/img_catastro/040104/84005007.jpg'])

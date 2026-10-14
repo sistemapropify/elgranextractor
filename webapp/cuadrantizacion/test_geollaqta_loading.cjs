@@ -7,6 +7,7 @@ class Element {
     constructor() { this.checked = false; this.hidden = false; this.textContent = ''; this.events = {}; this.dataset = {}; }
     addEventListener(name, fn) { this.events[name] = fn; }
     replaceChildren() {}
+    append() {}
 }
 class Data {
     constructor() { this.features = new Map(); Data.instances.push(this); }
@@ -34,20 +35,24 @@ const map = {
 const response = data => ({ok:true,redirected:false,headers:{get:()=> 'application/json'},json:async()=>data});
 const collection = ids => ({type:'FeatureCollection',name:'Lotes',truncated:false,features:ids.map(id => ({id,type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[]}}))});
 const sandbox = {
-    window:{},document:{getElementById:element,addEventListener(){},querySelector:()=>count,
+    window:{},document:{getElementById:element,createElement:()=>new Element(),addEventListener(){},querySelector:()=>count,
         querySelectorAll:selector => selector.includes('geollaqta-count') ? [count] : lotInput.checked ? [lotInput] : []},
     google:{maps:{Data,SymbolPath:{CIRCLE:1}}},location:{search:''},URLSearchParams,AbortController,Date,
     setTimeout:fn=>{scheduled=fn;return 1;},clearTimeout:()=>{scheduled=null;},
     fetch:async url => {
-        if (url.includes('cobertura')) return response({total:5240,ubigeo:'040126'});
-        calls++; return new Promise((resolve,reject)=>pending.push({resolve:data=>resolve(response(data)),reject}));
+        if (url.includes('distritos')) return response({checked_at:'2026-10-14',districts:[{ubigeo:'040126',name:'Yanahuara',published_lots:5240},{ubigeo:'040104',name:'Cerro Colorado',published_lots:15636}]});
+        if (url.includes('cobertura')) return response({total:5240,ubigeo:new URL('http://test'+url).searchParams.get('ubigeo')});
+        calls++; return new Promise((resolve,reject)=>pending.push({url,resolve:data=>resolve(response(data)),reject}));
     }
 };
+for(const file of ['geollaqta-data.js','geollaqta-google.js']) vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../static/js/',file),'utf8'),sandbox);
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../static/js/geollaqta-map.js'),'utf8'),sandbox);
-const flush = async () => { for (let i=0;i<12;i++) await Promise.resolve(); };
+const flush = async () => { for (let i=0;i<40;i++) await Promise.resolve(); };
 const idle = async () => { events.idle(); const fn = scheduled; scheduled=null;fn();await flush(); };
 async function main() {
-    sandbox.window.GeollaqtaMap.init(map);
+    const adapter={createLayer:()=>new Data(),pointIcon:()=>({}),getView:()=>({zoom,bbox:bounds}),onIdle:fn=>events.idle=fn};
+    delete sandbox.google;
+    const controller=sandbox.window.GeollaqtaMap.init(map,{adapter});
     element('geollaqta-visible').checked=true;
     element('geollaqta-visible').events.change(); await flush();
     pending.shift().resolve(collection([1,2]));await flush();
@@ -70,6 +75,16 @@ async function main() {
     element('geollaqta-visible').checked=false;element('geollaqta-visible').events.change();await flush();
     assert.equal(layer.features.size,0);assert.equal(layer.map,null,'Disabling explicitly clears the layer');
     pending.shift().resolve(collection([4]));await flush();assert.equal(layer.features.size,0,'Late response cannot reenable vectors');
-    console.log('10 cadastral pan, zoom, refresh and failure regression checks passed.');
+    element('geollaqta-visible').checked=true;element('geollaqta-visible').events.change();await flush();
+    element('geollaqta-refresh').events.click();await flush();const stale=pending.shift();
+    controller.setDistrict('040104',false);await flush();
+    assert.equal(layer.features.size,0,'District change clears foreign vectors');
+    const next=pending.shift();assert.match(next.url,/ubigeo=040104/);
+    next.resolve(collection([9]));await flush();stale.resolve(collection([7]));await flush();
+    assert.equal(layer.features.has(9),true);assert.equal(layer.features.has(7),false,'Late old-district response is ignored');
+    controller.setDistrict('040126',false);await flush();
+    assert.equal(layer.features.has(3),true,'Switching back reuses that district cache');
+    assert.equal(layer.features.has(9),false);
+    console.log('Cadastral pan, zoom, cache, refresh, district switching and stale-response checks passed without Google SDK.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

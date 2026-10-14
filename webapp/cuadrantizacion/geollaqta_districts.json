@@ -1,0 +1,272 @@
+{
+  "province": "Arequipa",
+  "province_ubigeo": "0401",
+  "checked_at": "2026-10-14",
+  "default_district": "040126",
+  "source": "https://geoportal.cofopri.gob.pe/giscofopri/rest/services/Cofopri/Catastro_PCDPI/MapServer",
+  "district_source": "https://geoportal.cofopri.gob.pe/giscofopri/rest/services/Tematicos/LIMITES_NACIONALES_INEI/MapServer/0",
+  "districts": [
+    {
+      "ubigeo": "040101",
+      "name": "Arequipa (Cercado)",
+      "slug": "arequipa",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040102",
+      "name": "Alto Selva Alegre",
+      "slug": "alto-selva-alegre",
+      "published_lots": 24705,
+      "center": {
+        "lat": -16.3634484,
+        "lng": -71.5211943
+      },
+      "sample_lot": "04010209014018"
+    },
+    {
+      "ubigeo": "040103",
+      "name": "Cayma",
+      "slug": "cayma",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040104",
+      "name": "Cerro Colorado",
+      "slug": "cerro-colorado",
+      "published_lots": 15636,
+      "center": {
+        "lat": -16.394389,
+        "lng": -71.5662077
+      },
+      "sample_lot": "04010484005007"
+    },
+    {
+      "ubigeo": "040105",
+      "name": "Characato",
+      "slug": "characato",
+      "published_lots": 343,
+      "center": {
+        "lat": -16.478809,
+        "lng": -71.4987874
+      },
+      "sample_lot": "04010598008002"
+    },
+    {
+      "ubigeo": "040106",
+      "name": "Chiguata",
+      "slug": "chiguata",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040107",
+      "name": "Jacobo Hunter",
+      "slug": "jacobo-hunter",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040108",
+      "name": "La Joya",
+      "slug": "la-joya",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040109",
+      "name": "Mariano Melgar",
+      "slug": "mariano-melgar",
+      "published_lots": 15493,
+      "center": {
+        "lat": -16.4021679,
+        "lng": -71.483583
+      },
+      "sample_lot": "04010912087006"
+    },
+    {
+      "ubigeo": "040110",
+      "name": "Miraflores",
+      "slug": "miraflores",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040111",
+      "name": "Mollebaya",
+      "slug": "mollebaya",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040112",
+      "name": "Paucarpata",
+      "slug": "paucarpata",
+      "published_lots": 973,
+      "center": {
+        "lat": -16.424888,
+        "lng": -71.4829713
+      },
+      "sample_lot": "04011299002002"
+    },
+    {
+      "ubigeo": "040113",
+      "name": "Pocsi",
+      "slug": "pocsi",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040114",
+      "name": "Polobaya",
+      "slug": "polobaya",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040115",
+      "name": "Quequeña",
+      "slug": "quequena",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040116",
+      "name": "Sabandía",
+      "slug": "sabandia",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040117",
+      "name": "Sachaca",
+      "slug": "sachaca",
+      "published_lots": 4838,
+      "center": {
+        "lat": -16.4328625,
+        "lng": -71.5944863
+      },
+      "sample_lot": "04011712010002"
+    },
+    {
+      "ubigeo": "040118",
+      "name": "San Juan de Siguas",
+      "slug": "san-juan-de-siguas",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040119",
+      "name": "San Juan de Tarucani",
+      "slug": "san-juan-de-tarucani",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040120",
+      "name": "Santa Isabel de Siguas",
+      "slug": "santa-isabel-de-siguas",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040121",
+      "name": "Santa Rita de Siguas",
+      "slug": "santa-rita-de-siguas",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040122",
+      "name": "Socabaya",
+      "slug": "socabaya",
+      "published_lots": 114,
+      "center": {
+        "lat": -16.4590645,
+        "lng": -71.5498426
+      },
+      "sample_lot": "04012299002011"
+    },
+    {
+      "ubigeo": "040123",
+      "name": "Tiabaya",
+      "slug": "tiabaya",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040124",
+      "name": "Uchumayo",
+      "slug": "uchumayo",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040125",
+      "name": "Vítor",
+      "slug": "vitor",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040126",
+      "name": "Yanahuara",
+      "slug": "yanahuara",
+      "published_lots": 5240,
+      "center": {
+        "lat": -16.4070716,
+        "lng": -71.5660169
+      },
+      "sample_lot": "04012607042018"
+    },
+    {
+      "ubigeo": "040127",
+      "name": "Yarabamba",
+      "slug": "yarabamba",
+      "published_lots": 0,
+      "center": null,
+      "sample_lot": null
+    },
+    {
+      "ubigeo": "040128",
+      "name": "Yura",
+      "slug": "yura",
+      "published_lots": 7750,
+      "center": {
+        "lat": -16.2911316,
+        "lng": -71.6333532
+      },
+      "sample_lot": "04012803075002"
+    },
+    {
+      "ubigeo": "040129",
+      "name": "José Luis Bustamante y Rivero",
+      "slug": "jose-luis-bustamante-y-rivero",
+      "published_lots": 20557,
+      "center": {
+        "lat": -16.4424152,
+        "lng": -71.5217181
+      },
+      "sample_lot": "04012910082020"
+    }
+  ]
+}

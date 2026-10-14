@@ -39,3 +39,7 @@
 #cmp-catastros{width:280px;max-width:calc(100% - 16px)}
 #cmp-catastros.cmp-floating-minimized{width:200px}
 #cmp-catastros-content{max-height:min(440px,60dvh);overflow:auto}
+
+.geollaqta-district{display:grid;gap:6px;margin:9px 0;font-size:12px}
+.geollaqta-district select{width:100%;min-width:0;padding:7px;border:1px solid var(--border-color,#30363d);border-radius:6px;background:var(--bg-secondary,#161b22);color:var(--text-primary,#f0f6fc);font:inherit}
+.geollaqta-district select:focus-visible{outline:2px solid #00b8a9;outline-offset:2px}

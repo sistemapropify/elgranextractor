@@ -1,12 +1,15 @@
 <section class="map-panel geollaqta-panel" id="panel-geollaqta" aria-labelledby="geollaqta-title">
-    <div class="map-panel-header" id="geollaqta-title">Catastros · Yanahuara <span class="panel-badge">COFOPRI</span></div>
+    <div class="map-panel-header" id="geollaqta-title">Catastros · <span id="geollaqta-district-title">Yanahuara</span> <span class="panel-badge">COFOPRI</span></div>
     <div class="map-panel-body">
         <label class="capa-raster-toggle" for="geollaqta-visible">
-            <input type="checkbox" id="geollaqta-visible"><span>Mostrar catastro de Yanahuara</span>
+            <input type="checkbox" id="geollaqta-visible"><span>Mostrar catastro</span>
         </label>
         <div id="geollaqta-options"{% if geollaqta_acm %} hidden{% endif %}>
+            <label class="geollaqta-district" for="geollaqta-district">Distrito
+                <select id="geollaqta-district"><option value="040126">Yanahuara</option></select>
+            </label>
             <p id="geollaqta-coverage" class="map-quality-help">Cobertura publicada por COFOPRI.</p>
-            <div class="geollaqta-layer-options" role="group" aria-label="Capas del catastro de Yanahuara">
+            <div class="geollaqta-layer-options" role="group" aria-label="Capas del catastro">
                 <label><input type="checkbox" name="geollaqta-layer" value="ejes-vias"><span class="geollaqta-swatch" style="background:#e6a224"></span>Ejes de vías <span data-geollaqta-count="ejes-vias"></span></label>
                 <label><input type="checkbox" name="geollaqta-layer" value="lotes" checked><span class="geollaqta-swatch" style="background:#00b8a9"></span>Lotes <span data-geollaqta-count="lotes"></span></label>
                 <label><input type="checkbox" name="geollaqta-layer" value="manzanas"><span class="geollaqta-swatch" style="background:#388cff"></span>Manzanas <span data-geollaqta-count="manzanas"></span></label>
