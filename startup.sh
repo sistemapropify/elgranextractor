@@ -230,7 +230,7 @@ if [ "${ML_CANDIDATES_ENABLED:-1}" = "1" ]; then
             echo "[$(date -u)] Candidate evaluator stopped; restarting in 10s."
             sleep 10
         done
-    ) >> /home/LogFiles/ml-candidates.log 2>&1 &
+    ) 2>&1 | python -u "$APP_ROOT/scripts/rotate_stream_log.py" /home/LogFiles/ml-candidates.log &
 fi
 
 # Analysis and shadow jobs survive web-worker recycling through the SQL queue.

@@ -11,6 +11,11 @@ on:
       - main
   workflow_dispatch:
 
+# Serialize production releases so App Service receives one deployment at a time.
+concurrency:
+  group: granextractorservice-production
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest

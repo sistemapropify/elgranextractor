@@ -1,3 +1,29 @@
+# Catastro in Cuadrantizacion only - release 2026-10-14
+
+Status: Validated - production publication explicitly authorized
+Recipe: CI/CD, existing GitHub Actions pipeline
+
+## Authorized scope and target
+Publish the reusable Arequipa cadastral module and district selector in Cuadrantizacion. Remove the Catastros card, initialization and cadastral assets from ACM. Preserve the ACM nearest places feature from main and all unrelated shared-checkout edits. Source release commits: 24a9ae0f and 59302185, on main 0f9f961d. Last successful production revision: 6294e1c9 (workflow 38320568638). The prior 0f9f961d workflow 38578210956 built successfully but deployment failed with 409 conflicts.
+Existing target: granextractorservice / rg-elgranextractor, Brazil South, subscription 0219eecc-9920-4789-9929-3091a2f09daf. No new resources, roles, secrets, dependencies or database migrations. Serialize production pipelines and cap the ML worker log at four files of 5 MiB to prevent the diagnosed disk exhaustion.
+
+## 7. Validation Proof
+azure-validate completed on 2026-10-14, America/Lima:
+- 29 isolated Django cadastral and ACM replication tests passed.
+- Four Node suites passed: provider for ten districts, district switching, cache, pan/zoom, geometry and facade gallery including skipped suffixes.
+- Production WSGI and all three page/panel templates compile with isolated SQLite.
+- collectstatic passed; six cadastral and ACM JavaScript/CSS release assets byte-match source.
+- Local ACM HTTP 200 confirms Catastros card and its asset references removed; nearest places card retained. Updated ACM JavaScript assets return HTTP 200 and match source.
+- Live COFOPRI geometry queries verified real sample lots for all ten published districts; report galleries checked without exposing personal data.
+- Shared D:/PROMETEO changes integrated surgically, retaining unrelated ACM edits. Source whitespace checks passed.
+- Worker stream rotation: two tests passed for bounded output without newlines and intact multibyte text. Workflow serialization YAML parsed successfully.
+- origin/main fetched; no newer revision beyond 0f9f961d. Azure existing subscription and Running App Service confirmed.
+
+## Execution and recovery
+Publishing authorized by the user's current instruction. Push to main without force after integrating any newly advanced revision. The prior pipeline's 409 failures require resolving the existing App Service deployment issue before retrying. A read-only SCM diagnostic found /home at 100 percent of its 10 GB capacity. The 5,512,251,623-byte ML worker log was backed up locally with verified SHA256 c9dfab7965977745a90c3e33bd87cd77f8faf804d70683d9c1f75b35fc1ae7c6. Archive its remote copy outside the full persistent volume; preserve application data. Recovery confirmed: the historical log was moved out of /home, the service restarted to release open handles, and /home now has 5.2 GB available (49 percent used). The archive in SCM temporary storage was cleared by the restart; the verified durable local backup remains in D:/PROMETEO/outputs/azure-deployment-recovery-20261014. Bash startup syntax, worker log rotation tests and workflow YAML validation passed. No blanket recursive deletion. User preference remains no prolonged deployment monitoring and personal visual verification. Confirm actual publication through a bounded public page/static check; do not call dispatch itself a successful publication.
+
+---
+
 # ACM nearest places - release 2026-10-14
 
 Status: Validated - publication explicitly authorized
