@@ -4,7 +4,7 @@ Estado: ampliación preparada en el checkout local D:/PROMETEO; pendiente de pub
 
 ## Uso en los mapas actuales
 
-ACM y Cuadrantización comparten la tarjeta Catastros, su selector de distritos y sus capas. La casilla activa las consultas; en ACM las opciones permanecen ocultas hasta activarla. El catálogo distingue distritos con lotes publicados de los que no tienen lotes en esta fuente. El botón Ir a usa el centro de un lote real de muestra; no inventa una ubicación para los distritos sin muestra.
+Cuadrantización contiene la tarjeta Catastros, su selector de distritos y sus capas. La casilla activa las consultas. La tarjeta y sus scripts se retiraron del ACM por solicitud del usuario. El catálogo distingue distritos con lotes publicados de los que no tienen lotes en esta fuente. El botón Ir a usa el centro de un lote real de muestra; no inventa una ubicación para los distritos sin muestra.
 
 El clic muestra los atributos del vector inmediatamente. Las fachadas aparecen debajo de los datos y las fichas catastrales tienen sus propios enlaces. En transporte del navegador se prueban únicamente imágenes, con dos colas y máximo 12 rutas; las galerías pueden tener sufijos discontinuos. Las imágenes fallidas no generan enlaces. El transporte del servidor obtiene las rutas de la ficha pública.
 
@@ -18,7 +18,7 @@ Para utilizar solo datos en otro mapa, crear el cliente y dibujar su GeoJSON con
 
 ## Controlador y adaptadores
 
-Google: cargar geollaqta-data.js, geollaqta-google.js, geollaqta-map.js y geollaqta-map.css; incluir cuadrantizacion/_geollaqta_panel.html. Iniciar GeollaqtaMap.init(map, {acm: true, getZones, onLotSelected}). Retorna setDistrict(ubigeo, move), refresh(), getDistrict(). onLotSelected recibe {feature, district} para integraciones futuras.
+Google: cargar geollaqta-data.js, geollaqta-google.js, geollaqta-map.js y geollaqta-map.css; incluir cuadrantizacion/_geollaqta_panel.html. Iniciar GeollaqtaMap.init(map, {getZones, onLotSelected}). Retorna setDistrict(ubigeo, move), refresh(), getDistrict(). onLotSelected recibe {feature, district} para integraciones futuras.
 
 Otro motor: pasar options.adapter con createLayer(), pointIcon(opacity), getView() -> {zoom,bbox}, focus({lat,lng},zoom), onIdle(callback). La capa debe implementar setStyle, overrideStyle, revertStyle, setMap, forEach, remove, addGeoJson, addListener; cada feature: getId, getProperty, toGeoJson. No hay dependencia de Google en el cliente ni en el controlador. El adaptador actual usa Google Maps Data. La prueba de carga usa un adaptador independiente sin SDK Google.
 

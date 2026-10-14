@@ -167,7 +167,6 @@
     const gestureObserver=new MutationObserver(hideGoogleGestureHint);gestureObserver.observe($('cmp-map'),{childList:true,subtree:true,characterData:true});hideGoogleGestureHint();
     drawCircles();if(snapshot&&result)renderMap();
     if(window.CapasMapa)window.CapasMapa.init(map);
-    if(window.GeollaqtaMap)window.GeollaqtaMap.init(map,{acm:true,getZones:()=>window.CapasMapa?.getZoneRows()||[]});
     if(window.ACMNearby)window.ACMNearby.init(map);
   };
   window.gm_authFailure=()=>{$('cmp-status').textContent='No se pudo cargar Google Maps. Puedes ingresar latitud y longitud para buscar.';};

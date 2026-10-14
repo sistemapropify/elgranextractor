@@ -5,7 +5,6 @@
 <link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=32">
 <link rel="stylesheet" href="{% static 'acm/css/comparison-valuation.css' %}?v=3">
 <link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
-<link rel="stylesheet" href="{% static 'css/geollaqta-map.css' %}?v=5">
 <link rel="stylesheet" href="{% static 'acm/css/nearby-places.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'acm/css/zona-preevaluacion.css' %}?v=5">
 {% endblock %}
@@ -135,13 +134,6 @@
         </div>
         <p id="capas-mapa-estado" class="map-quality-help" role="status" hidden></p>
         </div>
-      </section>
-      <section id="cmp-catastros" class="cmp-floating-card" aria-labelledby="cmp-catastros-title">
-        <header id="cmp-catastros-handle" class="cmp-floating-header" tabindex="0" title="Arrastra para mover la tarjeta" aria-label="Mover Catastros">
-          <h2 id="cmp-catastros-title">Catastros · Yanahuara</h2>
-          <button id="cmp-catastros-toggle" type="button" aria-controls="cmp-catastros-content" aria-expanded="true" aria-label="Minimizar Catastros">−</button>
-        </header>
-        <div id="cmp-catastros-content">{% include 'cuadrantizacion/_geollaqta_panel.html' with geollaqta_acm=True %}</div>
       </section>
       {% include 'acm/_nearby_places.html' %}
       <section id="cmp-comparison" class="cmp-floating-card" aria-labelledby="cmp-comparison-title" hidden>
@@ -281,10 +273,10 @@
 {{ block.super }}
 <script src="{% static 'acm/js/components-presentation.js' %}?v=11"></script>
 <script src="{% static 'acm/js/workspace-layout.js' %}?v=1"></script>
-<script src="{% static 'acm/js/floating-comparison.js' %}?v=6"></script>
+<script src="{% static 'acm/js/floating-comparison.js' %}?v=7"></script>
 <script src="{% static 'acm/js/comparison-valuation.js' %}?v=3"></script>
 {% if replication %}{{ replication|json_script:"cmp-replication-data" }}{% endif %}
-<script src="{% static 'acm/js/components.js' %}?v=58"></script>
+<script src="{% static 'acm/js/components.js' %}?v=59"></script>
 <script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>
 {{ capas_vectoriales|json_script:"capas-vectoriales-data" }}
 {{ capas_raster|json_script:"capas-raster-data" }}
@@ -292,9 +284,6 @@
 <script src="{% static 'js/capa-raster-overlay.js' %}?v=5"></script>
 <script src="{% static 'js/capa-vectorial.js' %}?v=6"></script>
 <script src="{% static 'js/capas-mapa.js' %}?v=2"></script>
-<script src="{% static 'js/geollaqta-data.js' %}?v=1"></script>
-<script src="{% static 'js/geollaqta-google.js' %}?v=1"></script>
-<script src="{% static 'js/geollaqta-map.js' %}?v=6"></script>
 <script src="{% static 'acm/js/nearby-places.js' %}?v=1"></script>
 <script src="{% static 'acm/js/zona-preevaluacion.js' %}?v=7"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
