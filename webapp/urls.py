@@ -72,6 +72,7 @@ urlpatterns = [
     
     # Cuadrantización Inmobiliaria
     path('cuadrantizacion/', include('cuadrantizacion.urls')),
+    path('catastro/', include('catastro.urls')),
     
     # Trazabilidad operativa local sobre propiedades externas (ruta específica primero)
     path('propifai/trazabilidad/', include('property_traceability.urls')),

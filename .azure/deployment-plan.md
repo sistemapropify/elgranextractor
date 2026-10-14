@@ -1,3 +1,58 @@
+# Catastro archive dashboard - release 2026-10-14
+
+Status: Validated - user explicitly requested production publication
+Recipe: CI/CD, existing GitHub Actions pipeline
+
+## Authorized scope and target
+Publish the Catastro dashboard, individual document viewer with original PDF lines,
+field extraction, private original-file access, bounded resumable collector and
+Geollaqta skill. Preserve the cadastral map in Cuadrantizacion and all other modules.
+Latest main and successful production revision: af610a4561f8fbf0dc691e919b927c32285b58e4,
+workflow 38590373658. Existing App Service granextractorservice / rg-elgranextractor,
+Brazil South, subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+No new infrastructure, roles, dependencies or application database migrations.
+Use existing private R2 bucket prometeo-catastro and its scoped credentials through
+Azure application settings. CATASTRO_DATA_DIR=/home/data/catastro persists the SQLite
+work ledger and current JSON indexes. Import the 12 reviewed pilot indexes and a
+consistent SQLite backup; leave original PDFs/photos in R2 and use authenticated
+GET fallback. Refuse overwriting existing cadastral data/configuration.
+
+## 7. Validation Proof
+azure-validate completed on 2026-10-14, America/Lima:
+- python -m unittest catastro.test_collector -q: 12 passed (resumption, all gallery
+  documents, PDF field mapping, inventory completeness, R2 retries, batch scope).
+- manage.py test catastro.test_views --settings=catastro.test_settings: 6 passed
+  (administrator access, CSRF, private allowlisted originals, original PDF pages).
+- Production WSGI and both Catastro templates compile with isolated SQLite.
+- collectstatic passed; Catastro CSS/JS byte-match source; node --check passed.
+- Local authenticated dashboard, new property, pending document names and original
+  rendered PDF page verified. Local CSS HTTP 200. 10 new Yanahuara properties
+  archived with successful interrupted-upload recovery; totals 12 properties,
+  34 PDFs, 20 images. Source errors remain explicitly pending.
+- Sample R2 GET originals and current JSON SHA256 match the local archive.
+- origin/main fetched; current branch starts at latest production af610a45.
+  Only three tracked integration files changed; all other shared local edits retained.
+- Azure account and existing Running App Service confirmed; Kudu active deployment
+  status 4. R2 settings are not yet configured on production. Authenticated Entra
+  SCM access confirmed; Basic authentication remains unchanged.
+- Resource template, what-if and new role checks do not apply to this existing
+  app-only release. Existing federation and production pipeline remain unchanged.
+
+## Execution and rollback
+Runtime setup completed: 12 pilot indexes and consistent SQLite ledger imported into
+/home/data/catastro; every remote index and ledger SHA256 verified. Private R2
+application settings confirmed without printing credentials; other settings retained.
+
+Configure only the required private R2 settings while preserving all existing app
+settings. Import the ledger/indexes into a new persistent directory and verify
+SHA256 before publishing. Push scoped source changes to main without force;
+re-fetch and integrate newer main if needed. The user requested no prolonged
+monitoring and will perform visual production verification personally. Do a
+bounded public route/static check and report pending if the release is not yet
+served. A rollback uses a new revert commit; retain archived data and R2 originals.
+
+---
+
 # Catastro in Cuadrantizacion only - release 2026-10-14
 
 Status: Validated - production publication explicitly authorized

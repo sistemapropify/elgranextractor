@@ -596,6 +596,16 @@
                     </div>
                 </div>
 
+                <div class="nav-item has-submenu {% if '/catastro/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F5FA;</span><span>Catastro</span><span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/catastro/" class="submenu-item {% if request.path == '/catastro/' %}active{% endif %}"><span>Dashboard catastral</span></a>
+                        <a href="/cuadrantizacion/mapa/?catastro=yanahuara" class="submenu-item"><span>Mapa en Cuadrantización</span></a>
+                    </div>
+                </div>
+
                 <!-- Matching con submenú -->
                 <div class="nav-item has-submenu {% if '/matching/' in request.path %}active{% endif %}">
                     <a href="#" class="nav-link submenu-toggle">

@@ -1,0 +1,31 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+{% block title %}Catastro · Prometeo{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-dashboard.css' %}?v=3">{% endblock %}
+{% block content %}
+<main class="catastro" id="catastro-dashboard">
+  <header class="catastro-heading"><div><p class="eyebrow">GEOLLAQTA · COFOPRI</p><h1>Catastro</h1><p>Reportes, fichas disponibles y fachadas, organizados por distrito y predio.</p></div><a class="btn btn-secondary catastro-button" href="/cuadrantizacion/mapa/?catastro=yanahuara">Abrir mapa</a></header>
+  <div class="catastro-metrics" aria-label="Resumen del archivo">
+    <article><span>Predios archivados en R2</span><strong id="metric-uploaded">0</strong></article>
+    <article><span>Reportes y fichas descargados</span><strong id="metric-reports">0</strong></article>
+    <article><span>Fotografías de fachada</span><strong id="metric-photos">0</strong></article>
+    <article><span>Documentos pendientes</span><strong id="metric-missing">0</strong></article>
+  </div>
+  <div class="catastro-controls-layout">
+    <section class="catastro-card"><h2>Descargar catastro</h2>
+      <form id="collection-form">{% csrf_token %}
+        <label for="district">Distrito</label><select id="district" name="ubigeo">{% for district in districts %}<option value="{{ district.ubigeo }}" {% if district.ubigeo == '040126' %}selected{% endif %} {% if not district.published_lots %}disabled{% endif %}>{{ district.name }}{% if not district.published_lots %} · sin lotes publicados en esta fuente{% endif %}</option>{% endfor %}</select>
+        <label for="batch-size">Predios por descarga</label><select id="batch-size"><option value="10">10 predios</option><option value="50">50 predios</option><option value="100">100 predios</option><option value="500">500 predios</option></select>
+        <details><summary>Opciones de descarga</summary><label for="lot-id">Un predio específico (opcional)</label><input id="lot-id" inputmode="numeric" maxlength="18" placeholder="Código catastral del lote"><label class="catastro-check"><input type="checkbox" id="retry-missing"> Reintentar documentos pendientes</label></details>
+        <p class="catastro-help">Cada descarga continúa desde los predios que faltan. Los archivos ya guardados se conservan.</p>
+        <div class="catastro-actions"><button class="btn btn-success catastro-button" id="start-collection" type="submit">Iniciar descarga</button><button class="btn btn-danger catastro-button" id="stop-collection" type="button" hidden>Detener</button></div>
+      </form>
+      <p id="collection-message" role="status" aria-live="polite"></p>
+    </section>
+    <section class="catastro-card"><h2>Almacenamiento privado</h2><span class="catastro-badge" id="storage-status">Comprobando configuración</span><p id="storage-detail">Los documentos y las fotos se archivan en Cloudflare R2.</p><div class="catastro-storage"><strong id="storage-bytes">0 B</strong><span>archivados por este recolector</span></div><p class="catastro-help">Esta primera etapa tiene un límite de 1 GB. Las fichas individuales que fallen en COFOPRI quedan pendientes; el reporte y la fachada se guardan cuando estén disponibles.</p></section>
+  </div>
+  <section class="catastro-card"><div class="catastro-section-heading"><h2>Últimas descargas</h2><button type="button" class="btn btn-secondary catastro-button small" id="refresh-collection">Actualizar</button></div><div id="jobs-list" class="catastro-jobs"><p>No hay descargas todavía.</p></div></section>
+  <section class="catastro-card"><h2>Predios del archivo</h2><p class="catastro-help">Últimos 50 predios del distrito seleccionado. Abre un predio para revisar sus documentos y fotos.</p><div class="catastro-table-wrap"><table><thead><tr><th>Código del lote</th><th>Estado</th><th>Documentos</th><th>Fachadas</th><th>Pendientes</th><th>Archivo</th></tr></thead><tbody id="lots-list"><tr><td colspan="6">Todavía no hay predios archivados en este distrito.</td></tr></tbody></table></div></section>
+</main>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=1" defer></script>{% endblock %}

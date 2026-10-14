@@ -127,6 +127,7 @@ class IntelligenceConfig(AppConfig):
             from .skills.scrapi.scraper_urbania import ScraperUrbaniaSkill
             from .skills.scrapi.scraper_facebook_marketplace import ScraperFacebookMarketplaceSkill
             from .skills.scrapi.scraper_orchestrator import ScraperOrchestratorSkill
+            from .skills.scrapi.scraper_geollaqta import ScraperGeollaqtaSkill
 
             registry = SkillRegistry()
             registry.register(BusquedaPropiedadesSkill)
@@ -179,6 +180,7 @@ class IntelligenceConfig(AppConfig):
             registry.register(ScraperUrbaniaSkill)
             registry.register(ScraperFacebookMarketplaceSkill)
             registry.register(ScraperOrchestratorSkill)
+            registry.register(ScraperGeollaqtaSkill)
             logger.info(
                 f"Skills registradas en SkillRegistry al iniciar Django "
                 f"(incluye 20 nuevas skills multi-rol + 6 scrapi skills)"
