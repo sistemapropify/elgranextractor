@@ -128,6 +128,11 @@
             coverage: (signal, browser = false, metadata = true) => get('cobertura/?' + suffix() + (browser ? '&transport=browser' : '') + (metadata ? '&metadata=1' : ''), signal),
             layer: (info, key, bbox, signal) => info.transport === 'browser' ? directLayer(info, key, bbox, signal, fetcher) :
                 get('capas/' + encodeURIComponent(key) + '/?' + suffix() + '&bbox=' + encodeURIComponent(bbox), signal),
+            report: (lotId, recordId, signal) => {
+                if (typeof lotId !== 'string' || !new RegExp('^' + district + '\\d{8,12}$').test(lotId)) return Promise.reject(new Error('El lote no pertenece al distrito seleccionado.'));
+                return get('reportes/' + encodeURIComponent(lotId) + '/?' + suffix() +
+                    (recordId ? '&record_id=' + encodeURIComponent(recordId) : ''), signal);
+            },
             detail: (feature, info, signal) => {
                 const lotId = String(feature.properties.ID_LOTE || '').trim();
                 if (!new RegExp('^' + district + '\\d{8,12}$').test(lotId)) return Promise.reject(new Error('El código de lote no pertenece al distrito seleccionado.'));

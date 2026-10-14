@@ -42,8 +42,8 @@
     if (/DENIED|PERMISSION|AUTH|API_KEY|BILLING|NOT ENABLED|NOT ACTIVATED/.test(code))
       return 'Google no autorizó '+service+'. Revisa que la API esté habilitada, la facturación y los permisos de la clave.';
     if (/QUOTA|RESOURCE_EXHAUSTED|OVER_QUERY_LIMIT/.test(code)) return 'Google alcanzó el límite de consultas. Intenta actualizar más tarde.';
-    if (/TIMEOUT/.test(code)) return 'Google tardó demasiado en responder. Puedes actualizar los lugares.';
-    return 'No se pudo consultar '+service+' en Google. Puedes actualizar los lugares.';
+    if (/TIMEOUT/.test(code)) return 'Google tardó demasiado en responder. Vuelve a pulsar Buscar y calcular.';
+    return 'No se pudo consultar '+service+' en Google. Vuelve a pulsar Buscar y calcular.';
   }
   async function bounded(promise) {
     let timer;
@@ -61,7 +61,12 @@
       (routesLibrary ||= google.maps.importLibrary('routes').catch(error=>{routesLibrary=null;throw error;}));
     const clearRoute=()=>{++routeSerial;polylines.forEach(line=>line.setMap(null));polylines=[];$('cmp-nearby-route').hidden=true;$('cmp-nearby-warnings').replaceChildren();};
     const clearMarkers=()=>{markers.forEach(marker=>marker.setMap(null));markers=[];};
-    const expand=()=>{card.hidden=false;document.dispatchEvent(new CustomEvent('acm:nearby-updated'));};
+    function setOpen(open) {
+      $('cmp-nearby-content').hidden=!open;
+      const toggle=$('cmp-nearby-toggle');toggle.setAttribute('aria-expanded',String(open));
+      toggle.setAttribute('aria-label',(open?'Minimizar':'Expandir')+' lugares cercanos');toggle.textContent=open?'−':'+';
+    }
+    const expand=()=>{card.hidden=false;setOpen(true);};
     async function showRoute(row,mode) {
       if (!origin || !row[mode]) return;
       clearRoute();const version=routeSerial,targetVersion=serial,start={...origin};
@@ -142,15 +147,19 @@
     function update(value) {
       const next=point(value);if(!next)return;
       const unchanged=origin && Math.abs(origin.lat-next.lat)<1e-7 && Math.abs(origin.lng-next.lng)<1e-7;
-      origin=next;expand();if(unchanged && data)return;
+      if(unchanged)return;
+      origin=next;card.hidden=true;setOpen(false);
       ++serial;clearTimeout(timer);clearRoute();clearMarkers();data=null;list.replaceChildren();card.setAttribute('aria-busy','false');
       $('cmp-nearby-origin').textContent='Desde el pin: '+origin.lat.toFixed(5)+', '+origin.lng.toFixed(5);
-      status.textContent='Buscando lugares para esta ubicación…';timer=setTimeout(()=>load(),700);
+      status.textContent='Pulsa Buscar y calcular para consultar los lugares de esta ubicación.';
     }
     document.addEventListener('acm:target-location',event=>update(event.detail));
-    radius.addEventListener('change',()=>{clearTimeout(timer);load();});
+    document.addEventListener('acm:search-completed',event=>{
+      update(event.detail);if(!origin)return;card.hidden=false;setOpen(false);return load();
+    });
+    radius.addEventListener('change',()=>{++serial;clearRoute();clearMarkers();data=null;list.replaceChildren();card.setAttribute('aria-busy','false');status.textContent='Radio cambiado. Pulsa Buscar y calcular para consultar nuevamente.';});
     sort.addEventListener('change',()=>{clearRoute();render();});
-    $('cmp-nearby-refresh').addEventListener('click',()=>{clearTimeout(timer);load(true);});
+    $('cmp-nearby-toggle').addEventListener('click',()=>setOpen($('cmp-nearby-content').hidden));
     $('cmp-nearby-clear-route').addEventListener('click',clearRoute);
     $('cmp-nearby-close').addEventListener('click',()=>{++serial;clearTimeout(timer);clearRoute();clearMarkers();data=null;origin=null;card.hidden=true;card.setAttribute('aria-busy','false');});
     if($('cmp-replication-data')){const form=$('cmp-form');update({lat:form.elements.lat.value,lng:form.elements.lng.value});}

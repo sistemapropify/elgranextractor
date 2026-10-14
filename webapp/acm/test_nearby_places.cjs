@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'static/acm/js/nearby-places.js'),'utf8');
-const flush=async()=>{for(let i=0;i<15;i++)await Promise.resolve();};
+const flush=async()=>{for(let i=0;i<40;i++)await Promise.resolve();};
 function fixture(options={}) {
   const elements=new Map(),events={},timers=new Map(),calls=[],pins=[];let timerId=0;
   class Element {
@@ -32,8 +32,9 @@ function fixture(options={}) {
     setTimeout:(callback,delay)=>{const id=++timerId;timers.set(id,{callback,delay});return id;},clearTimeout:id=>timers.delete(id)};
   vm.runInNewContext(source,sandbox);const api=sandbox.window.ACMNearby;api.init(map);
   const update=(lat=-16.4,lng=-71.53)=>events['acm:target-location']({detail:{lat,lng}});
+  const calculate=(lat=-16.4,lng=-71.53)=>events['acm:search-completed']({detail:{lat,lng}});
   const run=async()=>{const entry=[...timers.entries()].find(([,t])=>t.delay===700);if(entry){timers.delete(entry[0]);await entry[1].callback();}await flush();};
-  return {api,el,calls,pins,update,run,events};
+  return {api,el,calls,pins,update,calculate,run,events};
 }
 async function main(){
   const f=fixture();
@@ -43,7 +44,13 @@ async function main(){
   assert.equal(f.api.metric({condition:'ROUTE_EXISTS',distanceMeters:5,durationMillis:61000}).minutes,2);
   assert.equal(f.api.metric({condition:'ROUTE_EXISTS',distanceMeters:0,durationMillis:0}).minutes,0);
   assert.equal(f.el('cmp-nearby').hidden,true);assert.equal(f.calls.length,0,'No queries for the default map center');
-  f.update();assert.equal(f.el('cmp-nearby').hidden,false);await f.run();
+  for(let i=0;i<20;i++)f.update(-16.4+i*.00001,-71.53);
+  await f.run();assert.equal(f.calls.length,0,'Moving the pin 20 times makes no Places or Routes request');
+  assert.equal(f.el('cmp-nearby').hidden,true);
+  await f.calculate();assert.equal(f.el('cmp-nearby').hidden,false);
+  assert.equal(f.el('cmp-nearby-content').hidden,true,'Search results appear collapsed');
+  const initialCalls=f.calls.length;f.el('cmp-nearby-toggle').events.click();
+  assert.equal(f.el('cmp-nearby-content').hidden,false);assert.equal(f.calls.length,initialCalls,'Expanding is free of API calls');
   assert.equal(f.calls.filter(c=>c.kind==='places').length,4);assert.equal(f.calls.filter(c=>c.kind==='matrix').length,2);
   const cards=f.el('cmp-nearby-list').children;
   assert.equal(cards.length,4);assert.deepEqual(cards.map(c=>c.dataset.level),['blue','red','yellow','blue']);
@@ -55,15 +62,16 @@ async function main(){
   f.el('cmp-nearby-sort').value='DRIVING';f.el('cmp-nearby-sort').events.change();
   assert.match(f.el('cmp-nearby-list').children[0].children[1].textContent,/police 0/);assert.equal(f.el('cmp-nearby-list').children[0].dataset.level,'red');
   const requests=f.calls.length;f.update();await f.run();assert.equal(f.calls.length,requests,'Selecting the same pin reuses the results');
-  f.el('cmp-nearby-refresh').events.click();await flush();assert.equal(f.calls.filter(c=>c.kind==='places').length,8,'Refresh makes a new bounded query');
+  f.el('cmp-nearby-radius').value='10000';f.el('cmp-nearby-radius').events.change();await flush();assert.equal(f.calls.length,requests,'Changing radius waits for Buscar y calcular');
+  await f.calculate();assert.equal(f.calls.filter(c=>c.kind==='places').length,8,'Only another completed search queries the changed radius');
   f.el('cmp-nearby-close').events.click();assert.equal(f.el('cmp-nearby').hidden,true);assert.equal(f.el('cmp-nearby-route').hidden,true);
-  const denied=fixture({denyRoutes:true});denied.update();await denied.run();
+  const denied=fixture({denyRoutes:true});await denied.calculate();
   assert.equal(denied.el('cmp-nearby-list').children[0].dataset.level,'unknown');assert.match(denied.el('cmp-nearby-status').textContent,/no autorizó/);
-  const anonymous=fixture({anonymous:true});anonymous.update();await anonymous.run();assert.equal(anonymous.calls.length,0);assert.match(anonymous.el('cmp-nearby-status').textContent,/Inicia sesión/);
-  const pending=[];const stale=fixture({deferPlaces:request=>new Promise(resolve=>pending.push({request,resolve}))});stale.update();const loading=stale.run();await flush();
+  const anonymous=fixture({anonymous:true});await anonymous.calculate();assert.equal(anonymous.calls.length,0);assert.match(anonymous.el('cmp-nearby-status').textContent,/Inicia sesión/);
+  const pending=[];const stale=fixture({deferPlaces:request=>new Promise(resolve=>pending.push({request,resolve}))});const loading=stale.calculate();await flush();
   stale.update(-16.41,-71.54);pending.forEach(p=>p.resolve({places:[]}));await loading;
   assert.equal(stale.el('cmp-nearby-list').children.length,0,'Old origin results cannot overwrite a moved pin');
   assert.equal(stale.calls.filter(c=>c.kind==='matrix').length,0);
-  console.log('Nearby places: thresholds, four nearest categories, routes, traffic, cache, API denial, login and stale-pin checks passed.');
+  console.log('Nearby places: 20 pin moves without queries, explicit search, collapsed results, radius, routes, cache, login and stale-pin checks passed.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

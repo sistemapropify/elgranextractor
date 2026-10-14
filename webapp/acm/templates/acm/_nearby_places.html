@@ -1,9 +1,9 @@
-<section id="cmp-nearby" class="cmp-floating-card" aria-labelledby="cmp-nearby-title" hidden>
-  <header id="cmp-nearby-handle" class="cmp-floating-header" tabindex="0" title="Arrastra para mover la tarjeta" aria-label="Mover lugares cercanos">
+<section id="cmp-nearby" class="map-panel cmp-nearby-card" aria-labelledby="cmp-nearby-title" hidden>
+  <header id="cmp-nearby-handle" class="cmp-nearby-header">
     <h2 id="cmp-nearby-title">Lugares más cercanos</h2>
-    <button id="cmp-nearby-toggle" type="button" aria-controls="cmp-nearby-content" aria-expanded="true" aria-label="Minimizar lugares cercanos">−</button>
+    <button id="cmp-nearby-toggle" type="button" aria-controls="cmp-nearby-content" aria-expanded="false" aria-label="Expandir lugares cercanos">+</button>
   </header>
-  <div id="cmp-nearby-content">
+  <div id="cmp-nearby-content" hidden>
     <p id="cmp-nearby-origin">Coloca el pin de tu propiedad.</p>
     <div class="cmp-nearby-controls">
       <label>Buscar dentro de <select id="cmp-nearby-radius"><option value="3000">3 km</option><option value="5000" selected>5 km</option><option value="10000">10 km</option><option value="25000">25 km</option><option value="50000">50 km</option></select></label>
@@ -17,6 +17,6 @@
     <p id="cmp-nearby-route" role="status" hidden></p>
     <div id="cmp-nearby-warnings"></div>
     <small id="cmp-nearby-updated"></small>
-    <div class="cmp-nearby-footer"><button id="cmp-nearby-refresh" type="button">Actualizar lugares</button><button id="cmp-nearby-clear-route" type="button">Quitar recorrido</button><button id="cmp-nearby-close" type="button">Cerrar tarjeta</button></div>
+    <div class="cmp-nearby-footer"><button id="cmp-nearby-clear-route" type="button">Quitar recorrido</button><button id="cmp-nearby-close" type="button">Cerrar tarjeta</button></div>
   </div>
 </section>

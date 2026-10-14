@@ -484,7 +484,7 @@
     e.preventDefault();if(form.dataset.authenticated==='false'){requestLogin();return;}const p=input();if(!p.sources.length){$('cmp-status').textContent='Selecciona al menos una fuente.';return;}
     searching=true;setLocationLocked(true);setSearchFormCollapsed(true);$('cmp-search-message').hidden=true;
     const seq=++sequence;snapshot=null;excluded.clear();unselected.clear();locatedIds.clear();if($('cmp-detail').open)$('cmp-detail').close();clearResult('Buscando comparables…');$('cmp-search').disabled=true;$('cmp-status').textContent='Buscando comparables del tipo seleccionado…';
-    try{const data=await post('buscar',p);if(seq!==sequence)return;snapshot=data;result=data.result;tab=p.property_type==='Terreno'?'Terreno':'Casa';render();fitSearchRadius();$('cmp-status').textContent='Análisis actualizado. Desmarca comparables para recalcular el mapa, las tarjetas y el resultado.';}
+    try{const data=await post('buscar',p);if(seq!==sequence)return;snapshot=data;result=data.result;tab=p.property_type==='Terreno'?'Terreno':'Casa';render();fitSearchRadius();document.dispatchEvent(new CustomEvent('acm:search-completed',{detail:{lat:p.lat,lng:p.lng}}));$('cmp-status').textContent='Análisis actualizado. Desmarca comparables para recalcular el mapa, las tarjetas y el resultado.';}
     catch(error){if(seq===sequence){snapshot=null;setLocationLocked(false);setSearchFormCollapsed(false);clearResult('La búsqueda no terminó. Reintenta.');$('cmp-status').textContent=error.message;$('cmp-search-message').textContent=error.message;$('cmp-search-message').hidden=false;}}
     finally{if(seq===sequence){searching=false;setSearchFormCollapsed(form.hidden);$('cmp-search').disabled=false;}}
   });

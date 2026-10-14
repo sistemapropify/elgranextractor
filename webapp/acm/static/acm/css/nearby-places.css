@@ -1,5 +1,6 @@
-#cmp-nearby{width:350px;max-width:calc(100% - 16px)}
-#cmp-nearby.cmp-floating-minimized{width:230px}
+#cmp-nearby{position:static;flex-shrink:0;width:100%;max-width:100%}
+.cmp-nearby-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;background:var(--bg-secondary,#161b22);border-bottom:1px solid var(--border-color,#30363d)}
+.cmp-nearby-header h2{margin:0;font-size:12px;font-weight:600}
 #cmp-nearby-content{max-height:min(510px,66dvh);overflow:auto;padding:10px;font-size:12px}
 .cmp-nearby-controls{display:flex;gap:8px;margin:9px 0}
 .cmp-nearby-controls label{display:grid;gap:4px;flex:1;min-width:0}

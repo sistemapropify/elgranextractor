@@ -13,6 +13,21 @@ def report_total(params, result):
     return params.get('manual_valuation', (result.get('new') or {}).get('total'))
 
 
+def report_unit_price(params, result, default=None):
+    """Use the final target value per m² without changing report headings."""
+    if 'manual_valuation' not in params:
+        return default
+    from math import isfinite
+    area_key = (result.get('new') or {}).get('area_basis')
+    if area_key not in ('land', 'built'):
+        area_key = 'land' if result.get('model') == 'land' or params.get('property_type') == 'Terreno' else 'built'
+    try:
+        area, total = float(params.get(area_key)), float(report_total(params, result))
+    except (ValueError, TypeError):
+        return None
+    return total / area if isfinite(area) and area > 0 and isfinite(total) and total >= 0 else None
+
+
 def report_values(params, result):
     total = report_total(params, result)
     return {'market_entry': total * 1.05, 'commercial': total,

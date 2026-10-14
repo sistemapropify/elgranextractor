@@ -35,7 +35,26 @@ class GeollaqtaTests(SimpleTestCase):
             self.assertEqual(geo.coverage(request).status_code, 401)
             self.assertEqual(geo.lots(request).status_code, 401)
             self.assertEqual(geo.detail(request, 12343).status_code, 401)
+            self.assertEqual(geo.report(request, '04012607042018').status_code, 401)
             query.assert_not_called()
+
+    def test_report_metrics_are_private_and_scope_checked_before_fetch(self):
+        with patch('catastro.map_report.report_measurements') as metrics:
+            self.assertEqual(geo.report(self.request(), '04010206058015').status_code,400)
+            self.assertEqual(geo.report(self.request({'ubigeo':'040102','record_id':'0401262012010025582'}), '04010206058015').status_code,400)
+            metrics.assert_not_called()
+            metrics.return_value={'lot_id':'04010206058015','metrics':{'land_area':'200','built_area':'20.5','boundaries':{'frente':'10','derecha':'20','izquierda':'20','fondo':'10'}}}
+            response=geo.report(self.request({'ubigeo':'040102'}),'04010206058015')
+            self.assertEqual(response.status_code,200)
+            self.assertEqual(response['Cache-Control'],'private, no-store')
+            self.assertEqual(json.loads(response.content)['metrics']['built_area'],'20.5')
+
+    def test_report_failure_is_not_cached_as_a_verified_empty_result(self):
+        from catastro.map_report import ReportUnavailable
+        with patch('catastro.map_report.report_measurements',side_effect=[ReportUnavailable('Pending'),{'lot_id':'04012607042018','metrics':{'built_area':'20.5'}}]) as metrics:
+            self.assertEqual(geo.report(self.request(),'04012607042018').status_code,502)
+            self.assertEqual(geo.report(self.request(),'04012607042018').status_code,200)
+            self.assertEqual(metrics.call_count,2)
 
     def test_non_get_methods_are_rejected(self):
         self.assertEqual(geo.coverage(self.factory.post('/')).status_code, 405)

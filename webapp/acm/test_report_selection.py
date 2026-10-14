@@ -5,7 +5,7 @@ from django.test import SimpleTestCase, override_settings
 from .test_components import params, record, sample, _pdf_text
 from .components_engine import candidates, calculate
 from .components_pdf import build_acm_pdf, _static_map, _maps_key
-from .report_selection import report_records, report_total, report_values
+from .report_selection import report_records, report_total, report_values, report_unit_price
 from .components_html import build_acm_html
 
 
@@ -69,6 +69,28 @@ class ReportSelectionTests(SimpleTestCase):
         self.assertLess(text.index(b'VALOR COMERCIAL'),text.index(b'VALOR DE REALIZACI'))
         p.pop('manual_valuation')
         self.assertAlmostEqual(report_values(p,result)['commercial'],95294.11764705881)
+
+    def test_report_unit_price_uses_the_final_value_and_correct_target_area(self):
+        for kind,area_key in [('Casa','built'),('Departamento','built'),('Terreno','land')]:
+            p={**params(),'property_type':kind,'land':200,'built':100,'manual_valuation':240000}
+            result={'model':'land' if kind=='Terreno' else 'components','new':{'total':300000}}
+            self.assertEqual(report_unit_price(p,result),240000/p[area_key])
+            p.pop('manual_valuation');self.assertEqual(report_unit_price(p,result,1234),1234)
+        self.assertIsNone(report_unit_price({'manual_valuation':100,'built':0},{'new':{}}))
+        self.assertEqual(report_unit_price({'manual_valuation':100,'land':20,'built':100},{'new':{'area_basis':'land'}}),5)
+
+    def test_pdf_heading_and_chart_use_final_value_per_m2_without_adjustment_labels(self):
+        p={**params(),'property_type':'Departamento','land':0,'built':90,'manual_valuation':110000}
+        rows=[record('one',kind='Departamento',price=90000,land=None,built=90,distance=100,issues=[])]
+        result=calculate(rows,p)
+        with patch('acm.components_pdf._bar_chart',return_value=None) as chart:
+            pdf=build_acm_pdf(p,rows,result,fetch_images=False)
+        self.assertAlmostEqual(chart.call_args.args[2],110000/90)
+        text=_pdf_text(pdf)
+        self.assertIn(b'PRECIO PROMEDIO DE VENTA POR M2',text)
+        self.assertIn(b'1,222.22',text)
+        self.assertNotIn(b'Nuevo precio',text)
+        self.assertNotIn(b'manualmente',text)
 
     def test_pdf_does_not_include_property_codes_or_unchecked_properties(self):
         p=params();raw=sample()

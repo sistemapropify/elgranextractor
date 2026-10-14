@@ -311,7 +311,7 @@ def _selection(records, result, excluded):
 def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
                   user=None, fetch_images=True):
     """Construye el informe PDF (A4) con la identidad de Propify."""
-    from .report_selection import report_records, report_values
+    from .report_selection import report_records, report_values, report_unit_price
     records=report_records(params,records,excluded)
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_RIGHT
@@ -490,9 +490,10 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     unit_rows = [(row, _unit_price(row)) for row in chart_rows]
     unit_rows = [(row, unit) for row, unit in unit_rows if unit]
     average = mean([unit for _, unit in unit_rows]) if unit_rows else None
+    average = report_unit_price(params, result, average)
     story.append(Paragraph('PRECIO PROMEDIO DE VENTA POR M2', styles['section']))
     story.append(centered(Paragraph(_money(average), styles['center_bold'])))
-    if unit_rows:
+    if unit_rows and average is not None:
         labels = [f'{index + 1}. {_money(unit)}' for index, (_, unit) in enumerate(unit_rows)]
         chart = _bar_chart(labels, [unit for _, unit in unit_rows], average)
         if chart:

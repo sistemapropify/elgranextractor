@@ -2,7 +2,7 @@
 (function () {
     'use strict';
     const $ = id => document.getElementById(id);
-    const number = value => value == null || value === '' ? null : Number(value);
+    const number = value => value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value);
     const format = value => number(value) == null ? 'Sin dato' : Number(value).toLocaleString('es-PE');
     const {relation, esriGeometry, facadeUrl} = window.GeollaqtaData;
     function node(tag, text, className) {
@@ -17,7 +17,8 @@
     }
     function row(parent, label, value) {
         const element = node('div', null, 'geollaqta-field');
-        element.append(node('span', label), node('strong', value == null || value === '' ? 'Sin dato' : value)); parent.append(element);
+        const shown = node('strong', value == null || value === '' ? 'Sin dato' : value);
+        element.append(node('span', label), shown); parent.append(element); return shown;
     }
     function init(map, options = {}) {
         if (!$('geollaqta-visible') || map.__geollaqtaPilot) return;
@@ -125,14 +126,43 @@
             row(fields, 'Código catastral', selected.getProperty('ID_LOTE'));
             row(fields, 'Sector / manzana / lote', [selected.getProperty('COD_SECT'), selected.getProperty('COD_MZNA'), selected.getProperty('COD_LOTE')].join(' / '));
             row(fields, 'Año de catastro', selected.getProperty('ANIO_CAT'));
-            row(fields, 'Área de terreno (m²)', format(selected.getProperty('AREA_TER')));
-            row(fields, 'Área construida (m²)', format(selected.getProperty('AREA_CON')));
+            const reportControls = node('div'); fields.append(reportControls);
+            const land = row(fields, 'Área de terreno (m²)', 'Cargando…');
+            const built = row(fields, 'Área construida (m²)', 'Cargando…');
             row(fields, 'Pisos', format(selected.getProperty('NIVELES')));
             row(fields, 'Unidades', format(selected.getProperty('NRO_UNIDADES')));
+            const perimeter = node('div', null, 'geollaqta-section'); perimeter.append(node('strong', 'Medidas perimétricas'));card.append(perimeter);
+            const sides = {};
+            for (const [key, title] of Object.entries({frente:'Frente',derecha:'Derecha',izquierda:'Izquierda',fondo:'Fondo'})) sides[key] = row(perimeter,title + ' (m)','Cargando…');
+            const reportNotice = node('p');perimeter.append(reportNotice);
+            const reportSignal = detailRequest.signal;
+            const chosenLotId = String(selected.getProperty('ID_LOTE')).trim();
+            let reportSerial = 0;
+            async function loadReport(recordId) {
+                const current = ++reportSerial;
+                land.textContent = built.textContent = 'Cargando…';Object.values(sides).forEach(el => {el.textContent='Cargando…';});reportNotice.textContent='';
+                try {
+                    const data = await client.report(chosenLotId,recordId,reportSignal);
+                    if (version !== detailSerial || current !== reportSerial) return;
+                    if (!data.metrics || data.lot_id !== chosenLotId) throw new Error('No se pudieron verificar las medidas del reporte.');
+                    const metric = value => value == null || value === '' ? 'Sin dato' : String(value);
+                    land.textContent = metric(data.metrics.land_area);built.textContent = metric(data.metrics.built_area);
+                    Object.entries(sides).forEach(([key,el]) => {el.textContent=metric(data.metrics.boundaries?.[key]);});
+                    if (!recordId && data.reports?.length > 1) {
+                        const select = node('select');select.setAttribute('aria-label','Reporte de la unidad catastral');
+                        data.reports.forEach(report => {const option=node('option','Reporte ' + (report.form_number || report.record_id));option.value=report.record_id;select.append(option);});
+                        select.value=data.selected_record_id;select.addEventListener('change',()=>loadReport(select.value));reportControls.append(select);
+                    }
+                } catch(error) {
+                    if (version !== detailSerial || current !== reportSerial || error.name === 'AbortError') return;
+                    land.textContent = built.textContent = 'Sin dato verificado';Object.values(sides).forEach(el => {el.textContent='Sin dato verificado';});
+                    reportNotice.textContent=error.message;
+                }
+            }
+            loadReport();
             const zoneSection = node('div', null, 'geollaqta-section'); zoneSection.id = 'geollaqta-zones'; card.append(zoneSection); zones();
             const photos = node('div', 'Cargando fachada…', 'geollaqta-section'); photos.id = 'geollaqta-gallery'; card.append(photos);
             const records = node('div', null, 'geollaqta-section'); records.id = 'geollaqta-records'; card.append(records);
-            card.append(node('p', 'Fuente: COFOPRI. La fotografía y los datos corresponden al levantamiento publicado; pueden ser antiguos.', 'map-quality-help'));
             const feature = {type:'Feature',id:selected.getId(),geometry:selectedGeometry,properties:{}};
             ['ID_LOTE','ID_DIST','COD_SECT','COD_MZNA','COD_LOTE','ANIO_CAT','AREA_TER','AREA_CON','NIVELES','NRO_UNIDADES'].forEach(key => { feature.properties[key] = selected.getProperty(key); });
             options.onLotSelected?.({feature, district:client.district});

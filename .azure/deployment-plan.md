@@ -1,3 +1,50 @@
+# ACM calculation and cadastral measurements - release 2026-10-14
+
+Status: Validated - user explicitly requested publication of reviewed local changes
+Recipe: CI/CD, existing .github/workflows/main_granextractorservice.yml
+
+## Scope and existing target
+Publish only the reviewed ACM and cadastral corrections. Nearby places query only
+after successful Buscar y calcular, with a collapsed card in normal flow below
+the map. The client PDF retains its existing headings; its unit price and chart
+average use the selected total divided by the applicable target area. Cadastral
+areas and four boundaries come from the selected original report, with separate
+unit reports and no fallback to unverified vector areas. Preserve facade images.
+Base main and last successful production revision: 58b2310218aef07230a4eff2959e9bb3d9876d34,
+workflow 38632845572. Existing App Service granextractorservice / rg-elgranextractor,
+Brazil South, subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+No resources, roles, secrets, dependencies or database migrations change. Retain
+R2 runtime configuration, archive contents and unrelated shared-checkout edits.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-14, America/Lima:
+- 4 report-measurement, 22 isolated cadastral Django and 12 ACM report tests passed.
+- Node suites passed for report measurements, facade galleries, ten-district
+  provider, pan/zoom persistence and nearby places. Twenty pin moves produced
+  zero places/routes calls; explicit calculation alone initiates discovery.
+- Real local selected lot 04010206058015 displays report values 200 / 20.5 m2
+  and front/right/left/rear 10 / 20 / 20 / 10 m. Original facade is retained.
+- Local ACM DOM confirms initially hidden/collapsed, static-position card in
+  map-main outside the map container. Seven static assets HTTP 200 and exact bytes.
+- Sample PDF rendered and inspected: original PRECIO PROMEDIO DE VENTA POR M2
+  heading retained, 110000 / 90 = 1222.22 and matching chart line, no new labels.
+- Production WSGI, three templates and isolated collectstatic passed; seven
+  collected static assets exactly match their sources.
+- Latest origin/main fetched and prior production workflow confirmed successful.
+  Azure existing App Service confirmed Running in the expected subscription/region.
+- Shared D:/PROMETEO preview contains the changes, with unrelated edits preserved.
+  Git whitespace checks passed. Resource/role template checks are inapplicable to
+  this app-only release; the existing federated pipeline is unchanged.
+
+## Execution and verification
+Push only scoped application files, tests and this record to main without force,
+integrating newer main if it advances. Use existing serialized production pipeline.
+Perform a bounded public page/static check; report pending unless matching release
+bytes are actually served. User performs visual production verification; do not
+remain monitoring. Rollback uses a new revert commit and preserves archived data.
+
+---
+
 # Complete-district Catastro collection - release 2026-10-14
 
 Status: Validated - correction to the Catastro publication requested by the user

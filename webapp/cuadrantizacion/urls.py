@@ -39,6 +39,7 @@ urlpatterns = [
     path('geollaqta/cobertura/', geollaqta.coverage, name='geollaqta_coverage'),
     path('geollaqta/lotes/', geollaqta.lots, name='geollaqta_lots'),
     path('geollaqta/lotes/<int:object_id>/', geollaqta.detail, name='geollaqta_detail'),
+    path('geollaqta/reportes/<str:lot_id>/', geollaqta.report, name='geollaqta_report'),
     path('geollaqta/capas/<slug:layer_key>/', geollaqta.layer, name='geollaqta_layer'),
     path('zonificacion/leyenda/', views.api_zonificacion_leyenda, name='api_zonificacion_leyenda'),
     path(
