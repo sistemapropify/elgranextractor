@@ -1,3 +1,43 @@
+# ACM nearest places - release 2026-10-14
+
+Status: Validated - publication explicitly authorized
+Recipe: CI/CD, existing GitHub Actions pipeline
+
+## Authorized scope and target
+Publish only the ACM nearest places card: police, healthcare, shopping mall and
+school, walking/driving route distances and minutes, configurable radius,
+blue/yellow/red distance ranges and optional route drawing. Use the existing
+Maps key and the Places (New) and Routes APIs enabled with the user's consent.
+Base main and latest successful production workflow: 6294e1c9 / 38320568638.
+Target remains granextractorservice / rg-elgranextractor, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf. No infrastructure, roles,
+secrets, dependencies or migrations change. Preserve unrelated shared ACM work.
+
+## 7. Validation Proof
+azure-validate completed on 2026-10-14, America/Lima:
+- Node nearby-place suite passed: thresholds, four categories, nearest route,
+  walking/driving, traffic, cache, denied API, login and stale-pin cancellation.
+- Syntax checks passed for components.js and floating-comparison.js.
+- Production WSGI and both ACM templates compile using isolated SQLite.
+- collectstatic succeeds; all four release assets byte-match their sources.
+- Shared local ACM and four assets return HTTP 200; new card is included.
+- Google APIs report ENABLED; real Places and Routes requests with the existing
+  browser key returned 200, including a 291 m walking route from a public point.
+- Azure subscription and existing Running App Service verified; existing
+  federation, resource location and startup settings preserved.
+- Main fetched and scoped changes reviewed; no upstream revision advanced.
+
+## Execution and handoff
+Commit scoped files and push to main without force. The existing pipeline
+performs build, deployment and health verification. The user explicitly requested
+no deployment monitoring: dispatch the release and proceed with the next task.
+Do not poll CI, create an automation or declare the change live before public
+assets confirm it. A single later HTTP check may establish the release status.
+Rollback is a revert through the same pipeline. Further cadastral district
+changes are local-only until separately authorized for publication.
+
+---
+
 # Catastros gallery facade correction - release 2026-10-12
 
 Status: Validated - correction of production explicitly requested

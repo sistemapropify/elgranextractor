@@ -82,5 +82,6 @@
   initialize('cmp-comparison', 'comparación', 'top-right', 'acm:comparison-updated');
   initialize('cmp-plan-layers', 'capas del plano', 'bottom-left');
   initialize('cmp-catastros', 'Catastros', 'bottom-center');
+  initialize('cmp-nearby', 'lugares cercanos', 'top-left', 'acm:nearby-updated');
   initialize('cmp-pdm-zone', 'zona de uso', 'bottom-right');
 })();

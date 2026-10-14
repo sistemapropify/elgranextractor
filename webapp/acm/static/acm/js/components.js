@@ -106,7 +106,7 @@
     if(!map)return;circles.forEach(c=>c.setMap(null));circles=[];
     const p=snapshot?.params||input(),center={lat:p.lat,lng:p.lng};if(!Number.isFinite(center.lat)||!Number.isFinite(center.lng))return;
     if(!pin)pin=new google.maps.Marker({map,position:center,title:'Inmueble objetivo',draggable:!locationLocked});else{pin.setPosition(center);pin.setDraggable(!locationLocked);}
-    if(!pin.cmpListener){pin.addListener('dragend',e=>setLocation(e.latLng.lat(),e.latLng.lng()));pin.cmpListener=true;}
+    if(!pin.cmpListener){pin.addListener('dragend',e=>setLocation(e.latLng.lat(),e.latLng.lng()));pin.addListener('click',()=>{const p=pin.getPosition();document.dispatchEvent(new CustomEvent('acm:target-location',{detail:{lat:p.lat(),lng:p.lng()}}));});pin.cmpListener=true;}
     const layers=new Set(Array.from(document.querySelectorAll('[name=map_layer]:checked'),el=>el.value));
     const rings=presentation.mapRings(p,result,layers);
     rings.forEach((ring,index)=>{
@@ -147,7 +147,7 @@
     clearSelectedRecord();
     clearResult('Parámetros modificados: vuelve a buscar.');$('cmp-warnings').replaceChildren();$('cmp-status').textContent='Listo para una nueva búsqueda.';$('cmp-search').disabled=false;
   }
-  function setLocation(lat,lng){if(locationLocked)return;form.elements.lat.value=lat.toFixed(7);form.elements.lng.value=lng.toFixed(7);invalidate();if(map)map.panTo({lat,lng});if(window.ACMZona)window.ACMZona.actualizar(lat,lng);}
+  function setLocation(lat,lng){if(locationLocked)return;form.elements.lat.value=lat.toFixed(7);form.elements.lng.value=lng.toFixed(7);invalidate();if(map)map.panTo({lat,lng});if(window.ACMZona)window.ACMZona.actualizar(lat,lng);document.dispatchEvent(new CustomEvent('acm:target-location',{detail:{lat,lng}}));}
   function hideGoogleGestureHint(){
     const host=$('cmp-map'),phrases=['utiliza la tecla ctrl','usa la tecla ctrl','use ctrl','hold ctrl','mantén pulsada la tecla ctrl'];
     host.querySelectorAll('.gm-style-pbc,[class*="gm-style-pbc"],div,span').forEach(node=>{
@@ -168,6 +168,7 @@
     drawCircles();if(snapshot&&result)renderMap();
     if(window.CapasMapa)window.CapasMapa.init(map);
     if(window.GeollaqtaMap)window.GeollaqtaMap.init(map,{acm:true,getZones:()=>window.CapasMapa?.getZoneRows()||[]});
+    if(window.ACMNearby)window.ACMNearby.init(map);
   };
   window.gm_authFailure=()=>{$('cmp-status').textContent='No se pudo cargar Google Maps. Puedes ingresar latitud y longitud para buscar.';};
   // Keep all consulted records visible so an excluded outer land can be selected again.

@@ -6,6 +6,7 @@
 <link rel="stylesheet" href="{% static 'acm/css/comparison-valuation.css' %}?v=3">
 <link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
 <link rel="stylesheet" href="{% static 'css/geollaqta-map.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'acm/css/nearby-places.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'acm/css/zona-preevaluacion.css' %}?v=5">
 {% endblock %}
 {% block content %}
@@ -142,6 +143,7 @@
         </header>
         <div id="cmp-catastros-content">{% include 'cuadrantizacion/_geollaqta_panel.html' with geollaqta_acm=True %}</div>
       </section>
+      {% include 'acm/_nearby_places.html' %}
       <section id="cmp-comparison" class="cmp-floating-card" aria-labelledby="cmp-comparison-title" hidden>
         <header id="cmp-comparison-handle" class="cmp-floating-header" tabindex="0" title="Arrastra para mover la tarjeta; también puedes usar las flechas del teclado" aria-label="Mover comparación de casas">
           <h2 id="cmp-comparison-title">Casas comparables</h2>
@@ -279,10 +281,10 @@
 {{ block.super }}
 <script src="{% static 'acm/js/components-presentation.js' %}?v=11"></script>
 <script src="{% static 'acm/js/workspace-layout.js' %}?v=1"></script>
-<script src="{% static 'acm/js/floating-comparison.js' %}?v=5"></script>
+<script src="{% static 'acm/js/floating-comparison.js' %}?v=6"></script>
 <script src="{% static 'acm/js/comparison-valuation.js' %}?v=3"></script>
 {% if replication %}{{ replication|json_script:"cmp-replication-data" }}{% endif %}
-<script src="{% static 'acm/js/components.js' %}?v=57"></script>
+<script src="{% static 'acm/js/components.js' %}?v=58"></script>
 <script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>
 {{ capas_vectoriales|json_script:"capas-vectoriales-data" }}
 {{ capas_raster|json_script:"capas-raster-data" }}
@@ -291,6 +293,7 @@
 <script src="{% static 'js/capa-vectorial.js' %}?v=6"></script>
 <script src="{% static 'js/capas-mapa.js' %}?v=2"></script>
 <script src="{% static 'js/geollaqta-map.js' %}?v=5"></script>
+<script src="{% static 'acm/js/nearby-places.js' %}?v=1"></script>
 <script src="{% static 'acm/js/zona-preevaluacion.js' %}?v=7"></script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}

@@ -1,0 +1,27 @@
+#cmp-nearby{width:350px;max-width:calc(100% - 16px)}
+#cmp-nearby.cmp-floating-minimized{width:230px}
+#cmp-nearby-content{max-height:min(510px,66dvh);overflow:auto;padding:10px;font-size:12px}
+.cmp-nearby-controls{display:flex;gap:8px;margin:9px 0}
+.cmp-nearby-controls label{display:grid;gap:4px;flex:1;min-width:0}
+#cmp-nearby select,#cmp-nearby button{font:inherit;color:var(--text-primary,#e6edf3);background:var(--bg-secondary,#161b22);border:1px solid var(--border-color,#30363d);border-radius:5px;padding:5px}
+#cmp-nearby button{cursor:pointer}
+#cmp-nearby-origin,#cmp-nearby-status,#cmp-nearby-updated{margin:4px 0;line-height:1.4}
+.cmp-nearby-legend{display:flex;gap:9px;flex-wrap:wrap;margin:8px 0;font-size:11px}
+.cmp-nearby-legend span::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;background:var(--nearby-color)}
+#cmp-nearby-list{display:grid;gap:8px;margin-top:8px}
+.cmp-nearby-item{border:1px solid var(--border-color,#30363d);border-left:4px solid #94a3b8;border-radius:6px;padding:8px;background:#94a3b810;overflow-wrap:anywhere}
+.cmp-nearby-item[data-level=blue]{border-left-color:#3b82f6;background:#3b82f614}
+.cmp-nearby-item[data-level=yellow]{border-left-color:#e9bd26;background:#e9bd2614}
+.cmp-nearby-item[data-level=red]{border-left-color:#ed6363;background:#ed636314}
+.cmp-nearby-item h3{font-size:11px;margin:0 0 5px;color:var(--text-secondary,#aab7c5)}
+.cmp-nearby-name{display:block;font-size:13px}
+.cmp-nearby-address,.cmp-nearby-empty{margin:5px 0;color:var(--text-secondary,#aab7c5);line-height:1.4}
+.cmp-nearby-metric{display:grid;grid-template-columns:45px minmax(0,1fr) auto;gap:5px;align-items:center;padding:5px 0}
+.cmp-nearby-metric strong{font-size:11px}
+.cmp-nearby-item small{display:block;margin-top:4px;color:var(--text-secondary,#aab7c5)}
+#cmp-nearby a{display:inline-block;color:#70baff;margin-top:7px}
+.cmp-nearby-footer{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+#cmp-nearby [hidden]{display:none!important}
+#cmp-nearby-route{padding:7px;border:1px solid #3b82f6;border-radius:5px;margin-top:8px;line-height:1.4}
+#cmp-nearby-warnings p{font-size:11px;color:var(--text-secondary,#aab7c5)}
+#cmp-nearby button:focus-visible,#cmp-nearby select:focus-visible,#cmp-nearby a:focus-visible{outline:2px solid #3b82f6;outline-offset:2px}
