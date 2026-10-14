@@ -11,7 +11,7 @@ from catastro.jobs import run_job, start_job
 def main():
     parser = argparse.ArgumentParser(description='Archivar lotes de Geollaqta en R2, con reanudación.')
     parser.add_argument('--ubigeo', default='040126', help='Distrito; Yanahuara por defecto.')
-    parser.add_argument('--limit', type=int, default=10, help='Entre 1 y 500 lotes por ejecución.')
+    parser.add_argument('--limit', type=int, default=None, help='Opcional: limitar una prueba a 1–500 predios. Por defecto descarga todo el distrito.')
     parser.add_argument('--lot', help='Código catastral de un lote individual.')
     parser.add_argument('--retry-missing', action='store_true', help='Volver a consultar documentos pendientes.')
     parser.add_argument('--job-id', help=argparse.SUPPRESS)

@@ -38,6 +38,13 @@
       const article = node('article','');
       article.append(node('strong',job.district_name + ' · ' + (labels[job.status] || job.status) + ' · ' + job.processed + ' predios'));
       article.append(node('p',job.message || 'Preparando el inventario de lotes de COFOPRI.'));
+      if (job.source_objects) {
+        // Remaining also includes records outside an old bounded test scope.
+        const done = job.source_objects - job.remaining_objects;
+        const bar = document.createElement('progress');bar.max=job.source_objects;bar.value=Math.max(0,done);
+        bar.setAttribute('aria-label','Predios archivados del inventario consultado');article.append(bar);
+        article.append(node('p',done + ' de ' + job.source_objects + ' registros archivados · ' + job.remaining_objects + ' por archivar'));
+      }
       article.append(node('small',new Date(job.created * 1000).toLocaleString('es-PE')));
       jobs.append(article);
     });
@@ -57,7 +64,7 @@
   }
   el('collection-form').addEventListener('submit',async event => {
     event.preventDefault(); if(busy || active || !configured)return;busy=true;el('start-collection').disabled=true;
-    try { await api('start/',{ubigeo:el('district').value,limit:Number(el('batch-size').value),lot_id:el('lot-id').value.trim() || null,retry_missing:el('retry-missing').checked});message('Descarga iniciada. Puedes salir de esta página y volver para revisar el avance.'); }
+    try { await api('start/',{ubigeo:el('district').value,lot_id:el('lot-id').value.trim() || null,retry_missing:el('retry-missing').checked});message('Descarga iniciada: recorrerá todos los predios encontrados. Puedes salir de esta página y volver para revisar el avance.'); }
     catch(error) { message(error.message,true); }
     finally { busy=false;await refresh(); }
   });

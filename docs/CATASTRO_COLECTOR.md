@@ -16,24 +16,29 @@ y las fotografías al almacenamiento de Azure.
 
 ## Inicio y reanudación
 
-Desde el dashboard elegir distrito, cantidad (10 por defecto) y «Iniciar
-descarga». El proceso sigue aunque se cierre la página. «Detener» se aplica
+Desde el dashboard elegir distrito y «Descargar distrito completo». Se recorren
+todos los registros encontrados, con todas sus fichas, reportes y fotos
+disponibles. No hay un selector de cantidad ni un límite de predios por
+ejecución. El proceso sigue aunque se cierre la página. «Detener» se aplica
 antes de la siguiente solicitud. Una nueva ejecución salta los predios ya
 archivados; «Reintentar documentos pendientes» consulta los documentos fallidos.
 El estado distingue descarga de un lote terminada de cobertura completa del distrito.
-Cada ejecución muestra cuántos registros seleccionó del inventario de COFOPRI
-y cuántos quedan para otra descarga. Terminar un grupo no inicia otro por sí solo;
-el mensaje indica cuándo iniciar la siguiente descarga o reintentar documentos.
+Cada ejecución muestra el inventario real, los registros ya archivados y los
+que faltan. Los grupos internos de 100 geometrías se procesan en secuencia
+dentro de la misma ejecución, sin acumular el distrito completo en memoria
+ni pedir otro inicio por grupo. Reanudar salta lo ya guardado; reintentar
+pendientes revisa cada predio pendiente una sola vez durante esa ejecución.
 
 También desde PowerShell, sin Django ni acceso a la BD de propiedades:
 
 ```powershell
 & D:/PROMETEO/elgranextractor/venv/Scripts/python.exe D:/PROMETEO/scripts/collect_geollaqta.py --ubigeo 040117 --lot 04011713059004 --limit 1
-& D:/PROMETEO/elgranextractor/venv/Scripts/python.exe D:/PROMETEO/scripts/collect_geollaqta.py --ubigeo 040126 --limit 10
+& D:/PROMETEO/elgranextractor/venv/Scripts/python.exe D:/PROMETEO/scripts/collect_geollaqta.py --ubigeo 040126
 ```
 
-Cada ejecución admite 1–500 predios y una sola ejecución activa. No hay bucle
-masivo ni horario automático habilitado. CLI, dashboard y skill usan el mismo
+Por defecto cada ejecución abarca todo el distrito y hay una sola ejecución
+activa. CLI y skill conservan un límite opcional de 1–500 sólo para pruebas;
+el dashboard nunca lo envía. CLI, dashboard y skill usan el mismo
 motor, trabajo y estado. Fallos o procesos muertos pueden reanudarse; el
 heartbeat vence en cinco minutos. COFOPRI se consulta en serie, al menos un
 segundo entre solicitudes; errores de acceso o almacenamiento detienen el lote.
@@ -71,9 +76,13 @@ endpoints ni rutas arbitrarias en parámetros web o de la skill.
 
 Índice SQLite y copia local: `outputs/geollaqta-archive/`, configurable con
 `CATASTRO_DATA_DIR`. Es un índice local del piloto; D1 no está implementado.
-Originales y JSON van a R2. Límite acumulado del recolector: 1 GB, archivo: 20 MB.
-El límite cuenta lo registrado por este recolector, no todos los usos de la cuenta
-Cloudflare. Los archivos locales se conservan para revisión y reanudación.
+Originales y JSON van a R2. Se retiró el límite acumulado de 1 GB del piloto;
+no hay un máximo fijo de predios. Los archivos de más de 20 MB se identifican
+como pendientes. En Azure sólo quedan el índice SQLite y las copias de trabajo
+que todavía no se han confirmado en R2. Después de verificar una carga, se
+retiran sus nuevas copias de trabajo; se conservan las copias de revisión
+preexistentes. Los índices JSON y originales se consultan directamente de R2
+si no existe copia local. En desarrollo se conservan las copias locales.
 
 La compatibilidad PUT/HEAD/GET y región auto siguen la
 [documentación S3 de R2](https://developers.cloudflare.com/r2/api/s3/api/).

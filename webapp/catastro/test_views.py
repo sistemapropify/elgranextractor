@@ -39,6 +39,8 @@ class DashboardTests(TestCase):
         self.assertContains(response,'catastro-dashboard.js')
         self.assertContains(response,'catastro-dashboard.css')
         self.assertContains(response,'040117')
+        self.assertContains(response,'Descargar distrito completo')
+        self.assertNotContains(response,'Predios por descarga')
 
     def test_post_requires_csrf_and_does_not_allow_get_to_launch(self):
         self.client.force_login(self.admin)
@@ -73,6 +75,36 @@ class DashboardTests(TestCase):
             response=self.client.post('/catastro/api/start/',data=json.dumps({'ubigeo':'040117','limit':10,'credentials':'ignored'}),content_type='application/json')
             self.assertEqual(response.status_code,202)
             start.assert_called_once_with('040117',10,None,False)
+
+    def test_default_request_downloads_whole_district_without_a_limit(self):
+        self.client.force_login(self.admin)
+        with patch('catastro.views.start_job',return_value='district-job') as start:
+            response=self.client.post('/catastro/api/start/',data=json.dumps({'ubigeo':'040117'}),content_type='application/json')
+            self.assertEqual(response.status_code,202)
+            start.assert_called_once_with('040117',None,None,False)
+
+    def test_r2_only_property_and_original_can_be_read_without_azure_copies(self):
+        import fitz
+        code='04011713059004'
+        state=State(self.tmp.name);state.save_lot(code,'040117',status='complete',uploaded=1);state.close()
+        data={'lot_id':code,'district_ubigeo':'040117','reports':[],'missing':[],
+              'artifacts':[{'filename':'ficha-example.pdf','type':'cadastral_form_pdf','document_name':'FICHA INDIVIDUAL','form_number':'1/1'}]}
+        pdf=fitz.open();page=pdf.new_page();page.draw_rect((20,20,200,100));original=pdf.tobytes();pdf.close()
+        def remote_get(key):
+            return (json.dumps(data).encode() if key.endswith('datos.json') else original),{}
+        self.client.force_login(self.admin)
+        with patch('catastro.views.R2') as cloud:
+            cloud.return_value.get.side_effect=remote_get
+            self.assertContains(self.client.get('/catastro/lotes/'+code+'/'),'FICHA INDIVIDUAL')
+            response=self.client.get('/catastro/archivos/'+code+'/ficha-example.pdf/')
+            self.assertEqual(response.status_code,200)
+            self.assertEqual(b''.join(response.streaming_content),original)
+            response.close()
+            page_response=self.client.get('/catastro/paginas/'+code+'/ficha-example.pdf/1/')
+            self.assertEqual(page_response.status_code,200)
+            self.assertTrue(page_response.content.startswith(b'\x89PNG'))
+            data['lot_id']='04011713059005'
+            self.assertEqual(self.client.get('/catastro/lotes/'+code+'/').status_code,502)
 
     def test_original_page_returns_lines_as_private_png(self):
         import fitz

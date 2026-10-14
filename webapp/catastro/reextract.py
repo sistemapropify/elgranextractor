@@ -20,12 +20,12 @@ def reextract(lot_id=None, root=None, r2=None):
         for row in rows:
             folder = state.root / row['ubigeo'] / row['lot_id']
             path = folder / 'datos.json'
-            data = json.loads(path.read_text(encoding='utf-8'))
+            data = json.loads(path.read_text(encoding='utf-8')) if path.is_file() else json.loads(cloud.get('geollaqta/'+row['ubigeo']+'/'+row['lot_id']+'/datos.json')[0])
             artifacts = {a['filename']:a for a in data['artifacts']}
             fields = 0
             for report in data['reports']:
                 pdf_path = folder / report['filename']
-                original = pdf_path.read_bytes()
+                original = pdf_path.read_bytes() if pdf_path.is_file() else cloud.get('geollaqta/'+row['ubigeo']+'/'+row['lot_id']+'/'+report['filename'])[0]
                 if hashlib.sha256(original).hexdigest() != artifacts[report['filename']]['sha256']:
                     raise ValueError('La copia original no coincide con su hash; no se actualizarán los datos.')
                 report['pages'] = pdf_pages(original)
@@ -34,13 +34,14 @@ def reextract(lot_id=None, root=None, r2=None):
             data['extracted_at'] = time.time()
             body = json.dumps(data,ensure_ascii=False,indent=2).encode()
             snapshot = 'datos-' + hashlib.sha256(body).hexdigest()[:16] + '.json'
-            if state.upload_bytes() + 2*len(body) > DEFAULT_BUDGET:
+            if DEFAULT_BUDGET is not None and state.upload_bytes() + 2*len(body) > DEFAULT_BUDGET:
                 raise ValueError('La actualización excedería el límite de almacenamiento del recolector.')
             if row['uploaded']:
                 for name in (snapshot, 'datos.json'):
                     key = 'geollaqta/'+row['ubigeo']+'/'+row['lot_id']+'/'+name
                     cloud.put_verified(key, body, 'application/json')
                     state.save_upload(key, hashlib.sha256(body).hexdigest(),len(body))
+            folder.mkdir(parents=True, exist_ok=True)
             atomic_write(folder/snapshot,body)
             atomic_write(path,body)
             state.db.execute('UPDATE lots SET bytes=?,updated=? WHERE lot_id=?',

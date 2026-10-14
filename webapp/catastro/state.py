@@ -34,6 +34,15 @@ class State:
                 created REAL NOT NULL, heartbeat REAL NOT NULL, processed INTEGER DEFAULT 0,
                 message TEXT DEFAULT '', stop INTEGER DEFAULT 0, pid INTEGER);
         ''')
+        # Additive upgrade: keep old bounded jobs and existing archive intact.
+        columns = {r['name'] for r in self.db.execute('PRAGMA table_info(jobs)')}
+        for column in ('source_objects', 'skipped_objects', 'selected_objects', 'remaining_objects'):
+            if column not in columns:
+                try:
+                    self.db.execute(f'ALTER TABLE jobs ADD COLUMN {column} INTEGER DEFAULT 0')
+                except sqlite3.OperationalError:
+                    if column not in {r['name'] for r in self.db.execute('PRAGMA table_info(jobs)')}:
+                        raise
         self.db.commit()
 
     def close(self):
@@ -85,7 +94,8 @@ class State:
         return dict(row) if row else None
 
     def update_job(self, job_id, **values):
-        allowed = {'status', 'heartbeat', 'processed', 'message', 'stop', 'pid'}
+        allowed = {'status', 'heartbeat', 'processed', 'message', 'stop', 'pid',
+                   'source_objects', 'skipped_objects', 'selected_objects', 'remaining_objects'}
         if not values.keys() <= allowed:
             raise ValueError('Campos de ejecución no válidos.')
         values['heartbeat'] = time.time()

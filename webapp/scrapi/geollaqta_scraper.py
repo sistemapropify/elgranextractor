@@ -7,6 +7,7 @@ import hashlib
 from html.parser import HTMLParser
 import json
 import mimetypes
+import os
 from pathlib import Path
 import re
 import time
@@ -22,7 +23,7 @@ SERVICE = 'https://geoportal.cofopri.gob.pe/giscofopri/rest/services/Cofopri/Cat
 CATALOG = json.loads((Path(__file__).resolve().parents[1] / 'cuadrantizacion/geollaqta_districts.json').read_text(encoding='utf-8'))
 DISTRICTS = {d['ubigeo']: d for d in CATALOG['districts']}
 MAX_FILE = 20_000_000
-DEFAULT_BUDGET = 1_000_000_000
+DEFAULT_BUDGET = None
 
 
 class CollectionError(RuntimeError):
@@ -35,10 +36,10 @@ class Stopped(CollectionError):
     pass
 
 
-def validate(ubigeo, limit=10, lot_id=None):
+def validate(ubigeo, limit=None, lot_id=None):
     if ubigeo not in DISTRICTS:
         raise ValueError('Selecciona un distrito del catálogo de Arequipa.')
-    if isinstance(limit, bool) or not 1 <= int(limit) <= 500:
+    if limit is not None and (isinstance(limit, bool) or not 1 <= int(limit) <= 500):
         raise ValueError('El lote de descarga debe contener entre 1 y 500 predios.')
     if lot_id and not re.fullmatch(ubigeo + r'\d{8,12}', lot_id):
         raise ValueError('El código del lote no pertenece al distrito seleccionado.')
@@ -190,17 +191,19 @@ def atomic_write(path, body):
     temp.replace(path)
 
 
-def collect(ubigeo, max_lotes=10, lot_id=None, retry_missing=False, upload=True,
+def collect(ubigeo, max_lotes=None, lot_id=None, retry_missing=False, upload=True,
             root=None, r2=None, source=None, progress=None, checkpoint=lambda: None,
-            budget=DEFAULT_BUDGET):
+            budget=DEFAULT_BUDGET, keep_local=None):
     validate(ubigeo, max_lotes, lot_id)
     check_pdf_runtime()
     state = State(root)
     source = source or Source(checkpoint)
     r2 = (r2 or R2()) if upload else None
+    keep_local = bool(not os.environ.get('WEBSITE_SITE_NAME')) if keep_local is None else keep_local
+    keep_local = keep_local or not upload
     summary = {'ubigeo': ubigeo, 'processed': 0, 'uploaded': 0, 'partial': 0,
                'failed': 0, 'skipped': 0, 'complete': False, 'stop_reason': 'batch_limit', 'scope': 'lot' if lot_id else 'district'}
-    disk_bytes = sum(p.stat().st_size for p in state.root.rglob('*') if p.is_file())
+    disk_bytes = sum(p.stat().st_size for p in state.root.rglob('*') if p.is_file()) if budget is not None else 0
 
     def event(message):
         if progress:
@@ -219,23 +222,26 @@ def collect(ubigeo, max_lotes=10, lot_id=None, retry_missing=False, upload=True,
                 if row['status'] in ('complete', 'partial') and (not upload or row['uploaded'])
                 and (not retry_missing or not row['missing'])}
         pending = [i for i in ids if i not in done]
-        selected = pending[:int(max_lotes)]
+        selected = pending if max_lotes is None else pending[:int(max_lotes)]
         summary['skipped'] = len(ids) - len(pending)
         summary['selected_objects'] = len(selected)
-        summary['remaining_objects'] = len(pending) - len(selected)
-        event(f"Inventario: {len(ids)} registros; {len(selected)} seleccionados para esta descarga; "
-              f"{summary['remaining_objects']} quedan para otra descarga.")
-        rows = []
-        for start in range(0, len(selected), 100):
-            data = source.query(objectIds=','.join(map(str, selected[start:start + 100])),
-                                outFields='*', returnGeometry='true', outSR=4326)
-            batch = data.get('features', [])
-            returned = {row.get('attributes', {}).get('OBJECTID') for row in batch}
-            if data.get('exceededTransferLimit') or returned != set(selected[start:start + 100]):
-                raise CollectionError('COFOPRI devolvió un inventario incompleto; no se marcará como terminado.')
-            rows.extend(batch)
+        summary['remaining_objects'] = len(pending)
+        event(f"Inventario: {len(ids)} registros; {summary['skipped']} ya archivados; "
+              f"{len(selected)} por revisar en esta ejecución.")
+        def features():
+            # Stream small internal groups instead of keeping a whole district's
+            # geometries in memory. The user starts only one district download.
+            for start in range(0, len(selected), 100):
+                checkpoint()
+                data = source.query(objectIds=','.join(map(str, selected[start:start + 100])),
+                                    outFields='*', returnGeometry='true', outSR=4326)
+                batch = data.get('features', [])
+                returned = {row.get('attributes', {}).get('OBJECTID') for row in batch}
+                if data.get('exceededTransferLimit') or returned != set(selected[start:start + 100]):
+                    raise CollectionError('COFOPRI devolvió un inventario incompleto; no se marcará como terminado.')
+                yield from batch
         seen = set()
-        for feature in rows:
+        for feature in features():
             checkpoint()
             attrs = feature.get('attributes', {})
             code = str(attrs.get('ID_LOTE', '')).strip()
@@ -246,8 +252,16 @@ def collect(ubigeo, max_lotes=10, lot_id=None, retry_missing=False, upload=True,
             seen.add(code)
             folder = state.root / ubigeo / code
             folder.mkdir(parents=True, exist_ok=True)
+            existing_files = {p.name for p in folder.iterdir() if p.is_file()}
             manifest_path = folder / 'datos.json'
-            manifest = json.loads(manifest_path.read_text(encoding='utf-8')) if manifest_path.exists() else {}
+            stored_lot = state.lot(code)
+            if manifest_path.exists():
+                manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+            elif stored_lot and stored_lot['uploaded'] and upload:
+                body, _ = r2.get('geollaqta/' + ubigeo + '/' + code + '/datos.json')
+                manifest = json.loads(body)
+            else:
+                manifest = {}
             prior = {a['filename']: a for a in manifest.get('artifacts', [])}
             artifacts, missing, reports = [], [], []
             gallery_url = PORTAL + 'vistadetalle.php?' + urlencode({'id_lote': code})
@@ -261,12 +275,19 @@ def collect(ubigeo, max_lotes=10, lot_id=None, retry_missing=False, upload=True,
                     filename = previous['filename']
                     path = folder / filename
                 body = path.read_bytes() if path.is_file() else None
+                key = 'geollaqta/' + ubigeo + '/' + code + '/' + filename
+                if body is None and previous and upload and state.uploaded_hash(key) == previous['sha256']:
+                    body, _ = r2.get(key)
+                    if hashlib.sha256(body).hexdigest() != previous['sha256']:
+                        raise StorageError('El original archivado en R2 no coincide con su hash.')
+                    atomic_write(path, body)
+                    disk_bytes += len(body)
                 cached = body is not None and previous and previous['source_url'] == url and previous['sha256'] == hashlib.sha256(body).hexdigest()
                 if not cached:
                     body = source.get(url, retry=retry)
                     if not valid_body(kind, body):
                         raise CollectionError('El documento recibido no tiene el formato esperado.')
-                    if disk_bytes + len(body) > budget:
+                    if budget is not None and disk_bytes + len(body) > budget:
                         raise CollectionError('Se alcanzó el límite local de almacenamiento del piloto.')
                     stem, suffix = Path(filename).stem, Path(filename).suffix
                     if previous:
@@ -300,6 +321,8 @@ def collect(ubigeo, max_lotes=10, lot_id=None, retry_missing=False, upload=True,
                         except Stopped:
                             raise
                         except (CollectionError, ValueError, RuntimeError) as exc:
+                            if isinstance(exc, StorageError):
+                                raise
                             missing.append({**document, 'error': str(exc), 'http_status': getattr(exc, 'http_status', None)})
                             if 'rechazó' in str(exc):
                                 raise
@@ -308,8 +331,12 @@ def collect(ubigeo, max_lotes=10, lot_id=None, retry_missing=False, upload=True,
             except Stopped:
                 raise
             except CollectionError as exc:
-                fatal = str(exc)
-                missing.append({'type': 'source_html', 'source_url': gallery_url, 'error': fatal})
+                # An unavailable gallery belongs to this property only. Keep
+                # collecting the other properties, while stopping on denied
+                # access or a connection failure affecting the whole source.
+                if exc.http_status not in (404, 410, 500, 502, 503, 504):
+                    fatal = str(exc)
+                missing.append({'type': 'source_html', 'source_url': gallery_url, 'error': str(exc), 'http_status': exc.http_status})
             manifest = {'schema_version': 1, 'extraction_revision': 2, 'lot_id': code, 'district_ubigeo': ubigeo,
                         'source_url': gallery_url, 'retrieved_at': time.time(),
                         'feature': feature, 'artifacts': artifacts, 'reports': reports, 'missing': missing}
@@ -326,8 +353,8 @@ def collect(ubigeo, max_lotes=10, lot_id=None, retry_missing=False, upload=True,
                         key = 'geollaqta/' + ubigeo + '/' + code + '/' + filename
                         if state.uploaded_hash(key) == digest:
                             continue
-                        if state.upload_bytes() + len(body) > budget:
-                            raise StorageError('Se alcanzó el límite de 1 GB del recolector; la carga queda pendiente.')
+                        if budget is not None and state.upload_bytes() + len(body) > budget:
+                            raise StorageError('Se alcanzó el límite de almacenamiento configurado; la carga queda pendiente.')
                         mime = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
                         r2.put_verified(key, body, mime)
                         state.save_upload(key, digest, len(body))
@@ -343,12 +370,25 @@ def collect(ubigeo, max_lotes=10, lot_id=None, retry_missing=False, upload=True,
             summary['uploaded'] += int(cloud_ok)
             summary['partial'] += int(status == 'partial')
             summary['failed'] += int(status == 'failed')
+            summary['remaining_objects'] -= int(cloud_ok if upload else not fatal)
             event(code + ': ' + ('archivado en R2' if cloud_ok else 'guardado localmente') +
                   ('; documentos pendientes' if missing else '') + (('; ' + fatal) if fatal else ''))
             if fatal:
-                summary['remaining_objects'] += len(selected) - len(seen) + 1
                 summary['stop_reason'] = 'source_or_storage_error'
                 break
+            if cloud_ok and not keep_local:
+                # Only remove new working copies, after PUT/HEAD verification.
+                # Existing local review files and all remote versions are kept.
+                for filename in {a['filename'] for a in artifacts} | {snapshot_name, 'datos.json'}:
+                    path = folder / filename
+                    if filename not in existing_files and path.is_file():
+                        disk_bytes -= path.stat().st_size
+                        path.unlink()
+                state.db.execute('UPDATE lots SET bytes=? WHERE lot_id=?',
+                                 (sum(p.stat().st_size for p in folder.iterdir() if p.is_file()), code))
+                state.db.commit()
+                if not any(folder.iterdir()):
+                    folder.rmdir()
         else:
             unresolved = state.lot(lot_id)['missing'] if lot_id and state.lot(lot_id) else state.snapshot(ubigeo)['totals']['missing']
             summary['complete'] = not summary['remaining_objects'] and not summary['partial'] and not summary['failed'] and not unresolved

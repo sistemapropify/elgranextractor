@@ -1,3 +1,52 @@
+# Complete-district Catastro collection - release 2026-10-14
+
+Status: Validated - correction to the Catastro publication requested by the user
+Recipe: CI/CD, existing GitHub Actions pipeline
+
+## Scope and existing target
+Remove the user-facing record quantity selector and default to every property
+found in the selected district. One execution streams internal groups of 100
+geometries and persists inventory, archived and remaining counts. Keep optional
+bounded CLI/skill tests, administrator/CSRF access, stop and resumption.
+Remove the initial 1 GB archive cap. In Azure keep the ledger and pending working
+copies; after verified R2 upload remove only new working files, preserving existing
+review copies. Read full indexes, original PDFs and images directly from private
+R2 when no local copy exists. Missing individual galleries remain pending while
+the collector continues to the other properties. Denied access and connection or
+storage failures stop collection with its progress preserved.
+Base main 25ed5a80659fd5397cec10ddd65bdfa6d9afff72. Same existing App Service,
+subscription, region, R2 settings and directory /home/data/catastro. No new
+resources, roles, dependencies, credentials or SQL Server migrations. SQLite job
+progress columns are additive and preserve existing jobs and property records.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-14, America/Lima:
+- 17 collector tests passed, including a single 503-property run beyond the old
+  500 ceiling, streamed source groups, default unlimited job, persisted stop/
+  progress, R2-only retry without source redownload, unavailable galleries,
+  transient upload retries and preservation of existing review files.
+- 8 isolated Django view tests passed, including whole-district API default,
+  administrator/CSRF protections and reading private PDF/page/index from R2
+  without any Azure file copies. Wrong-property remote index rejected.
+- JavaScript syntax, source whitespace checks and both templates passed.
+- Production WSGI and collectstatic passed with isolated SQLite; release assets
+  byte-match source. Local CSS/JS HTTP 200 and exact source byte matches.
+- Local authenticated browser confirmed no quantity selector, correct full-
+  district action and updated storage copy. Screenshot saved locally.
+- Shared D:/PROMETEO served checkout updated only for these Catastro files;
+  previous versions backed up and unrelated edits retained.
+- Existing Azure target and deployment authorization established in the previous
+  release. Runtime R2 settings and uploaded pilot indexes are retained.
+
+## Execution and verification
+Publish this correction through the already-authorized Catastro production
+pipeline, fetching main and integrating newer revisions without force push.
+No prolonged monitoring; user performs visual production verification. A bounded
+public asset check must report pending rather than live until bytes match.
+Rollback is a new revert commit; preserve the archive and additive job columns.
+
+---
+
 # Catastro archive dashboard - release 2026-10-14
 
 Status: Validated - user explicitly requested production publication

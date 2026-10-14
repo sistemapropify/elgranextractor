@@ -1,4 +1,4 @@
-"""One bounded collector process at a time, shared by dashboard and skill."""
+"""One resumable district collection at a time, shared by dashboard and skill."""
 import os
 from pathlib import Path
 import subprocess
@@ -9,12 +9,12 @@ from .storage import credentials
 from scrapi.geollaqta_scraper import collect, validate, Stopped
 
 
-def start_job(ubigeo, limit=10, lot_id=None, retry_missing=False, launch=True):
+def start_job(ubigeo, limit=None, lot_id=None, retry_missing=False, launch=True):
     validate(ubigeo, limit, lot_id)
     credentials()  # Fail before queuing when this machine has no R2 configuration.
     state = State()
     try:
-        job_id = state.create_job(ubigeo, int(limit), lot_id, retry_missing)
+        job_id = state.create_job(ubigeo, int(limit) if limit is not None else 0, lot_id, retry_missing)
         if launch:
             command = [sys.executable, str(ROOT / 'scripts/collect_geollaqta.py'), '--job-id', job_id]
             try:
@@ -53,16 +53,18 @@ def run_job(job_id):
             state.update_job(job_id)
 
         def progress(data):
-            state.update_job(job_id, processed=data['processed'], message=data['message'])
+            state.update_job(job_id, processed=data['processed'], message=data['message'],
+                             source_objects=data.get('source_objects', 0), skipped_objects=data['skipped'],
+                             selected_objects=data.get('selected_objects', 0), remaining_objects=data.get('remaining_objects', 0))
 
-        result = collect(job['ubigeo'], job['limit_lots'], lot_id=job['lot_id'],
+        result = collect(job['ubigeo'], job['limit_lots'] or None, lot_id=job['lot_id'],
                          retry_missing=bool(job['retry_missing']), progress=progress, checkpoint=checkpoint)
         remaining = result['remaining_objects']
-        next_step = (f"Quedan {remaining} registros del inventario; inicia otra descarga para continuar."
+        next_step = (f"Quedan {remaining} registros sin archivar; puedes reanudar desde el avance guardado."
                      if remaining else "Inventario consultado archivado; los documentos pendientes pueden reintentarse."
                      if result['partial'] or not result['complete'] else "Descarga completa para el ámbito seleccionado.")
         state.update_job(job_id, status='failed' if result['failed'] else 'completed',
-                         processed=result['processed'],
+                         processed=result['processed'], remaining_objects=remaining,
                          message=f"{result['processed']} lotes procesados; {result['uploaded']} archivados en R2; "
                                  f"{result['partial']} con documentos pendientes; {result['failed']} con errores. {next_step}")
         return result

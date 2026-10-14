@@ -13,14 +13,14 @@ class ScraperGeollaqtaSkill(BaseSkill):
     cacheable = False
     parameters_schema = {
         'ubigeo': {'type': 'string', 'required': True, 'description': 'UBIGEO de Arequipa; Yanahuara: 040126.'},
-        'max_lotes': {'type': 'integer', 'required': False, 'description': 'Lotes por ejecución (1–500); predeterminado 10.'},
+        'max_lotes': {'type': 'integer', 'required': False, 'description': 'Sólo para pruebas: limitar a 1–500 predios. Omitir para descargar todo el distrito.'},
         'id_lote': {'type': 'string', 'required': False, 'description': 'Un lote catastral específico del distrito.'},
         'reintentar_pendientes': {'type': 'boolean', 'required': False, 'description': 'Volver a consultar fichas o imágenes pendientes.'},
     }
 
     def validate_params(self, params):
         try:
-            validate(params.get('ubigeo'), params.get('max_lotes', 10), params.get('id_lote'))
+            validate(params.get('ubigeo'), params.get('max_lotes'), params.get('id_lote'))
             return isinstance(params.get('reintentar_pendientes', False), bool)
         except (ValueError, TypeError):
             return False
@@ -29,7 +29,7 @@ class ScraperGeollaqtaSkill(BaseSkill):
         if not self.validate_params(params):
             return SkillResult.error('Distrito, cantidad o código de lote no válidos.', skill_name=self.name)
         try:
-            job_id = start_job(params['ubigeo'], params.get('max_lotes', 10), params.get('id_lote'),
+            job_id = start_job(params['ubigeo'], params.get('max_lotes'), params.get('id_lote'),
                                params.get('reintentar_pendientes', False))
             return SkillResult.ok({'job_id': job_id, 'status': 'queued', 'dashboard': '/catastro/'},
                                   'Descarga catastral iniciada. Consulta el avance en Catastro.', skill_name=self.name)

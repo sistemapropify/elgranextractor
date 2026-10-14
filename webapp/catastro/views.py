@@ -66,7 +66,7 @@ def start(request):
         params = json.loads(request.body)
         if not isinstance(params, dict) or not isinstance(params.get('retry_missing', False), bool):
             raise ValueError('Parámetros no válidos.')
-        job_id = start_job(params.get('ubigeo'), params.get('limit', 10), params.get('lot_id') or None,
+        job_id = start_job(params.get('ubigeo'), params.get('limit'), params.get('lot_id') or None,
                            params.get('retry_missing', False))
         return JsonResponse({'job_id': job_id}, status=202)
     except (ValueError, TypeError, RuntimeError) as exc:
@@ -88,6 +88,23 @@ def stop(request, job_id):
         state.close()
 
 
+def archived_manifest(state, row):
+    path = state.root / row['ubigeo'] / row['lot_id'] / 'datos.json'
+    if path.is_file():
+        data = json.loads(path.read_text(encoding='utf-8'))
+    elif row['uploaded']:
+        body, _ = R2().get('geollaqta/' + row['ubigeo'] + '/' + row['lot_id'] + '/datos.json')
+        data = json.loads(body)
+    else:
+        raise StorageError('El índice del predio está pendiente de almacenamiento.')
+    if data.get('lot_id') != row['lot_id'] or data.get('district_ubigeo') != row['ubigeo']:
+        # Accept older indexes without identifiers only from local files;
+        # remote indexes must match their authenticated property route.
+        if not path.is_file():
+            raise StorageError('El índice archivado no corresponde al predio.')
+    return data
+
+
 @require_GET
 @admin_required
 def lot(request, lot_id):
@@ -98,11 +115,12 @@ def lot(request, lot_id):
         row = state.lot(lot_id)
         if not row:
             return JsonResponse({'error': 'Lote no archivado.'}, status=404)
-        path = state.root / row['ubigeo'] / lot_id / 'datos.json'
-        data = json.loads(path.read_text(encoding='utf-8'))
+        data = archived_manifest(state, row)
         files = [a for a in data['artifacts'] if a['type'] != 'source_html']
         return render(request, 'catastro/lot.html', {'lot_id': lot_id, 'data': data, 'files': files,
                                                      'district': DISTRICTS[row['ubigeo']]['name']})
+    except StorageError as exc:
+        return JsonResponse({'error': str(exc)}, status=502)
     finally:
         state.close()
 
@@ -118,7 +136,7 @@ def asset(request, lot_id, filename):
         if not row:
             return JsonResponse({'error': 'Lote no archivado.'}, status=404)
         folder = state.root / row['ubigeo'] / lot_id
-        manifest = json.loads((folder / 'datos.json').read_text(encoding='utf-8'))
+        manifest = archived_manifest(state, row)
         entries = {a['filename']: a for a in manifest['artifacts']}
         if filename != 'datos.json' and filename not in entries:
             return JsonResponse({'error': 'Archivo no archivado.'}, status=404)
@@ -154,7 +172,7 @@ def document_page(request, lot_id, filename, page_number):
         if not row:
             return JsonResponse({'error': 'Lote no archivado.'}, status=404)
         folder = state.root / row['ubigeo'] / lot_id
-        data = json.loads((folder / 'datos.json').read_text(encoding='utf-8'))
+        data = archived_manifest(state, row)
         if not any(a['filename'] == filename and a['type'].endswith('pdf') for a in data['artifacts']):
             return JsonResponse({'error': 'Documento no archivado.'}, status=404)
         path = folder / filename

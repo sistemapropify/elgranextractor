@@ -11,7 +11,7 @@ import fitz
 from catastro.pdf_fields import extract_page
 from catastro.report_fields import extract_report
 from catastro.state import State
-from scrapi.geollaqta_scraper import collect, CollectionError, GalleryLinks, validate
+from scrapi.geollaqta_scraper import collect, CollectionError, GalleryLinks, validate, Stopped
 
 LOT = '04011713059004'
 BASE = 'https://catastro.cofopri.gob.pe/geollaqta/reportefichas/vistapdf/'
@@ -57,6 +57,9 @@ class FakeR2:
 
     def put_verified(self, key, body, mime):
         self.objects[key] = (body, mime)
+
+    def get(self, key):
+        return self.objects[key][0], {}
 
 
 class CollectorTests(unittest.TestCase):
@@ -166,8 +169,74 @@ class CollectorTests(unittest.TestCase):
             state.close()
             self.assertEqual(job['status'], 'completed')
             self.assertIn('5229 registros', job['message'])
-            self.assertIn('inicia otra descarga', job['message'])
+            self.assertIn('reanudar', job['message'])
             self.assertNotIn('automáticamente', job['message'])
+
+    def test_complete_district_streams_more_than_500_without_manual_batches(self):
+        class DistrictSource:
+            def __init__(self):
+                self.events=[]
+            def query(self, **params):
+                if params.get('returnIdsOnly'):
+                    return {'objectIds':list(range(1,504))}
+                ids=list(map(int,params['objectIds'].split(',')))
+                self.events.append(('query',ids[0],len(ids)))
+                return {'features':[{'attributes':{'OBJECTID':i,'ID_DIST':'040117','ID_LOTE':'040117'+str(i).zfill(8)},'geometry':{'rings':[]}} for i in ids]}
+            def get(self, url, **kwargs):
+                self.events.append(('gallery',url))
+                return b'<html><table></table></html>'
+        with tempfile.TemporaryDirectory() as tmp:
+            source=DistrictSource();progress=[]
+            result=collect('040117',root=tmp,source=source,r2=FakeR2(),progress=progress.append,keep_local=False)
+            self.assertEqual(result['processed'],503)
+            self.assertEqual(result['uploaded'],503)
+            self.assertEqual(result['remaining_objects'],0)
+            self.assertEqual([e[2] for e in source.events if e[0]=='query'],[100,100,100,100,100,3])
+            self.assertEqual(source.events[1][0],'gallery')
+            self.assertEqual(progress[0]['remaining_objects'],503)
+            self.assertEqual(progress[-1]['remaining_objects'],0)
+
+    def test_r2_only_archive_retries_missing_without_redownloading_saved_originals(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source,cloud=FakeSource(),FakeR2()
+            collect('040117',lot_id=LOT,root=tmp,source=source,r2=cloud,keep_local=False)
+            self.assertFalse((Path(tmp)/'040117'/LOT/'datos.json').exists())
+            get_count=len(source.gets);source.missing=False
+            result=collect('040117',lot_id=LOT,retry_missing=True,root=tmp,source=source,r2=cloud,keep_local=False)
+            self.assertEqual(result['uploaded'],1)
+            self.assertTrue(result['complete'])
+            self.assertEqual(len(source.gets),get_count+1)
+            self.assertFalse((Path(tmp)/'040117'/LOT).exists())
+
+    def test_r2_working_copy_cleanup_preserves_existing_review_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)/'040117'/LOT;folder.mkdir(parents=True)
+            (folder/'review.txt').write_text('Keep this review')
+            collect('040117',lot_id=LOT,root=tmp,source=FakeSource(),r2=FakeR2(),keep_local=False)
+            self.assertEqual([p.name for p in folder.iterdir()],['review.txt'])
+
+    def test_missing_gallery_is_pending_without_failing_district_collection(self):
+        source=FakeSource()
+        source.get=lambda *args,**kwargs: (_ for _ in ()).throw(CollectionError('COFOPRI respondió HTTP 404.',404))
+        with tempfile.TemporaryDirectory() as tmp:
+            result=collect('040117',root=tmp,source=source,r2=FakeR2())
+            self.assertEqual((result['failed'],result['partial'],result['uploaded'],result['remaining_objects']),(0,1,1,0))
+
+    def test_district_job_has_no_record_limit_and_persists_inventory_progress(self):
+        from catastro.jobs import start_job, run_job
+        with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'CATASTRO_DATA_DIR':tmp}),patch('catastro.jobs.credentials'):
+            job_id=start_job('040117',launch=False)
+            def collector(ubigeo,limit,**kwargs):
+                self.assertIsNone(limit)
+                kwargs['progress']({'processed':4,'skipped':96,'source_objects':15000,'selected_objects':14904,'remaining_objects':14900,'message':'avance'})
+                raise Stopped('Detenida')
+            with patch('catastro.jobs.collect',side_effect=collector):
+                run_job(job_id)
+            state=State();job=state.job(job_id);state.close()
+            self.assertEqual(job['limit_lots'],0)
+            self.assertEqual(job['source_objects'],15000)
+            self.assertEqual(job['remaining_objects'],14900)
+            self.assertEqual(job['status'],'stopped')
 
     def test_rejects_unbounded_or_cross_district_requests(self):
         for params in [('040117', 0, None), ('040117', 501, None), ('040117', 10, '04012607041014'), ('999999', 10, None)]:
