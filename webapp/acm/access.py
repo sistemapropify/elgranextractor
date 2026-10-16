@@ -19,14 +19,14 @@ SESSION_PROFILE = 'acm_propify_profile'
 SESSION_TOKEN = 'acm_propify_token'
 SESSION_PREVIEW = 'acm_role_perspective'
 
-# New capabilities are denied unless explicitly enabled. Administrator is complete.
+# Defaults define the basic ACM; explicit role policies can restrict capabilities.
 CATEGORIES = (
     ('Mapa y capas', (
         ('pdm_query', 'Consultar zonificación PDM', True),
         ('pdm_polygons', 'Mostrar polígonos PDM', False),
         ('pdm_card', 'Mostrar tarjeta PDM', False),
         ('street_view', 'Usar Street View', False),
-        ('cadastral_info', 'Catastro maestro: lotes de la manzana e información catastral', False),
+        ('cadastral_info', 'Catastro maestro: lotes del distrito e información catastral', True),
     )),
     ('Propiedades comparables', (
         ('property_data', 'Consultar datos de la propiedad', True),

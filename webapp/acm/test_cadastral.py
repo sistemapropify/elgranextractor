@@ -5,11 +5,12 @@ from unittest.mock import patch
 from types import SimpleNamespace
 
 from django.core.cache import cache
-from django.test import SimpleTestCase, RequestFactory
+from django.test import SimpleTestCase, RequestFactory, TestCase
 from PIL import Image
 
 from . import cadastral_views
-from .access import DEFAULTS
+from .access import DEFAULTS, policy_for
+from .access_models import ACMRolePolicy
 from catastro import master
 from catastro.test_map_report import pages, LOT, RECORD
 
@@ -19,6 +20,21 @@ def archive():
             'feature': {'attributes': {'AREA_TER': '9999', 'AREA_CON': '2012', 'NIVELES': 99}},
             'artifacts': [{'type': 'facade_image', 'filename': 'facade.jpg'}],
             'reports': [{'type': 'cadastral_report_pdf', 'record_id': RECORD, 'form_number': '1', 'pages': pages()}]}
+
+
+class CadastralBasicPolicyTests(TestCase):
+    role={'id':20,'name':'Agente No Afiliado'}
+
+    def test_basic_role_includes_the_cadastre(self):
+        self.assertTrue(policy_for(self.role)[0]['cadastral_info'])
+
+    def test_existing_policy_without_new_flag_inherits_basic_access(self):
+        ACMRolePolicy.objects.create(role_id=20,permissions={'pdm_polygons':False},updated_by='test')
+        self.assertTrue(policy_for(self.role)[0]['cadastral_info'])
+
+    def test_administrator_can_still_disable_it_for_a_specific_role(self):
+        ACMRolePolicy.objects.create(role_id=20,permissions={'cadastral_info':False},updated_by='test')
+        self.assertFalse(policy_for(self.role)[0]['cadastral_info'])
 
 
 class CadastralAccessTests(SimpleTestCase):
@@ -31,8 +47,8 @@ class CadastralAccessTests(SimpleTestCase):
         request.acm_access = SimpleNamespace(permissions={**DEFAULTS, 'cadastral_info': allowed})
         return request
 
-    def test_new_capability_is_off_by_default(self):
-        self.assertFalse(DEFAULTS['cadastral_info'])
+    def test_cadastre_is_included_by_default_in_the_basic_acm(self):
+        self.assertTrue(DEFAULTS['cadastral_info'])
 
     @patch('acm.cadastral_views.master.configuration')
     def test_forbidden_role_cannot_obtain_provider_configuration(self, config):
@@ -54,6 +70,10 @@ class CadastralAccessTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(b'coordinates', response.content)
         self.assertEqual(response['Cache-Control'], 'no-store')
+        import json
+        config=json.loads(response.content)
+        self.assertEqual(config['scope'],'district')
+        self.assertNotIn('max_lots',config)
 
     def test_invalid_lot_is_rejected_before_storage_access(self):
         with patch('catastro.master.manifest') as read:

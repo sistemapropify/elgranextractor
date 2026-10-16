@@ -121,17 +121,27 @@ con Cuadrantización. El DWG real ya se leyó en local y Azure: 35 capas,
 102.978 entidades y 102.962 dibujables. Sigue pendiente confirmar su CRS/datum
 y aprobar qué capas aportarán al maestro.
 
-## Integración local con ACM — 16/10/2026
+## Integración con ACM — 16/10/2026
 
 Permiso `cadastral_info`, categoría «Mapa y capas», configurable por rol y
-aplicado en cada API. Administrador tiene acceso completo; otros roles requieren
-activar el permiso. La vista de perspectiva aplica la política del rol seleccionado.
+aplicado en cada API. Se incluye por defecto en el ACM básico; una política
+explícita permite desactivarlo para un rol. Administrador tiene acceso completo.
+La vista de perspectiva aplica la política del rol seleccionado.
 
-Al posicionar el pin se consulta la manzana que lo contiene y todos sus lotes,
-con filtros exactos de distrito/sector/manzana. Se conservan los vectores al mover
-el pin dentro de esa manzana; una manzana distinta sustituye la anterior.
-Mover/alejar el mapa no vuelve a descargar los lotes. No se inicia inventario
-distrital ni se escoge un predio cercano cuando el pin cae en una calle/límite.
+Al posicionar el pin se identifica el distrito y se cargan todos sus lotes
+disponibles, con filtro exacto por ID_DIST. El inventario no tiene el límite
+anterior de 1.000 lotes: usa tandas de hasta 500, dos peticiones simultáneas
+y dibujo progresivo. Mover el pin dentro del mismo distrito comparte su
+descarga activa; pan/zoom no vuelve a descargarlo. Cambiar de distrito sustituye
+la capa. Tras una interrupción, reintentar completa los identificadores pendientes.
+Un pin en una calle mantiene los contornos del distrito sin asignar un lote falso.
+
+Se prioriza la atribución del sector catastral, luego el lote y finalmente el
+límite administrativo INEI. Los componentes de dos dígitos del límite se
+convierten al UBIGEO completo. La cartografía administrativa puede discrepar de
+la atribución catastral; no debe sustituir automáticamente al sector existente.
+Se conservan dos distritos completos en memoria y sólo se consultan documentos
+del lote que contiene el pin. Los registros sin geometría se cuentan explícitamente.
 
 Tarjeta «Información catastral», colapsada inicialmente y debajo del mapa:
 fachada, códigos, año publicado del catastro y datos documentales verificados.
@@ -158,3 +168,15 @@ La integración ACM, numeración, Street View y recuperación del visor se inclu
 en la publicación integral posterior a 8053415f. El resultado del despliegue se
 comprueba en GitHub Actions. El visor también recupera bloqueos transitorios
 del archivo de estado en Windows. El CRS de los DWG sigue pendiente de confirmar.
+
+
+### Corrección de distrito completo y acceso básico — publicación solicitada
+
+Posterior a f32f1c09; incluida en esta publicación. Su estado se comprueba en
+GitHub Actions, sin asumir éxito por el envío. 71 pruebas Python de permisos/ACM
+pasaron, junto con la prueba Node de 1.201 lotes, movimiento durante descarga,
+calles, dibujo progresivo, cambio de distrito, caché y recuperación de pendientes.
+Se recibieron y validaron los 5.240 lotes actuales de Yanahuara en 11 tandas;
+el proveedor identifica el lote 04012607038027 en ese conjunto completo.
+Los JS v2 responden por HTTP local con bytes verificados; sin sesión la API
+sigue devolviendo 401. La sesión del ACM local requiere el login real de Propify.

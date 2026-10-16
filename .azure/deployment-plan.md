@@ -1,3 +1,67 @@
+# Basic ACM district-wide cadastre correction - 2026-10-16
+
+Status: Validated - azure-validate release checks passed.
+Recipe: CI/CD, existing main_granextractorservice.yml.
+
+## 1. Scope
+Enable cadastral information by default in basic ACM, respecting explicit role
+disables. Locate the cadastral district on pin placement and load all available
+lot geometry, in progressive batches of 500 with two concurrent requests.
+Retain district polygons during same-district pin movement and resume missing
+batches after failure. Preserve facade and verified document measurements.
+
+## 2. Existing target
+Authorized Azure subscription 1 / 0219eecc-9920-4789-9929-3091a2f09daf.
+App Service granextractorservice, rg-elgranextractor, Brazil South.
+https://acm.propifai.com/acm/analisis/
+Existing OIDC pipeline. No resources, billing, settings, schema or RBAC changes.
+
+## 3. Integration
+Base: f32f1c09 (latest origin/main). Preserve upstream and shared preview edits.
+Only eight scoped ACM/provider/test files, documentation and this plan.
+No originals, harvested fixtures, sessions, credentials or extraction ledgers.
+
+## 4. Validation steps
+- [x] Isolated ACM permissions, role preview and cadastral suites.
+- [x] District batching, cache, pin movement and recovery Node regression.
+- [x] JavaScript syntax, static collection, WSGI and local HTTP exact bytes.
+- [x] Existing Azure target/authentication and pipeline public verification.
+- [x] Scoped diff, whitespace and latest origin/main integration.
+
+## 5. Execution
+Non-forced push through existing production pipeline. User handles extended
+monitoring. Dispatch is reported separately from confirmed live publication.
+CI requires public login/protected APIs and exact release static bytes.
+Rollback: scoped revert through the same pipeline.
+
+## 6. Infrastructure verification
+Application-only update; no IaC, capacity, database migration or RBAC changes.
+Use the subscription/location and deployment authorization already granted.
+
+## 7. Validation Proof
+2026-10-16, America/Lima:
+- Latest origin/main f32f1c09 confirmed. Its production Actions run 38932414071
+  completed successfully; all existing upstream work remains intact.
+- 71 isolated Django tests passed: acm.test_cadastral, acm.test_access,
+  acm.test_role_analysis, acm.test_superadmin_access (access_test_settings).
+- node webapp/acm/test_cadastral.cjs passed: basic access, 1201 lots, two bounded
+  workers, progressive drawing, street pin, same-district movement/cache,
+  district replacement, retry pending batches and boundary UBIGEO handling.
+- node --check passed for both changed JavaScript assets; changed Python AST
+  parsed. collectstatic and isolated WSGI import passed in release checkout.
+- Both collected JS assets exactly match source and local HTTP 200 v2 bytes.
+- Local real-source validation received all 5240 Yanahuara geometries, eleven
+  batches in 5.26 seconds. Provider identified lot 04012607038027. Private
+  geometry fixture is excluded from Git and deployment.
+- Azure read-only checks confirm subscription 0219eecc-9920-4789-9929-3091a2f09daf,
+  granextractorservice Running in Brazil South. Existing OIDC remains unchanged.
+- No infrastructure, new identity, RBAC, database migration or settings change.
+  CI already enforces protected cadastral API and exact public release assets.
+- Ten-file release scope and git diff --check passed. No private data staged.
+  Extended monitoring is left to the user; dispatch does not establish live success.
+
+---
+
 # Pending ACM, cadastre and viewer improvements — 2026-10-16
 
 Status: Validated — release checks passed under azure-validate (2026-10-16).
