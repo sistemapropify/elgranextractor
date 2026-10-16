@@ -1,3 +1,74 @@
+# ACM radius-scoped cadastral loading - 2026-10-16
+
+Status: Validated - release checks passed under azure-validate.
+Recipe: CI/CD, existing main_granextractorservice.yml.
+
+## 1. Scope
+Replace ACM district-wide lot downloads with a spatial circle matching the
+selected 100-2000 metre radius. Retain its footprint during pin movement; only
+leaving the loaded footprint or changing the radius starts a new inventory.
+Reuse overlapping geometries and three previous/empty footprints, resumable
+500-lot batches with two workers, no pan/zoom reload. Preserve floating card,
+facades, numbered lots, basic role access and verified document measurements.
+
+## 2. Existing target
+Azure subscription 1 / 0219eecc-9920-4789-9929-3091a2f09daf.
+App Service granextractorservice, rg-elgranextractor, Brazil South.
+https://acm.propifai.com/acm/analisis/
+Existing OIDC deployment; no new resources, settings, schema, RBAC or billing.
+
+## 3. Integration
+Base: 5c050e3e, latest origin/main. Shared preview changes preserved.
+Seven scoped application/test files, documentation and this plan only.
+Private originals, local sessions, real-source fixtures and credentials excluded.
+
+## 4. Validation steps
+- [x] Isolated ACM role/access/document suites.
+- [x] Radius geometry, cache, moving pin, overlap, cancellation and retry tests.
+- [x] Existing label behavior and JavaScript/Python syntax.
+- [x] Template/configuration, static collection, WSGI and local HTTP exact bytes.
+- [x] Azure target, latest production base, scoped diff and public CI asset gates.
+
+## 5. Execution
+Non-forced push through the existing production pipeline. User handles extended
+monitoring; report dispatch separately from confirmed live publication. Existing
+CI checks protected endpoints and exact public assets. Rollback: scoped revert
+through the same pipeline. No production authentication bypass for verification.
+
+## 6. Infrastructure and limits
+Application-only update; existing subscription/location authorization applies.
+No database migration or Azure/Cloudflare configuration change. Live document
+access limitations remain independent; no bulk document collection is started.
+
+## 7. Validation Proof
+2026-10-16, America/Lima:
+- Latest origin/main 5c050e3e confirmed. Its production run 38949369979
+  completed successfully; existing upstream changes preserved.
+- 72 isolated Django tests passed: acm.test_cadastral, acm.test_access,
+  acm.test_role_analysis, acm.test_superadmin_access with access_test_settings.
+- node acm/test_cadastral.cjs passed circular inventories, adjacent districts,
+  active-download movement, street gaps, boundary lots, overlap reuse, prior and
+  empty footprints, radius change, retry, cancellation/return and facade/card.
+- node cuadrantizacion/test_geollaqta_labels.cjs passed existing label defaults
+  and ACM all-zoom numbering. Both changed JS syntax checks passed.
+- collectstatic and isolated WSGI succeeded in release checkout; both changed JS
+  assets match source, collected bytes and local HTTP 200 versioned responses.
+- Rendered basic ACM includes provider v3 and widget v4; provider configuration
+  reports revision 3, scope radius. Changed Python AST parsed successfully.
+- Local real-source validation: a 500 m circle around lot 04010483021014
+  returned 1532 geometries, 669984 bytes, five requests in 2.01 seconds. Actual
+  provider converted all lots and selected the correct parcel; moving inside
+  added zero GIS requests. Private fixtures excluded from Git/artifact.
+- Read-only Azure account/webapp checks confirm the existing authorized
+  subscription, granextractorservice Running and Brazil South location.
+- No settings, credentials, migrations, RBAC or infrastructure changed. Existing
+  CI gates exact public static bytes and protected map/cadastral endpoints.
+- Scoped nine-file diff and git diff --check passed. Preserve private originals,
+  sessions, local edits and collector state. User handles extended monitoring;
+  dispatch must not be described as confirmed live deployment.
+
+---
+
 # ACM compact floating cadastre and lot numbering - 2026-10-16
 
 Status: Validated - scoped correction passed azure-validate checks.

@@ -1,4 +1,4 @@
-/* District discovery and complete, resumable lot batches; independent of Maps. */
+/* Radius-scoped, reusable lot geometry; independent of Maps. */
 (() => {
     'use strict';
     function point(value) {
@@ -28,92 +28,100 @@
         if(!matches.length||new Set(matches.map(f=>f.properties.ID_LOTE)).size!==1)return null;
         return matches.sort((a,b)=>(Number(b.properties.ANIO_CAT)||0)-(Number(a.properties.ANIO_CAT)||0))[0];
     }
-    function code(value,width) {
+    const earth=6371008.8,radians=Math.PI/180;
+    function distance(a,b){
+        const lat=(b.lat-a.lat)*radians,lng=(b.lng-a.lng)*radians;
+        const h=Math.sin(lat/2)**2+Math.cos(a.lat*radians)*Math.cos(b.lat*radians)*Math.sin(lng/2)**2;
+        return 2*earth*Math.asin(Math.sqrt(Math.min(1,Math.max(0,h))));
+    }
+    function circle(center,radius){
+        const count=96,angle=radius/(earth*Math.cos(Math.PI/count)),lat=center.lat*radians,lng=center.lng*radians,ring=[];
+        for(let i=0;i<count;i++){
+            const bearing=2*Math.PI*i/count,y=Math.asin(Math.sin(lat)*Math.cos(angle)+Math.cos(lat)*Math.sin(angle)*Math.cos(bearing));
+            const x=lng+Math.atan2(Math.sin(bearing)*Math.sin(angle)*Math.cos(lat),Math.cos(angle)-Math.sin(lat)*Math.sin(y));
+            ring.push([Number((x/radians).toFixed(8)),Number((y/radians).toFixed(8))]);
+        }
+        ring.push([...ring[0]]);return {rings:[ring],spatialReference:{wkid:4326}};
+    }
+    function covers(area,target,radius){
+        if(!area||area.radius!==Number(radius))return false;
+        return distance(area.center,target)<=area.radius||area.lots.features.some(f=>contains(f.geometry,target));
+    }
+    function code(value,width){
         const text=String(value??'').trim();
-        if (!/^\d+$/.test(text)||text.length>width) throw Error('El catastro devolvió un código de manzana no válido.');
+        if(!/^\d+$/.test(text)||text.length>width)throw Error('El catastro devolvió un código no válido.');
         return text.padStart(width,'0');
     }
     const fields='OBJECTID,ID_LOTE,ID_DIST,COD_SECT,COD_MZNA,COD_LOTE,ANIO_CAT';
-    function feature(raw, district) {
+    function feature(raw,districts){
         const attrs=raw.attributes||{},p={};
         fields.split(',').forEach(k=>{p[k]=typeof attrs[k]==='string'?attrs[k].trim():attrs[k];});
-        if (p.ID_DIST!==district || !new RegExp('^'+district+'\\d{8}$').test(p.ID_LOTE)) throw Error('La respuesta contiene lotes de otro distrito.');
-        p.COD_SECT=code(p.COD_SECT??p.ID_LOTE.slice(6,8),2);p.COD_MZNA=code(p.COD_MZNA??p.ID_LOTE.slice(8,11),3);
-        p.COD_LOTE=code(p.COD_LOTE??p.ID_LOTE.slice(11),3);
+        const district=districts.get(p.ID_DIST);
+        if(!district||!new RegExp('^'+p.ID_DIST+'\\d{8}$').test(p.ID_LOTE))throw Error('La respuesta contiene un distrito o lote no válido.');
+        p.COD_SECT=code(p.COD_SECT??p.ID_LOTE.slice(6,8),2);p.COD_MZNA=code(p.COD_MZNA??p.ID_LOTE.slice(8,11),3);p.COD_LOTE=code(p.COD_LOTE??p.ID_LOTE.slice(11),3);
+        p.DISTRICT_NAME=district.name;
         let geometry;try{geometry=window.GeollaqtaData.esriGeometry(raw.geometry,'polygon');}catch(_){return null;}
         return {type:'Feature',id:p.OBJECTID,properties:p,geometry};
     }
-    function create(config, fetcher=fetch) {
-        const provider=config.providers.find(p=>p.id==='geollaqta'&&p.active),cache=new Map(),areas=new Map();
-        if (!provider) throw Error('No hay una fuente catastral activa y validada.');
-        const query=(id,params,signal)=>window.GeollaqtaData.directQuery(provider,{id},params,signal,fetcher);
+    function create(config,fetcher=fetch){
+        const provider=config.providers.find(p=>p.id==='geollaqta'&&p.active),cache=new Map(),features=new Map();
+        if(!provider)throw Error('No hay una fuente catastral activa y validada.');
+        const districts=new Map(provider.districts.map(d=>[code(d.ubigeo,6),d]));
+        const where='ID_DIST IN ('+[...districts.keys()].map(id=>"'"+id+"'").join(',')+')';
         const aborted=signal=>{if(signal?.aborted){const e=Error('Consulta cancelada');e.name='AbortError';throw e;}};
-        function area(raw,administrative=false){
-            const a=raw.attributes||{};
-            const id=administrative?(String(a.ID_DIST).length===6?String(a.ID_DIST):code(a.ID_DPTO,2)+code(a.ID_PROV,2)+code(a.ID_DIST,2)):String(a.ID_DIST??'').trim();
-            const entry=provider.districts.find(d=>d.ubigeo===id);if(!entry)return null;
-            return {key:id,code:id,name:entry.name,geometry:window.GeollaqtaData.esriGeometry(raw.geometry,'polygon'),administrative};
+        const read=(params,signal)=>window.GeollaqtaData.directQuery(provider,{id:provider.lot_layer},params,signal,fetcher);
+        function prune(current){
+            for(const [key,entry] of cache)if(cache.size>3&&key!==current&&!entry.promise)cache.delete(key);
+            const keep=new Set([...cache.values()].flatMap(entry=>entry.ids||[]));
+            for(const id of features.keys())if(!keep.has(id))features.delete(id);
         }
-        async function districtAt(value,signal) {
-            const target=point(value);if (!target) throw Error('Posiciona un pin válido.');
-            const cached=[...areas.values()].flat().filter(saved=>!saved.administrative&&contains(saved.geometry,target,true));
-            if(new Set(cached.map(saved=>saved.code)).size===1)return cached[0];
-            const where='ID_DIST IN ('+provider.districts.map(d=>"'"+code(d.ubigeo,6)+"'").join(',')+')';
-            const params={where,geometry:JSON.stringify({x:target.lng,y:target.lat}),geometryType:'esriGeometryPoint',inSR:'4326',outSR:'4326',spatialRel:'esriSpatialRelIntersects',returnGeometry:'true',outFields:'OBJECTID,ID_DIST'};
-            let response=await query(provider.sector_layer,params,signal);
-            if(!Array.isArray(response.features)||response.exceededTransferLimit)throw Error('No se pudo identificar el distrito catastral.');
-            let matches=response.features.map(raw=>area(raw)).filter(a=>a&&contains(a.geometry,target,true));
-            if(new Set(matches.map(a=>a.code)).size!==1){
-                response=await query(provider.lot_layer,params,signal);
-                if(!Array.isArray(response.features)||response.exceededTransferLimit)throw Error('No se pudo identificar el distrito catastral.');
-                const lots=response.features.map(raw=>area(raw)).filter(a=>a&&contains(a.geometry,target,true));
-                if(lots.length)matches=lots;
-            }
-            if(!matches.length){
-                const boundary=provider.boundaries,province=provider.province_ubigeo;
-                response=await window.GeollaqtaData.directQuery(boundary,{id:boundary.layer},{...params,where:"ID_DPTO='"+province.slice(0,2)+"' AND ID_PROV='"+province.slice(2)+"'",outFields:'OBJECTID,ID_DPTO,ID_PROV,ID_DIST'},signal,fetcher);
-                matches=(response.features||[]).map(raw=>area(raw,true)).filter(a=>a&&contains(a.geometry,target,true));
-            }
-            aborted(signal);if(!matches.length)return null;
-            if(new Set(matches.map(a=>a.code)).size!==1)throw Error('Hay distritos superpuestos. Reubica el pin para identificar el distrito.');
-            const result=matches[0],saved=areas.get(result.code)||[];saved.push(...matches);areas.set(result.code,saved);return result;
-        }
-        async function loadDistrict(district,{signal,onBatch=()=>{}}={}){
-            const id=district.code;if(!provider.districts.some(d=>d.ubigeo===id))throw Error('Distrito catastral no válido.');
-            let entry=cache.get(id);
-            if(!entry){entry={result:{key:id,district:district.name,code:id,lots:{type:'FeatureCollection',features:[]},total:null,processed:0,unavailable:0,complete:false},ids:null,done:new Set(),promise:null};cache.set(id,entry);}
+        async function loadRadius(value,radius,{signal,onBatch=()=>{}}={}){
+            const center=point(value);radius=Number(radius);
+            if(!center||!Number.isFinite(radius)||radius<100||radius>2000)throw Error('Selecciona un radio entre 100 y 2000 metros.');
+            aborted(signal);
+            const key=[center.lat.toFixed(7),center.lng.toFixed(7),radius].join(':');
+            const prior=[...cache.values()].reverse().find(entry=>entry.result.complete&&covers(entry.result,center,radius));
+            if(prior){onBatch([],prior.result);return prior.result;}
+            let entry=cache.get(key);
+            if(!entry){entry={result:{key,center,radius,district:'Lotes del radio',lots:{type:'FeatureCollection',features:[]},total:null,processed:0,unavailable:0,complete:false},ids:null,done:new Set(),promise:null};cache.set(key,entry);}
             onBatch([],entry.result);
-            if(entry.result.complete)return entry.result;
-            if(entry.promise)return entry.promise;
+            if(entry.promise){
+                if(!entry.signal?.aborted)return entry.promise;
+                try{await entry.promise;}catch(_){}
+                aborted(signal);return loadRadius(center,radius,{signal,onBatch});
+            }
+            entry.signal=signal;
             const task=async()=>{
-                const scope="ID_DIST='"+id+"'";
                 if(!entry.ids){
-                    const inventory=await query(provider.lot_layer,{where:scope,returnIdsOnly:'true'},signal);aborted(signal);
-                    if(!Array.isArray(inventory.objectIds)&&inventory.objectIds!==null)throw Error('No se recibió el inventario del distrito.');
+                    const inventory=await read({where,geometry:JSON.stringify(circle(center,radius)),geometryType:'esriGeometryPolygon',inSR:'4326',spatialRel:'esriSpatialRelIntersects',returnIdsOnly:'true'},signal);aborted(signal);
+                    if(inventory.exceededTransferLimit||!Array.isArray(inventory.objectIds)&&inventory.objectIds!==null)throw Error('No se recibió el inventario completo del radio.');
                     entry.ids=[...new Set(inventory.objectIds||[])].sort((a,b)=>a-b);
                     if(entry.ids.some(n=>!Number.isSafeInteger(n)||n<0))throw Error('Identificadores catastrales no válidos.');
-                    entry.result.total=entry.ids.length;onBatch([],entry.result);
+                    entry.result.total=entry.ids.length;
+                    for(const id of entry.ids)if(features.has(id)){
+                        const f=features.get(id);if(f)entry.result.lots.features.push(f);else entry.result.unavailable++;
+                        entry.done.add(id);
+                    }
+                    entry.result.processed=entry.done.size;onBatch([],entry.result);
                 }
-                const pending=entry.ids.filter(n=>!entry.done.has(n)),size=Math.min(500,Math.max(1,config.batch_size||500));let next=0;
+                const pending=entry.ids.filter(id=>!entry.done.has(id)),size=Math.min(500,Math.max(1,config.batch_size||500));let next=0;
                 const stop=new AbortController(),abort=()=>stop.abort();signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
                 async function worker(){while(next<pending.length){
                     aborted(stop.signal);const ids=pending.slice(next,next+size);next+=size;
-                    const batch=await query(provider.lot_layer,{where:scope,objectIds:ids.join(','),outFields:fields,returnGeometry:'true',outSR:'4326'},stop.signal);aborted(stop.signal);
+                    const batch=await read({where,objectIds:ids.join(','),outFields:fields,returnGeometry:'true',outSR:'4326'},stop.signal);aborted(stop.signal);
                     const received=new Set((batch.features||[]).map(raw=>raw.attributes?.OBJECTID));
-                    if(batch.exceededTransferLimit||!Array.isArray(batch.features)||batch.features.length!==ids.length||received.size!==ids.length||ids.some(n=>!received.has(n)))throw Error('El distrito se recibió incompleto. El avance queda conservado para reintentar.');
-                    const additions=[];let missing=0;
-                    for(const raw of batch.features){if(!raw.geometry){missing++;continue;}const f=feature(raw,id);if(f)additions.push(f);else missing++;}
-                    entry.result.lots.features.push(...additions);entry.result.unavailable+=missing;ids.forEach(n=>entry.done.add(n));entry.result.processed=entry.done.size;onBatch(additions,entry.result);
+                    if(batch.exceededTransferLimit||!Array.isArray(batch.features)||batch.features.length!==ids.length||received.size!==ids.length||ids.some(id=>!received.has(id)))throw Error('El radio se recibió incompleto. Reintenta para completar los lotes pendientes.');
+                    const converted=batch.features.map(raw=>[raw.attributes.OBJECTID,raw.geometry?feature(raw,districts):null]),additions=[];
+                    for(const [id,f] of converted){features.set(id,f);if(f)additions.push(f);else entry.result.unavailable++;entry.done.add(id);}
+                    entry.result.lots.features.push(...additions);entry.result.processed=entry.done.size;onBatch(additions,entry.result);
                 }}
                 const tasks=[worker(),worker()];
                 try{await Promise.all(tasks);}catch(error){stop.abort();await Promise.allSettled(tasks);throw error;}finally{signal?.removeEventListener('abort',abort);}
-                aborted(signal);entry.result.complete=true;onBatch([],entry.result);
-                for(const key of cache.keys())if(cache.size>2&&key!==id&&!cache.get(key).promise)cache.delete(key);
-                return entry.result;
+                aborted(signal);entry.result.complete=true;onBatch([],entry.result);prune(key);return entry.result;
             };
             entry.promise=task().finally(()=>{entry.promise=null;});return entry.promise;
         }
-        return {districtAt,loadDistrict};
+        return {loadRadius};
     }
-    window.CatastroMasterData={create,point,contains,selectedLot};
+    window.CatastroMasterData={create,point,contains,selectedLot,distance,circle,covers};
 })();

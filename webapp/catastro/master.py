@@ -26,10 +26,11 @@ def validate_lot(lot_id):
 
 
 def configuration():
-    return {'revision': 2, 'scope': 'district', 'batch_size': 500,
+    return {'revision': 3, 'scope': 'radius', 'batch_size': 500,
             'providers': [{'id': 'geollaqta', 'active': True, 'service_base': geo.SERVICE_BASE,
                            'districts': [{'ubigeo': d['ubigeo'], 'name': d['name']}
                                          for d in geo.DISTRICTS.values()],
+                           # Retain source metadata for already-open map clients.
                            'boundaries': {'service_base': geo.CATALOG['district_source'].rsplit('/', 1)[0],
                                           'layer': 0, 'code_field': 'ID_DIST'},
                            'province_ubigeo': geo.CATALOG['province_ubigeo'], 'sector_layer': 13, 'lot_layer': 10}]}

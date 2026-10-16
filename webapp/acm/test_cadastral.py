@@ -72,7 +72,7 @@ class CadastralAccessTests(SimpleTestCase):
         self.assertEqual(response['Cache-Control'], 'no-store')
         import json
         config=json.loads(response.content)
-        self.assertEqual(config['scope'],'district')
+        self.assertEqual(config['scope'],'radius')
         self.assertNotIn('max_lots',config)
 
     def test_invalid_lot_is_rejected_before_storage_access(self):

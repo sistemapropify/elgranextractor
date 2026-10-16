@@ -128,20 +128,23 @@ aplicado en cada API. Se incluye por defecto en el ACM básico; una política
 explícita permite desactivarlo para un rol. Administrador tiene acceso completo.
 La vista de perspectiva aplica la política del rol seleccionado.
 
-Al posicionar el pin se identifica el distrito y se cargan todos sus lotes
-disponibles, con filtro exacto por ID_DIST. El inventario no tiene el límite
-anterior de 1.000 lotes: usa tandas de hasta 500, dos peticiones simultáneas
-y dibujo progresivo. Mover el pin dentro del mismo distrito comparte su
-descarga activa; pan/zoom no vuelve a descargarlo. Cambiar de distrito sustituye
-la capa. Tras una interrupción, reintentar completa los identificadores pendientes.
-Un pin en una calle mantiene los contornos del distrito sin asignar un lote falso.
+La nueva optimización local consulta los lotes que intersectan un círculo del
+radio seleccionado, con geometría WGS84 calculada en metros. El inventario
+incluye distritos vecinos y usa lotes completos, sin cortar sus contornos.
+El distrito/numeración de la tarjeta se obtiene del lote seleccionado.
 
-Se prioriza la atribución del sector catastral, luego el lote y finalmente el
-límite administrativo INEI. Los componentes de dos dígitos del límite se
-convierten al UBIGEO completo. La cartografía administrativa puede discrepar de
-la atribución catastral; no debe sustituir automáticamente al sector existente.
-Se conservan dos distritos completos en memoria y sólo se consultan documentos
-del lote que contiene el pin. Los registros sin geometría se cuentan explícitamente.
+La cobertura permanece anclada al punto de la primera carga: mover el pin dentro
+de ese círculo, incluso por calles entre lotes, conserva el conjunto. Si el pin
+entra en un lote ya cargado que sobrepasa el círculo, también se reutiliza.
+Al salir de la cobertura se consulta un nuevo radio; cambiar el radio también
+actualiza la selección. Pan y zoom no consultan ni eliminan los lotes.
+
+El inventario espacial trae identificadores y sólo se descargan geometrías
+pendientes, en tandas de hasta 500 y con dos peticiones simultáneas. Los lotes
+comunes con coberturas anteriores se reutilizan. Se conservan tres coberturas,
+incluidas las vacías. El reintento completa pendientes, sin rehacer el inventario.
+Mover el pin durante una descarga no la cancela mientras siga en su cobertura;
+las respuestas de una cobertura abandonada no pueden sustituir la actual.
 
 Tarjeta flotante «Información catastral», de 260 px y con cierre independiente:
 fachada, códigos, año publicado del catastro y datos documentales verificados.
@@ -209,3 +212,21 @@ La conexión directa desde Azure al origen agota el tiempo de espera; un ensayo
 con un Worker autenticado tampoco pudo descargarlo y queda fuera de la aplicación.
 Por tanto los documentos no archivados todavía dependen de resolver ese acceso.
 No se ha iniciado una extracción masiva ni configurado un relay en Azure.
+
+
+### Optimización por radio — publicación solicitada
+
+Posterior a 5c050e3e; publicación solicitada. El resultado se comprueba en
+GitHub Actions. Contrato de configuración revisión 3, scope radius.
+La carga completa del distrito queda sustituida en ACM por el radio seleccionado.
+La prueba real de 500 m alrededor de 04010483021014 recibió 1.532 lotes,
+669.984 bytes y cinco peticiones en 2,01 s. El proveedor los convirtió sin
+pérdidas, identificó el lote y no hizo peticiones adicionales al mover el pin
+11 m dentro de la cobertura. Son resultados de esa consulta, no una estimación
+de cobertura ni una garantía de latencia para todos los radios.
+
+Pruebas automáticas: reutilización dentro del círculo, calles, lote de borde,
+vecinos de otro distrito, radio distinto, regiones previas/vacías, conservación
+de lotes comunes, lotes >1.000, recuperación de pendientes y cancelación/retorno.
+La tarjeta flotante, fachada, permisos y datos documentales se conservan.
+La limitación de acceso en vivo a documentos desde Azure sigue siendo independiente.

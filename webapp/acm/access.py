@@ -26,7 +26,7 @@ CATEGORIES = (
         ('pdm_polygons', 'Mostrar polígonos PDM', False),
         ('pdm_card', 'Mostrar tarjeta PDM', False),
         ('street_view', 'Usar Street View', False),
-        ('cadastral_info', 'Catastro maestro: lotes del distrito e información catastral', True),
+        ('cadastral_info', 'Catastro maestro: lotes del radio e información catastral', True),
     )),
     ('Propiedades comparables', (
         ('property_data', 'Consultar datos de la propiedad', True),
