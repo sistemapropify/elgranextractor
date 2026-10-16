@@ -5,6 +5,7 @@
         create(map) {
             return {
                 createLayer: () => new google.maps.Data(),
+                createLabels: () => window.GeollaqtaLabels?.create(map),
                 pointIcon: opacity => ({path: google.maps.SymbolPath.CIRCLE, scale: 3,
                     fillOpacity: opacity, strokeColor: '#ffffff', strokeWeight: 1}),
                 getView() {

@@ -1,7 +1,11 @@
 from django.urls import include, path
 from . import portal_views as portal
+from . import cadastral_views
 from .components_routes import urlpatterns as components
 patterns = [
+    path('catastro/configuracion/', cadastral_views.configuration, name='cadastral_config'),
+    path('catastro/lotes/<str:lot_id>/', cadastral_views.lot, name='cadastral_lot'),
+    path('catastro/lotes/<str:lot_id>/fachada/', cadastral_views.facade, name='cadastral_facade'),
     path('', portal.dashboard, name='acm_dashboard'),
     path('login/', portal.login, name='login'),
     path('logout/', portal.logout, name='logout'),

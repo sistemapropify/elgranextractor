@@ -117,5 +117,44 @@ seleccionar el CRS correcto. Detalles y límites en `docs/LECTOR_DWG.md`.
 
 Pendiente: aprobación de fuentes en R2, georreferenciación por puntos de control,
 confirmación y desactivación de aportes, consolidación del maestro e integración
-con Cuadrantización. El DWG real de Cayma aún debe probarse. La entrega permanece
-local; producción sin cambios.
+con Cuadrantización. El DWG real ya se leyó en local y Azure: 35 capas,
+102.978 entidades y 102.962 dibujables. Sigue pendiente confirmar su CRS/datum
+y aprobar qué capas aportarán al maestro.
+
+## Integración local con ACM — 16/10/2026
+
+Permiso `cadastral_info`, categoría «Mapa y capas», configurable por rol y
+aplicado en cada API. Administrador tiene acceso completo; otros roles requieren
+activar el permiso. La vista de perspectiva aplica la política del rol seleccionado.
+
+Al posicionar el pin se consulta la manzana que lo contiene y todos sus lotes,
+con filtros exactos de distrito/sector/manzana. Se conservan los vectores al mover
+el pin dentro de esa manzana; una manzana distinta sustituye la anterior.
+Mover/alejar el mapa no vuelve a descargar los lotes. No se inicia inventario
+distrital ni se escoge un predio cercano cuando el pin cae en una calle/límite.
+
+Tarjeta «Información catastral», colapsada inicialmente y debajo del mapa:
+fachada, códigos, año publicado del catastro y datos documentales verificados.
+Áreas y perímetros provienen de la ficha; el reporte completa los campos ausentes
+de la misma unidad. No se usan áreas de capas, geometría ni otra unidad como
+reemplazo. Los datos faltantes permanecen explícitos. No se entregan propietarios,
+DNI ni el documento completo a través de esta tarjeta. El selector separa unidades.
+
+Proveedor reutilizable `catastro/master.py` y `catastro-master-data.js`; Google
+Maps sólo presenta los vectores. Geollaqta es el primer proveedor activo. El DWG
+no aporta todavía datos al maestro. Fuentes/versionado y aprobación siguen pendientes.
+
+Cuadrantización incluye números de lote/manzana obtenidos de los vectores ya
+cargados. Canvas único, sin marcadores adicionales ni peticiones extra: manzanas
+desde zoom 17, lotes desde zoom 18, control de superposición y casilla para ocultar.
+Cuando la capa de manzanas está desactivada, sus códigos se agrupan desde los lotes
+visibles; al activarla se usa la geometría de manzana para posicionar el rótulo.
+
+Verificación: 126 pruebas ACM y 36 Catastro (una de fixture nativo omitida),
+pruebas Node del transporte, geometría, galería, medidas, numeración y widget;
+activos locales HTTP 200 con comparación de bytes. APIs sin sesión: 401.
+Caso real 04012607038027: manzana 07/038, 48 lotes, sin inventario distrital.
+La integración ACM, numeración, Street View y recuperación del visor se incluyen
+en la publicación integral posterior a 8053415f. El resultado del despliegue se
+comprueba en GitHub Actions. El visor también recupera bloqueos transitorios
+del archivo de estado en Windows. El CRS de los DWG sigue pendiente de confirmar.

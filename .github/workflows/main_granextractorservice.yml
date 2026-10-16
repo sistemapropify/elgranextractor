@@ -277,8 +277,29 @@ jobs:
               ACM_JS_STATUS=$(http_status /tmp/acm-components.js https://acm.propifai.com/static/acm/js/components.js)
               CAD_JS_STATUS=$(http_status /tmp/visor-planos.js https://acm.propifai.com/static/js/visor-planos.js)
               CAD_CSS_STATUS=$(http_status /tmp/visor-planos.css https://acm.propifai.com/static/css/visor-planos.css)
+              MASTER_STATUS=$(http_status /tmp/master-denied.json https://acm.propifai.com/acm/catastro/configuracion/)
+              QUAD_STATUS=$(http_status /tmp/quad-protected.html https://acm.propifai.com/cuadrantizacion/mapa/)
+              EXTRA_STATIC_OK=1
+              while IFS='|' read -r asset source; do
+                ASSET_STATUS=$(http_status /tmp/cadastral-asset "https://acm.propifai.com/static/$asset")
+                if [ "$ASSET_STATUS" != "200" ] || ! cmp -s /tmp/cadastral-asset "$source"; then
+                  echo "Release asset pending: $asset ($ASSET_STATUS)"
+                  EXTRA_STATIC_OK=0
+                  break
+                fi
+              done <<'CATASTRO_ASSETS'
+          acm/js/cadastral-info.js|webapp/acm/static/acm/js/cadastral-info.js
+          acm/css/cadastral-info.css|webapp/acm/static/acm/css/cadastral-info.css
+          js/catastro-master-data.js|webapp/static/js/catastro-master-data.js
+          js/geollaqta-labels.js|webapp/static/js/geollaqta-labels.js
+          js/geollaqta-google.js|webapp/static/js/geollaqta-google.js
+          js/geollaqta-map.js|webapp/static/js/geollaqta-map.js
+          js/cuadrantizacion-street-view.js|webapp/static/js/cuadrantizacion-street-view.js
+          css/cuadrantizacion-street-view.css|webapp/static/css/cuadrantizacion-street-view.css
+          CATASTRO_ASSETS
               if [ "$ACM_STATUS" = "200" ] && [ "$VIEWER_STATUS" = "302" ] \
                 && [ "$ACM_JS_STATUS" = "200" ] && [ "$CAD_JS_STATUS" = "200" ] && [ "$CAD_CSS_STATUS" = "200" ] \
+                && [ "$MASTER_STATUS" = "401" ] && [ "$QUAD_STATUS" = "302" ] && [ "$EXTRA_STATIC_OK" = "1" ] \
                 && grep -q Propify /tmp/acm-login.html \
                 && cmp -s /tmp/acm-components.js webapp/acm/static/acm/js/components.js \
                 && cmp -s /tmp/visor-planos.js webapp/static/js/visor-planos.js \

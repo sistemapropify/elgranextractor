@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="{% static 'acm/css/comparison-valuation.css' %}?v=6">
 <link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
 <link rel="stylesheet" href="{% static 'acm/css/nearby-places.css' %}?v=2">
+{% if acm_permissions.cadastral_info %}<link rel="stylesheet" href="{% static 'acm/css/cadastral-info.css' %}?v=1">{% endif %}
 <link rel="stylesheet" href="{% static 'acm/css/zona-preevaluacion.css' %}?v=5">
 {% endblock %}
 {% block content %}
@@ -171,6 +172,7 @@
       </section>
     </div>
     {% if acm_permissions.nearby %}{% include 'acm/_nearby_places.html' %}{% endif %}
+    {% if acm_permissions.cadastral_info %}{% include 'acm/_cadastral_info.html' %}{% endif %}
   </div>
 
   <!-- ===== Columna derecha: enlaces y resultados ===== -->
@@ -288,7 +290,7 @@
 <script src="{% static 'acm/js/comparison-valuation.js' %}?v=8"></script>
 {% if replication %}{{ replication|json_script:"cmp-replication-data" }}{% endif %}
 {% if analysis_resume %}{{ analysis_resume|json_script:"cmp-role-analysis-data" }}{% endif %}
-<script src="{% static 'acm/js/components.js' %}?v=66"></script>
+<script src="{% static 'acm/js/components.js' %}?v=67"></script>
 {% if acm_permissions.ai %}<script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>{% endif %}
 {% if acm_permissions.pdm_polygons %}
 {{ capas_vectoriales|json_script:"capas-vectoriales-data" }}
@@ -299,6 +301,11 @@
 <script src="{% static 'js/capas-mapa.js' %}?v=3"></script>
 {% endif %}
 {% if acm_permissions.nearby %}<script src="{% static 'acm/js/nearby-places.js' %}?v=2"></script>{% endif %}
+{% if acm_permissions.cadastral_info %}
+<script src="{% static 'js/geollaqta-data.js' %}?v=2"></script>
+<script src="{% static 'js/catastro-master-data.js' %}?v=1"></script>
+<script src="{% static 'acm/js/cadastral-info.js' %}?v=1"></script>
+{% endif %}
 {% if acm_permissions.pdm_query and acm_permissions.pdm_card %}<script src="{% static 'acm/js/zona-preevaluacion.js' %}?v=8"></script>{% endif %}
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}

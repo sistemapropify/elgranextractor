@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from . import portal_views
+from . import cadastral_views
 from .access import legacy_admin
 from . import outlier_views
 from .components_routes import urlpatterns as component_routes
@@ -11,6 +12,9 @@ from ingestas.ml_candidate_views import dashboard as ml_control
 from ingestas import ml_model_views
 
 urlpatterns = [
+    path('catastro/configuracion/', cadastral_views.configuration, name='cadastral_config'),
+    path('catastro/lotes/<str:lot_id>/', cadastral_views.lot, name='cadastral_lot'),
+    path('catastro/lotes/<str:lot_id>/fachada/', cadastral_views.facade, name='cadastral_facade'),
     path('login/', portal_views.login, name='login'),
     path('logout/', portal_views.logout, name='logout'),
     path('vista-por-rol/', portal_views.perspective, name='perspective'),

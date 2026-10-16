@@ -41,8 +41,9 @@ def credentials(path=None):
 
 
 class R2:
-    def __init__(self, values=None):
+    def __init__(self, values=None, timeout=30):
         self.values = values or credentials()
+        self.timeout = max(1, min(float(timeout), 30))
         self.bucket = self.values['R2_BUCKET']
         self.host = self.values['R2_ACCOUNT_ID'] + '.r2.cloudflarestorage.com'
         self.opener = build_opener(NoRedirect())
@@ -73,7 +74,7 @@ class R2:
         req = Request('https://' + self.host + uri, method=method, headers=headers,
                       data=data if method == 'PUT' else None)
         try:
-            with self.opener.open(req, timeout=30) as response:
+            with self.opener.open(req, timeout=self.timeout) as response:
                 return response.read(20_000_001), dict(response.headers)
         except HTTPError as exc:
             raise StorageError('R2 respondió HTTP ' + str(exc.code) + '.') from None

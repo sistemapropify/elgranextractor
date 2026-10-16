@@ -1,0 +1,12 @@
+.cuadra-streetview-card{margin:10px 0;padding:10px;border:1px solid var(--border-color,#30363d);border-radius:7px;background:var(--bg-primary,#0d1117);color:var(--text-primary,#e6edf3)}
+.cuadra-streetview-card summary{font-size:12px;font-weight:650;cursor:pointer}
+.cuadra-streetview-card p{margin:8px 0;font-size:11px;line-height:1.5;color:var(--text-secondary,#9bacbd)}
+.cuadra-streetview-card .btn-draw{width:100%;justify-content:center;margin:4px 0}
+.cuadra-streetview-card .btn-draw:disabled{opacity:.6;cursor:wait}
+.cuadra-streetview-card [data-error=true]{color:#f5bb8f}
+#map-container.cuadra-streetview-active>.map-controls,#map-container.cuadra-streetview-active>.zone-info-panel,#map-container.cuadra-streetview-active>.propify-floating-card,#map-container.cuadra-streetview-active>#remax-agencies-card,#map-container.cuadra-streetview-active>.property-area-select-surface{visibility:hidden}
+.cuadra-streetview-toolbar{position:absolute;bottom:44px;left:12px;z-index:150;display:flex;gap:9px;align-items:center;max-width:calc(100% - 24px);padding:8px 10px;border:1px solid #526376;border-radius:8px;background:#131e29ed;color:#e6edf3;font:12px/1.4 system-ui,sans-serif;box-shadow:0 4px 16px #0004}
+.cuadra-streetview-toolbar[hidden]{display:none!important}
+.cuadra-streetview-toolbar button{padding:7px 11px;border:1px solid #638377;border-radius:6px;background:#20493d;color:#ceffe8;font:inherit;cursor:pointer;white-space:nowrap}
+.cuadra-streetview-toolbar button:focus-visible{outline:2px solid #9ae6c4;outline-offset:2px}
+@media(max-width:600px){.cuadra-streetview-toolbar span{display:none}}

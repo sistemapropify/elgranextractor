@@ -1,3 +1,76 @@
+# Pending ACM, cadastre and viewer improvements — 2026-10-16
+
+Status: Validated — release checks passed under azure-validate (2026-10-16).
+Recipe: CI/CD, existing main_granextractorservice.yml.
+
+## 1. Scope
+- ACM role-gated, collapsible cadastral card and selected block's lot contours.
+- Facade and verified ficha/report measurements; no layer-based area fallback.
+- Cuadrantizacion lot/block number labels reusing loaded vectors; Street View.
+- DWG automatic state recovery, completed bootstrap and coordinate-view feedback.
+- Windows atomic status-write retry; original files and extraction ledgers retained.
+No DWG source is activated in the master without confirmed CRS/layer approval.
+
+## 2. Existing target
+Authorized Azure subscription 1 / 0219eecc-9920-4789-9929-3091a2f09daf.
+App Service granextractorservice, rg-elgranextractor, Brazil South.
+https://acm.propifai.com/acm/analisis/
+https://acm.propifai.com/cuadrantizacion/mapa/
+https://acm.propifai.com/catastro/visor-planos/
+Existing OIDC and infrastructure. No resources, capacity, RBAC or billing changes.
+
+## 3. Integration
+Latest main and confirmed successful production base: 8053415f.
+Shared D:/PROMETEO edits preserved; unrelated portal default checkboxes excluded.
+No private originals, local sessions, manifests, ledgers or credentials deployed.
+No model migration: the new permission defaults off except Administrator.
+Role policies are configured through the existing administrator UI.
+
+## 4. Validation steps
+- [x] Isolated ACM permissions, identity, reports and cadastral measurements.
+- [x] Isolated Catastro reader/storage/report/viewer tests.
+- [x] Browser transport, labels, Street View, DWG recovery and JS syntax.
+- [x] Static collection, WSGI import, exact local HTTP bytes and release diff.
+- [x] Existing Azure target/auth and CI public asset/API verification.
+
+## 5. Execution
+Non-forced push through existing pipeline. User handles extended deployment
+monitoring; report dispatch separately from verified live publication.
+CI validates public login, protected map/viewer, role API and exact release assets.
+Rollback: scoped revert through same pipeline. Preserve existing secrets/settings.
+
+## 6. Infrastructure verification
+Application-only update. No Bicep/Terraform, Container App, identity or RBAC change.
+Use the same subscription, region and deployment credentials already authorized.
+
+## 7. Validation Proof
+Validated 2026-10-16, America/Lima:
+- origin/main 8053415f confirmed; prior production run 38924645440 succeeded.
+- 126 isolated ACM tests passed: permissions, role preview, identity/session,
+  verified document measurements, history privacy, comparable/report behavior.
+- 39 isolated Catastro tests passed (one optional native fixture skipped).
+  Repeated reader suite with the official LibreDWG 0.14 Polygon.dwg fixture:
+  all 11 passed, including native background conversion and layer HTTP endpoint.
+  An earlier generic fixture had invalid handles; the real user DWG and official
+  valid fixture both complete. No unsupported-input success is claimed.
+- Nine Node suites passed: transport, geometry, gallery, measurements, numbering,
+  cache/pan/zoom, Street View, cadastral card and actual deadline/recovery.
+- New/changed JS syntax and Python AST passed. Isolated WSGI import and
+  collectstatic succeeded; ten release static assets match local HTTP 200 bytes.
+- Real local browser reopened the completed DWG and rendered 2000 lot polygons;
+  Google overlay tested provisionally. No datum assigned to the stored source.
+- Azure account and webapp read-only checks: expected authorized subscription,
+  existing Brazil South target Running. No resources/RBAC/schema/settings change.
+- CI YAML parsing and bash syntax passed. Existing OIDC and startup preserved.
+  Public checks now require new static bytes, protected map/viewer and API 401.
+- Scoped release diff preserves upstream work and pre-existing local portal
+  defaults. Private data, sessions, originals and extraction ledgers excluded.
+- Git whitespace and staged scope checks required immediately before push.
+  Native Linux conversion/startup/public checks remain enforced CI gates.
+- User retains extended monitoring; report dispatch separately from live proof.
+
+---
+
 # DWG viewer visibility and feedback — release 2026-10-16
 
 Status: Validated — viewer checks passed under azure-validate (2026-10-16).

@@ -54,6 +54,7 @@
 </main>
 {% endblock %}
 {% block extra_js %}
-<script src="{% static 'js/visor-planos.js' %}?v=4"></script>
+{{ cad_initial_state|json_script:"planos-initial-state" }}
+<script src="{% static 'js/visor-planos.js' %}?v=6"></script>
 {% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;libraries=geometry&amp;callback=initPlanosMap" async defer></script>{% endif %}
 {% endblock %}

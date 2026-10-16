@@ -2,15 +2,15 @@
 'use strict';
 const $=id=>document.getElementById(id),ns='http://www.w3.org/2000/svg',layers=new Map();
 let map=null,data=null,meta=null,job=null,serial=0,timer=null,box=[0,0,100,100],drag=null,moved=false,measure=null,points=[],measurement=null;
-let importStarted=0,importClock=null;
+let importStarted=0,importClock=null,pollVersion=0;
 const geographic=()=>$('planos-crs').value!=='unknown';
 const format=n=>new Intl.NumberFormat('es-PE',{maximumFractionDigits:2}).format(n);
 function status(text,error=false){$('planos-status').textContent=text;$('planos-status').dataset.error=String(error);}
 function importState(phase,detail,filename){
- const busy=['uploading','reading','drawing'].includes(phase),titles={idle:'Ningún archivo seleccionado',uploading:'1 de 3 · Subiendo DWG',reading:'2 de 3 · Leyendo el DWG',drawing:'3 de 3 · Dibujando la capa',completed:'Plano listo',failed:'No se pudo completar la lectura',disconnected:'No se pudo consultar el estado'};
+ const busy=['uploading','reading','drawing','reconnecting'].includes(phase),titles={idle:'Ningún archivo seleccionado',uploading:'1 de 3 · Subiendo DWG',reading:'2 de 3 · Leyendo el DWG',drawing:'3 de 3 · Dibujando la capa',reconnecting:'Reconectando con el servidor',completed:'Plano listo',failed:'No se pudo completar la lectura',disconnected:'No se pudo consultar el estado'};
  $('planos-import-state').dataset.state=phase;$('planos-import-state').setAttribute('aria-busy',String(busy));$('planos-import-title').textContent=titles[phase];$('planos-import-detail').textContent=detail;
  if(filename){$('planos-import-file').textContent=filename;$('planos-import-file').hidden=false;}
- $('planos-import-progress').hidden=!busy;$('planos-file').disabled=busy;$('planos-import-retry').hidden=phase!=='disconnected'||!job;
+ $('planos-import-progress').hidden=!busy;$('planos-file').disabled=busy;$('planos-import-retry').hidden=!['disconnected','reconnecting'].includes(phase)||!job;
  if(busy&&!importStarted)importStarted=Date.now();
  function elapsed(){const seconds=Math.floor((Date.now()-importStarted)/1000);$('planos-import-elapsed').textContent='Tiempo transcurrido: '+Math.floor(seconds/60)+' min '+String(seconds%60).padStart(2,'0')+' s';}
  if(importStarted){elapsed();$('planos-import-elapsed').hidden=false;}
@@ -21,7 +21,17 @@ function importState(phase,detail,filename){
 function positions(g){const list=[];function walk(v){if(typeof v[0]==='number')list.push(v);else v.forEach(walk);}walk(g.coordinates);return list;}
 function visible(){return [...layers.values()].filter(l=>l.visible).flatMap(l=>l.features);}
 function controls(){const has=!!visible().length;['planos-all','planos-none','planos-layer-search'].forEach(id=>$(id).disabled=!meta);$('planos-fit').disabled=!has;$('planos-export').disabled=!has||!geographic();['planos-distance','planos-area'].forEach(id=>$(id).disabled=!geographic()||!map);}
-async function api(path){const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);try{const r=await fetch('/catastro/api/planos/'+path,{credentials:'same-origin',cache:'no-store',signal:controller.signal,headers:{Accept:'application/json'}});if(!r.headers.get('content-type')?.includes('application/json'))throw Error('Inicia sesión para leer el plano.');const v=await r.json();if(!r.ok)throw Error(v.error||'No se pudo leer el plano.');return v;}catch(error){if(error.name==='AbortError')throw Error('El servidor no respondió en 20 segundos. Puedes volver a consultar el estado sin subir otra vez el DWG.');throw error;}finally{clearTimeout(timeout);}}
+async function api(path,deadlineMs=path.includes('/capa/')?45000:20000){
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),deadlineMs);
+ try {
+  const r=await fetch('/catastro/api/planos/'+path,{credentials:'same-origin',cache:'no-store',signal:controller.signal,headers:{Accept:'application/json'}});
+  if(!r.headers.get('content-type')?.includes('application/json'))throw Error('Inicia sesión para leer el plano.');
+  const v=await r.json();if(!r.ok){const error=Error(v.error||'No se pudo leer el plano.');error.retryable=[408,429,502,503,504].includes(r.status);throw error;}return v;
+ }catch(error){
+  if(error.name==='AbortError'){const expired=Error('La consulta tardó más de '+Math.round(deadlineMs/1000)+' segundos. El DWG sigue guardado en el servidor.');expired.retryable=true;throw expired;}
+  if(error.name==='TypeError')error.retryable=true;throw error;
+ }finally{clearTimeout(timeout);}
+}
 function setBox(v){box=v;$('planos-cad').setAttribute('viewBox',v.join(' '));}
 function fit(){
  const features=visible();if(!features.length)return;
@@ -77,14 +87,23 @@ async function ready(value){
  const geometryCount=row=>['LWPOLYLINE','POLYLINE','HATCH','SOLID'].reduce((n,type)=>n+(row.types[type]||0),0),rows=[...layers.values()].filter(row=>row.drawable);
  const cadastral=rows.filter(row=>/^(lotes?|parcelas?|predios?)(?:$|[ _-])/i.test(row.name)&&geometryCount(row)>(row.types.TEXT||0)+(row.types.MTEXT||0));
  const first=cadastral.sort((a,b)=>geometryCount(b)-geometryCount(a))[0]||rows.sort((a,b)=>geometryCount(b)-geometryCount(a))[0];
- if(first){first.visible=true;importState('drawing','El archivo ya se leyó. Preparando la capa «'+first.name+'»…',value.filename);if(await load(first.name,true))importState('completed',layers.size+' capas disponibles · «'+first.name+'»: '+first.features.length+' de '+first.drawable+' entidades cargadas.'+(geographic()?'':' Vista CAD: coordenadas sin confirmar.'));else importState('failed','El DWG se leyó, pero no se pudo dibujar la primera capa. '+$('planos-status').textContent);}
+ if(first){first.visible=true;importState('drawing','El archivo ya se leyó. Preparando la capa «'+first.name+'»…',value.filename);if(await load(first.name,true))importState('completed',layers.size+' capas disponibles · «'+first.name+'»: '+first.features.length+' de '+first.drawable+' entidades cargadas.'+(geographic()?'':' Vista CAD: coordenadas sin confirmar.'));else importState('disconnected','El DWG ya está leído. No se pudo dibujar la primera capa. '+$('planos-status').textContent);}
  else {status('DWG leído. No contiene entidades compatibles para dibujar.',true);importState('completed','El DWG se leyó. No contiene entidades compatibles para dibujar.',value.filename);}
 }
-async function poll(id){
- const stamp=serial;
- importState('reading','Consultando el avance del archivo en el servidor…');$('planos-import-progress').removeAttribute('value');
- try {const v=await api(id+'/');if(stamp!==serial)return;status(v.message||'DWG recibido.',v.status==='failed');if(v.status==='completed'){await ready(v);return;}if(v.status==='failed'){importState('failed',v.message,v.filename);return;}importState('reading',v.message||'Preparando lectura de capas.',v.filename);timer=setTimeout(()=>poll(id),2000);}
- catch(error){if(stamp===serial){status(error.message,true);importState('disconnected',error.message);}}
+async function poll(id,attempt=0){
+ if(id!==job)return;
+ clearTimeout(timer);const stamp=serial,version=++pollVersion;
+ importState('reading',attempt?'Reconsultando automáticamente el archivo conservado…':'Consultando el avance del archivo en el servidor…');$('planos-import-progress').removeAttribute('value');
+ try {
+  const v=await api(id+'/',20000+attempt*10000);if(stamp!==serial||version!==pollVersion)return;
+  status(v.message||'DWG recibido.',v.status==='failed');
+  if(v.status==='completed'){await ready(v);return;}
+  if(v.status==='failed'){importState('failed',v.message,v.filename);return;}
+  importState('reading',v.message||'Preparando lectura de capas.',v.filename);timer=setTimeout(()=>poll(id),2000);
+ }catch(error){if(stamp===serial&&version===pollVersion){
+  if(error.retryable&&attempt<3){const seconds=[2,5,10][attempt],text='La conexión se interrumpió. Reintentando automáticamente en '+seconds+' s (intento '+(attempt+1)+' de 3). No vuelvas a subir el DWG.';status(text);importState('reconnecting',text);timer=setTimeout(()=>poll(id,attempt+1),seconds*1000);}
+  else {status(error.message,true);importState('disconnected',error.message+' Usa «Consultar estado del plano» para recuperar la lectura conservada.');}
+ }}
 }
 function reset(){importState('idle','Abre un DWG para comenzar la lectura.');$('planos-cad-notice').hidden=true;serial++;clearTimeout(timer);$('planos-crs').value='unknown';measure=null;['distance','area'].forEach(key=>$('planos-'+key).setAttribute('aria-pressed','false'));map?.setOptions({draggableCursor:null});data?.setMap(null);data=null;job=null;meta=null;layers.clear();$('planos-cad-entities').replaceChildren();$('planos-cad').setAttribute('hidden','');$('planos-map').hidden=false;$('planos-file-info').hidden=true;$('planos-selection-data').hidden=true;$('planos-selection-empty').hidden=false;$('planos-cad-warnings').hidden=true;$('planos-layers').replaceChildren();$('planos-layer-count').textContent='0';$('planos-file').value='';clearMeasurement();controls();}
 function upload(file){return new Promise((resolve,reject)=>{const body=new FormData();body.append('file',file);const xhr=new XMLHttpRequest();xhr.open('POST','/catastro/api/planos/importar/');xhr.timeout=120000;xhr.setRequestHeader('X-CSRFToken',$('planos-upload-form').querySelector('[name=csrfmiddlewaretoken]').value);xhr.upload.addEventListener('progress',event=>{if(event.lengthComputable){$('planos-import-progress').value=event.loaded/event.total;const text='Subiendo DWG: '+Math.round(event.loaded/event.total*100)+'% de '+format(file.size/1048576)+' MB.';status(text);importState('uploading',text,file.name);}});xhr.upload.addEventListener('load',()=>importState('uploading','Archivo enviado. Esperando confirmación del servidor…',file.name));xhr.addEventListener('load',()=>{let v;try{v=JSON.parse(xhr.responseText);}catch(_){reject(Error('Inicia sesión para cargar el DWG.'));return;}if(xhr.status===202)resolve(v);else reject(Error(v.error||'No se pudo cargar el DWG.'));});xhr.addEventListener('timeout',()=>reject(Error('El servidor no confirmó la carga en dos minutos. Consulta si el plano quedó recibido antes de intentarlo nuevamente.')));xhr.addEventListener('error',()=>reject(Error('La carga se interrumpió. Vuelve a seleccionar el DWG.')));xhr.send(body);});}
@@ -95,7 +114,19 @@ $('planos-file').addEventListener('change',async event=>{
  catch(error){status(error.message,true);importState('failed',error.message);}
 });
 $('planos-import-retry').addEventListener('click',()=>{if(job)return poll(job);});
-$('planos-crs').addEventListener('change',async()=>{serial++;clearMeasurement();measure=null;const names=[...layers.values()].filter(row=>row.visible).map(row=>row.name);layers.forEach(row=>{row.features=[];row.next=0;row.loaded=false;row.loading=false;});draw();if(meta)$('planos-map-caption').textContent=meta.filename+' · '+(geographic()?'sistema seleccionado':'coordenadas CAD sin ubicación confirmada');for(const name of names)await load(name,true);});
+$('planos-crs').addEventListener('change',async()=>{
+ const stamp=++serial;clearMeasurement();measure=null;
+ const names=[...layers.values()].filter(row=>row.visible).map(row=>row.name);
+ layers.forEach(row=>{row.features=[];row.next=0;row.loaded=false;row.loading=false;});draw();
+ if(!meta)return;
+ $('planos-map-caption').textContent=meta.filename+' · '+(geographic()?'sistema seleccionado':'coordenadas CAD sin ubicación confirmada');
+ importState('drawing','Actualizando las capas con el sistema de coordenadas seleccionado…',meta.filename);
+ let success=true;
+ for(const name of names){if(stamp!==serial)return;if(!await load(name,true))success=false;}
+ if(stamp!==serial)return;
+ if(success)importState('completed',layers.size+' capas disponibles · '+(geographic()?'Vista en Google Maps con el sistema seleccionado.':'Vista CAD: coordenadas sin confirmar.'));
+ else importState('disconnected','El DWG ya está leído. No se pudieron actualizar todas las capas; puedes reconsultar el plano sin subirlo nuevamente.');
+});
 function clearMeasurement(){measurement?.setMap(null);measurement=null;points=[];$('planos-measure-result').textContent=geographic()?'Selecciona una herramienta y marca puntos en el mapa.':'Confirma el sistema de coordenadas para medir en metros sobre Google Maps.';}
 function mode(value){if(!geographic()||!map)return;clearMeasurement();measure=measure===value?null:value;['distance','area'].forEach(key=>$('planos-'+key).setAttribute('aria-pressed',String(measure===key)));map.setOptions({draggableCursor:measure?'crosshair':null});}
 function addMeasurement(point){points.push(point);measurement?.setMap(null);const area=measure==='area';measurement=area?new google.maps.Polygon({map,paths:points,fillColor:'#65b8ff',fillOpacity:.2,strokeColor:'#65b8ff',clickable:false}):new google.maps.Polyline({map,path:points,strokeColor:'#65b8ff',clickable:false});const g=google.maps.geometry.spherical;$('planos-measure-result').textContent=area?(points.length<3?'Marca al menos tres puntos.':'Área aproximada: '+format(g.computeArea(points))+' m²'):'Distancia aproximada: '+format(g.computeLength(points))+' m';}
@@ -113,5 +144,5 @@ svg.addEventListener('pointermove',event=>{if(!drag)return;const dx=event.client
 ['pointerup','pointercancel'].forEach(type=>svg.addEventListener(type,event=>{drag=null;if(svg.hasPointerCapture(event.pointerId))svg.releasePointerCapture(event.pointerId);}));
 window.initPlanosMap=()=>{map=new google.maps.Map($('planos-map'),{center:{lat:-16.3989,lng:-71.535},zoom:15,mapTypeControl:false,streetViewControl:false,fullscreenControl:false,gestureHandling:'greedy'});map.addListener('click',event=>{if(measure&&geographic())addMeasurement(event.latLng);});map.addListener('mousemove',event=>{$('planos-coordinates').textContent=event.latLng.lat().toFixed(6)+', '+event.latLng.lng().toFixed(6)+' · WGS84';});controls();if(meta&&geographic()){draw();fit();}if(!job)status('Abre un archivo DWG para explorar sus capas.');};
 window.gm_authFailure=()=>{if(!job||geographic())status('Google Maps no pudo autorizar este dominio. La vista CAD sigue disponible.',true);};
-controls();const previous=new URLSearchParams(location.search).get('plano');if(previous&&/^[a-f0-9]{32}$/.test(previous)){job=previous;poll(job);}else status('Abre un archivo DWG para explorar sus capas.');
+controls();const previous=new URLSearchParams(location.search).get('plano');if(previous&&/^[a-f0-9]{32}$/.test(previous)){job=previous;let initial=null;try{initial=JSON.parse($('planos-initial-state')?.textContent||'null');}catch(_){}if(initial?.id===previous&&initial.status==='completed')ready(initial);else poll(job);}else status('Abre un archivo DWG para explorar sus capas.');
 })();

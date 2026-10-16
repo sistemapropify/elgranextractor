@@ -28,6 +28,12 @@
         const toggle = $('geollaqta-visible'), status = $('geollaqta-status'), card = $('geollaqta-detail');
         const districtSelect = $('geollaqta-district');
         const layers = new Map(), cache = new Map(), signatures = new WeakMap(), layer = adapter.createLayer(); layers.set('lotes', layer);
+        const numbering=adapter.createLabels?.(),loadedLabels=new Map(),numberToggle=$('geollaqta-numbering');
+        let visibleKeys=[];
+        function drawNumbers(){
+            numbering?.setData(visibleKeys.includes('lotes')?loadedLabels.get('lotes')||[]:[],visibleKeys.includes('manzanas')?loadedLabels.get('manzanas')||[]:[]);
+            numbering?.setVisible(toggle.checked&&(numberToggle?.checked??true));
+        }
         const colors = {'lotes':'#00b8a9','ejes-vias':'#e6a224','manzanas':'#388cff','comercios':'#e05fa4','ingresos':'#cf7fff','habilitaciones':'#965bd1','sectores':'#758aa4'};
         let opacity = .85;
         function paint(key, dataLayer) {
@@ -42,6 +48,7 @@
         let catalogData, catalogRequest, districtEntry = {ubigeo:'040126',name:'Yanahuara',center:{lat:-16.40707,lng:-71.56604}};
         const message = text => { status.textContent = text; };
         function clear() {
+            loadedLabels.clear();visibleKeys=[];drawNumbers();
             layers.forEach(dataLayer => { dataLayer.revertStyle(); dataLayer.forEach(feature => dataLayer.remove(feature)); dataLayer.setMap(null); signatures.delete(dataLayer); });
             document.querySelectorAll('[data-geollaqta-count]').forEach(element => { element.textContent = ''; });
             selected = null; selectedGeometry = null; card.hidden = true;
@@ -170,6 +177,7 @@
             catch (error) { if (version === detailSerial && error.name !== 'AbortError') photos.replaceChildren(node('p', error.message)); }
         }
         function activeLayers(keys) {
+            visibleKeys=keys;drawNumbers();
             layers.forEach((dataLayer, key) => dataLayer.setMap(keys.includes(key) ? map : null));
             document.querySelectorAll('[data-geollaqta-count]').forEach(element => {
                 if (!keys.includes(element.dataset.geollaqtaCount)) element.textContent = '';
@@ -232,11 +240,13 @@
                 const data = result.value;
                 if (!layers.has(key)) layers.set(key, adapter.createLayer());
                 const dataLayer = layers.get(key); paint(key, dataLayer); reconcile(dataLayer, data); dataLayer.setMap(map);
+                if(key==='lotes'||key==='manzanas')loadedLabels.set(key,data.features);
                 const count = document.querySelector('[data-geollaqta-count="' + key + '"]');
                 if (count) count.textContent = '(' + data.features.length.toLocaleString('es-PE') + ')';
                 messages.push(data.name + ': ' + data.features.length.toLocaleString('es-PE') + (data.truncated ? ' de ' + data.total_in_view.toLocaleString('es-PE') + ' · vista parcial, acércate' : '') + (data.skipped ? ' · ' + data.skipped + ' geometrías no disponibles' : ''));
             });
             message('Capas cargadas · ' + messages.join(' · '));
+            drawNumbers();
         }
         function focus() {
             if (!districtEntry.center) {message('No hay un lote de muestra publicado para ' + districtEntry.name + '. Puedes explorar el mapa y actualizar las capas.');return;}
@@ -245,6 +255,7 @@
         function schedule() { clearTimeout(timer); request?.abort(); ++serial; timer = setTimeout(load, 350); }
         layer.addListener('click', choose); adapter.onIdle(schedule);
         toggle.addEventListener('change', () => { clearTimeout(timer); load(); });
+        numberToggle?.addEventListener('change',drawNumbers);
         document.querySelectorAll('[name="geollaqta-layer"]').forEach(input => input.addEventListener('change', () => { clearTimeout(timer); load(); }));
         $('geollaqta-constructions').addEventListener('change', () => { $('geollaqta-floors').disabled = !$('geollaqta-constructions').checked; clearTimeout(timer); load(); });
         $('geollaqta-opacity').addEventListener('input', event => { opacity = Number(event.target.value) / 100; layers.forEach((dataLayer, key) => paint(key, dataLayer)); });

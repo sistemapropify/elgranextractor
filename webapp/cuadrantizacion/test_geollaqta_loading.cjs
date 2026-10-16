@@ -50,7 +50,9 @@ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../static/js/geollaqta-m
 const flush = async () => { for (let i=0;i<40;i++) await Promise.resolve(); };
 const idle = async () => { events.idle(); const fn = scheduled; scheduled=null;fn();await flush(); };
 async function main() {
-    const adapter={createLayer:()=>new Data(),pointIcon:()=>({}),getView:()=>({zoom,bbox:bounds}),onIdle:fn=>events.idle=fn};
+    const numbers={visible:false,lots:[],setVisible(value){this.visible=value;},setData(lots){this.lots=lots;}};
+    element('geollaqta-numbering').checked=true;
+    const adapter={createLabels:()=>numbers,createLayer:()=>new Data(),pointIcon:()=>({}),getView:()=>({zoom,bbox:bounds}),onIdle:fn=>events.idle=fn};
     delete sandbox.google;
     const controller=sandbox.window.GeollaqtaMap.init(map,{adapter});
     element('geollaqta-visible').checked=true;
@@ -58,6 +60,10 @@ async function main() {
     pending.shift().resolve(collection([1,2]));await flush();
     const layer = Data.instances[0], first=layer.features.get(1);
     assert.equal(layer.features.size,2);
+    assert.equal(numbers.visible,true);assert.equal(numbers.lots.length,2);
+    element('geollaqta-numbering').checked=false;element('geollaqta-numbering').events.change();
+    assert.equal(numbers.visible,false);assert.equal(calls,1,'Number visibility reuses loaded vectors without a query');
+    element('geollaqta-numbering').checked=true;element('geollaqta-numbering').events.change();
     bounds = [-71.569,-16.409,-71.559,-16.399]; await idle();
     assert.equal(calls,1,'Small pan reuses the buffered viewport');
     zoom=19; bounds=[-71.567,-16.407,-71.563,-16.403];await idle();
@@ -74,6 +80,7 @@ async function main() {
     element('geollaqta-refresh').events.click();await flush();assert.equal(calls,previous+1,'Manual refresh bypasses viewport cache');
     element('geollaqta-visible').checked=false;element('geollaqta-visible').events.change();await flush();
     assert.equal(layer.features.size,0);assert.equal(layer.map,null,'Disabling explicitly clears the layer');
+    assert.equal(numbers.visible,false);assert.equal(numbers.lots.length,0,'Clear numbers with their polygons');
     pending.shift().resolve(collection([4]));await flush();assert.equal(layer.features.size,0,'Late response cannot reenable vectors');
     element('geollaqta-visible').checked=true;element('geollaqta-visible').events.change();await flush();
     element('geollaqta-refresh').events.click();await flush();const stale=pending.shift();

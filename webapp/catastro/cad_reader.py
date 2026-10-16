@@ -39,9 +39,21 @@ def write_status(folder, **changes):
     path = folder / 'estado.json'
     data = json.loads(path.read_text(encoding='utf8')) if path.is_file() else {}
     data.update(changes, updated=time.time())
-    temporary = folder / 'estado.tmp'
-    temporary.write_text(json.dumps(data, ensure_ascii=False), encoding='utf8')
-    temporary.replace(path)
+    temporary = folder / ('estado-' + uuid.uuid4().hex + '.tmp')
+    try:
+        temporary.write_text(json.dumps(data, ensure_ascii=False), encoding='utf8')
+        # Windows antivirus/indexers may briefly hold the destination open.
+        # Keep the previous complete JSON available while retrying the rename.
+        for attempt in range(8):
+            try:
+                temporary.replace(path)
+                break
+            except PermissionError:
+                if attempt == 7:
+                    raise
+                time.sleep(min(.025 * 2**attempt, .4))
+    finally:
+        temporary.unlink(missing_ok=True)
     return data
 
 

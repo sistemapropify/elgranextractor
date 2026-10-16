@@ -14,12 +14,22 @@ from . import cad_reader
 @admin_required
 @ensure_csrf_cookie
 def viewer(request):
+    initial = None
+    job_id = request.GET.get('plano')
+    if job_id:
+        try:
+            value = cad_reader.status(job_id)
+            if value['status'] == 'completed':
+                initial = value
+        except (ValueError, OSError):
+            pass
     response = render(request, 'catastro/visor_planos.html', {
         'google_maps_api_key': getattr(settings, 'GOOGLE_MAPS_API_KEY', None)
                                if getattr(settings, 'GOOGLE_MAPS_API_KEY', None) is not None
                                else google_maps_api_key(),
         'cad_available': cad_reader.available(),
         'cad_crs': cad_reader.CRS,
+        'cad_initial_state': initial,
     })
     response['Cache-Control'] = 'private, no-store'
     return response

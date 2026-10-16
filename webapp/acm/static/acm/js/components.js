@@ -171,6 +171,7 @@
     drawCircles();if(snapshot&&result)renderMap();
     if(permissions.pdm_polygons&&window.CapasMapa)window.CapasMapa.init(map,{configUrl:'/acm/capas-mapa/'});
     if(window.ACMNearby)window.ACMNearby.init(map);
+    if(permissions.cadastral_info&&window.ACMCadastral)window.ACMCadastral.init(map);
   };
   window.gm_authFailure=()=>{$('cmp-status').textContent='No se pudo cargar Google Maps. Puedes ingresar latitud y longitud para buscar.';};
   // Keep all consulted records visible so an excluded outer land can be selected again.

@@ -18,6 +18,37 @@ from . import cad_reader as cad
 READY = bool(importlib.util.find_spec('ezdxf') and importlib.util.find_spec('pyproj'))
 
 
+class CadStatusTests(SimpleTestCase):
+    def test_transient_windows_lock_preserves_previous_json_and_retries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder=Path(temporary)
+            cad.write_status(folder,status='running',message='Anterior')
+            original=Path.replace
+            attempts=[]
+            def replace(source,target):
+                attempts.append(source)
+                if len(attempts)<3:
+                    self.assertEqual(json.loads((folder/'estado.json').read_text())['message'],'Anterior')
+                    raise PermissionError(5,'Acceso denegado')
+                return original(source,target)
+            with patch.object(Path,'replace',replace),patch.object(cad.time,'sleep') as sleep:
+                cad.write_status(folder,message='Actualizado')
+            self.assertEqual(len(attempts),3)
+            self.assertEqual(sleep.call_count,2)
+            self.assertEqual(json.loads((folder/'estado.json').read_text())['message'],'Actualizado')
+            self.assertEqual(list(folder.glob('*.tmp')),[])
+
+    def test_persistent_lock_is_bounded_and_does_not_destroy_last_status(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder=Path(temporary)
+            cad.write_status(folder,status='running',message='Conservado')
+            with patch.object(Path,'replace',side_effect=PermissionError(5,'Acceso denegado')) as replace,patch.object(cad.time,'sleep'):
+                with self.assertRaises(PermissionError):cad.write_status(folder,message='Otro')
+            self.assertEqual(replace.call_count,8)
+            self.assertEqual(json.loads((folder/'estado.json').read_text())['message'],'Conservado')
+            self.assertEqual(list(folder.glob('*.tmp')),[])
+
+
 @skipUnless(READY, 'Install requirements-cad.txt for CAD tests')
 class CadGeometryTests(SimpleTestCase):
     def setUp(self):

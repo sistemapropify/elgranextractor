@@ -140,7 +140,7 @@ class RoleAnalysisTests(TestCase):
         html = response.content.decode()
         self.assertIn('id="acm-perspective-form"',html)
         self.assertIn('id="cmp-role-analysis-data"',html)
-        self.assertIn('components.js?v=66',html)
+        self.assertIn('components.js?v=67',html)
         import re
         payload = json.loads(re.search(r'id="cmp-role-analysis-data"[^>]*>(.*?)</script>',html,re.S)[1])
         self.assertEqual(payload['snapshot']['records'][0]['source'],'comparable')

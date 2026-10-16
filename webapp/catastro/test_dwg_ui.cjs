@@ -16,7 +16,7 @@ class XHR{
 const context={window:{},document:{getElementById:get,createElement:tag=>new Node(tag),createElementNS:(_,tag)=>new Node(tag)},
  location:{search:'',pathname:'/catastro/visor-planos/'},history:{replaceState(){}},URLSearchParams,
  XMLHttpRequest:XHR,FormData:class{append(name,file){this[name]=file;}},AbortController,setInterval:()=>1,clearInterval(){},setTimeout(fn,ms){const id=++timerId;timeouts.set(id,{fn,ms});return id;},clearTimeout(id){timeouts.delete(id);},
- fetch:async url=>{requests.push(url);if(mode==='disconnected')throw Error('No se pudo contactar con el servidor.');return {ok:true,headers:{get:()=> 'application/json'},json:async()=>url.includes('/capa/')?{type:'FeatureCollection',features:[feature],next_offset:null}:{...meta,status:mode,message:mode==='failed'?'La conversión falló. El original se conserva.':'Leyendo entidades CAD.'}};}};
+ fetch:async (url,options)=>{requests.push(url);if(mode==='status-timeout')return await new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>{const e=Error('deadline');e.name='AbortError';reject(e);}));if(mode==='disconnected')throw TypeError('No se pudo contactar con el servidor.');return {ok:true,headers:{get:()=> 'application/json'},json:async()=>url.includes('/capa/')?{type:'FeatureCollection',features:[feature],next_offset:null}:{...meta,status:mode,message:mode==='failed'?'La conversión falló. El original se conserva.':'Leyendo entidades CAD.'}};}};
 (async()=>{
  vm.runInNewContext(source,context);
  const file={name:'cayma.dwg',size:14700000};
@@ -29,6 +29,8 @@ const context={window:{},document:{getElementById:get,createElement:tag=>new Nod
  assert.equal(get('planos-import-progress').hidden,true);
  assert.equal(get('planos-cad-notice').hidden,false,'Explain the dark CAD view beside the coordinate selector.');
  assert.match(requests.find(url=>url.includes('/capa/')),/layer=LOTES&/,'Prefer the cadastral geometry over layer 0 and labels.');
+ get('planos-crs').value='EPSG:32719';await get('planos-crs').handlers.change();assert.equal(get('planos-map').hidden,false);assert.match(get('planos-import-detail').textContent,/Google Maps/);
+ get('planos-crs').value='unknown';await get('planos-crs').handlers.change();assert.equal(get('planos-map').hidden,true);assert.match(get('planos-import-detail').textContent,/Vista CAD/);
  const path=get('planos-cad-entities').children[0];assert.equal(path.tag,'path');assert.match(path.attributes.d,/230000/);
  path.handlers.click({stopPropagation(){}});
  assert.equal(get('planos-selection').open,true);
@@ -42,10 +44,25 @@ const context={window:{},document:{getElementById:get,createElement:tag=>new Nod
  mode='failed';await [...timeouts.values()].find(timer=>timer.ms===2000).fn();
  assert.equal(get('planos-import-state').dataset.state,'failed');assert.equal(get('planos-import-progress').hidden,true);assert.equal(get('planos-file').disabled,false);
  mode='disconnected';await get('planos-file').handlers.change({target:{files:[file]}});
- assert.equal(get('planos-import-state').dataset.state,'disconnected');assert.equal(get('planos-import-retry').hidden,false);
+ assert.equal(get('planos-import-state').dataset.state,'reconnecting');assert.equal(get('planos-import-retry').hidden,false);assert.equal(get('planos-import-progress').hidden,false);
+ const automatic=[...timeouts.values()].find(t=>t.ms===2000);const noNewUpload=uploadCount;mode='completed';await automatic.fn();assert.equal(get('planos-import-state').dataset.state,'completed');assert.equal(uploadCount,noNewUpload,'Automatic reconnection must not upload or restart conversion.');
+ mode='disconnected';await get('planos-file').handlers.change({target:{files:[file]}});
+ for(const ms of [2000,5000,10000]){const next=[...timeouts.values()].find(t=>t.ms===ms);assert.ok(next);await next.fn();}
+ assert.equal(get('planos-import-state').dataset.state,'disconnected');
  const beforeRetry=uploadCount;mode='completed';await get('planos-import-retry').handlers.click();
  assert.equal(uploadCount,beforeRetry,'Consult the saved job without re-uploading.');assert.equal(get('planos-import-state').dataset.state,'completed');
+ mode='status-timeout';const timed=get('planos-file').handlers.change({target:{files:[file]}});for(let i=0;i<12;i++)await Promise.resolve();
+ const deadline=[...timeouts.values()].find(t=>t.ms===20000);assert.ok(deadline);deadline.fn();await timed;
+ assert.equal(get('planos-import-state').dataset.state,'reconnecting','The real 20-second deadline must trigger recovery rather than leave the screen stopped.');
+ const retriesBefore=uploadCount;mode='completed';await [...timeouts.values()].find(t=>t.ms===2000).fn();
+ assert.equal(get('planos-import-state').dataset.state,'completed');assert.equal(uploadCount,retriesBefore);
  mode='timeout';await get('planos-file').handlers.change({target:{files:[file]}});
  assert.equal(get('planos-import-state').dataset.state,'failed');assert.match(get('planos-import-detail').textContent,/dos minutos/);assert.equal(get('planos-import-progress').hidden,true);
+ const bootNodes=new Map(),bootGet=id=>{if(!bootNodes.has(id))bootNodes.set(id,new Node());return bootNodes.get(id);};
+ bootGet('planos-crs').value='unknown';bootGet('planos-opacity').value='65';bootGet('planos-initial-state').textContent=JSON.stringify(meta);
+ const beforeBoot=requests.length;mode='completed';vm.runInNewContext(source,{...context,window:{},location:{search:'?plano='+meta.id},document:{...context.document,getElementById:bootGet}});
+ for(let i=0;i<20;i++)await Promise.resolve();
+ assert.equal(bootGet('planos-import-state').dataset.state,'completed');
+ assert.ok(requests.slice(beforeBoot).every(url=>url.includes('/capa/')),'Completed imports skip the redundant status request on reopening.');
  console.log('DWG UI: native upload, progress/errors/retry, cadastral layer priority and CAD explanation verified.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

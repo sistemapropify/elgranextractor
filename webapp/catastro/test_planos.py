@@ -27,6 +27,31 @@ class PlanViewerTests(SimpleTestCase):
     def test_regular_account_cannot_open_administrative_plan_workspace(self):
         self.assertEqual(viewer(self.request()).status_code, 403)
 
+    def test_completed_import_is_bootstrapped_without_a_second_status_request(self):
+        request=self.request()
+        request.current_user.is_staff=True
+        request.GET=request.GET.copy()
+        request.GET['plano']='a'*32
+        with patch('catastro.cad_reader.status',return_value={'id':'a'*32,'status':'completed','layers':[]}) as status:
+            html=viewer(request).content.decode()
+        status.assert_called_once_with('a'*32)
+        self.assertIn('id="planos-initial-state"',html)
+        self.assertIn('"status": "completed"',html)
+
+    def test_anonymous_cannot_read_bootstrapped_plan_metadata(self):
+        request=RequestFactory().get('/catastro/visor-planos/?plano='+'a'*32)
+        with patch('catastro.cad_reader.status') as status:
+            self.assertEqual(viewer(request).status_code,302)
+        status.assert_not_called()
+
+    def test_unknown_plan_does_not_break_workspace(self):
+        request=self.request()
+        request.current_user.is_staff=True
+        request.GET=request.GET.copy()
+        request.GET['plano']='invalid'
+        with patch('catastro.cad_reader.status',side_effect=ValueError('Plano no encontrado.')):
+            self.assertEqual(viewer(request).status_code,200)
+
     @override_settings(GOOGLE_MAPS_API_KEY='maps-test-key')
     def test_staff_gets_map_workspace_and_collapsible_cards(self):
         request = self.request()
@@ -40,7 +65,7 @@ class PlanViewerTests(SimpleTestCase):
         self.assertIn('Abrir archivo DWG', html)
         self.assertIn('accept=".dwg,', html)
         self.assertNotIn('Abrir archivo GeoJSON', html)
-        self.assertIn('visor-planos.js?v=4', html)
+        self.assertIn('visor-planos.js?v=6', html)
         self.assertIn('maps-test-key', html)
         self.assertIn('visor-planos/', html)
         self.assertEqual(response['Cache-Control'], 'private, no-store')

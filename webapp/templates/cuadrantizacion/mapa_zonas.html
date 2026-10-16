@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
 <link rel="stylesheet" href="{% static 'css/zonificacion-marcadores.css' %}">
 <link rel="stylesheet" href="{% static 'css/geollaqta-map.css' %}?v=6">
+<link rel="stylesheet" href="{% static 'css/cuadrantizacion-street-view.css' %}?v=1">
 <style>
 .ml-map-card{width:310px;max-width:calc(100vw - 48px);color:#162333;font:13px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;overflow-wrap:anywhere;background:#fff;border-radius:12px;padding:14px;box-shadow:0 8px 24px #10202d33}.ml-map-card strong{display:block;font-size:14px;color:#16304a;border-bottom:1px solid #dbe4ee;padding-bottom:8px;margin-bottom:8px}.ml-map-card p{margin:7px 0;color:#405366}.ml-map-card div{padding:3px 0}.ml-map-card a{color:#185dd0;font-weight:600}.ml-map-card button{font:inherit}
 .ml-context-filters{display:grid;gap:5px;margin-top:8px}
@@ -964,6 +965,10 @@ window.onGoogleMapsLoaded = function() {
     <div class="map-main">
         <div id="map-container">
             <div id="map"></div>
+            <div class="cuadra-streetview-toolbar" id="cuadra-streetview-toolbar" hidden>
+                <button id="cuadra-streetview-close" type="button">Volver al mapa</button>
+                <span>Street View · recorre la calle con las flechas</span>
+            </div>
             <div class="property-area-select-surface" id="property-area-select-surface" hidden aria-label="Arrastra para seleccionar propiedades">
                 <div class="property-area-drag-box" id="property-area-drag-box"></div>
             </div>
@@ -1002,6 +1007,13 @@ window.onGoogleMapsLoaded = function() {
                         <button class="btn-search" id="search-address">Ir</button>
                     </div>
                 </div>
+
+                <details class="cuadra-streetview-card" open>
+                    <summary>Street View</summary>
+                    <p>Centra el mapa en el lote o la calle que quieres revisar.</p>
+                    <button class="btn-draw" id="cuadra-streetview-open" type="button">Ver calle en el centro</button>
+                    <p id="cuadra-streetview-status" role="status" aria-live="polite">También puedes arrastrar el muñeco amarillo hasta una calle.</p>
+                </details>
 
                 <div class="form-group">
                     <label for="zone-level">Nivel de zona</label>
@@ -1310,14 +1322,16 @@ window.onGoogleMapsLoaded = function() {
 {{ block.super }}
 <script src="{% static 'js/ml-map-context.js' %}"></script>
 <script src="{% static 'js/remax-agencies.js' %}?v=1"></script>
+<script src="{% static 'js/cuadrantizacion-street-view.js' %}?v=1"></script>
 {{ capas_raster|json_script:"capas-raster-data" }}
 {{ capas_vectoriales|json_script:"capas-vectoriales-data" }}
 <script src="{% static 'js/capa-raster-overlay.js' %}?v=5"></script>
 <script src="{% static 'js/capa-vectorial.js' %}?v=6"></script>
 <script src="{% static 'js/capas-mapa.js' %}?v=2"></script>
 <script src="{% static 'js/geollaqta-data.js' %}?v=2"></script>
-<script src="{% static 'js/geollaqta-google.js' %}?v=1"></script>
-<script src="{% static 'js/geollaqta-map.js' %}?v=7"></script>
+<script src="{% static 'js/geollaqta-labels.js' %}?v=1"></script>
+<script src="{% static 'js/geollaqta-google.js' %}?v=2"></script>
+<script src="{% static 'js/geollaqta-map.js' %}?v=8"></script>
 <script src="{% static 'js/zonificacion-marcadores.js' %}"></script>
 <script>
 // ============================================================
@@ -1495,7 +1509,7 @@ function initMap() {
             style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
             position: google.maps.ControlPosition.TOP_RIGHT
         },
-        streetViewControl: false,
+        streetViewControl: true,
         fullscreenControl: true,
         fullscreenControlOptions: {
             position: google.maps.ControlPosition.RIGHT_BOTTOM
@@ -1505,6 +1519,8 @@ function initMap() {
             position: google.maps.ControlPosition.RIGHT_BOTTOM
         }
     });
+
+    if (window.CuadraStreetView) window.CuadraStreetView.init(map);
 
     // La Drawing Library fue retirada por Google en mayo de 2026.
     // La visualización de zonas no debe depender de las herramientas de dibujo.
