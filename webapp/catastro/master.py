@@ -7,16 +7,15 @@ private R2 credentials and complete cadastral documents always stay server-side.
 import hashlib
 import json
 import re
-import unicodedata
 from urllib.parse import urlsplit
-from urllib.request import Request, build_opener
 
 from django.core.cache import cache
 
 from cuadrantizacion import geollaqta as geo
 from .state import data_dir
-from .storage import R2, StorageError, NoRedirect
-from .map_report import measurements, ReportUnavailable
+from .storage import R2, StorageError
+from .map_report import (document_metrics, ReportUnavailable, cached_report,
+                         report_measurements, report_cache_key, download)
 
 
 def validate_lot(lot_id):
@@ -57,12 +56,7 @@ def manifest(lot_id):
 
 
 def _download(url):
-    # Only the validated source gallery/document URLs are passed here.
-    with build_opener(NoRedirect()).open(Request(url), timeout=8) as response:
-        body = response.read(8_000_001)
-    if len(body) > 8_000_000:
-        raise ValueError('Cadastral document too large')
-    return body
+    return download(url)
 
 
 def _facade_url(url, lot_id):
@@ -72,31 +66,11 @@ def _facade_url(url, lot_id):
                 r'/img_catastro/' + lot_id[:6] + r'/[A-Za-z0-9_.-]+\.(jpg|jpeg|png)', parsed.path, re.I))
 
 
-def _number(fields, labels, maximum):
-    def norm(text):
-        return ''.join(c for c in unicodedata.normalize('NFKD', str(text).upper())
-                       if not unicodedata.combining(c)).strip()
-    values = {str(f.get('value')).strip() for f in fields
-              if norm(f.get('original_label', f.get('label', ''))) in labels and f.get('value') is not None}
-    if len(values) != 1:
-        return None
-    value = next(iter(values))
-    return int(value) if re.fullmatch(r'\d+', value) and 0 <= int(value) <= maximum else None
-
-
-def document_metrics(pages, lot_id):
-    values = measurements(pages, lot_id)  # Verifies sector, block and lot identity.
-    fields = [f for page in pages for f in page.get('named_fields', [])]
-    values['floors'] = _number(fields, {'PISOS', 'NIVELES', 'NUMERO DE PISOS', 'NRO DE PISOS'}, 200)
-    values['units'] = _number(fields, {'UNIDADES', 'NUMERO DE UNIDADES', 'NRO DE UNIDADES'}, 100000)
-    return values
-
-
 def lot_summary(lot_id, record_id=None):
     validate_lot(lot_id)
     if record_id and not re.fullmatch(lot_id[:6] + r'\d{13}', record_id):
         raise ValueError('Reporte catastral no válido.')
-    key = 'master-summary-v2:' + lot_id + ':' + (record_id or 'first')
+    key = 'master-summary-v3:' + lot_id + ':' + (record_id or 'first')
     saved = cache.get(key)
     if saved is not None:
         return saved
@@ -108,6 +82,11 @@ def lot_summary(lot_id, record_id=None):
     facade = None
     if any(a.get('type') == 'facade_image' for a in (archive or {}).get('artifacts', [])):
         facade = f'/acm/catastro/lotes/{lot_id}/fachada/'
+    shared = cached_report(lot_id, record_id)
+    # Reuse the report already verified by either map, even during a source outage.
+    # An archived individual form still has precedence over report fields.
+    if not documents and shared:
+        documents = [{'type': 'cadastral_report_pdf', **r} for r in shared['reports']]
     live = []
     connection_failed = False
     # Prefer the verified archive; only the selected lot can trigger a live read.
@@ -134,26 +113,35 @@ def lot_summary(lot_id, record_id=None):
     verified = False
     candidates = sorted((d for d in documents if d['record_id'] == selected),
                         key=lambda d: d['type'] != 'individual_record_pdf')
+    def read(document):
+        if document['type'] == 'cadastral_report_pdf':
+            return report_measurements(lot_id, selected, reports=documents)['metrics']
+        pages = document.get('pages')
+        if pages is None:
+            from scrapi.geollaqta_scraper import pdf_pages
+            url = document.get('source_url', '')
+            parsed = urlsplit(url)
+            if (parsed.scheme != 'https' or parsed.netloc != 'catastro.cofopri.gob.pe'
+                    or not re.fullmatch(r'/geollaqta/reportefichas/vistapdf/ficha[a-z0-9]{1,12}\.php', parsed.path)
+                    or parsed.query != 'id=' + document['record_id'] or parsed.fragment):
+                raise ReportUnavailable('Origen de ficha no válido.')
+            body = _download(url)
+            if not body.lstrip().startswith(b'%PDF-'):
+                raise ReportUnavailable('COFOPRI no devolvió la ficha en PDF.')
+            pages = pdf_pages(body)
+        return document_metrics(pages, lot_id)
+
+    # Merge only this unit's documents, with the individual form taking priority.
     for document in candidates:
         try:
-            pages = document.get('pages')
-            if pages is None:
-                from scrapi.geollaqta_scraper import pdf_pages
-                url = document.get('source_url', '')
-                # Check even archived descriptors before requesting an external URL.
-                parsed = urlsplit(url)
-                if (parsed.scheme != 'https' or parsed.netloc != 'catastro.cofopri.gob.pe'
-                        or not re.fullmatch(r'/geollaqta/reportefichas/vistapdf/(reporte|ficha[a-z0-9]{1,12})\.php', parsed.path)
-                        or parsed.query != 'id=' + document['record_id']):
-                    continue
-                body = _download(url)
-                if not body.lstrip().startswith(b'%PDF-'):
-                    continue
-                pages = pdf_pages(body)
-            extracted = document_metrics(pages, lot_id)
+            extracted = read(document)
+            if document['type'] == 'cadastral_report_pdf' and not record_id:
+                shared = cached_report(lot_id, selected)
+                if shared:
+                    cache.set(report_cache_key(lot_id), shared, 900)
             for field in ('land_area', 'built_area', 'floors', 'units'):
                 if values[field] is None:
-                    values[field] = extracted[field]
+                    values[field] = extracted.get(field)
             for side in values['boundaries']:
                 if values['boundaries'][side] is None:
                     values['boundaries'][side] = extracted['boundaries'][side]

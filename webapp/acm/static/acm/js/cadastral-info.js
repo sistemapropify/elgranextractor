@@ -5,11 +5,12 @@
         if (!card||map.__acmCadastral||!window.ACMPermissions?.cadastral_info) return;
         map.__acmCadastral=true;
         const spatial=window.CatastroMasterData,cache=new Map(),layer=new google.maps.Data(),labels=window.GeollaqtaLabels?.create(map,{minZoom:0,lotMinZoom:0});
-        let provider=null,providerPromise=null,result=null,lot=null,target=null,serial=0,controller=null,areaController=null,timer=null,drawnKey=null,drawnCount=0,highlighted=null,detailsId=null,allowed=true,areaLoading=false,areaEpoch=0,detailLoading=false;
+        let provider=null,providerPromise=null,result=null,lot=null,target=null,serial=0,controller=null,areaController=null,timer=null,drawnKey=null,drawnCount=0,highlighted=null,detailsId=null,allowed=true,areaLoading=false,areaEpoch=0,detailLoading=false,photoLookup=null;
         layer.setStyle({clickable:false,fillColor:"#19b9b0",fillOpacity:.06,strokeColor:"#0caaa2",strokeOpacity:.95,strokeWeight:1.6,zIndex:110000});
         const sides=['frente','derecha','izquierda','fondo'];
         function status(text,error=false){$('status').textContent=text;$('status').hidden=!text;$('status').dataset.error=String(error);}
         function clearFields(){
+            if(photoLookup)clearTimeout(photoLookup.timer);photoLookup=null;
             ['code','address','year','floors','units'].forEach(k=>$(k).textContent=k==='code'?'Sin lote seleccionado':'Sin dato');
             ['land','built',...sides].forEach(k=>$(k).textContent='Sin dato');
             $('photo').hidden=true;$('photo').removeAttribute('src');$('photo-status').hidden=false;$('photo-status').textContent='Sin fachada disponible';
@@ -17,7 +18,7 @@
         }
         function clearMap(){layer.forEach(f=>layer.remove(f));layer.setMap(null);labels?.setData([],[]);drawnKey=null;drawnCount=0;highlighted=null;}
         async function api(path,signal){
-            const stop=new AbortController(),abort=()=>stop.abort(),deadline=setTimeout(abort,path.startsWith('lotes/')?45000:25000);
+            const stop=new AbortController(),abort=()=>stop.abort(),deadline=setTimeout(abort,path.startsWith('lotes/')?90000:25000);
             signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
             try {
                 const r=await fetch('/acm/catastro/'+path,{credentials:'same-origin',cache:'no-store',signal:stop.signal,headers:{Accept:'application/json'}});
@@ -54,14 +55,24 @@
         function photo(url,stamp){
             const image=$('photo'),id=lot?.properties.ID_LOTE;
             if(!id)return;
-            const direct=window.GeollaqtaData.facadeUrl(id),candidates=[...new Set([url,direct].filter(Boolean))];
-            if(image.getAttribute?.('src')===direct&&image.complete&&image.naturalWidth>0)return;
-            if(!url&&image.getAttribute?.('src')===direct)return;
-            let next=0;
-            $('photo-status').textContent='Cargando fachada…';
-            image.onload=()=>{if(stamp!==serial||lot?.properties.ID_LOTE!==id)return;image.hidden=false;$('photo-status').hidden=true;};
-            image.onerror=()=>{if(stamp!==serial||lot?.properties.ID_LOTE!==id)return;if(next<candidates.length){image.src=candidates[next++];return;}image.hidden=true;$('photo-status').hidden=false;$('photo-status').textContent='Sin fachada disponible';};
-            image.loading='eager';image.src=candidates[next++];
+            if(photoLookup?.id===id&&photoLookup.stamp===stamp){
+                if(!url||photoLookup.urls.includes(url)||photoLookup.loaded)return;
+                // A verified archive image can arrive after source candidates failed.
+            }
+            if(photoLookup)clearTimeout(photoLookup.timer);
+            const urls=[...new Set([url,...Array.from({length:12},(_,index)=>window.GeollaqtaData.facadeUrl(id,index))].filter(Boolean))];
+            const lookup=photoLookup={id,stamp,urls,timer:null,loaded:false};let next=0;
+            const current=()=>photoLookup===lookup&&stamp===serial&&lot?.properties.ID_LOTE===id;
+            $('photo-status').textContent='Cargando fachada…';$('photo-status').hidden=false;
+            function attempt(){
+                clearTimeout(lookup.timer);if(!current())return;
+                if(next>=urls.length){image.hidden=true;$('photo-status').hidden=false;$('photo-status').textContent='Sin fachada disponible';return;}
+                const candidate=urls[next++],active=()=>current()&&(image.getAttribute?.('src')??image.src)===candidate;
+                image.onload=()=>{if(!active())return;clearTimeout(lookup.timer);lookup.loaded=true;image.hidden=false;$('photo-status').hidden=true;};
+                image.onerror=()=>{if(active())attempt();};
+                lookup.timer=setTimeout(attempt,6000);image.loading='eager';image.src=candidate;
+            }
+            attempt();
         }
         function metrics(value,stamp){
             const data=value.metrics||{};

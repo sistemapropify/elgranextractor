@@ -1,4 +1,5 @@
 import unittest
+from django.core.cache import cache
 from unittest.mock import patch
 
 from catastro.map_report import measurements, report_measurements, ReportUnavailable
@@ -19,6 +20,9 @@ def pages(built='20.5', land='200'):
 
 
 class MapReportTests(unittest.TestCase):
+    def setUp(self):
+        cache.clear()
+
     def test_areas_and_four_measures_are_independent_of_vector_values(self):
         result=measurements(pages(),LOT)
         self.assertEqual(result['land_area'],'200')
@@ -44,3 +48,45 @@ class MapReportTests(unittest.TestCase):
         self.assertEqual(second['metrics']['built_area'],'42.35')
         self.assertEqual(len(first['reports']),2)
         self.assertNotIn('87654321',str(first))
+
+
+    @patch('catastro.map_report.Source')
+    def test_both_maps_use_the_same_bounded_source_request(self, source):
+        from catastro import master
+        source.return_value.get.return_value = b'gallery'
+        url = 'https://catastro.cofopri.gob.pe/geollaqta/reportefichas/vistadetalle.php?id_lote=' + LOT
+        self.assertEqual(master._download(url), b'gallery')
+        source.return_value.get.assert_called_once_with(url, retry=False)
+
+    @patch('catastro.map_report.download', side_effect=ReportUnavailable('offline'))
+    def test_failures_do_not_poison_the_shared_cache(self, download):
+        from catastro.map_report import cached_report
+        reports = [{'type':'cadastral_report_pdf','record_id':RECORD,
+                    'source_url':'https://catastro.cofopri.gob.pe/geollaqta/reportefichas/vistapdf/reporte.php?id=' + RECORD}]
+        with self.assertRaises(ReportUnavailable):
+            report_measurements(LOT, reports=reports)
+        self.assertIsNone(cached_report(LOT))
+        reports[0]['pages'] = pages()
+        self.assertEqual(report_measurements(LOT, reports=reports)['metrics']['built_area'], '20.5')
+
+    @patch('catastro.map_report.download')
+    def test_untrusted_archived_document_url_is_rejected_before_download(self, download):
+        reports = [{'type':'cadastral_report_pdf','record_id':RECORD,
+                    'source_url':'https://evil.test/report.pdf'}]
+        with self.assertRaises(ReportUnavailable): report_measurements(LOT, reports=reports)
+        download.assert_not_called()
+
+    @patch('catastro.map_report.State')
+    def test_old_archive_extraction_is_read_again_instead_of_trusting_wrong_columns(self, state):
+        import tempfile, json
+        from pathlib import Path
+        from catastro.map_report import _archived_reports
+        with tempfile.TemporaryDirectory() as directory:
+            state.return_value.root = Path(directory)
+            folder = Path(directory) / LOT[:6] / LOT
+            folder.mkdir(parents=True)
+            (folder / 'datos.json').write_text(json.dumps({'lot_id': LOT, 'district_ubigeo': LOT[:6],
+                'extraction_revision': 1, 'reports': [{'type': 'cadastral_report_pdf',
+                'record_id': RECORD, 'pages': pages(built='2012')}]}), encoding='utf8')
+            self.assertNotIn('pages', _archived_reports(LOT)[0])
+        state.return_value.close.assert_called_once()

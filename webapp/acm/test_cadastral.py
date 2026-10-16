@@ -152,3 +152,61 @@ class CadastralAccessTests(SimpleTestCase):
     def test_photo_url_allowlist(self):
         self.assertTrue(master._facade_url('https://catastro.cofopri.gob.pe/img_catastro/'+LOT[:6]+'/example.jpg', LOT))
         self.assertFalse(master._facade_url('https://evil.test/img_catastro/'+LOT[:6]+'/example.jpg', LOT))
+
+
+class SharedCadastralReportTests(SimpleTestCase):
+    def setUp(self):
+        cache.clear()
+        self.factory = RequestFactory()
+
+    def quad(self, record=None):
+        from cuadrantizacion.geollaqta import report
+        request = self.factory.get('/', {'ubigeo': LOT[:6], **({'record_id': record} if record else {})})
+        request.current_user = SimpleNamespace(is_active=True, is_authenticated=True)
+        response = report(request, LOT)
+        self.assertEqual(response.status_code, 200)
+        import json
+        return json.loads(response.content)
+
+    @patch('catastro.master._download', side_effect=OSError('offline'))
+    @patch('catastro.master.manifest', return_value=None)
+    @patch('catastro.map_report._archived_reports')
+    def test_acm_reuses_report_verified_in_quadrantizacion_even_when_source_is_offline(self, reports, manifest, download):
+        reports.return_value = archive()['reports']
+        expected = self.quad()
+        result = master.lot_summary(LOT)
+        self.assertEqual(result['document_status'], 'verified')
+        self.assertEqual(result['metrics'], expected['metrics'])
+        self.assertNotIn('87654321', str(result))
+        download.assert_not_called()
+
+    @patch('catastro.map_report._archived_reports', side_effect=AssertionError('should reuse verified report'))
+    @patch('catastro.master.manifest')
+    def test_quadrantizacion_reuses_report_verified_in_acm(self, manifest, reports):
+        manifest.return_value = archive()
+        expected = master.lot_summary(LOT)
+        self.assertEqual(self.quad()['metrics'], expected['metrics'])
+        reports.assert_not_called()
+
+    @patch('catastro.master._download', side_effect=OSError('offline'))
+    @patch('catastro.master.manifest', return_value=None)
+    @patch('catastro.map_report._archived_reports')
+    def test_cached_reports_remain_separate_for_each_unit(self, reports, manifest, download):
+        second = RECORD[:-1] + '3'
+        reports.return_value = archive()['reports'] + [{'type': 'cadastral_report_pdf', 'record_id': second,
+                                                      'form_number': '2', 'pages': pages(built='42.35')}]
+        self.quad()
+        self.quad(second)
+        self.assertEqual(master.lot_summary(LOT)['metrics']['built_area'], '20.5')
+        self.assertEqual(master.lot_summary(LOT, second)['metrics']['built_area'], '42.35')
+        download.assert_not_called()
+
+    @patch('catastro.master.manifest')
+    def test_shared_report_cache_does_not_override_available_individual_form(self, manifest):
+        from catastro.map_report import report_measurements
+        report_measurements(LOT, reports=archive()['reports'])
+        manifest.return_value = archive()
+        manifest.return_value['reports'].append({'type': 'individual_record_pdf', 'record_id': RECORD,
+                                                 'pages': pages(land='199', built=None)})
+        self.assertEqual(master.lot_summary(LOT)['metrics']['land_area'], '199')
+        self.assertEqual(master.lot_summary(LOT)['metrics']['built_area'], '20.5')

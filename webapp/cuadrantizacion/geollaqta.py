@@ -368,7 +368,8 @@ def report(request, lot_id):
             raise ValueError('El reporte no pertenece al distrito seleccionado.')
     except ValueError as exc:
         return JsonResponse({'error': str(exc)}, status=400)
-    key = 'geollaqta-report-v1:' + lot_id + ':' + (record_id or 'first')
+    from catastro.map_report import report_cache_key
+    key = report_cache_key(lot_id, record_id)
     saved = cache.get(key)
     if saved is not None:
         response = JsonResponse(saved)

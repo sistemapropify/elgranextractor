@@ -230,3 +230,27 @@ vecinos de otro distrito, radio distinto, regiones previas/vacías, conservació
 de lotes comunes, lotes >1.000, recuperación de pendientes y cancelación/retorno.
 La tarjeta flotante, fachada, permisos y datos documentales se conservan.
 La limitación de acceso en vivo a documentos desde Azure sigue siendo independiente.
+
+
+## Shared ACM and Cuadrantización document reader — 2026-10-16
+Both maps now use `catastro.map_report.report_measurements` and a shared,
+verified 15-minute report cache, keyed by lot and individual unit. The ACM keeps
+individual-form priority and fills missing fields from that same unit's report.
+Neither reader uses GIS areas as a fallback. Old archive extraction revisions
+are read again before their fields can be used. Failed reads are not cached.
+
+The source reader uses the same headers and 25-second request timeout in both
+maps, with one interactive attempt per download. The ACM request deadline allows
+for the gallery, individual form and report; aborting or changing the pin still
+cancels the browser request and ignores stale responses. District geometry is
+still limited to the selected radius and reuses the previously loaded footprint.
+
+The floating card tries the primary facade image and suffixes `_1` through `_11`,
+with bounded image attempts and stale-lot protection. Report failures do not stop
+facade discovery. Missing images remain missing rather than displaying a PDF.
+
+Validation: 106 isolated Django tests and four JavaScript regression suites
+passed. A live local read of lot 04010222013014 returned land 369.71 m²,
+construction 469.52 m² and boundaries 11.73 / 38.44 / 38.81 / 12.27 m in about
+four seconds; the other map reused the same result without a second source read.
+Its source gallery has no images and the twelve usual facade URLs return 404.

@@ -1,3 +1,46 @@
+# ACM cadastral document lookup correction — 2026-10-16
+
+Status: Validated — continuation of the requested production correction.
+Recipe: existing CI/CD main_granextractorservice.yml, application code only.
+Target: Azure subscription 1 / 0219eecc-9920-4789-9929-3091a2f09daf,
+rg-elgranextractor / granextractorservice, Brazil South.
+Base: origin/main 855dd38c, previous radius deployment completed successfully.
+
+## Scope and validation
+Unify verified report reading/cache across ACM and Cuadrantización; retain
+individual-form priority, private role checks, separate units and exact document
+values. Probe the same facade suffixes as Cuadrantización. Preserve radius-based
+geometry caching, floating card size, labels and unrelated modules. No SQL,
+resource, identity, settings, capacity or billing changes.
+
+All validation checks must pass:
+- [x] Isolated Django report, access and cadastral regressions (106 tests).
+- [x] Node ACM radius/card/photo, gallery, measures and labels regressions.
+- [x] Live source example returns exact measurements and shares its result.
+- [x] Shared local HTTP login/assets/auth gates, assets byte-matched.
+- [x] Existing Azure subscription/app Running; previous publication successful.
+- [x] Release build/static collection, WSGI import, scoped diff and whitespace.
+
+## 7. Validation Proof
+106 Django tests passed with acm.access_test_settings. Four Node suites passed.
+Local source lot 04010222013014 verified land 369.71, construction 469.52 and
+boundaries 11.73 / 38.44 / 38.81 / 12.27, approximately four seconds. Cross-map
+cache tests prove reuse during source outages and separate per-unit selection.
+No owner identifiers enter map responses. Local static URLs return 200 and
+match the served source bytes; ACM login 200 and anonymous cadastral APIs 401.
+Azure account and app read-only checks confirm existing approved target Running.
+Previous radius run 38952032795 completed success. Release-worktree collectstatic, exact output asset comparison, isolated WSGI
+startup, template compilation, JavaScript syntax and git diff --check passed.
+The final release-worktree run passed all 106 Django tests and four Node suites.
+No infrastructure or RBAC files were changed; no provisioning is required.
+
+Execution: scoped non-forced push to main through the existing OIDC pipeline.
+Its public page/static verification remains required before live-success claims.
+The user handles monitoring; report dispatch separately from live completion.
+Rollback: scoped revert through the same pipeline. No infrastructure changes.
+
+---
+
 # ACM radius-scoped cadastral loading - 2026-10-16
 
 Status: Validated - release checks passed under azure-validate.
