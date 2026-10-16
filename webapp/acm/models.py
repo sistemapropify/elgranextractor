@@ -157,3 +157,7 @@ class ACMTestProperty(models.Model):
 
     def get_estado_propiedad_display(self):
         return self.estado_propiedad or 'En Publicación'
+
+
+# ACM access configuration and personal Propify history.
+from .access_models import ACMRolePolicy, ACMRoleAudit, ACMPortalAnalysis, ACMPhotoReview

@@ -26,6 +26,12 @@ echo "[PRE] Application root: $APP_ROOT"
 # FIX-504: Evita precarga del modelo de embeddings (1GB RAM, ~20s) en startup.
 # El modelo se carga lazy en la primera solicitud que lo requiera.
 export PRODUCTION=true
+
+# Deployment artifacts do not retain executable bits; restore the bundled reader.
+if [ -f "$APP_ROOT/cad-runtime/bin/dwg2dxf" ]; then
+    chmod +x "$APP_ROOT/cad-runtime/bin/dwg2dxf"
+    "$APP_ROOT/cad-runtime/bin/dwg2dxf" --version
+fi
 echo "[PRE] Modo PRODUCTION activado — embeddings lazy load"
 
 # Cache persistente del navegador entre reinicios de App Service.

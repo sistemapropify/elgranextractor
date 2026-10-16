@@ -1,0 +1,51 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+{% block title %}Visor de planos · Catastro{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/visor-planos.css' %}?v=2">{% endblock %}
+{% block content %}
+<main class="planos-workspace" id="planos-workspace">
+  <header class="planos-heading">
+    <div><span class="planos-eyebrow">CATASTRO</span><h1>Visor de planos</h1></div>
+    <div class="planos-heading-actions"><button class="planos-button" id="planos-fit" type="button" disabled>Centrar plano</button><button class="planos-button" id="planos-panels-toggle" type="button" aria-expanded="true" aria-controls="planos-panels">Ocultar tarjetas</button></div>
+  </header>
+  <section class="planos-canvas" aria-label="Área de trabajo del plano">
+    <div id="planos-map" aria-label="Mapa de Google Maps"></div>
+    <svg id="planos-cad" aria-label="Plano CAD en sus coordenadas originales" hidden><g id="planos-cad-entities"></g></svg>
+    <aside class="planos-panels" id="planos-panels" aria-label="Herramientas del visor">
+      <details class="planos-card" open><summary><span class="planos-card-icon">01</span>Planos y archivos<span class="planos-chevron" aria-hidden="true">⌄</span></summary><div class="planos-card-body">
+        <form id="planos-upload-form">{% csrf_token %}<label class="planos-upload" for="planos-file"><strong>Abrir archivo DWG</strong><span>.dwg · hasta 100 MB</span><input id="planos-file" type="file" accept=".dwg,application/acad,application/x-acad" {% if not cad_available %}disabled{% endif %}></label></form>
+        <p class="planos-help">El DWG se conserva como original. Puedes revisar sus capas antes de ubicarlo en el mapa.</p>
+        {% if not cad_available %}<p class="planos-help">El lector DWG no está instalado en este servidor.</p>{% endif %}
+        <progress id="planos-import-progress" aria-label="Lectura del archivo DWG" hidden></progress>
+        <div class="planos-file-info" id="planos-file-info" hidden><strong id="planos-file-name"></strong><span id="planos-file-count"></span><button class="planos-button" id="planos-remove" type="button">Cerrar plano</button></div>
+        <label class="planos-label" for="planos-crs">Ubicación del plano<select id="planos-crs">{% for code, label in cad_crs.items %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+        <p class="planos-help">Si desconoces las coordenadas, usa la vista CAD. Selecciona el sistema correcto para superponerlo en Google Maps.</p>
+        <p id="planos-cad-warnings" class="planos-help" hidden></p>
+      </div></details>
+      <details class="planos-card" open><summary><span class="planos-card-icon">02</span>Capas del plano<span class="planos-count" id="planos-layer-count">0</span><span class="planos-chevron" aria-hidden="true">⌄</span></summary><div class="planos-card-body">
+        <label class="planos-label" for="planos-layer-search">Buscar capa<input id="planos-layer-search" type="search" placeholder="Nombre de la capa" disabled></label>
+        <div class="planos-inline"><button type="button" class="planos-button planos-small" id="planos-all" disabled>Mostrar todas</button><button type="button" class="planos-button planos-small" id="planos-none" disabled>Ocultar todas</button></div>
+        <div id="planos-layers" class="planos-layers"><p class="planos-empty">Las capas aparecerán al abrir un plano.</p></div>
+      </div></details>
+      <details class="planos-card"><summary><span class="planos-card-icon">03</span>Vista y medición<span class="planos-chevron" aria-hidden="true">⌄</span></summary><div class="planos-card-body">
+        <label class="planos-label" for="planos-basemap">Mapa de fondo<select id="planos-basemap"><option value="roadmap">Mapa</option><option value="satellite">Satélite</option><option value="hybrid">Satélite con calles</option></select></label>
+        <label class="planos-label" for="planos-opacity">Opacidad del plano <output id="planos-opacity-value">65%</output><input id="planos-opacity" type="range" min="0" max="100" value="65"></label>
+        <div class="planos-inline"><button type="button" class="planos-button" id="planos-distance" aria-pressed="false">Medir distancia</button><button type="button" class="planos-button" id="planos-area" aria-pressed="false">Medir área</button></div>
+        <output id="planos-measure-result" class="planos-measure-result">Selecciona una herramienta y marca puntos en el mapa.</output>
+        <button type="button" class="planos-button planos-small" id="planos-measure-clear">Limpiar medición</button>
+      </div></details>
+      <details class="planos-card" id="planos-selection"><summary><span class="planos-card-icon">04</span>Elemento seleccionado<span class="planos-chevron" aria-hidden="true">⌄</span></summary><div class="planos-card-body">
+        <p class="planos-empty" id="planos-selection-empty">Haz clic en un polígono, una línea o un punto del plano.</p>
+        <div id="planos-selection-data" hidden><span class="planos-selected-layer" id="planos-selected-layer"></span><dl id="planos-selected-properties"></dl><p class="planos-help">Las medidas se calculan sobre la geometría del mapa; no son áreas registrales.</p></div>
+      </div></details>
+      <details class="planos-card"><summary><span class="planos-card-icon">05</span>Exportar selección de capas<span class="planos-chevron" aria-hidden="true">⌄</span></summary><div class="planos-card-body"><p class="planos-help">Con el plano ubicado, exporta las entidades cargadas de sus capas visibles como GeoJSON. El aporte al Catastro maestro se incorporará después de la revisión.</p><button class="planos-button planos-primary" id="planos-export" type="button" disabled>Descargar geometrías cargadas</button></div></details>
+    </aside>
+    <div class="planos-map-caption"><span class="planos-live-dot"></span><span id="planos-map-caption">Arequipa · sin plano abierto</span></div>
+  </section>
+  <footer class="planos-statusbar"><span id="planos-status" role="status" aria-live="polite">{% if google_maps_api_key %}Cargando mapa…{% else %}Google Maps está pendiente de configuración.{% endif %}</span><span id="planos-coordinates">WGS84 · longitud / latitud</span></footer>
+</main>
+{% endblock %}
+{% block extra_js %}
+<script src="{% static 'js/visor-planos.js' %}?v=3"></script>
+{% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;libraries=geometry&amp;callback=initPlanosMap" async defer></script>{% endif %}
+{% endblock %}

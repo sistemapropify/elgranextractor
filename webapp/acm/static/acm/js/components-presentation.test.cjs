@@ -82,3 +82,21 @@ assert.deepEqual(comparisonRows([apartment,unusedApartment,missingApartment,expl
   {property_type:'Departamento'},nearestResult).map(row=>row.id),['apartment']);
 assert.equal(property(explicitReference,{...nearestResult,house_ids:['apartment','explicit-reference']}).status,'reference');
 console.log('Nearest apartment selection: table excludes both unused and explicit reference records.');
+
+// Every card distinguishes the whole-property offer from its area unit price.
+const {offer} = require('./components-presentation.js');
+const apartmentSale = offer({kind:'Departamento', operation:'Venta', price:130000, built:65, land:900});
+assert.equal(apartmentSale.totalLabel, 'Precio de venta total');
+assert.equal(apartmentSale.unitLabel, 'Precio por m² construido');
+assert.equal(apartmentSale.unit, 2000);
+const landSale = offer({kind:'Terreno', operation:'Venta', price:100000, land:200, built:65});
+assert.equal(landSale.unitLabel, 'Precio por m² de terreno');
+assert.equal(landSale.unit, 500);
+const rental = offer({kind:'Departamento', operation:'Alquiler', price:756, built:65});
+assert.equal(rental.totalLabel, 'Importe de alquiler anunciado');
+assert.equal(rental.operation, 'Alquiler');
+assert.ok(Math.abs(rental.unit - 756 / 65) < 1e-9);
+assert.equal(offer({kind:'Casa', operation:'Venta', price:100000, land:100, built:null}).unit, null);
+assert.equal(offer({operation:'No especificado'}).operation, 'Operación por confirmar');
+assert.equal(offer({operation:'Venta',operation_status:'review'}).operation, 'Operación por confirmar');
+console.log('Card prices: operation, total amount and explicit built/land unit prices verified.');

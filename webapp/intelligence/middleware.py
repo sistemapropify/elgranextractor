@@ -56,6 +56,11 @@ class AuthenticationMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        # ACM authenticates against Propify without loading a Prometeo identity.
+        if request.path.startswith(('/acm/', '/api/acm/')):
+            request.current_user = None
+            return self.get_response(request)
+
         # 0. Limpiar _auth_user_id de Django si no es un UUID válido
         #    Esto evita que django.contrib.auth.middleware falle al
         #    resolver request.user con IDs enteros de sesiones pre-UUID.

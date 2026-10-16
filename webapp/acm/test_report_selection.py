@@ -138,6 +138,8 @@ class SelectedReportEndpointTests(SimpleTestCase):
     def setUp(self):
         from django.test import RequestFactory
         self.factory=RequestFactory();self.user=SimpleNamespace(pk=1,is_active=True,is_authenticated=True)
+        from .test_access_helpers import install_propify_fixture
+        install_propify_fixture(self)
 
     def request(self,data):
         import json
@@ -162,7 +164,7 @@ class SelectedReportEndpointTests(SimpleTestCase):
         self.assertIn('attachment',response['Content-Disposition'])
         self.assertEqual(response['X-ACM-History-Code'],'ACM-html-test')
         self.assertIn(b'USD 234,000.00',response.content)
-        self.assertEqual(persist.call_args.args[1]['report_ids'],selected)
+        self.assertEqual(persist.call_args.args[1]['report_ids'],[sample()[0]['id']])
         for payload,status in [({'token':snapshot['token'],'report_ids':[]},422),
                                ({'token':snapshot['token'],'report_ids':['foreign']},400),
                                ({'token':'tampered'},400)]:

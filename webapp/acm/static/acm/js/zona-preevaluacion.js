@@ -9,7 +9,7 @@
 (function () {
     'use strict';
 
-    var ENDPOINT = '/cuadrantizacion/zonificacion/clasificar/';
+    var ENDPOINT = '/acm/pdm/';
     var panel = null;
     var contador = 0;
     var ultimo = null;

@@ -4,6 +4,7 @@ import json
 import logging
 from statistics import median
 from django.core.cache import cache
+from .comparable_policy import land_only, priority
 logger=logging.getLogger(__name__)
 
 RULES = '''Explica un ACM inmobiliario a una persona sin conocimientos técnicos.
@@ -20,6 +21,8 @@ Reglas obligatorias:
 - La referencia de suelo sale de terrenos. Construcción y mejoras es un remanente del anuncio,
   no un coste de obra comprobado. No atribuyas diferencias a antigüedad, acabados, baños,
   habitaciones o piscina: no están valorados por este método.
+- La antigüedad, cuando se informa, participa en la selección junto con distancia y áreas.
+  No existe un descuento monetario por año. Solo casas de más de 40 años usan el suelo.
 - En terrenos, departamentos y oficinas se usa la mediana por la superficie correspondiente;
   no se aplican los pesos de casas ni se separa construcción de un departamento.
 - Con la misma muestra y pesos, más terreno y construcción aumentan el valor y menos lo reducen.
@@ -48,12 +51,13 @@ def evidence(params, records, result, excluded, warnings):
         items.append({
             'referencia':d['id'], 'precio_anuncio':row['price'],
             'terreno_m2':row.get('land'), 'construccion_m2':row.get('built'),
+            'antiguedad':row.get('age'), 'distancia_m':row.get('distance'),
             'valor_terreno':d.get('land_value'), 'remanente_mejoras':d.get('remainder'),
             'ajuste_terreno':d.get('land_adjustment'), 'ajuste_construccion':d.get('built_adjustment'),
             'precio_ajustado':d.get('target_estimate',d.get('adjusted_total')),
             'peso_aplicado_pct':d.get('similarity_weight'), 'participa':d['usable'],
         })
-    return {'tipo':params.get('property_type','Casa'), 'objetivo':{k:params[k] for k in ('land','built')},
+    return {'tipo':params.get('property_type','Casa'), 'objetivo':{k:params.get(k) for k in ('land','built','age')},
         'metodo':result.get('built_unit_method',result['model']), 'suelo_usd_m2':result.get('land_unit'),
         'resultado':result['new'], 'terrenos_usados':result['land_count'],
         'comparables':items, 'comparables_omitidos_del_resumen':max(0,len(ordered)-40),
@@ -104,13 +108,18 @@ def explain_result(user,params,records,result,excluded,warnings):
         cache.delete(lock)
 
 
-PROPOSAL_RULES='''Propón entre una y tres casas como referencia para valorar el objetivo.
-Devuelve JSON: {"ids": ["id real"], "justificacion": "texto breve"}.
-Compara semejanza conjunta de terreno y construcción, distancia y coherencia de
-los precios ajustados que ya calculó el sistema.
-La referencia actual prioriza proximidad entre casas aptas. Justifica expresamente
-si propones reemplazar una casa cercana por otra más lejana; una mínima mejora de
-similitud por sí sola no basta. Tu propuesta no sustituye el cálculo sin aceptación.
+PROPOSAL_RULES='''Recomienda comparables inmobiliarios sin inventar datos ni valorar otra vez.
+Devuelve JSON: {"ids": ["id completo"], "revisar": [{"id":"id incompleto", "motivo":"qué dato completar y por qué puede servir"}], "justificacion":"texto breve"}.
+ids: entre cero y tres candidatos completos; revisar: entre cero y tres referencias
+incompletas de la lista referencias_para_revisar. Debe haber al menos una recomendación.
+Las referencias incompletas solo reciben una recomendación para revisión: nunca
+las pongas en ids ni supongas que su dato ausente vale cero. Si solo sirven referencias
+incompletas, devuelve ids vacío. No elijas registros excluidos, retirados o duplicados.
+Compara cercanía, antigüedad cuando esté informada y áreas aplicables; sin antigüedad
+objetivo manda la cercanía. Estreno tiene preferencia entre candidatos aptos.
+Para casas objetivo de más de 40 años compara únicamente terrenos y su superficie.
+Justifica reemplazar un comparable cercano por uno lejano. Tu propuesta no sustituye
+el cálculo sin aceptación. Los puntajes ordenan, no son porcentajes de depreciación.
 No elijas más casas
 solo por aumentar la muestra. Una discrepancia de precios no se resuelve inventando motivos.
 Solo selecciona IDs de candidatos. Los demás registros son evidencia para contraste.
@@ -122,20 +131,37 @@ Reconoce si la lista está limitada y no afirmes haber revisado registros omitid
 '''
 
 
-def propose_result(user,params,records,result,excluded):
+def propose_result(user,params,records,result,excluded,warnings=()):
     from intelligence.services.llm import LLMService
     by_id={r['id']:r for r in records}
-    ranked=sorted(result['breakdown'],key=lambda d:-(d.get('land_similarity',0)+d.get('built_similarity',0)))
-    eligible=[d for d in ranked if d.get('remainder',0)>0 and d['id'] not in excluded]
-    allowed={d['id'] for d in eligible[:30]}
-    if not allowed:raise RuntimeError('No proposal candidates')
-    payload={'objetivo':{k:params[k] for k in ('land','built')},
-             'candidatos':[{'id':d['id'],'terreno':by_id[d['id']]['land'],
-                'construccion':by_id[d['id']]['built'],'distancia_m':by_id[d['id']]['distance'],
-                'precio':by_id[d['id']]['price'],'precio_ajustado':d['target_estimate'],
-                'similitud_terreno':d['land_similarity'],'similitud_construccion':d['built_similarity']}
-                for d in eligible[:30]],'candidatos_omitidos':max(0,len(eligible)-30),
-             'referencias_no_aptas':len(records)-len(eligible),'avisos':result['messages']}
+    target='Terreno' if land_only(params) else params.get('property_type','Casa')
+    details={d['id']:d for d in result['breakdown']}
+    considered=[row for row in records if row['kind']==target and row['id'] not in excluded and
+                not row.get('duplicate_of') and not row.get('review_excluded') and
+                row.get('state')=='activa' and row.get('precision')=='exacta' and
+                row.get('operation')=='Venta' and row['distance']<=
+                (result.get('land_radius',params['radius']) if target=='Terreno' else params['radius'])]
+    ranked=sorted(considered,key=lambda row:priority(row,params))
+    eligible=[row for row in ranked if not row['issues'] and
+              (result['model']!='components' or details.get(row['id'],{}).get('remainder',0)>0)]
+    incomplete=[row for row in ranked if row['issues'] and all(
+        issue.startswith(('Falta área','Precio sin informar','Antigüedad sin informar')) for issue in row['issues'])]
+    allowed={row['id'] for row in eligible[:30]}
+    review_allowed={row['id'] for row in incomplete[:20]}
+    if not allowed and not review_allowed:raise RuntimeError('No proposal candidates')
+    def item(row):
+        detail=details.get(row['id'],{})
+        return {'id':row['id'], 'terreno':row.get('land'), 'construccion':row.get('built'),
+                'antiguedad':row.get('age'), 'distancia_m':row['distance'],
+                'precio':row.get('price'), 'precio_ajustado':detail.get('target_estimate',detail.get('adjusted_total')),
+                'similitud_terreno':row.get('land_similarity'), 'similitud_construccion':row.get('built_similarity'),
+                'puntaje_seleccion':row.get('selection_score'), 'datos_por_completar':row['issues']}
+    payload={'objetivo':{k:params.get(k) for k in ('property_type','land','built','age')},
+             'modo':'solo_terreno' if land_only(params) else 'construccion',
+             'candidatos':[item(row) for row in eligible[:30]],
+             'referencias_para_revisar':[item(row) for row in incomplete[:20]],
+             'candidatos_omitidos':max(0,len(eligible)-30)+max(0,len(incomplete)-20),
+             'referencias_no_aptas':len(records)-len(eligible),'avisos':result['messages']+list(warnings)}
     body=json.dumps(payload,ensure_ascii=False,sort_keys=True)
     key='acm-proposal:'+hashlib.sha256((str(user)+PROPOSAL_RULES+body).encode()).hexdigest()
     cached=cache.get(key)
@@ -153,11 +179,21 @@ def propose_result(user,params,records,result,excluded):
         try:
             proposal=json.loads(response['content'])
             ids=proposal['ids'];reason=proposal['justificacion']
-            if not isinstance(ids,list) or not 1<=len(ids)<=3 or any(not isinstance(i,str) or i not in allowed for i in ids) or len(set(ids))!=len(ids):raise ValueError('invalid proposal IDs')
+            reviews=proposal.get('revisar',[])
+            if not isinstance(ids,list) or len(ids)>3 or any(not isinstance(i,str) or i not in allowed for i in ids) or len(set(ids))!=len(ids):raise ValueError('invalid proposal IDs')
+            if not isinstance(reviews,list) or len(reviews)>3:raise ValueError('invalid reviews')
+            review_ids=[]
+            for review in reviews:
+                if not isinstance(review,dict) or review.get('id') not in review_allowed or not isinstance(review.get('motivo'),str) or not review['motivo'].strip() or len(review['motivo'])>600:
+                    raise ValueError('invalid review')
+                review_ids.append(review['id'])
+            if len(set(review_ids))!=len(review_ids) or not ids and not review_ids:raise ValueError('empty or duplicate recommendations')
             if not isinstance(reason,str) or not reason.strip() or len(reason)>1800:raise ValueError('invalid reason')
         except (ValueError,TypeError,KeyError) as exc:
             raise RuntimeError('Invalid AI proposal') from exc
-        value={'ids':ids,'explanation':reason.strip(),'omitted':payload['candidatos_omitidos']}
+        value={'ids':ids,'explanation':reason.strip(),'omitted':payload['candidatos_omitidos'],
+               'reviews':[{'id':review['id'],'reason':review['motivo'].strip(),
+                           'missing':by_id[review['id']]['issues']} for review in reviews]}
         cache.set(key,value,900)
         return value
     finally:

@@ -1,8 +1,11 @@
 """ACM experimental por componentes. Sin escrituras ni dependencias de ML."""
 import math
 from statistics import median
+from .listing_operation import resolve_operation
+from .comparable_policy import (age_years, land_only, surface_similarity, selection_metrics,
+                               selection_pool, automatic_houses, age_messages)
 
-VERSION = 'componentes-5-comparables-cercanos'
+VERSION = 'componentes-6-antiguedad-grupo-cercano'
 MIN_LANDS = 1
 MIN_HOUSES = 1
 # Portales habilitados en el ACM. La selección se administra aquí, no en el mapa.
@@ -33,9 +36,13 @@ def parameters(data):
     if target not in ('Casa','Terreno','Departamento','Oficina'):
         raise ValueError('Tipo de propiedad inválido')
     output = {'property_type':target}
+    raw_age = data.get('age')
+    output['age'] = age_years(raw_age) if target != 'Terreno' else None
+    if target != 'Terreno' and raw_age not in (None, '') and output['age'] is None:
+        raise ValueError('Antigüedad: ingresa años enteros entre 0 y 150, o déjala vacía.')
     for key, low, high in [('lat',-90,90), ('lng',-180,180), ('radius',100,2000),
                            ('max_radius',100,5000), ('land',.01,1000000), ('built',.01,1000000)]:
-        optional = (key=='built' and target=='Terreno') or (key=='land' and target in ('Departamento','Oficina'))
+        optional = (key=='built' and (target=='Terreno' or land_only(output))) or (key=='land' and target in ('Departamento','Oficina'))
         value = number(data.get(key))
         if optional and value in (None,0):
             output[key] = 0
@@ -81,13 +88,25 @@ def reason(record, p):
     if record.get('precision') != 'exacta': issues.append('Ubicación no exacta')
     if record.get('state') != 'activa': issues.append('Disponibilidad sin confirmar')
     if record.get('operation') != 'Venta': issues.append('Operación de venta sin confirmar')
+    if record.get('operation_status') == 'review': issues.append('Operación contradictoria entre título original y publicación: revisar')
     if record.get('review_excluded'): issues.append('Excluida por revisión de calidad')
     if record['kind'] == 'Terreno' and positive(record.get('built')):
         issues.append('Terreno con construcción: revisar antes de usar como suelo')
     if record['kind'] in ('Casa','Terreno') and positive(record.get('land')) and not .5 <= record['land']/p['land'] <= 2:
         issues.append('Terreno fuera del rango de tamaño comparable (0,5 a 2 veces)')
-    if record['kind'] != 'Terreno' and positive(record.get('built')) and not .5 <= record['built']/p['built'] <= 2:
+    if record['kind'] != 'Terreno' and not land_only(p) and positive(record.get('built')) and not .5 <= record['built']/p['built'] <= 2:
         issues.append('Construcción fuera del rango de tamaño comparable (0,5 a 2 veces)')
+    if record['kind'] != 'Terreno' and land_only(p):
+        issues.append('Casa objetivo de más de 40 años: se valora con terrenos, sin aporte de construcción')
+    elif record['kind'] != 'Terreno' and p.get('age') is not None:
+        if age_years(record.get('age')) is None or record.get('age_conflict'):
+            issues.append('Antigüedad sin informar o con evidencia contradictoria')
+        if p.get('property_type', 'Casa') == 'Casa' and (age_years(record.get('age')) or 0) > 40:
+            issues.append('Casa de más de 40 años: no aporta referencia de construcción')
+        keys = ('land', 'built') if p.get('property_type', 'Casa') == 'Casa' else ('built',)
+        for key in keys:
+            if positive(record.get(key)) and surface_similarity(record[key], p[key]) < 70:
+                issues.append('Superficie con menos de 70% de similitud: revisar antes de valorar')
     # Rooms, bathrooms and floor remain descriptive until the model can assign
     # an economic adjustment to their differences. Exact matching here would
     # discard otherwise comparable properties and bias small samples to zero.
@@ -113,11 +132,15 @@ def candidates(records, p):
     result = []
     for source in records:
         row = dict(source)
+        row['operation'], row['operation_status'] = resolve_operation(row)
+        if row['operation'] in ('Alquiler', 'Ambos', 'Anticresis'):
+            continue
         row['kind'] = kind(row.get('kind'))
         if not row['kind']: continue
         target=p.get('property_type','Casa')
         if row['kind'] not in ({'Casa','Terreno'} if target=='Casa' else {target}): continue
         for key in ('lat', 'lng', 'price', 'land', 'built','rooms','baths','floor'): row[key] = number(row.get(key))
+        row['age'] = age_years(row.get('age'))
         if row['lat'] is None or row['lng'] is None or not -90<=row['lat']<=90 or not -180<=row['lng']<=180:
             continue
         row['distance'] = round(distance(p['lat'],p['lng'],row['lat'],row['lng']),2)
@@ -128,6 +151,7 @@ def candidates(records, p):
         # como referencia, para que el agente pueda encontrarlos en el mapa y
         # decidir con evidencia si conviene incluirlos.
         row.update(_similarity_metrics(row, p))
+        row.update(selection_metrics(row, p))
         row['issues'] = reason(row,p)
         row['duplicate_of'] = None
         result.append(row)
@@ -163,6 +187,7 @@ def old_estimate(houses, built):
 
 
 def calculate(records, p, excluded=()):
+    records = [row for row in records if resolve_operation(row)[0] == 'Venta']
     if p.get('property_type','Casa')!='Casa':
         return calculate_same_type(records,p,excluded)
     excluded=set(excluded)
@@ -173,10 +198,16 @@ def calculate(records, p, excluded=()):
     while radius < p['max_radius'] and not any(r['distance']<=radius for r in eligible_lands):
         radius=min(radius+500,p['max_radius'])
     lands=[r for r in eligible_lands if r['distance']<=radius]
-    result={'version':VERSION,'model':'components','property_type':'Casa','status':'insufficient','messages':[], 'land_radius':radius,
+    if land_only(p) and isinstance(p.get('reference_ids'), list):
+        requested = p['reference_ids']
+        if 1 <= len(requested) <= 3 and len(set(requested)) == len(requested) and all(i in {r['id'] for r in lands} for i in requested):
+            lands=[r for r in lands if r['id'] in requested]
+    result={'version':VERSION,'model':'land' if land_only(p) else 'components','property_type':'Casa','status':'insufficient','messages':[], 'land_radius':radius,
             'land_count':len(lands),'house_count':len(houses),'min_lands':MIN_LANDS,'min_houses':MIN_HOUSES,
             'land_ids':[r['id'] for r in lands], 'house_ids':[r['id'] for r in houses],
             'old':old_estimate(houses,p['built']), 'new':None,'breakdown':[], 'land_unit':None}
+    if land_only(p):
+        result.update(valuation_mode='land_only', house_ids=[], house_count=0)
     if len(lands)<MIN_LANDS:
         result['messages'].append('No hay terrenos válidos seleccionados para obtener una referencia de suelo. No se puede deducir ese precio de las áreas de las casas.')
         return result
@@ -189,6 +220,17 @@ def calculate(records, p, excluded=()):
     result['land_dispersion']=(q75-q25)/unit
     if result['land_dispersion']>1:
         result['messages'].append('Precios de suelo muy dispersos: se muestra el cálculo orientativo con la mediana; revisa los terrenos seleccionados.')
+    if land_only(p):
+        total = p['land'] * unit
+        result.update(model='land', valuation_mode='land_only', house_count=0, house_ids=[],
+                      usable_house_count=0, selection_method='nearest',
+                      breakdown=[{'id':r['id'], 'method':'land', 'offer_unit':r['price']/r['land'],
+                                  'area':r['land'], 'adjusted_total':r['price']/r['land']*p['land'],
+                                  'usable':True} for r in lands], status='ok',
+                      new={'total':total, 'unit':unit, 'area_basis':'land', 'land_value':total,
+                           'built_value':0, 'range_low':q25*p['land'], 'range_high':q75*p['land']})
+        result['messages'].append('Casa con más de 40 años: valorada únicamente como terreno según la regla configurada. Construcción sin aporte en este cálculo; no se descuentan gastos de demolición.')
+        return result
     residuals=[]
     usable_rows=[]
     for row in houses:
@@ -208,19 +250,17 @@ def calculate(records, p, excluded=()):
         result['messages'].append(f'{invalid} casas tienen remanente no positivo: quedan visibles para revisión y no intervienen en la estimación de construcción y mejoras.')
     if len(residuals)<MIN_HOUSES:
         result['messages'].append('Se calculó el suelo y el desglose disponible, pero no hay casas seleccionadas con remanente positivo para estimar construcción y mejoras.')
+        result['messages'].extend(age_messages(p, []))
         return result
     # Scenario comparisons keep the original evidence and weighting reference.
     weight_params={**p, **p.get('weight_reference', {})}
     # Among suitable houses, keep the nearest reference as the map expands.
-    chosen_row,built_unit=min(usable_rows,key=lambda item:(
-        item[0].get('distance') or 0,
-        abs(item[0]['land']-weight_params['land'])/weight_params['land']+
-        abs(item[0]['built']-weight_params['built'])/weight_params['built'],
-        item[0]['id']))
-    reference_ids=p.get('reference_ids') or [chosen_row['id']]
+    automatic_ids=automatic_houses([row for row,_ in usable_rows], weight_params,
+                                   {row['id']:value for row,value in usable_rows})
+    reference_ids=p.get('reference_ids') or automatic_ids
     allowed={row['id'] for row,_ in usable_rows}
     if not isinstance(reference_ids,list) or not 1<=len(reference_ids)<=3 or len(set(reference_ids))!=len(reference_ids) or any(i not in allowed for i in reference_ids):
-        reference_ids=[chosen_row['id']]
+        reference_ids=automatic_ids
     selected_rows=[row for row,_ in usable_rows if row['id'] in reference_ids]
     built_unit=sum(value for row,value in usable_rows if row['id'] in reference_ids)/len(reference_ids)
     weight_rows=[(row,value,1/len(reference_ids) if row['id'] in reference_ids else 0)
@@ -242,13 +282,17 @@ def calculate(records, p, excluded=()):
     result['usable_house_count']=len(reference_ids)
     result['old']=old_estimate(selected_rows,p['built'])
     result['messages'].append(
-        'Se usa la casa apta más próxima. Las superficies sirven para comprobar '
-        'comparabilidad y desempatar. El suelo se busca desde 500 m y se amplía '
+        f'Se usan {len(reference_ids)} casas aptas. El grupo automático añade hasta tres '
+        'casas a no más de 200 m del objetivo, con hasta 50 m de diferencia de distancia '
+        'respecto de la primera, superficies similares y aportes coherentes. '
+        'Sin antigüedad se prioriza distancia. El suelo se busca desde 500 m y se amplía '
         'solo si no hay terrenos aptos, independientemente del radio del mapa. '
         'Las demás casas no intervienen salvo que aceptes otra propuesta.'
     )
     if p.get('reference_ids'):
         result['messages'][-1]=f'Se usan {len(reference_ids)} casas de la propuesta aceptada. Se promedian únicamente sus precios ajustados a tus metrajes; las demás quedan como referencia.'
+    result['messages'].extend(age_messages(p, selected_rows))
+    result['selection_method']='age_proximity' if p.get('age') is not None else 'nearest_group'
     result.update(built_unit_min=built_unit_min, built_unit_max=built_unit_max,
                   built_unit_dispersion=(built_unit_max-built_unit_min)/(built_unit or 1))
     dispersion_ratio=built_unit_max/built_unit_min if built_unit_min > 0 else float('inf')
@@ -289,8 +333,10 @@ def _similarity_metrics(row,p):
     built=area_similarity(row.get('built'),p.get('built'))
     radius=max(p.get('radius') or 1,1)
     distance=max(0,100*(1-min((row.get('distance') or 0)/radius,1)))
+    target = p.get('property_type','Casa')
+    overall = land if target == 'Terreno' or land_only(p) else built if target in ('Departamento','Oficina') else (land+built)/2
     return {'land_similarity':round(land,1),'built_similarity':round(built,1),
-            'distance_similarity':round(distance,1),'overall_similarity':round((land+built)/2,1)}
+            'distance_similarity':round(distance,1),'overall_similarity':round(overall,1)}
 
 
 def calculate_same_type(records,p,excluded=()):
@@ -299,14 +345,33 @@ def calculate_same_type(records,p,excluded=()):
     eligible=[r for r in records if r['kind']==target and not r['issues'] and r['id'] not in excluded and r['distance']<=p['radius']]
     count=len(eligible)
     limit=count if count<=3 else 3 if count<=15 else 4 if count<=30 else 5
-    rows=sorted(eligible,key=lambda r:(r['distance'],str(r['id'])))[:limit]
+    pool=selection_pool(eligible,p)
+    if p.get('age') is not None and not is_land and pool:
+        best_score=selection_metrics(pool[0],p)['selection_score']
+        pool=[r for r in pool if best_score-selection_metrics(r,p)['selection_score']<=8]
+    rows=pool[:min(limit,len(pool))]
+    if rows:
+        first=rows[0]
+        close=[r for r in rows if r['distance']<=200 and abs(r['distance']-first['distance'])<=50 and
+               surface_similarity(r.get(area),p.get(area))>=70]
+        if len(close)>1:
+            rows=close
+    requested=p.get('reference_ids')
+    if isinstance(requested,list) and 1<=len(requested)<=5 and len(set(requested))==len(requested) and all(i in {r['id'] for r in eligible} for i in requested):
+        rows=[r for r in pool if r['id'] in requested]
+        # A manually accepted fallback may include non-premieres.
+        rows.extend(r for r in eligible if r['id'] in requested and r not in rows)
     units=sorted(r['price']/r[area] for r in rows)
     result={'version':VERSION,'model':'land' if is_land else 'built','property_type':target,
         'status':'insufficient','messages':[],'land_radius':p['radius'],'land_count':len(rows) if is_land else 0,
         'house_count':0 if is_land else len(rows),'land_ids':[r['id'] for r in rows] if is_land else [],
         'house_ids':[] if is_land else [r['id'] for r in rows], 'min_lands':MIN_LANDS,'min_houses':MIN_HOUSES,
         'new':None,'old':None,'land_unit':None,'breakdown':[],
-        'eligible_count':count,'selection_count':len(rows),'selection_method':'nearest'}
+        'eligible_count':count,'selection_count':len(rows),
+        'selection_method':'age_proximity' if p.get('age') is not None and not is_land else 'nearest'}
+    result['messages'].extend(age_messages(p, rows))
+    if len(rows)>1 and all(r['distance']<=200 for r in rows):
+        result['messages'].append(f'Se usan {len(rows)} comparables cercanos y aptos; los más lejanos quedan como referencia.')
     if rows:
         weights=[1/((r['distance'] or 1)+1) for r in rows]
         old_unit=sum(w*r['price']/r[area] for w,r in zip(weights,rows))/sum(weights)
@@ -316,7 +381,7 @@ def calculate_same_type(records,p,excluded=()):
             'area':r[area],'adjusted_total':r['price']/r[area]*p[area],'usable':True})
     minimum=1
     if len(rows)<minimum:
-        result['messages']=[f'Faltan comparables completos de {target.lower()}: {len(rows)} de {minimum} requeridos.']
+        result['messages'].append(f'Faltan comparables completos de {target.lower()}: {len(rows)} de {minimum} requeridos.')
         return result
     if len(rows)<5:
         result['messages'].append(f'Muestra reducida: cálculo con {len(rows)} comparables completos.')

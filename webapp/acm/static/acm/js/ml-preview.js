@@ -24,7 +24,7 @@
       if (current !== sequence) return;
       if (!response.ok) throw new Error(data.error || 'No se pudo consultar el modelo.');
       if (!data.available) { status.textContent = data.message; return; }
-      status.textContent = `Modelo ${data.run_id} · conjunto ${data.dataset_id} · ${data.sample} anuncios · ${data.quality}`;
+      status.textContent = window.ACMPermissions&&!window.ACMPermissions.metadata ? 'Estimación del modelo' : `Modelo ${data.run_id} · conjunto ${data.dataset_id} · ${data.sample} anuncios · ${data.quality}`;
       result.textContent = `Oferta estimada: ${dollars(data.price_usd)}` +
         (data.range_usd ? ` · rango orientativo ${dollars(data.range_usd[0])} a ${dollars(data.range_usd[1])}` : '') +
         `. ${data.warning}`;

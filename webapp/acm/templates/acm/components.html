@@ -1,15 +1,17 @@
-{% extends 'propifai_base.html' %}
+{% extends 'acm/portal_base.html' %}
 {% load static %}
 {% block title %}ACM · Suelo y construcción{% endblock %}
 {% block extra_head %}
+{{ block.super }}
 <link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=32">
-<link rel="stylesheet" href="{% static 'acm/css/comparison-valuation.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'acm/css/comparison-valuation.css' %}?v=6">
 <link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
 <link rel="stylesheet" href="{% static 'acm/css/nearby-places.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'acm/css/zona-preevaluacion.css' %}?v=5">
 {% endblock %}
 {% block content %}
 <main class="components-acm">
+{% include "acm/_role_perspective.html" %}
 <div class="map-layout">
 
   <!-- ===== Mapa, con la tarjeta de controles flotando encima ===== -->
@@ -20,6 +22,7 @@
       <div class="map-controls" id="cmp-controls">
         <button id="cmp-form-toggle" class="cmp-search-toggle" type="button" aria-expanded="true" aria-controls="cmp-form">Parámetros de búsqueda <span aria-hidden="true">−</span></button>
         <form id="cmp-form" data-authenticated="{{ acm_is_authenticated|yesno:'true,false' }}" data-search-url="{% url 'acm:componentes_buscar' %}" data-calculate-url="{% url 'acm:componentes_calcular' %}" data-report-url="{% url 'acm:componentes_informe_word' %}" data-pdf-url="{% url 'acm:componentes_informe_pdf' %}" data-html-url="{% url 'acm:componentes_informe_html' %}" data-save-url="{% url 'acm:componentes_guardar' %}">{% csrf_token %}
+          {% if acm_permissions.pdm_query and not acm_permissions.pdm_card %}<div class="acm-pdm-consult"><button type="button" class="acm-button" id="acm-pdm-query">Consultar zonificación PDM</button><output id="acm-pdm-result"></output></div>{% endif %}
           <p id="cmp-search-message" class="cmp-search-message" role="alert" hidden></p>
           {% if replication %}<p class="cmp-muted" role="status">Datos de <strong>{{ replication.code }}</strong> cargados. Pulsa <strong>Buscar y calcular</strong> para consultar los comparables actuales.</p>{% endif %}
 
@@ -48,6 +51,11 @@
             </div>
           </div>
 
+          <div class="form-group" id="cmp-age-field">
+            <label for="cmp-age">Antigüedad (años, opcional)</label>
+            <input id="cmp-age" name="age" type="number" min="0" max="150" step="1" placeholder="Sin informar · 0 = estreno" class="form-control" aria-describedby="cmp-age-help">
+            <small id="cmp-age-help">Vacío: prioriza distancia. 0: estreno. Solo casas: más de 40 años se valora como terreno.</small>
+          </div>
           <div class="cmp-info-fields" role="group" aria-labelledby="cmp-info-label">
             <div class="cmp-info-label" id="cmp-info-label">Características (informativas)</div>
             <div class="cmp-form-row cmp-info-row">
@@ -90,12 +98,14 @@
         <summary>Comparables en el mapa <span id="cmp-map-count">Sin análisis</span></summary>
         <div class="section-title">Comparables en el mapa</div>
         <div class="form-group">
+          {% if acm_permissions.portal_pins %}
           <label for="cmp-marker-mode">Mostrar bajo el pin</label>
           <select id="cmp-marker-mode" class="form-control">
             <option value="land">Suelo estimado / m²</option>
             <option value="improvements">Construcción y mejoras / m²</option>
             <option value="price">Precio total anunciado</option>
           </select>
+          {% else %}<input id="cmp-marker-mode" type="hidden" value="unit">{% endif %}
         </div>
 
         <div class="section-title" id="cmp-layers-heading">Capas visibles</div>
@@ -140,8 +150,10 @@
           <h2 id="cmp-comparison-title">Casas comparables</h2>
           <button id="cmp-comparison-toggle" type="button" aria-controls="cmp-comparison-content" aria-expanded="true" aria-label="Minimizar comparación">−</button>
         </header>
+        <p id="cmp-source-warning" class="cmp-warning" role="alert" hidden></p>
         <div id="cmp-comparison-content"></div>
         <footer class="cmp-comparison-report-footer">
+          <button id="cmp-ai-open" type="button" disabled>Recomendaciones de la IA</button>
           <button id="cmp-comparison-report" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="cmp-comparison-downloads" disabled>Descargar informe</button>
           <div id="cmp-comparison-downloads" role="menu" aria-label="Formato del informe" hidden>
             <button type="button" role="menuitem" data-report-format="pdf" disabled>PDF</button>
@@ -158,7 +170,7 @@
         <div id="cmp-pdm-zone-content"><div class="cmp-zona" id="cmp-zona" hidden></div></div>
       </section>
     </div>
-    {% include 'acm/_nearby_places.html' %}
+    {% if acm_permissions.nearby %}{% include 'acm/_nearby_places.html' %}{% endif %}
   </div>
 
   <!-- ===== Columna derecha: enlaces y resultados ===== -->
@@ -172,13 +184,7 @@
       </button>
       <div class="cmp-selected-content" id="cmp-selected-content" hidden></div>
     </section>
-    <div class="map-panel">
-      <div class="map-panel-body cmp-enlaces">
-        <a href="{% url 'acm:modelos_dashboard' %}">Modelos ML ↗</a>
-        <span>·</span>
-        <a href="{% url 'acm:acm_analisis_clasico' %}">ACM clásico ↗</a>
-      </div>
-    </div>
+
 
     <div class="map-panel">
       <div class="map-panel-body">
@@ -194,11 +200,11 @@
       </div>
     </section>
 
-    <details class="map-panel cmp-secondary" id="cmp-ml-preview" data-url="{% url 'acm:modelo_estimacion' %}" hidden>
+    <details class="map-panel cmp-secondary" id="cmp-ml-preview" data-url="/acm/modelos/estimar/" hidden>
       <summary>Estimación del modelo ML</summary>
       <div class="map-panel-body">
         <p id="cmp-ml-status"></p><p id="cmp-ml-result"></p>
-        <a href="{% url 'acm:modelos_dashboard' %}">Ver evaluación y versión del modelo</a>
+
       </div>
     </details>
 
@@ -221,15 +227,6 @@
       </div>
     </details>
 
-    <details class="map-panel cmp-secondary" id="cmp-ai-panel" data-url="{% url 'acm:componentes_explicar' %}" hidden>
-      <summary id="cmp-ai-title">Explicación del resultado</summary>
-      <div class="map-panel-body">
-        <p id="cmp-ai-status" role="status"></p>
-        <div id="cmp-simple" hidden role="status" style="white-space:pre-line"></div>
-        <div id="cmp-proposal" hidden><div id="cmp-proposal-summary"></div>
-          <button id="cmp-proposal-apply" type="button" class="btn-success btn-block">Usar estas casas</button></div>
-      </div>
-    </details>
 
     <div class="map-panel">
       <div class="map-panel-body">
@@ -251,7 +248,7 @@
           <button data-tab="Terreno" aria-pressed="false">Terrenos <span id="cmp-land-count"></span></button>
           <button data-tab="reference" aria-pressed="false">Referencia <span id="cmp-ref-count"></span></button>
         </nav>
-        <div id="cmp-cards"><p class="cmp-muted">Aquí aparecerán Propify y los portales seleccionados.</p></div>
+        <div id="cmp-cards"><p class="cmp-muted">Aquí aparecerán las propiedades comparables.</p></div>
         <div class="cmp-calculation-access"><p>Consulta las operaciones, ajustes y pesos de cada comparable.</p><button id="cmp-calculation-open" type="button" disabled>Ver cálculo completo</button></div>
       </div>
     </div>
@@ -259,6 +256,18 @@
 
 </div>
 </main>
+<dialog id="cmp-ai-dialog" class="cmp-detail" aria-labelledby="cmp-ai-heading">
+  <header class="cmp-detail-header"><div><span>ANÁLISIS DE COMPARABLES</span><h2 id="cmp-ai-heading">Recomendaciones de la IA</h2></div><button id="cmp-ai-close" type="button">Cerrar <span aria-hidden="true">×</span></button></header>
+  <details class="map-panel cmp-secondary" id="cmp-ai-panel" data-url="{% url 'acm:componentes_explicar' %}" open hidden>
+    <summary id="cmp-ai-title">Recomendaciones y explicación</summary>
+    <div class="map-panel-body">
+      <p id="cmp-ai-status" role="status"></p>
+      <div id="cmp-simple" hidden role="status" style="white-space:pre-line"></div>
+      <div id="cmp-proposal" hidden><div id="cmp-proposal-summary"></div>
+        <button id="cmp-proposal-apply" type="button" class="btn-success btn-block">Usar estos comparables</button></div>
+    </div>
+  </details>
+</dialog>
 <dialog id="cmp-detail" class="cmp-detail" aria-labelledby="cmp-detail-heading">
   <header class="cmp-detail-header"><div><span>COMPARABLE · ANÁLISIS POR COMPONENTES</span><h2 id="cmp-detail-heading">Detalle de la propiedad</h2></div><button type="button" id="cmp-detail-close" autofocus aria-label="Cerrar detalle">Cerrar <span aria-hidden="true">×</span></button></header>
   <div id="cmp-detail-content"></div>
@@ -267,24 +276,29 @@
   <header class="cmp-detail-header"><div><span>VALORACIÓN · OPERACIONES Y COMPARABLES</span><h2 id="cmp-calculation-heading">Cálculo completo del ACM</h2></div><button type="button" id="cmp-calculation-close" autofocus aria-label="Cerrar cálculo">Cerrar <span aria-hidden="true">×</span></button></header>
   <div id="cmp-calculation-explanation"><p>Busca comparables para ver aquí las operaciones con sus valores reales.</p></div>
 </dialog>
-{% include 'ingestas/property_editor.html' %}
+
 {% endblock %}
 {% block extra_scripts %}
 {{ block.super }}
-<script src="{% static 'acm/js/components-presentation.js' %}?v=11"></script>
+{{ acm_permissions|json_script:"acm-access-data" }}
+<script src="{% static 'acm/js/portal-access.js' %}?v=1"></script>
+<script src="{% static 'acm/js/components-presentation.js' %}?v=14"></script>
 <script src="{% static 'acm/js/workspace-layout.js' %}?v=1"></script>
 <script src="{% static 'acm/js/floating-comparison.js' %}?v=8"></script>
-<script src="{% static 'acm/js/comparison-valuation.js' %}?v=3"></script>
+<script src="{% static 'acm/js/comparison-valuation.js' %}?v=8"></script>
 {% if replication %}{{ replication|json_script:"cmp-replication-data" }}{% endif %}
-<script src="{% static 'acm/js/components.js' %}?v=60"></script>
-<script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>
+{% if analysis_resume %}{{ analysis_resume|json_script:"cmp-role-analysis-data" }}{% endif %}
+<script src="{% static 'acm/js/components.js' %}?v=66"></script>
+{% if acm_permissions.ai %}<script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>{% endif %}
+{% if acm_permissions.pdm_polygons %}
 {{ capas_vectoriales|json_script:"capas-vectoriales-data" }}
 {{ capas_raster|json_script:"capas-raster-data" }}
 {{ zonas_mapa|json_script:"zonas-mapa-data" }}
 <script src="{% static 'js/capa-raster-overlay.js' %}?v=5"></script>
 <script src="{% static 'js/capa-vectorial.js' %}?v=6"></script>
-<script src="{% static 'js/capas-mapa.js' %}?v=2"></script>
-<script src="{% static 'acm/js/nearby-places.js' %}?v=2"></script>
-<script src="{% static 'acm/js/zona-preevaluacion.js' %}?v=7"></script>
+<script src="{% static 'js/capas-mapa.js' %}?v=3"></script>
+{% endif %}
+{% if acm_permissions.nearby %}<script src="{% static 'acm/js/nearby-places.js' %}?v=2"></script>{% endif %}
+{% if acm_permissions.pdm_query and acm_permissions.pdm_card %}<script src="{% static 'acm/js/zona-preevaluacion.js' %}?v=8"></script>{% endif %}
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>
 {% endblock %}

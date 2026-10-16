@@ -41,7 +41,7 @@ def _median_text(values):
 
 
 def build_acm_docx(params, records, result, excluded=(), generated_at=None):
-    from .report_selection import report_records, report_total
+    from .report_selection import report_records, report_total, report_unit_price
     records = report_records(params,records,excluded)
     from docx import Document
     from docx.enum.section import WD_ORIENT
@@ -128,27 +128,30 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
         ('Tipo', params['property_type']), ('Radio de propiedades', f'{_number(params["radius"])} m'),
         ('Área de terreno', f'{_number(params.get("land"),2)} m²' if params.get('land') else 'No aplica'),
         ('Área construida', f'{_number(params.get("built"),2)} m²' if params.get('built') else 'No aplica'),
+        ('Antigüedad', 'Sin informar' if params.get('age') is None else 'Estreno' if params['age']==0 else f"{params['age']} años"),
         ('Fuentes consultadas', ', '.join(params.get('sources', []))),
     ]
     table(('Dato', 'Valor'), target_rows, (2.2, 4.7))
 
     heading('Resultado')
     new = result.get('new')
-    if new and 'manual_valuation' in params:
-        doc.add_paragraph('Valorización ajustada manualmente: '+_money(report_total(params,result)))
     if new:
         if result['model'] == 'components':
             result_rows = [('Valor del terreno objetivo', _money(new['land_value'])),
                            ('Valor de construcción y mejoras', _money(new['built_value'])),
-                           ('Estimación total', _money(new['total'])),
+                           ('Estimación total', _money(report_total(params,result))),
                            ('Rango de comparables ajustados' if result.get('built_unit_method')=='weighted_adjusted_prices' else 'Rango central orientativo', f'{_money(new["range_low"])} a {_money(new["range_high"])}')]
         else:
-            result_rows = [('Valor unitario usado', _unit(new['unit'])),
-                           ('Estimación total', _money(new['total'])),
+            result_rows = [('Valor unitario usado', _unit(report_unit_price(params,result,new['unit']))),
+                           ('Estimación total', _money(report_total(params,result))),
                            ('Rango central orientativo', f'{_money(new["range_low"])} a {_money(new["range_high"])}')]
         table(('Concepto', 'Resultado'), result_rows, (3.8, 3.1))
     else:
         doc.add_paragraph('No se obtuvo una estimación final porque faltaron comparables aptos para completar el método.')
+
+    if params.get('report_notes'):
+        heading('Justificación u observaciones')
+        doc.add_paragraph(params['report_notes'])
 
     if result['model'] == 'components':
         heading('Paso 1 Cálculo del valor del suelo')
@@ -198,7 +201,7 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
                 if result.get('built_unit_method') == 'primary_area_reference':
                     if params.get('proposal_explanation'):
                         doc.add_paragraph('Justificación de la propuesta aceptada: '+params['proposal_explanation'])
-                    doc.add_paragraph('Solo las casas marcadas como usadas intervienen. Si se aceptó una propuesta de varias casas, se promedian sus precios ajustados; las demás permanecen como referencia.')
+                    doc.add_paragraph('Solo las casas marcadas como usadas intervienen. Cuando se seleccionan varias casas aptas, se promedian sus precios ajustados; las demás permanecen como referencia.')
                     table(('Casa usada','Precio anunciado','Ajuste terreno','Ajuste construcción','Precio ajustado'),[
                         (d['id'],_money(d['price']),_money(d['land_adjustment']),_money(d['built_adjustment']),_money(d['target_estimate']))
                         for d in breakdown.values() if d['usable']])

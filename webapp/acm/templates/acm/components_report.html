@@ -33,17 +33,18 @@
     {% if property_type == 'Casa' or property_type == 'Terreno' %}<div><dt>Terreno</dt><dd>{{ land }}</dd></div>{% endif %}
     {% if property_type != 'Terreno' %}<div><dt>Construcción</dt><dd>{{ built }}</dd></div>{% endif %}
     <div><dt>Radio de búsqueda</dt><dd>{{ radius }}</dd></div>
+    {% if property_type != 'Terreno' %}<div><dt>Antigüedad</dt><dd>{{ age }}</dd></div>{% endif %}
     <div><dt>Coordenadas</dt><dd>{{ lat }}, {{ lng }}</dd></div>
   </dl>
   <h2>Comparables incluidos en el informe · {{ rows|length }}</h2>
   <div class="table-scroll"><table>
-    <thead><tr><th>Propiedad</th><th>Ubicación</th><th>Precio anunciado</th><th>Terreno</th><th>Construcción</th><th>Distancia</th><th>Publicación</th></tr></thead>
-    <tbody>{% for row in rows %}<tr><td>{{ row.title }}</td><td>{{ row.district }}</td><td>{{ row.price }}</td><td>{{ row.land }}</td><td>{{ row.built }}</td><td>{{ row.distance }}</td><td>{% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener noreferrer">Ver anuncio</a>{% else %}Sin enlace{% endif %}</td></tr>{% empty %}<tr><td colspan="7">No hay comparables marcados.</td></tr>{% endfor %}</tbody>
+    <thead><tr><th>Propiedad</th><th>Ubicación</th><th>Precio anunciado</th><th>Terreno</th><th>Construcción</th><th>Distancia</th>{% if show_publication %}<th>Publicación</th>{% endif %}</tr></thead>
+    <tbody>{% for row in rows %}<tr><td>{{ row.title }}</td><td>{{ row.district }}</td><td>{{ row.price }}</td><td>{{ row.land }}</td><td>{{ row.built }}</td><td>{{ row.distance }}</td>{% if show_publication %}<td>{% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener noreferrer">Ver anuncio</a>{% else %}Sin enlace{% endif %}</td>{% endif %}</tr>{% empty %}<tr><td colspan="7">No hay comparables marcados.</td></tr>{% endfor %}</tbody>
   </table></div>
   <h2>Valoración y operaciones</h2>
   <p><strong>{{ method }}</strong></p><p>{{ calculation }}</p>
-  {% if manual_value %}<p>Valor comercial ajustado en la tarjeta: <strong>{{ manual_value }}</strong>.</p>{% endif %}
   {% for row in rows %}<article class="operation"><strong>{{ row.title }}</strong><p>{{ row.operation }}</p></article>{% endfor %}
+  {% if report_notes %}<section class="agent-notes"><h2>Justificación u observaciones</h2><div style="white-space:pre-wrap;overflow-wrap:anywhere">{{ report_notes }}</div></section>{% endif %}
   {% if messages %}<h2>Observaciones del análisis</h2><ul>{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}
   <footer class="muted">Estimación de precios de oferta, no de ventas cerradas. El valor de salida al mercado es el valor comercial +5%; el valor de realización inmediata es el valor comercial −5%. Puedes abrir este archivo en un navegador o imprimirlo.</footer>
 </main>

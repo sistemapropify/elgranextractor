@@ -1,0 +1,3 @@
+# DWG input is converted by the separate GNU LibreDWG dwg2dxf executable.
+ezdxf==1.4.4
+pyproj==3.8.0

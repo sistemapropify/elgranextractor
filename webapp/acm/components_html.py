@@ -76,9 +76,12 @@ def build_acm_html(params, records, result, excluded=(), generated_at=None):
         'generated_at': generated_at.strftime('%d/%m/%Y %H:%M'),
         'land': _number(params.get('land'), ' m²'),
         'built': _number(params.get('built'), ' m²'),
+        'age': 'Sin informar' if params.get('age') is None else 'Estreno' if params['age'] == 0 else f"{params['age']} años",
         'radius': _number(params.get('radius'), ' m'),
         'lat': params.get('lat'), 'lng': params.get('lng'),
         'rows': rows, 'values': values, 'method': method, 'calculation': calculation,
         'manual_value': _money(report_total(params, result)) if 'manual_valuation' in params else None,
+        'report_notes': params.get('report_notes', ''),
         'messages': result.get('messages', []),
+        'show_publication': params.get('_acm_permissions', {}).get('publication', True),
     })

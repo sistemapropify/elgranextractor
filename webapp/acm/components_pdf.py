@@ -175,6 +175,17 @@ def _static_map(center, markers, key, size=(640, 420), zoom=15, fetch=True,
     return None
 
 
+def _property_photo(url, deadline=None):
+    if not url or (deadline is not None and time.monotonic() >= deadline):
+        return None
+    try:
+        from .portal_views import load_photo_bytes
+        return load_photo_bytes(url)
+    except Exception:
+        logger.info('ACM PDF: fotografía no disponible; se conserva el informe.')
+        return None
+
+
 def _reverse_geocode(lat, lng, key, fetch=True):
     """Dirección legible para la portada; cae a coordenadas si no hay servicio."""
     if fetch and key:
@@ -326,7 +337,7 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     generated_at = generated_at or datetime.now()
     new = result.get('new')
     used = _selection(records, result, excluded)
-    target_kind = params.get('property_type', 'Casa')
+    target_kind = 'Terreno' if result.get('valuation_mode') == 'land_only' else params.get('property_type', 'Casa')
     excluded_set = set() if 'report_ids' in params else set(excluded or ())
     # Comparables completos del tipo analizado: la evidencia de mercado del informe.
     market = sorted(
@@ -344,11 +355,14 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     key = _maps_key()
     deadline = time.monotonic() + 45 if fetch_images else None
     location_maps={}
+    property_photos={}
     if fetch_images:
         def location_image(row):
-            return row['id'],_static_map((row['lat'],row['lng']),[f'color:red|{row["lat"]},{row["lng"]}'],key,size=(320,240),zoom=16,deadline=deadline)
+            return row['id'],(_static_map((row['lat'],row['lng']),[f'color:red|{row["lat"]},{row["lng"]}'],key,size=(320,240),zoom=16,deadline=deadline), _property_photo(row.get('image'),deadline) if params.get('_acm_permissions',{}).get('report_photos',False) else None)
         with ThreadPoolExecutor(max_workers=4) as pool:
-            location_maps=dict(pool.map(location_image,records))
+            images=dict(pool.map(location_image,records))
+            location_maps={identifier:pair[0] for identifier,pair in images.items()}
+            property_photos={identifier:pair[1] for identifier,pair in images.items() if pair[1]}
 
     styles = {
         'band': ParagraphStyle('band', fontName='Helvetica-Bold', fontSize=23,
@@ -480,7 +494,7 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     areas = Table([[
         Paragraph(f'<b>ÁREA TERRENO :</b> {_number(params.get("land"), 2, " m²") if params.get("land") else "No aplica"}', styles['center_small']),
         Paragraph(f'<b>ÁREA CONSTRUIDA :</b> {_number(params.get("built"), 2, " m²") if params.get("built") else "No aplica"}', styles['center_small']),
-        Paragraph('<b>ANTIGÜEDAD :</b> Sin informar', styles['center_small']),
+        Paragraph('<b>ANTIGÜEDAD :</b> '+('Sin informar' if params.get('age') is None else 'Estreno' if params['age']==0 else f"{params['age']} años"), styles['center_small']),
     ]], colWidths=[width / 3] * 3)
     areas.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
     story.append(areas)
@@ -544,7 +558,7 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
             ('ÁREA CONSTRUIDA', _number(row.get('built'), 2, ' m²')),
             ('PRECIO', _money(row.get('price'))),
             ('PRECIO M2', _money(_unit_price(row))),
-            ('FECHA DE PUBLICACIÓN', _fecha_corta(row.get('first_seen') or row.get('last_seen'))),
+            *([('FECHA DE PUBLICACIÓN', _fecha_corta(row.get('first_seen')))] if params.get('_acm_permissions', {}).get('publication_dates', True) else []),
         ]
         facts_table = Table(
             [[Paragraph(f'<b>{label} :</b>', styles['label']),
@@ -583,6 +597,13 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
             if fetch_images and not thumb:
                 thumb=_croquis((params['lat'],params['lng']),[(row['lat'],row['lng'])],params['radius'])
             story.append(comparable_block(row, thumb))
+            photograph=property_photos.get(row['id'])
+            if photograph:
+                iw,ih=ImageReader(io.BytesIO(photograph)).getSize()
+                scale=min(110*mm/iw,65*mm/ih)
+                image=Image(io.BytesIO(photograph),width=iw*scale,height=ih*scale)
+                image.hAlign='CENTER'
+                story.extend([Spacer(1,3*mm),image])
         story.append(PageBreak())
 
     comparable_section('COMPARABLES EN VENTA', market or used, 6)
@@ -593,6 +614,10 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
 
     # ------------------------------------------------------------- Resultado
     story.append(Paragraph('RESULTADO', styles['section']))
+    if result.get('valuation_mode') == 'land_only':
+        story.append(Paragraph('Casa de más de 40 años: valoración únicamente del terreno, según la regla configurada. La construcción no aporta valor en este cálculo.', styles['body']))
+    elif params.get('age') is not None:
+        story.append(Paragraph('La selección combina cercanía, antigüedad y áreas. No se aplica un descuento monetario por año de antigüedad.', styles['body']))
     story.append(Spacer(1, 6 * mm))
     story.append(Paragraph(
         'El resultado de la estimación de valor de mercado de su propiedad es precisa y '
@@ -631,6 +656,11 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
             'No se obtuvo una estimación final porque faltaron comparables aptos para '
             'completar el método.', styles['body']))
         story.append(Spacer(1, 10 * mm))
+    if params.get('report_notes'):
+        story.append(Paragraph('JUSTIFICACIÓN U OBSERVACIONES', styles['section']))
+        for line in params['report_notes'].split('\n'):
+            story.append(Paragraph(escape(line) if line else '&#160;', styles['body']))
+        story.append(Spacer(1, 5 * mm))
     story.append(Paragraph(
         'El precio puede ajustarse de acuerdo a su gusto, pero hay que tener en cuenta el '
         'efecto en las ofertas que recibirá y la cantidad de días que su propiedad '

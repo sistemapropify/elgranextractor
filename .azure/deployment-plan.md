@@ -1,3 +1,86 @@
+# ACM access and native DWG viewer â€” release 2026-10-16
+
+Status: Approved â€” explicit publication requested by the user.
+Recipe: CI/CD, existing main_granextractorservice.yml.
+
+## 1. Scope
+Publish all locally reviewed ACM role access, independent Propify login,
+role preview, own histories, comparable labels, calibration controls, notes,
+PDM permissions and native DWG viewer improvements. Preserve the current
+production collector and other upstream changes. No local ledgers, sessions,
+credentials or originals enter the deployment artifact.
+
+## 2. Existing target
+Azure subscription 1 / 0219eecc-9920-4789-9929-3091a2f09daf.
+App Service granextractorservice, rg-elgranextractor, Brazil South.
+https://acm.propifai.com/acm/ and /catastro/visor-planos/.
+Existing OIDC pipeline, no new resources or RBAC assignments.
+
+## 3. Integration
+Base: a2dfce95 (latest origin/main). Shared preview D:/PROMETEO preserved.
+Native GNU LibreDWG 0.14 reader built on Linux and bundled with release.
+ACM policies/history require migration 0005; verify SQL capacity and migrate
+before considering production ready. Existing sessions/data remain private.
+
+## 4. Validation steps
+- Isolated ACM and CAD regression suites, Node checks, real native fixtures.
+- Production Python dependency compatibility and Linux native build/smoke.
+- Static collection and WSGI import under isolated build settings.
+- Azure target, SQL capacity/migrations, release scope and whitespace.
+- Public page/static verification in deployment pipeline.
+
+## 5. Execution
+Non-forced push to main starts existing production pipeline. The user's
+standing instruction is to handle deployment monitoring personally: do not
+keep polling. Report dispatch separately from confirmed live deployment.
+Rollback: scoped revert through the same pipeline.
+
+## 6. Runtime
+Preserve all existing secrets/settings, use persistent /home for private files.
+No subscription/location or infrastructure changes.
+
+## Capacity prerequisite — independently validated and authorized
+Status: Validated (2026-10-16).
+User explicitly approved Standard S0 after reviewing its cost (USD 0.5855/day).
+Read-only az account show confirms the existing subscription. az sql server list
+and az sql db show confirm rg-elgranextractor/granextractor-sql-prod/
+propiextractor, Online, Basic, maxSizeBytes 2147483648. SQL reports quota 40544
+for migration 0005 and verified archival cleanup; no tables were published.
+Microsoft resource limits confirm S0 includes up to 250 GB. Existing target,
+credentials, firewall and data retained; only edition/SLO/max-size change.
+Execute through azure-deploy: az sql db update --edition Standard
+--service-objective S0 --max-size 250GB. No app deployment until schema succeeds.
+
+## 7. Validation Proof
+Validated under azure-validate on 2026-10-16 (America/Lima):
+- Latest origin/main a2dfce95 is also the successful production revision,
+  Actions run 38651317156. Integration preserves its collector/startup work.
+- 157 isolated Django ACM tests passed with acm.access_test_settings:
+  identity/privacy, permissions, own histories, perspective, sessions,
+  area/age selection, listing operation, reports, calibration and notes.
+- 21 isolated Catastro tests passed with catastro.test_settings, including
+  real native conversion of an official DWG fixture. No tests used Azure SQL.
+- Nine Node regression suites passed; changed JS files pass node --check.
+- Production WSGI import passed against isolated build databases.
+  collectstatic passed; ACM and viewer output bytes match release sources.
+- Local HTTP: /acm/login/ 200; protected viewer 302; components.js v66 and
+  visor-planos.js v3 return 200 and byte-match the served D:/PROMETEO files.
+- Azure account/target confirmed Running and correct existing subscription.
+- Authorized SQL S0/250 GB capacity change completed. Migration acm.0005
+  applied successfully; all four new tables respond to count queries.
+- Three user-reviewed local role policies imported only when absent, with
+  an audit entry; no local sessions, histories or collector ledgers copied.
+- Native Linux compilation is a required CI build gate before app deployment,
+  pinned to the verified official 0.14 source SHA256. CI converts both 2000
+  and 2018 DWG fixtures. The Windows native pipeline already passed locally.
+- Workflow dependency gates, YAML parsing, staged scope and whitespace passed.
+- No new resource, role assignment, firewall, identity credential or subscription
+  change. Only the explicitly approved SQL capacity increased billing.
+- Existing CI verifies public health, ACM login, protected viewer and exact
+  ACM/viewer static bytes. User handles monitoring after dispatch.
+
+---
+
 # Permanent Azure cadastral collector - release 2026-10-14
 
 Status: Validated - user requires Azure only and operation with the PC powered off

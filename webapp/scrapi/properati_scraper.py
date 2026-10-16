@@ -15,7 +15,7 @@ from urllib.error import URLError, HTTPError
 from camoufox.async_api import AsyncCamoufox
 from scrapi.camoufox_launcher import camoufox_kwargs
 from scrapi.areas import calcular_areas
-from scrapi.normalization import construction_age
+from scrapi.normalization import construction_age, listing_operation
 from scrapi.properati_age import construction_features_from_html
 from scrapi.contracts import ScrapingInterrupted
 from captura.azure_storage import upload_bytes
@@ -341,24 +341,13 @@ def mapear_a_formato_remax(prop):
     tipo_prop = (prop.get("Tipo Propiedad") or prop.get("Tipo") or "").strip()
     titulo = (prop.get("Titulo") or "").strip()
 
-    if tipo_prop:
-        tipo_raw = tipo_prop if clasificar_operacion(tipo_prop) else f"{tipo_prop} en Venta"
-    elif titulo:
-        t_upper = titulo.upper()
-        if "DEPARTAMENTO" in t_upper:
-            tipo_raw = "Departamento en Venta"
-        elif "CASA" in t_upper:
-            tipo_raw = "Casa en Venta"
-        elif "TERRENO" in t_upper:
-            tipo_raw = "Terreno en Venta"
-        elif "OFICINA" in t_upper:
-            tipo_raw = "Oficina en Venta"
-        elif "LOCAL" in t_upper:
-            tipo_raw = "Local en Venta"
-        else:
-            tipo_raw = "Propiedad en Venta"
-    else:
-        tipo_raw = "Propiedad en Venta"
+    # Never invent a sale operation from a generic property type. The original
+    # detail title can explicitly identify a rental inside sale search results.
+    operation = listing_operation({'URL Propiedad': prop.get('URL Propiedad'), 'Titulo': titulo})
+    if operation is None:
+        operation = clasificar_operacion(tipo_prop)
+    property_kind = clasificar_tipo_inmueble(tipo_prop or titulo) or 'Propiedad'
+    tipo_raw = f'{property_kind} en {operation}' if operation else property_kind
 
     # Parsear ubicacion para extraer distrito
     ubicacion = (prop.get("Ubicacion") or "").strip()

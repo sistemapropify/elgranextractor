@@ -88,6 +88,19 @@ class HistoryReplicationTests(TestCase):
             self.assertEqual(saved['lat'], params()['lat'])
             self.assertEqual(saved['baths'], None if kind == 'Terreno' else 0)
 
+    def test_age_is_restored_and_old_house_history_keeps_land_area(self):
+        from .test_components import record
+        p=parameters({**params(),'property_type':'Casa','age':41,'built':''})
+        rows=candidates([record('soil','Terreno',price=150000)],p)
+        history,_=persist_component_history(self.user,p,rows,calculate(rows,p))
+        self.assertEqual(history.area_m2,p['land'])
+        saved=replication_parameters(history)
+        self.assertEqual(saved['age'],41)
+        self.assertEqual(saved['built'],0)
+        history.parametros_json['age']=0
+        history.parametros_json['built']=200
+        self.assertEqual(replication_parameters(history)['age'],0)
+
     def test_history_button_uses_owner_scoped_uuid(self):
         response = historial_acm(self.request())
         url = reverse('acm:componentes_historial_replicar', args=[self.history.pk])

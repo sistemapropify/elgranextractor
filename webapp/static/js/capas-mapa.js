@@ -88,7 +88,10 @@
     if (!map || pending || document.hidden || $('cmp-form')?.dataset.authenticated === 'false') return;
     pending = true;
     try {
-      const response = await fetch('/cuadrantizacion/capas-mapa/', {credentials:'same-origin', cache:'no-store', headers:{Accept:'application/json'}});
+      const response = await fetch(options.configUrl || '/cuadrantizacion/capas-mapa/', {credentials:'same-origin', cache:'no-store', headers:{Accept:'application/json'}});
+      if (response.status === 401 || response.status === 403) {
+        apply({vectoriales:[], raster:[], zonas:[]}); status(''); return;
+      }
       if (!response.ok || response.redirected || !response.headers.get('content-type')?.includes('application/json')) return;
       apply(await response.json()); status('');
     } catch (_) { status('No se pudieron actualizar las capas. Se conserva el plano cargado.'); }

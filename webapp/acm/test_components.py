@@ -87,7 +87,7 @@ class ComponentsEngineTests(SimpleTestCase):
         self.assertEqual(result['status'],'ok')
         self.assertGreater(result['new']['total'],300000)
         self.assertLessEqual(result['new']['total'],350000)
-        self.assertEqual(result['usable_house_count'],1)
+        self.assertEqual(result['usable_house_count'],2)
         self.assertFalse(next(r for r in result['breakdown'] if r['id']=='bad')['usable'])
     def test_land_target_needs_no_construction_and_stays_in_selected_radius(self):
         p=parameters({**params(),'property_type':'Terreno','built':0})
@@ -157,7 +157,7 @@ class ComponentsEngineTests(SimpleTestCase):
         self.assertIn('Falta área de terreno',bad['issues'])
         result=calculate(rows,params())
         self.assertNotIn('incomplete',result['house_ids'])
-        self.assertEqual(result['old']['houses'],1)
+        self.assertEqual(result['old']['houses'],2)
 
     def test_expand_lands_only_in_500m_steps(self):
         raw=[record('near')]+[record(f'l{i}','Terreno',lat=-16.406-i*.0001) for i in range(5)]+[record('far',lat=-16.406)]
@@ -226,11 +226,17 @@ class ComponentsEngineTests(SimpleTestCase):
 class ComponentsEndpointTests(SimpleTestCase):
     def setUp(self):
         self.factory=RequestFactory();self.user=SimpleNamespace(pk=1,is_active=True,is_authenticated=True)
+        from .test_access_helpers import install_propify_fixture
+        install_propify_fixture(self)
         layers=patch('cuadrantizacion.map_layers.map_layers_config',return_value={'vectoriales':[],'raster':[],'zonas':[]})
         layers.start();self.addCleanup(layers.stop)
 
     def request(self,data):
-        req=self.factory.post('/',json.dumps(data),content_type='application/json');req.current_user=self.user
+        from .test_access_helpers import client_selection
+        req=self.factory.post('/',content_type='application/json');req.current_user=self.user
+        from .access import get_access
+        get_access(req)
+        req._body=json.dumps(client_selection(req,data)).encode()
         req._dont_enforce_csrf_checks=True
         return req
 
@@ -265,7 +271,8 @@ class ComponentsEndpointTests(SimpleTestCase):
         self.assertEqual(response['Content-Type'],'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
         self.assertIn('informe-acm.docx',response['Content-Disposition'])
         self.assertEqual(response['X-ACM-History-Code'],'ACM1234567')
-        self.assertEqual(build.call_args.args[3],['a'])
+        from .access_data import opaque_id
+        self.assertEqual(build.call_args.args[3],[opaque_id(self.request({}),'a')])
 
     @patch('acm.components_views._persist_history')
     @patch('acm.components_views.load_records')
@@ -315,14 +322,13 @@ class ComponentsEndpointTests(SimpleTestCase):
         self.assertContains(response,'Casas comparables')
         self.assertContains(response,'Casas solo referencia')
         self.assertContains(response,'Terrenos para valor del suelo')
-        self.assertContains(response,'id="scraped-editor"')
+        self.assertNotContains(response,'id="scraped-editor"')
         self.assertNotContains(response,'ENTORNO DE PRUEBAS')
 
-    def test_page_shell_remains_visible_before_login(self):
+    def test_page_redirects_to_propify_login_before_access(self):
         response=page(self.factory.get('/acm/analisis/'))
-        self.assertEqual(response.status_code,200)
-        self.assertEqual(response['X-ACM-Model'],'componentes-5-comparables-cercanos')
-        self.assertEqual(response['Cache-Control'],'no-store')
+        self.assertEqual(response.status_code,302)
+        self.assertIn('/acm/login/',response['Location'])
 
 
 class ComponentsDatabaseTests(TestCase):
@@ -385,11 +391,17 @@ def _pdf_text(pdf):
 class ComponentsPdfReportTests(SimpleTestCase):
     def setUp(self):
         self.factory=RequestFactory();self.user=SimpleNamespace(pk=1,is_active=True,is_authenticated=True)
+        from .test_access_helpers import install_propify_fixture
+        install_propify_fixture(self)
         layers=patch('cuadrantizacion.map_layers.map_layers_config',return_value={'vectoriales':[],'raster':[],'zonas':[]})
         layers.start();self.addCleanup(layers.stop)
 
     def request(self,data):
-        req=self.factory.post('/',json.dumps(data),content_type='application/json');req.current_user=self.user
+        from .test_access_helpers import client_selection
+        req=self.factory.post('/',content_type='application/json');req.current_user=self.user
+        from .access import get_access
+        get_access(req)
+        req._body=json.dumps(client_selection(req,data)).encode()
         req._dont_enforce_csrf_checks=True
         return req
 
@@ -406,14 +418,16 @@ class ComponentsPdfReportTests(SimpleTestCase):
         self.assertEqual(response['Content-Type'],'application/pdf')
         self.assertIn('informe-acm.pdf',response['Content-Disposition'])
         self.assertEqual(response['X-ACM-History-Code'],'ACM1234567')
-        self.assertEqual(build.call_args.args[3],['a'])
+        from .access_data import opaque_id
+        self.assertEqual(build.call_args.args[3],[opaque_id(self.request({}),'a')])
 
     def test_pdf_report_rejects_expired_or_invalid_selection(self):
         self.assertEqual(pdf_report(self.request({'token':'tampered','excluded':[]})).status_code,400)
         self.assertEqual(pdf_report(self.request({'token':'','excluded':[]})).status_code,400)
 
     def test_dashboard_exposes_the_pdf_download(self):
-        response=page(self.factory.get('/acm/analisis/'))
+        request=self.factory.get('/acm/analisis/');request.current_user=self.user
+        response=page(request)
         self.assertContains(response,'id="cmp-pdf"')
         self.assertContains(response,'>Informe PDF</button>')
         self.assertContains(response,'data-pdf-url="/acm/componentes/informe-pdf/"')

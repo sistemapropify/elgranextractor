@@ -71,7 +71,7 @@ def persist_component_history(user, params, records, result, excluded=()):
     units = _unit_values(result) or [result['new'].get('unit') or result['new'].get('built_unit') or 0]
     units = [float(value) for value in units if value is not None]
     unit_mid = median(units) if units else 0
-    area = params.get('land') if params['property_type'] == 'Terreno' else params.get('built')
+    area = params.get('land') if result.get('model') == 'land' else params.get('built')
     defaults = {
         'codigo': generar_codigo_acm(), 'origen': 'componentes', 'metodo': 'componentes',
         'tipo_propiedad': params['property_type'], 'area_m2': _decimal(area),

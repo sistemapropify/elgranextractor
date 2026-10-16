@@ -602,6 +602,7 @@
                     </a>
                     <div class="submenu-items">
                         <a href="/catastro/" class="submenu-item {% if request.path == '/catastro/' %}active{% endif %}"><span>Dashboard catastral</span></a>
+                        <a href="/catastro/visor-planos/" class="submenu-item {% if '/catastro/visor-planos/' in request.path %}active{% endif %}"><span>Visor de planos</span></a>
                         <a href="/cuadrantizacion/mapa/?catastro=yanahuara" class="submenu-item"><span>Mapa en Cuadrantización</span></a>
                     </div>
                 </div>
@@ -1071,7 +1072,7 @@
         </div>
     </div>
 
-    {% if not request.current_user %}
+    {% if not request.current_user and not acm_access %}
     <!-- ═══════════════════════════════════════════════════════════════
          LOGIN MODAL — Sistema de autenticación Intelligence
          ═══════════════════════════════════════════════════════════════ -->

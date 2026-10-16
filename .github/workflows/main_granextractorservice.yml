@@ -17,13 +17,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  cad-reader:
+    # glibc 2.35 also runs on the App Service Debian/glibc 2.36 image.
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build pinned GNU LibreDWG reader
+        run: bash scripts/build_cad_reader.sh cad-runtime
+      - name: Verify actual DWG conversion
+        run: |
+          for version in 2000 2018; do
+            curl --fail --location --retry 2 --max-time 30 \
+              "https://raw.githubusercontent.com/LibreDWG/libredwg/0.14/test/test-data/$version/Polygon.dwg" \
+              -o "/tmp/polygon-$version.dwg"
+            cad-runtime/bin/dwg2dxf -v0 -o "/tmp/polygon-$version.dxf" "/tmp/polygon-$version.dwg"
+            grep -q LWPOLYLINE "/tmp/polygon-$version.dxf"
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cad-reader
+          path: cad-runtime/
+          retention-days: 1
+
   build:
+    needs: cad-reader
     runs-on: ubuntu-latest
     permissions:
       contents: read #This is required for actions/checkout
 
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: cad-reader
+          path: cad-runtime/
+
+      - name: Restore native reader permissions
+        run: chmod +x cad-runtime/bin/dwg2dxf
 
       - name: Set up Python version
         uses: actions/setup-python@v7
@@ -239,8 +272,21 @@ jobs:
               && [ "$MOBILE_SCHEMA_STATUS" = "200" ] \
               && grep -q '"status":"ok"\|"status": "ok"' /tmp/mobile-schema.json \
               && grep -q '"status":"ok"\|"status": "ok"' /tmp/health-response.json; then
-              echo "Application and static assets are healthy"
-              exit 0
+              ACM_STATUS=$(http_status /tmp/acm-login.html https://acm.propifai.com/acm/login/)
+              VIEWER_STATUS=$(http_status /tmp/cad-viewer.html https://acm.propifai.com/catastro/visor-planos/)
+              ACM_JS_STATUS=$(http_status /tmp/acm-components.js https://acm.propifai.com/static/acm/js/components.js)
+              CAD_JS_STATUS=$(http_status /tmp/visor-planos.js https://acm.propifai.com/static/js/visor-planos.js)
+              CAD_CSS_STATUS=$(http_status /tmp/visor-planos.css https://acm.propifai.com/static/css/visor-planos.css)
+              if [ "$ACM_STATUS" = "200" ] && [ "$VIEWER_STATUS" = "302" ] \
+                && [ "$ACM_JS_STATUS" = "200" ] && [ "$CAD_JS_STATUS" = "200" ] && [ "$CAD_CSS_STATUS" = "200" ] \
+                && grep -q Propify /tmp/acm-login.html \
+                && cmp -s /tmp/acm-components.js webapp/acm/static/acm/js/components.js \
+                && cmp -s /tmp/visor-planos.js webapp/static/js/visor-planos.js \
+                && cmp -s /tmp/visor-planos.css webapp/static/css/visor-planos.css; then
+                echo "Application, ACM login, protected DWG viewer and release static assets verified"
+                exit 0
+              fi
+              echo "Waiting for the ACM/viewer release: login=$ACM_STATUS viewer=$VIEWER_STATUS"
             fi
             sleep 15
           done

@@ -4,6 +4,20 @@
   const money = n => n == null ? '—' : new Intl.NumberFormat('es-PE', {
     style: 'currency', currency: 'USD', maximumFractionDigits: 0
   }).format(n);
+  function offer(record) {
+    const sale = record.operation === 'Venta' && record.operation_status !== 'review';
+    const rent = record.operation === 'Alquiler';
+    const land = record.kind === 'Terreno';
+    const area = Number(land ? record.land : record.built);
+    const price = record.price == null ? NaN : Number(record.price);
+    return {
+      operation: sale ? 'Venta' : rent ? 'Alquiler' : 'Operación por confirmar',
+      totalLabel: sale ? 'Precio de venta total' : rent ? 'Importe de alquiler anunciado' : 'Importe anunciado · operación por confirmar',
+      unitLabel: land ? 'Precio por m² de terreno' : 'Precio por m² construido',
+      unit: Number.isFinite(price) && price > 0 && Number.isFinite(area) && area > 0 ? price / area : null,
+      areaBasis: land ? 'terreno' : 'construida'
+    };
+  }
   function property(record, result, excluded = new Set()) {
     if (!result) return {status:'pending', reason:'Análisis pendiente de actualización'};
     if (record.issues.length) return {status:'reference', reason:record.issues.join(' · ')};
@@ -16,7 +30,7 @@
     const nearestReference = {status:'reference', referenceOnly:true,
       reason:'Solo referencia: fuera de los comparables más cercanos usados para valorar'};
     if (!detail) {
-      if (result.model === 'built' && result.selection_method === 'nearest') return nearestReference;
+      if (result.model === 'built' || result.valuation_mode === 'land_only') return nearestReference;
       return {status:'pending', reason:result.messages.join(' ') || 'Referencia de suelo pendiente'};
     }
     if (detail.method === 'built') {
@@ -41,7 +55,7 @@
     return {short:'S/d', label:'Precisión sin informar · solo referencia', kind:'unknown'};
   }
   function markerValue(record, value, mode) {
-    if (mode === 'price') return 'Anuncio ' + money(record.price);
+    if (mode === 'price') return 'Anuncio · ' + offer(record).totalLabel + ' ' + money(record.price);
     if (value.status === 'reference') return 'Solo referencia';
     if (value.status === 'excluded') return 'No seleccionada';
     if (value.status === 'pending') return 'Sin cálculo';
@@ -50,7 +64,18 @@
     if (mode === 'improvements') return (value.status === 'review' ? 'Revisar: ' : 'Mejoras ') + money(value.builtUnit) + '/m²';
     return 'Suelo estim. ' + money(value.landUnit) + '/m²';
   }
-  function marker(record, value, mode) {
+  function numbering(records, orderedComparables) {
+    const ids = [...new Set([...orderedComparables, ...records].map(row => String(row.id)))];
+    return new Map(ids.map((id, index) => [id, index + 1]));
+  }
+  function marker(record, value, mode, compact = false) {
+    if (compact) {
+      const unit = offer(record).unit;
+      const amount = unit == null ? '—' : '$' + Number(unit).toLocaleString('es-PE', {maximumFractionDigits:0});
+      const similarity = record.overall_similarity == null ? '' : ' - (' + Number(record.overall_similarity).toLocaleString('es-PE', {maximumFractionDigits:1}) + '%)';
+      return amount + '/m²' + similarity;
+    }
+
     const similarity = record.overall_similarity == null ? '' : ' · Sim ' + Number(record.overall_similarity).toLocaleString('es-PE', {maximumFractionDigits:1}) + '%';
     return precision(record).short + ' · ' + markerValue(record, value, mode) + similarity;
   }
@@ -60,9 +85,10 @@
     return record.kind === 'Terreno' ? 'other_reference' : 'property_reference';
   }
   function comparisonRows(records, params, result, excluded = new Set()) {
-    const targetGroup = params.property_type === 'Terreno' ? 'land' : 'property';
-    const usedIds = params.property_type === 'Terreno' ? result?.land_ids : result?.house_ids;
-    return records.filter(record => record.kind === params.property_type &&
+    const targetType = result?.valuation_mode === 'land_only' ? 'Terreno' : params.property_type;
+    const targetGroup = targetType === 'Terreno' ? 'land' : 'property';
+    const usedIds = targetType === 'Terreno' ? result?.land_ids : result?.house_ids;
+    return records.filter(record => record.kind === targetType &&
       (!Array.isArray(usedIds) || usedIds.includes(record.id)) &&
       group(record, property(record, result, excluded)) === targetGroup);
   }
@@ -80,7 +106,7 @@
     }
     return rings;
   }
-  const api = {property, marker, precision, group, comparisonRows, mapRadius, inMapRadius, mapRings};
+  const api = {numbering, offer, property, marker, precision, group, comparisonRows, mapRadius, inMapRadius, mapRings};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ACMComponentsPresentation = api;
 })(typeof window !== 'undefined' ? window : globalThis);

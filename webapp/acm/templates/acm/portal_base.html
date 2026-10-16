@@ -1,0 +1,15 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+{% block title %}ACM · Propify{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'acm/css/portal.css' %}?v=1">{% endblock %}
+{% block sidebar_brand %}<div class="sidebar-brand"><span class="brand-icon">A</span><div><span class="brand-text">Propify</span><div class="brand-subtext">Análisis comparativo de mercado</div></div></div>{% endblock %}
+{% block sidebar_menu %}
+<div class="nav-section-title">ACM</div>
+<a href="{% url 'acm:acm_dashboard' %}" class="nav-item {% if request.path == '/acm/' %}active{% endif %}"><span class="nav-icon">◫</span><span>Dashboard</span></a>
+<a href="{% url 'acm:acm_analisis' %}" class="nav-item {% if '/analisis' in request.path %}active{% endif %}"><span class="nav-icon">＋</span><span>Nuevo análisis</span></a>
+{% if acm_permissions.history %}<a href="{% url 'acm:historial_acm' %}" class="nav-item {% if '/historial/' in request.path %}active{% endif %}"><span class="nav-icon">◷</span><span>Historial</span></a>{% endif %}
+{% if show_acm_configuration %}<a href="{% url 'acm:role_settings' %}" class="nav-item {% if '/configuracion/' in request.path %}active{% endif %}"><span class="nav-icon">⚙</span><span>Configuración de accesos</span></a>{% endif %}
+{% endblock %}
+{% block header_title_area %}<div class="header-title">ACM <span>· Propify</span></div>{% endblock %}
+{% block header_actions %}<span class="acm-user">{{ acm_access.user.username }}</span><form method="post" action="{% url 'acm:logout' %}">{% csrf_token %}<button class="acm-button" type="submit">Cerrar sesión</button></form>{% endblock %}
+{% block extra_scripts %}{{ block.super }}<script src="{% static 'acm/js/portal-access.js' %}?v=1"></script>{% endblock %}
