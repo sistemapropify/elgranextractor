@@ -1,3 +1,51 @@
+# Full-district Geollaqta layers in Cuadrantización — 2026-10-16
+
+Status: Validated — user explicitly requested publication after local preview.
+Recipe: existing CI/CD main_granextractorservice.yml.
+Target: existing subscription 0219eecc-9920-4789-9929-3091a2f09daf,
+rg-elgranextractor / granextractorservice, Brazil South.
+Base: latest origin/main e3abe84b; previous deployment 38964665668 succeeded.
+
+## Scope
+Publish complete selected-district layers in bounded 500-feature batches,
+maximum two source requests at once, progressive counts, resumable failures,
+session reuse, district framing and stale-response protection. Preserve ACM
+radius behavior and all role/document access. Integrate only scoped template
+script changes; pre-existing local portal checkbox edits are not published.
+Add a Node regression gate and exact public checks for the new district loader.
+No database, capacity, resource, identity, secret, RBAC or billing changes.
+
+All validation checks:
+- [x] Seven Node map/data/gallery/labels/ACM regression suites passed.
+- [x] 48 isolated Django cadastral/access tests passed.
+- [x] Real source Yanahuara: 5240 / 5240 polygons, zero skipped.
+- [x] Authenticated shared-local browser: Cerro Colorado 15636 / 15636.
+- [x] Local HTTP 200 and exact source bytes for all four map scripts.
+- [x] Latest upstream integration, CI YAML and git whitespace checks passed.
+- [x] Release static collection, WSGI and Cuadrantización template build.
+
+## 7. Validation Proof
+Previous shared-preview verification loaded Yanahuara completely and retained
+its 5240 / 5240 count after zooming out, then rendered Cerro Colorado with
+15636 / 15636. Loader regressions cover more than 1000 features, progressive
+rendering, two-request concurrency, incomplete batches, missing geometry,
+foreign districts, cancellation, cache and resuming only missing blocks.
+48 Django tests and seven Node suites pass in this release worktree. CI YAML
+parses, scoped diff excludes unrelated local checkbox edits and whitespace passes.
+Azure CLI account confirms the approved subscription. Resource-show ARM request
+reset, but the existing deployment completed successfully and both production
+health and ACM login currently return HTTP 200. No ARM mutation is required.
+Release collectstatic succeeded, all four emitted script files exactly match
+release sources, WSGI startup succeeded with isolated databases, and the map
+template compiled with the district-loader dependency present.
+
+Execution: scoped non-forced push to main triggers the existing Azure OIDC
+pipeline. User handles monitoring; report dispatch separately from live success.
+CI must verify public health, protected pages and exact release static assets.
+Rollback: scoped revert through the same workflow.
+
+---
+
 # Identical cadastral HTTP responses in ACM and Cuadrantización — 2026-10-16
 
 Status: Validated — continuing the requested production correction.

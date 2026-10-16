@@ -71,6 +71,16 @@ jobs:
           source antenv/bin/activate
           pip install -r requirements.txt
 
+      - name: Validate complete district loading
+        run: |
+          node webapp/cuadrantizacion/test_geollaqta_district.cjs
+          node webapp/cuadrantizacion/test_geollaqta_loading.cjs
+          node webapp/cuadrantizacion/test_geollaqta_data.cjs
+          node webapp/cuadrantizacion/test_geollaqta_gallery.cjs
+          node webapp/cuadrantizacion/test_geollaqta_measures.cjs
+          node webapp/cuadrantizacion/test_geollaqta_labels.cjs
+          node webapp/acm/test_cadastral.cjs
+
       - name: Collect Django static files
         env:
           # Valores dummy para que Django cargue settings sin conexión a BD.
@@ -291,6 +301,8 @@ jobs:
           acm/js/cadastral-info.js|webapp/acm/static/acm/js/cadastral-info.js
           acm/css/cadastral-info.css|webapp/acm/static/acm/css/cadastral-info.css
           js/catastro-master-data.js|webapp/static/js/catastro-master-data.js
+          js/geollaqta-data.js|webapp/static/js/geollaqta-data.js
+          js/geollaqta-district.js|webapp/static/js/geollaqta-district.js
           js/geollaqta-labels.js|webapp/static/js/geollaqta-labels.js
           js/geollaqta-google.js|webapp/static/js/geollaqta-google.js
           js/geollaqta-map.js|webapp/static/js/geollaqta-map.js

@@ -27,9 +27,9 @@
         const client = window.GeollaqtaData.createClient(options.data || {});
         const toggle = $('geollaqta-visible'), status = $('geollaqta-status'), card = $('geollaqta-detail');
         const districtSelect = $('geollaqta-district');
-        const layers = new Map(), cache = new Map(), signatures = new WeakMap(), layer = adapter.createLayer(); layers.set('lotes', layer);
+        const layers = new Map(), signatures = new WeakMap(), layer = adapter.createLayer(); layers.set('lotes', layer);
         const numbering=adapter.createLabels?.(),loadedLabels=new Map(),numberToggle=$('geollaqta-numbering');
-        let visibleKeys=[];
+        let visibleKeys=[],fitDistrict=true;
         function drawNumbers(){
             numbering?.setData(visibleKeys.includes('lotes')?loadedLabels.get('lotes')||[]:[],visibleKeys.includes('manzanas')?loadedLabels.get('manzanas')||[]:[]);
             numbering?.setVisible(toggle.checked&&(numberToggle?.checked??true));
@@ -198,62 +198,55 @@
             signatures.set(dataLayer,new Map([...incoming].map(([id,value]) => [id, selected && String(selected.getId()) === id && previous.has(id) ? previous.get(id) : value])));
         }
         async function load(force = false) {
-            request?.abort(); const version = ++serial;
-            if (options.acm) $('geollaqta-options').hidden = !toggle.checked;
-            if (!toggle.checked) { coverageAbort?.abort(); coverageRequest=null; clear(); message('Activa el catastro para consultar las capas de ' + districtEntry.name + '.'); return; }
-            try { await catalog(); } catch(error) { if(version===serial)message(error.message); return; }
-            if(version!==serial || !toggle.checked)return;
-            const keys = Array.from(document.querySelectorAll('[name="geollaqta-layer"]:checked'), input => input.value)
-                .filter(key => !key.startsWith('piso-') || $('geollaqta-constructions').checked);
-            if (!keys.length) { clear(); message('Elige una capa del catastro.'); return; }
-            activeLayers(keys);
-            const view = adapter.getView();
-            if (!view.bbox || view.zoom < 17) { message('Acércate al mapa (zoom 17 o mayor) para cargar más lotes. Se conservan las capas ya cargadas.'); return; }
-            request = new AbortController();
-            const rawBox = view.bbox, district = client.district;
-            if (rawBox[2]-rawBox[0]>.05 || rawBox[3]-rawBox[1]>.05) {message('Acércate al mapa para consultar las capas.');return;}
-            // A bounded margin avoids a fresh request for every small pan or zoom in.
-            const dx = Math.min((rawBox[2]-rawBox[0])*.3, (.05-(rawBox[2]-rawBox[0]))/2);
-            const dy = Math.min((rawBox[3]-rawBox[1])*.3, (.05-(rawBox[3]-rawBox[1]))/2);
-            const box = [rawBox[0]-dx,rawBox[1]-dy,rawBox[2]+dx,rawBox[3]+dy], bbox = box.join(',');
-            const reusable = key => {
-                const entry = cache.get(district + ':' + key);
-                return !force && entry && Date.now()-entry.time < 300000 && !entry.data.truncated &&
-                    rawBox[0]>=entry.box[0] && rawBox[1]>=entry.box[1] && rawBox[2]<=entry.box[2] && rawBox[3]<=entry.box[3];
-            };
-            if (keys.some(key => !reusable(key))) message('Actualizando capas de ' + districtEntry.name + '… Se conservan los vectores cargados.');
+            request?.abort();const version=++serial;
+            if(options.acm)$('geollaqta-options').hidden=!toggle.checked;
+            if(!toggle.checked){coverageAbort?.abort();coverageRequest=null;clear();message('Activa el catastro para consultar las capas de '+districtEntry.name+'.');return;}
+            try{await catalog();}catch(error){if(version===serial)message(error.message);return;}
+            if(version!==serial||!toggle.checked)return;
+            const keys=Array.from(document.querySelectorAll('[name="geollaqta-layer"]:checked'),input=>input.value)
+                .filter(key=>!key.startsWith('piso-')||$('geollaqta-constructions').checked)
+                .sort((a,b)=>(a==='lotes'?-2:a==='manzanas'?-1:0)-(b==='lotes'?-2:b==='manzanas'?-1:0));
+            if(!keys.length){clear();message('Elige una capa del catastro.');return;}
+            activeLayers(keys);request=new AbortController();const signal=request.signal,district=client.district;
+            message('Consultando el catastro completo de '+districtEntry.name+'…');
             let info;
-            try {info=await(coverageRequest || coverage());}
-            catch(error) {if(version===serial)message(error.message);return;}
-            if(version!==serial)return;
-            const responses = await Promise.allSettled(keys.map(async key => {
-                if (reusable(key)) return cache.get(district + ':' + key).data;
-                const data = await client.layer(info,key,bbox,request.signal);
-                if (version === serial) { cache.set(district + ':' + key,{box,data,time:Date.now()}); if(cache.size>26)cache.delete(cache.keys().next().value); }
-                return data;
-            }));
-            if (version !== serial || !toggle.checked) return;
-            const messages = [];
-            responses.forEach((result, index) => {
-                const key = keys[index];
-                if (result.status === 'rejected') { if (result.reason.name !== 'AbortError') messages.push(key + ': ' + result.reason.message + ' Se conserva la carga anterior.'); return; }
-                const data = result.value;
-                if (!layers.has(key)) layers.set(key, adapter.createLayer());
-                const dataLayer = layers.get(key); paint(key, dataLayer); reconcile(dataLayer, data); dataLayer.setMap(map);
-                if(key==='lotes'||key==='manzanas')loadedLabels.set(key,data.features);
-                const count = document.querySelector('[data-geollaqta-count="' + key + '"]');
-                if (count) count.textContent = '(' + data.features.length.toLocaleString('es-PE') + ')';
-                messages.push(data.name + ': ' + data.features.length.toLocaleString('es-PE') + (data.truncated ? ' de ' + data.total_in_view.toLocaleString('es-PE') + ' · vista parcial, acércate' : '') + (data.skipped ? ' · ' + data.skipped + ' geometrías no disponibles' : ''));
-            });
-            message('Capas cargadas · ' + messages.join(' · '));
-            drawNumbers();
+            try{info=await(coverageRequest||coverage());}
+            catch(error){if(version===serial)message(error.message);return;}
+            if(version!==serial||signal.aborted)return;
+            const messages=[];
+            for(const key of keys){
+                try{
+                    const data=await client.districtLayer(info,key,{signal,force,onBatch:(batch,data)=>{
+                        if(version!==serial||signal.aborted||district!==client.district||!toggle.checked)return;
+                        if(!layers.has(key))layers.set(key,adapter.createLayer());
+                        const dataLayer=layers.get(key);paint(key,dataLayer);
+                        if(data.complete)reconcile(dataLayer,data);
+                        else if(batch.length){
+                            const existing=new Set();dataLayer.forEach(feature=>existing.add(String(feature.getId())));
+                            dataLayer.addGeoJson({type:'FeatureCollection',features:batch.filter(feature=>!existing.has(String(feature.id)))});
+                        }
+                        dataLayer.setMap(map);
+                        if(key==='lotes'||key==='manzanas'){loadedLabels.set(key,data.features);drawNumbers();}
+                        const count=document.querySelector('[data-geollaqta-count="'+key+'"]');
+                        if(count)count.textContent='('+data.features.length.toLocaleString('es-PE')+(data.complete?'':' / '+data.total_in_view.toLocaleString('es-PE'))+')';
+                        message((data.complete?'Capa completa · ':'Cargando distrito · ')+districtEntry.name+' · '+data.name+': '+data.features.length.toLocaleString('es-PE')+' / '+data.total_in_view.toLocaleString('es-PE')+(data.skipped?' · '+data.skipped+' geometrías no disponibles':''));
+                    }});
+                    if(version!==serial||signal.aborted)return;
+                    if(fitDistrict&&data.features.length&&adapter.fitFeatures){adapter.fitFeatures(data.features);fitDistrict=false;}
+                    messages.push(data.name+': '+data.features.length.toLocaleString('es-PE')+' / '+data.total_in_view.toLocaleString('es-PE')+(data.skipped?' · '+data.skipped+' geometrías no disponibles':''));
+                }catch(error){
+                    if(version!==serial||signal.aborted)return;
+                    messages.push(key+': '+error.message+' Se conserva el avance; pulsa Actualizar capas para continuar.');
+                }
+            }
+            if(version===serial){message('Catastro de '+districtEntry.name+' · '+messages.join(' · '));drawNumbers();}
         }
         function focus() {
             if (!districtEntry.center) {message('No hay un lote de muestra publicado para ' + districtEntry.name + '. Puedes explorar el mapa y actualizar las capas.');return;}
-            toggle.checked = true; adapter.focus(districtEntry.center,18); schedule();
+            toggle.checked = true;fitDistrict=true;adapter.focus(districtEntry.center,14);schedule();
         }
         function schedule() { clearTimeout(timer); request?.abort(); ++serial; timer = setTimeout(load, 350); }
-        layer.addListener('click', choose); adapter.onIdle(schedule);
+        layer.addListener('click', choose); // District geometry is independent of viewport and zoom.
         toggle.addEventListener('change', () => { clearTimeout(timer); load(); });
         numberToggle?.addEventListener('change',drawNumbers);
         document.querySelectorAll('[name="geollaqta-layer"]').forEach(input => input.addEventListener('change', () => { clearTimeout(timer); load(); }));
@@ -275,7 +268,7 @@
             const entry=catalogData?.districts.find(item=>item.ubigeo===code);
             if(!entry){message('Distrito no disponible en el catálogo.');return;}
             clearTimeout(timer); request?.abort(); coverageAbort?.abort(); ++serial; clear();
-            client.setDistrict(code);districtEntry=entry;coverageData=null;coverageRequest=null;updateLabels();
+            client.setDistrict(code);districtEntry=entry;coverageData=null;coverageRequest=null;fitDistrict=move;toggle.checked=true;updateLabels();
             if(toggle.checked && move && entry.center)focus();else load();
         }
         function catalog() {
@@ -298,8 +291,7 @@
         function coverage() {
             const district=client.district;
             coverageAbort=new AbortController();const signal=coverageAbort.signal;
-            const browserPreview=new URLSearchParams(location.search).get('catastro_transport')==='browser';
-            coverageRequest=client.coverage(signal,browserPreview).then(data => {
+            coverageRequest=client.coverage(signal,true).then(data => {
                 if(district!==client.district || signal.aborted)throw new DOMException('Cambio de distrito','AbortError');
                 coverageData=data;
                 // Counting never delays the first geometry request or selecting a lot.

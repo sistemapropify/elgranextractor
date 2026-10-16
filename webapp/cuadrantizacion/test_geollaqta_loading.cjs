@@ -1,97 +1,30 @@
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const vm = require('node:vm');
-const path = require('node:path');
-
-class Element {
-    constructor() { this.checked = false; this.hidden = false; this.textContent = ''; this.events = {}; this.dataset = {}; }
-    addEventListener(name, fn) { this.events[name] = fn; }
-    replaceChildren() {}
-    append() {}
-}
-class Data {
-    constructor() { this.features = new Map(); Data.instances.push(this); }
-    forEach(fn) { [...this.features.values()].forEach(fn); }
-    remove(feature) { this.features.delete(feature.getId()); }
-    setMap(map) { this.map = map; }
-    revertStyle() {}
-    setStyle() {}
-    addListener() {}
-    addGeoJson(data) { data.features.forEach(raw => this.features.set(raw.id, {getId: () => raw.id})); }
-}
-Data.instances = [];
-const elements = new Map();
-const element = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
-const lotInput = new Element(); lotInput.value = 'lotes'; lotInput.checked = true;
-const count = new Element(); count.dataset.geollaqtaCount = 'lotes';
-const events = {}, pending = [];
-let zoom = 18, bounds = [-71.57,-16.41,-71.56,-16.40], scheduled, calls = 0;
-const map = {
-    addListener: (name, fn) => events[name] = fn,
-    getZoom: () => zoom,
-    getBounds: () => ({getSouthWest: () => ({lng: () => bounds[0],lat: () => bounds[1]}),
-        getNorthEast: () => ({lng: () => bounds[2],lat: () => bounds[3]})})
-};
-const response = data => ({ok:true,redirected:false,headers:{get:()=> 'application/json'},json:async()=>data});
-const collection = ids => ({type:'FeatureCollection',name:'Lotes',truncated:false,features:ids.map(id => ({id,type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[]}}))});
-const sandbox = {
-    window:{},document:{getElementById:element,createElement:()=>new Element(),addEventListener(){},querySelector:()=>count,
-        querySelectorAll:selector => selector.includes('geollaqta-count') ? [count] : lotInput.checked ? [lotInput] : []},
-    google:{maps:{Data,SymbolPath:{CIRCLE:1}}},location:{search:''},URLSearchParams,AbortController,Date,
-    setTimeout:fn=>{scheduled=fn;return 1;},clearTimeout:()=>{scheduled=null;},
-    fetch:async url => {
-        if (url.includes('distritos')) return response({checked_at:'2026-10-14',districts:[{ubigeo:'040126',name:'Yanahuara',published_lots:5240},{ubigeo:'040104',name:'Cerro Colorado',published_lots:15636}]});
-        if (url.includes('cobertura')) return response({total:5240,ubigeo:new URL('http://test'+url).searchParams.get('ubigeo')});
-        calls++; return new Promise((resolve,reject)=>pending.push({url,resolve:data=>resolve(response(data)),reject}));
-    }
-};
-for(const file of ['geollaqta-data.js','geollaqta-google.js']) vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../static/js/',file),'utf8'),sandbox);
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+class Element{constructor(){this.checked=false;this.hidden=false;this.textContent='';this.events={};this.dataset={};}addEventListener(k,v){this.events[k]=v;}replaceChildren(){}append(){}}
+class Data{constructor(){this.features=new Map();Data.instances.push(this);}forEach(fn){[...this.features.values()].forEach(fn);}remove(f){this.features.delete(f.getId());}setMap(m){this.map=m;}revertStyle(){}setStyle(){}addListener(){}addGeoJson(data){data.features.forEach(raw=>this.features.set(raw.id,{getId:()=>raw.id}));}}Data.instances=[];
+const nodes=new Map(),element=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
+const lotInput=new Element();lotInput.value='lotes';lotInput.checked=true;const count=new Element();count.dataset.geollaqtaCount='lotes';
+const pending=[],saved=new Map(),calls=[];let district='040126',scheduled;
+const collection=(ids,complete=true)=>({type:'FeatureCollection',name:'Lotes',features:ids.map(id=>({id,type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[]}})),complete,total_in_view:ids.length,processed:ids.length,skipped:0});
+const client={get district(){return district;},setDistrict(value){district=value;},catalog:async()=>({districts:[{ubigeo:'040126',name:'Yanahuara',published_lots:5240},{ubigeo:'040104',name:'Cerro Colorado',published_lots:15636}]}),coverage:async()=>({transport:'browser',ubigeo:district,layers:{lotes:{}}}),
+ districtLayer:async(info,key,options)=>{const d=district;calls.push({district:d,force:options.force});if(saved.has(d)&&!options.force){const value=saved.get(d);options.onBatch(value.features,value);return value;}
+ return new Promise((resolve,reject)=>pending.push({district:d,signal:options.signal,batch(ids){options.onBatch(collection(ids).features,collection(ids,false));},resolve(ids){const value=collection(ids);saved.set(d,value);options.onBatch([],value);resolve(value);},reject}));}};
+const numbers={setVisible(v){this.visible=v;},setData(lots){this.lots=lots;}};let fits=0;const map={};
+const adapter={createLayer:()=>new Data(),createLabels:()=>numbers,pointIcon:()=>({}),fitFeatures:()=>fits++,getView:()=>{throw Error('District loading must not depend on map bounds or zoom.');},onIdle:()=>{throw Error('Pan and zoom must not schedule district reloads.');}};
+const sandbox={window:{GeollaqtaData:{createClient:()=>client,directQuery:async()=>({count:5240})}},document:{getElementById:element,createElement:()=>new Element(),addEventListener(){},querySelector:()=>count,querySelectorAll:selector=>selector.includes('geollaqta-count')?[count]:lotInput.checked?[lotInput]:[]},location:{search:''},URLSearchParams,AbortController,Date,setTimeout:fn=>{scheduled=fn;return 1;},clearTimeout:()=>{scheduled=null;}};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../static/js/geollaqta-map.js'),'utf8'),sandbox);
-const flush = async () => { for (let i=0;i<40;i++) await Promise.resolve(); };
-const idle = async () => { events.idle(); const fn = scheduled; scheduled=null;fn();await flush(); };
-async function main() {
-    const numbers={visible:false,lots:[],setVisible(value){this.visible=value;},setData(lots){this.lots=lots;}};
-    element('geollaqta-numbering').checked=true;
-    const adapter={createLabels:()=>numbers,createLayer:()=>new Data(),pointIcon:()=>({}),getView:()=>({zoom,bbox:bounds}),onIdle:fn=>events.idle=fn};
-    delete sandbox.google;
-    const controller=sandbox.window.GeollaqtaMap.init(map,{adapter});
-    element('geollaqta-visible').checked=true;
-    element('geollaqta-visible').events.change(); await flush();
-    pending.shift().resolve(collection([1,2]));await flush();
-    const layer = Data.instances[0], first=layer.features.get(1);
-    assert.equal(layer.features.size,2);
-    assert.equal(numbers.visible,true);assert.equal(numbers.lots.length,2);
-    element('geollaqta-numbering').checked=false;element('geollaqta-numbering').events.change();
-    assert.equal(numbers.visible,false);assert.equal(calls,1,'Number visibility reuses loaded vectors without a query');
-    element('geollaqta-numbering').checked=true;element('geollaqta-numbering').events.change();
-    bounds = [-71.569,-16.409,-71.559,-16.399]; await idle();
-    assert.equal(calls,1,'Small pan reuses the buffered viewport');
-    zoom=19; bounds=[-71.567,-16.407,-71.563,-16.403];await idle();
-    assert.equal(calls,1,'Zooming in reuses vectors');assert.equal(layer.features.get(1),first);
-    bounds=[-71.565,-16.405,-71.55,-16.39];await idle();
-    assert.equal(calls,2);assert.equal(layer.features.size,2,'Old vectors remain during loading');assert.equal(layer.map,map);
-    pending.shift().reject(new Error('Source timeout'));await flush();
-    assert.equal(layer.features.get(1),first,'Failed fetch preserves loaded vectors');
-    await idle();pending.shift().resolve(collection([1,3]));await flush();
-    assert.equal(layer.features.get(1),first,'Overlapping lots retain object identity');
-    assert.equal(layer.features.has(2),false);assert.equal(layer.features.has(3),true);
-    zoom=16;await idle();assert.equal(layer.map,map);assert.equal(layer.features.size,2,'Zoom out keeps existing vectors');
-    zoom=18;bounds=[-71.564,-16.404,-71.56,-16.40];await idle();const previous=calls;
-    element('geollaqta-refresh').events.click();await flush();assert.equal(calls,previous+1,'Manual refresh bypasses viewport cache');
-    element('geollaqta-visible').checked=false;element('geollaqta-visible').events.change();await flush();
-    assert.equal(layer.features.size,0);assert.equal(layer.map,null,'Disabling explicitly clears the layer');
-    assert.equal(numbers.visible,false);assert.equal(numbers.lots.length,0,'Clear numbers with their polygons');
-    pending.shift().resolve(collection([4]));await flush();assert.equal(layer.features.size,0,'Late response cannot reenable vectors');
-    element('geollaqta-visible').checked=true;element('geollaqta-visible').events.change();await flush();
-    element('geollaqta-refresh').events.click();await flush();const stale=pending.shift();
-    controller.setDistrict('040104',false);await flush();
-    assert.equal(layer.features.size,0,'District change clears foreign vectors');
-    const next=pending.shift();assert.match(next.url,/ubigeo=040104/);
-    next.resolve(collection([9]));await flush();stale.resolve(collection([7]));await flush();
-    assert.equal(layer.features.has(9),true);assert.equal(layer.features.has(7),false,'Late old-district response is ignored');
-    controller.setDistrict('040126',false);await flush();
-    assert.equal(layer.features.has(3),true,'Switching back reuses that district cache');
-    assert.equal(layer.features.has(9),false);
-    console.log('Cadastral pan, zoom, cache, refresh, district switching and stale-response checks passed without Google SDK.');
-}
-main().catch(error=>{console.error(error);process.exitCode=1;});
+const flush=async()=>{for(let i=0;i<60;i++)await Promise.resolve();};
+(async()=>{
+ element('geollaqta-numbering').checked=true;const control=sandbox.window.GeollaqtaMap.init(map,{adapter});await flush();
+ element('geollaqta-visible').checked=true;element('geollaqta-visible').events.change();await flush();
+ const first=pending.shift(),layer=Data.instances[0];first.batch([1]);assert.equal(layer.features.size,1,'Render the first block immediately.');first.resolve([1,2]);await flush();
+ assert.equal(layer.features.size,2);assert.equal(numbers.lots.length,2);assert.equal(fits,1,'Fit the complete district when first loaded.');const identity=layer.features.get(1);
+ element('geollaqta-numbering').events.change();assert.equal(calls.length,1);
+ element('geollaqta-refresh').events.click();await flush();assert.equal(layer.features.get(1),identity,'Refresh retains the visible layer while downloading.');
+ pending.shift().reject(Error('source failed'));await flush();assert.equal(layer.features.size,2);assert.match(element('geollaqta-status').textContent,/conserva el avance/);
+ element('geollaqta-refresh').events.click();await flush();pending.shift().resolve([1,3]);await flush();assert.equal(layer.features.get(1),identity);assert.equal(layer.features.has(2),false);assert.equal(layer.features.has(3),true);
+ element('geollaqta-refresh').events.click();await flush();const stale=pending.shift();
+ control.setDistrict('040104',false);await flush();assert.equal(layer.features.size,0);const next=pending.shift();assert.equal(next.district,'040104');next.resolve([9]);await flush();stale.resolve([7]);await flush();assert.equal(layer.features.has(9),true);assert.equal(layer.features.has(7),false,'Old district responses cannot paint into the selected district.');
+ control.setDistrict('040126',false);await flush();assert.equal(layer.features.has(9),false);
+ element('geollaqta-visible').checked=false;element('geollaqta-visible').events.change();await flush();assert.equal(layer.map,null);assert.equal(layer.features.size,0);assert.equal(numbers.visible,false);
+ console.log('District map: no zoom/viewport dependency, progressive rendering, full-district framing, retained refresh, district isolation, numbering and stale-response checks passed.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

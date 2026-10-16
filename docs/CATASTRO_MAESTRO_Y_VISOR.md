@@ -280,3 +280,22 @@ The two individual-form endpoints returned HTTP 500 and remain explicitly pendin
 The deployed reader in Azure returned its verified archive in 0.951 seconds with
 the source deliberately disconnected for that read test. This repairs that archive;
 it does not establish general live connectivity for unarchived properties.
+
+
+### Cuadrantización: complete selected district — 2026-10-16
+The selected layer now enumerates every object ID in the district, then loads
+explicit batches of 500 with two concurrent requests. It no longer depends on
+the viewport, zoom 17 or a 1000-feature cap. All enabled cadastral layers follow
+the same district scope. The browser reads the approved public ArcGIS geometry
+source directly; authenticated configuration and private report access remain.
+
+Draw completed batches immediately and show the received/total count. Interrupted
+loads keep their inventory and completed batches; Update layers resumes missing
+blocks. A completed layer is reused for the session until manual refresh. Retain
+up to two districts and clear foreign vectors on district change. Pan/zoom does
+not trigger cadastral downloads. Initial selection fits the published geometries.
+
+Verified live Yanahuara 5240 / 5240 and local-browser Cerro Colorado 15636 / 15636.
+Node suites cover complete loading, bounded concurrency, resume, stale responses
+and district filtering. The publication workflow verifies exact bytes of the new
+geollaqta-district.js dependency, as well as its map/data/adapter scripts.

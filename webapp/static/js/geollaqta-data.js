@@ -121,11 +121,17 @@
         let district = validateDistrict(options.district || '040126');
         const get = (path, signal) => read(path, signal, baseUrl, fetcher);
         const suffix = () => 'ubigeo=' + encodeURIComponent(district);
+        let districtLoader;
+        function districtLayer(info,key,options){
+            districtLoader ||= window.GeollaqtaDistrict.create(fetcher);
+            return districtLoader.load(info,key,options);
+        }
         return {
             get district() { return district; },
             setDistrict(value) { district = validateDistrict(value); },
             catalog: signal => get('distritos/', signal),
             coverage: (signal, browser = false, metadata = true) => get('cobertura/?' + suffix() + (browser ? '&transport=browser' : '') + (metadata ? '&metadata=1' : ''), signal),
+            districtLayer,
             layer: (info, key, bbox, signal) => info.transport === 'browser' ? directLayer(info, key, bbox, signal, fetcher) :
                 get('capas/' + encodeURIComponent(key) + '/?' + suffix() + '&bbox=' + encodeURIComponent(bbox), signal),
             report: (lotId, recordId, signal) => {
