@@ -1,3 +1,76 @@
+# ACM compact floating cadastre and lot numbering - 2026-10-16
+
+Status: Validated - scoped correction passed azure-validate checks.
+Recipe: CI/CD, existing main_granextractorservice.yml.
+
+## 1. Scope
+Compact 260px floating card inside the map: facade and cadastral data, close and
+drag without hiding lots, no dropdown/full-width panel, counters or source links.
+Direct facade fallback and shared Canvas lot/block numbers without a minimum
+zoom in ACM. Preserve Cuadrantizacion label defaults and cached district vectors.
+Distinguish document connection failures from actual empty document fields.
+This release does not claim to repair Azure-to-COFOPRI network connectivity.
+
+## 2. Existing target
+Azure subscription 1 / 0219eecc-9920-4789-9929-3091a2f09daf.
+App Service granextractorservice, rg-elgranextractor, Brazil South.
+https://acm.propifai.com/acm/analisis/
+Existing OIDC pipeline; no Azure resources, billing, schema or RBAC changes.
+
+## 3. Integration
+Base 7519d401, production Actions run 38940429869 succeeded.
+Nine scoped application/test files plus documentation and this plan.
+Preserve shared preview edits and latest main. No original document, harvested
+fixture, local session, credential or experimental relay code enters Git.
+
+## 4. Validation steps
+- [x] Isolated ACM permission, role and verified document tests.
+- [x] Widget, facade fallback, retry and shared label regression/syntax.
+- [x] Rendered floating card, compact size, static collection, WSGI/local HTTP.
+- [x] Real selected-lot report/facade archived and readable from Azure R2.
+- [x] Azure target, latest main, scoped diff and public CI asset gates.
+
+## 5. Execution
+Non-forced push through the existing pipeline. User handles extended monitoring.
+Report dispatch separately from verified live publication. CI checks exact public
+static bytes and protected APIs. Rollback: scoped revert through the same pipeline.
+
+## 6. Infrastructure and limits
+No Azure setting/credential changes. Existing private R2 storage only: one user-
+reported lot archived, originals/version snapshots retained, no bulk extraction.
+A protected Cloudflare Worker was tested but upstream timed out; it is idle and
+not configured in Azure or used by the application. General live documents remain
+unavailable from the current Azure network; only archived records are confirmed.
+
+## 7. Validation Proof
+2026-10-16, America/Lima:
+- Latest origin/main 7519d401 confirmed; prior production pipeline succeeded.
+- 72 isolated Django tests passed: cadastral measurements/availability, basic
+  policies, role preview, access and superadmin configuration.
+- Node widget regression passed: progressive 1201 lots, cache, street pins,
+  district replacement, facade fallback without archive, card close retaining
+  polygons, all-zoom label configuration, document error display and retry.
+- Shared number-label tests passed: real codes, grouping, safe placement, prior
+  Cuadrantizacion defaults and ACM labels below the former zoom threshold.
+- Both JS syntax checks and changed Python AST passed. Isolated collectstatic,
+  WSGI import and three source/collected/local-HTTP byte comparisons passed.
+- Rendered basic ACM has a floating section within map-container, no dropdown
+  or layer checkbox. Visual harness measured card width 260px, height 438px.
+  This is layout verification, not an authenticated Google Maps session test.
+- Exact reported lot 04010483021014: real report parsing returned land 201.49,
+  built 248.98, sides 10.00/19.78/19.67/10.00. One original report and facade
+  archived with hash-verified R2 uploads; read from Azure confirmed revision 2.
+  Its individual form remains pending. No bulk collection was initiated.
+- Azure TCP to the COFOPRI host times out; the isolated Cloudflare trial also
+  timed out. Failed relay code/settings are excluded, no Azure secret modified.
+  Release does not assert general live document connectivity has been fixed.
+- Read-only Azure checks confirm authorized subscription and Running Brazil
+  South target. Existing OIDC, static/public gates, schema and RBAC preserved.
+- Scoped eleven-file diff and git diff --check passed. Private data and local
+  experimental files excluded. User handles extended deployment monitoring.
+
+---
+
 # Basic ACM district-wide cadastre correction - 2026-10-16
 
 Status: Validated - azure-validate release checks passed.

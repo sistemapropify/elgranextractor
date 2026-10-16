@@ -56,8 +56,8 @@ def manifest(lot_id):
 
 
 def _download(url):
-    # URLs only come from the strict GalleryLinks parser, never client input.
-    with build_opener(NoRedirect()).open(Request(url), timeout=4) as response:
+    # Only the validated source gallery/document URLs are passed here.
+    with build_opener(NoRedirect()).open(Request(url), timeout=8) as response:
         body = response.read(8_000_001)
     if len(body) > 8_000_000:
         raise ValueError('Cadastral document too large')
@@ -95,7 +95,7 @@ def lot_summary(lot_id, record_id=None):
     validate_lot(lot_id)
     if record_id and not re.fullmatch(lot_id[:6] + r'\d{13}', record_id):
         raise ValueError('Reporte catastral no válido.')
-    key = 'master-summary-v1:' + lot_id + ':' + (record_id or 'first')
+    key = 'master-summary-v2:' + lot_id + ':' + (record_id or 'first')
     saved = cache.get(key)
     if saved is not None:
         return saved
@@ -108,8 +108,9 @@ def lot_summary(lot_id, record_id=None):
     if any(a.get('type') == 'facade_image' for a in (archive or {}).get('artifacts', [])):
         facade = f'/acm/catastro/lotes/{lot_id}/fachada/'
     live = []
+    connection_failed = False
     # Prefer the verified archive; only the selected lot can trigger a live read.
-    if not documents or not facade:
+    if not documents:
         try:
             from scrapi.geollaqta_scraper import GalleryLinks
             parser = GalleryLinks(lot_id[:6])
@@ -118,7 +119,7 @@ def lot_summary(lot_id, record_id=None):
             if not facade:
                 facade = next((url for url in parser.images if _facade_url(url, lot_id)), None)
         except (OSError, ValueError, RuntimeError):
-            pass
+            connection_failed = True
     known = {(d.get('record_id'), d.get('type')) for d in documents}
     documents.extend(d for d in live if (d.get('record_id'), d.get('type')) not in known)
     documents = [d for d in documents if d.get('type') in ('individual_record_pdf', 'cadastral_report_pdf')
@@ -156,12 +157,17 @@ def lot_summary(lot_id, record_id=None):
                 if values['boundaries'][side] is None:
                     values['boundaries'][side] = extracted['boundaries'][side]
             verified = True
-        except (OSError, ValueError, RuntimeError, ReportUnavailable):
+        except ReportUnavailable:
+            continue
+        except (OSError, ValueError, RuntimeError):
+            connection_failed = True
             continue
     result = {'lot_id': lot_id, 'metrics': values, 'verified': verified, 'facade_url': facade,
               'reports': [{'record_id': rid, 'form_number': number} for rid, number in choices],
-              'selected_record_id': selected}
-    cache.set(key, result, 300 if verified else 30)
+              'selected_record_id': selected,
+              'document_status': 'verified' if verified else 'unavailable' if connection_failed or documents else 'not_published'}
+    if result['document_status'] != 'unavailable':
+        cache.set(key, result, 300 if verified else 30)
     return result
 
 

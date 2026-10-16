@@ -1,5 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
-const nodes=new Map(),events={},requests=[],timers=new Map();let timerId=0,hold=true,fail=false;const gates=[];
+const nodes=new Map(),events={},requests=[],timers=new Map(),labelUpdates=[];let timerId=0,hold=true,fail=false,documentsFailed=false;const gates=[];
 class Element{
  constructor(){this.events={};this.hidden=false;this.checked=true;this.dataset={};this.children=[];this.attributes={};this.value='';this.textContent='';}
  addEventListener(t,fn){this.events[t]=fn;}setAttribute(k,v){this.attributes[k]=v;}removeAttribute(k){delete this.attributes[k];}replaceChildren(...v){this.children=v;}append(...v){this.children.push(...v);}
@@ -23,7 +23,7 @@ const response=value=>({ok:true,headers:{get:()=> 'application/json'},json:async
 async function fetcher(url,options={}){
  requests.push({url,options});if(fail)throw TypeError('offline');
  if(url.includes('/configuracion/'))return response(config);
- if(url.includes('/acm/catastro/lotes/'))return response({lot_id:url.split('/lotes/')[1].split('/')[0],verified:true,metrics:{land_area:'200',built_area:'20.5',floors:null,units:null,boundaries:{frente:'10'}},facade_url:null,reports:[]});
+ if(url.includes('/acm/catastro/lotes/'))return response({lot_id:url.split('/lotes/')[1].split('/')[0],verified:!documentsFailed,document_status:documentsFailed?'unavailable':'verified',metrics:{land_area:'200',built_area:'20.5',floors:null,units:null,boundaries:{frente:'10'}},facade_url:null,reports:[]});
  const p=options.body;assert.equal(p.has('resultRecordCount'),false,'No unsupported ArcGIS pagination.');
  if(url.endsWith('/13/query')){assert.equal(p.get('geometryType'),'esriGeometryPoint');const x=JSON.parse(p.get('geometry')).x;return response({features:x<10?[sector('040126',0)]:x<30?[sector('040102',20)]:[]});}
  if(url.includes('/boundaries/'))return response({features:[]});
@@ -37,7 +37,7 @@ async function fetcher(url,options={}){
  if(hold)await new Promise(resolve=>gates.push(resolve));
  return response({features:selected.map(id=>lot(id,district))});
 }
-const context={window:{ACMPermissions:{cadastral_info:true}},document:{getElementById:id=>id.endsWith('-data')?null:get(id),createElement:()=>new Element(),addEventListener:(name,fn)=>events[name]=fn},google:{maps:{Data}},fetch:fetcher,AbortController,URLSearchParams,setTimeout(fn,ms){const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);}};
+const context={window:{ACMPermissions:{cadastral_info:true},GeollaqtaLabels:{create(map,options){assert.equal(options.minZoom,0);assert.equal(options.lotMinZoom,0);return {setData(lots){labelUpdates.push(lots.length);}};}}},document:{getElementById:id=>id.endsWith('-data')?null:get(id),createElement:()=>new Element(),addEventListener:(name,fn)=>events[name]=fn},google:{maps:{Data}},fetch:fetcher,AbortController,URLSearchParams,setTimeout(fn,ms){const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);}};
 for(const name of ['static/js/geollaqta-data.js','static/js/catastro-master-data.js','acm/static/acm/js/cadastral-info.js'])vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..',name),'utf8'),context);
 const flush=async()=>{for(let i=0;i<40;i++)await Promise.resolve();};
 async function move(lng,lat=.2){events['acm:target-location']({detail:{lat,lng}});const entry=[...timers].find(([,v])=>v.ms===450);timers.delete(entry[0]);return await entry[1].fn();}
@@ -49,12 +49,18 @@ async function move(lng,lat=.2){events['acm:target-location']({detail:{lat,lng}}
  const layer=Data.instances[0];assert.equal(layer.features.length,1201,'Load all lots, including more than the old 1000 limit.');assert.equal(layer.map,map);assert.ok(layer.drawSizes.some(n=>n>0&&n<1201),'Lots appear progressively.');
  assert.equal(requests.filter(r=>r.options.body?.get('returnIdsOnly')).length,1,'Same-district movement shares the inventory and active download.');
  assert.equal(get('cmp-cadastral-code').textContent,'04012607001002');assert.equal(get('cmp-cadastral-land').textContent,'200');assert.equal(get('cmp-cadastral-built').textContent,'20.5');
+ assert.ok(labelUpdates.includes(1201),'Use all loaded lot numbers without additional requests.');
+ assert.equal(get('cmp-cadastral-photo').src,'https://catastro.cofopri.gob.pe/img_catastro/040126/07001002.jpg','Facade can load directly even without an archived document.');
+ assert.equal(get('cmp-cadastral-status').hidden,true,'Successful card contains only facade and cadastral data.');
  assert.equal(layer.styleFor(layer.features.find(f=>f.getId()===2)).strokeWeight,2.6);assert.equal(layer.style.clickable,false);
  const before=requests.filter(r=>r.url.startsWith('https://')).length;
  await move(.2);await flush();assert.equal(requests.filter(r=>r.url.startsWith('https://')).length,before,'Repositioning in a loaded district uses its cache.');assert.equal(get('cmp-cadastral-code').textContent,'04012607001001');
  await move(.5);assert.equal(layer.features.length,1201,'A pin on a street must keep the whole district visible.');assert.match(get('cmp-cadastral-status').textContent,/no está dentro de un lote/);
- get('cmp-cadastral-visible').checked=false;get('cmp-cadastral-visible').events.change();assert.equal(layer.map,null);get('cmp-cadastral-visible').checked=true;get('cmp-cadastral-visible').events.change();assert.equal(layer.map,map);
- await move(20.2);assert.equal(layer.features.length,1,'A different district replaces the previous one.');assert.match(get('cmp-cadastral-hint').textContent,/Alto Selva Alegre/);
+ get('cmp-cadastral-close').events.click();assert.equal(get('cmp-cadastral').hidden,true);assert.equal(layer.map,map,'Closing the card retains all lots.');
+ await move(.2);assert.equal(get('cmp-cadastral').hidden,false,'A new pin placement reopens the floating card.');
+ documentsFailed=true;await move(20.2);await flush();assert.equal(layer.features.length,1,'A different district replaces the previous one.');assert.match(get('cmp-cadastral-hint').textContent,/Alto Selva Alegre/);
+ assert.equal(get('cmp-cadastral-land').textContent,'Consulta no disponible','A connection failure never becomes an empty verified field.');assert.equal(get('cmp-cadastral-status').hidden,false);
+ documentsFailed=false;await move(20.2);await flush();assert.equal(get('cmp-cadastral-land').textContent,'200','Retry does not reuse a failed document response.');
  await move(60);assert.equal(layer.features.length,0);assert.match(get('cmp-cadastral-status').textContent,/fuera del catálogo/);
  // Resume a district after one failed batch; never restart completed batches.
  const spatial=context.window.CatastroMasterData;let failed=false,inventoryCalls=0;const batchCalls=[],progress=[];

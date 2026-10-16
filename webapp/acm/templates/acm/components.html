@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="{% static 'acm/css/comparison-valuation.css' %}?v=6">
 <link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
 <link rel="stylesheet" href="{% static 'acm/css/nearby-places.css' %}?v=2">
-{% if acm_permissions.cadastral_info %}<link rel="stylesheet" href="{% static 'acm/css/cadastral-info.css' %}?v=1">{% endif %}
+{% if acm_permissions.cadastral_info %}<link rel="stylesheet" href="{% static 'acm/css/cadastral-info.css' %}?v=3">{% endif %}
 <link rel="stylesheet" href="{% static 'acm/css/zona-preevaluacion.css' %}?v=5">
 {% endblock %}
 {% block content %}
@@ -170,9 +170,9 @@
         </header>
         <div id="cmp-pdm-zone-content"><div class="cmp-zona" id="cmp-zona" hidden></div></div>
       </section>
+      {% if acm_permissions.cadastral_info %}{% include 'acm/_cadastral_info.html' %}{% endif %}
     </div>
     {% if acm_permissions.nearby %}{% include 'acm/_nearby_places.html' %}{% endif %}
-    {% if acm_permissions.cadastral_info %}{% include 'acm/_cadastral_info.html' %}{% endif %}
   </div>
 
   <!-- ===== Columna derecha: enlaces y resultados ===== -->
@@ -304,7 +304,8 @@
 {% if acm_permissions.cadastral_info %}
 <script src="{% static 'js/geollaqta-data.js' %}?v=2"></script>
 <script src="{% static 'js/catastro-master-data.js' %}?v=2"></script>
-<script src="{% static 'acm/js/cadastral-info.js' %}?v=2"></script>
+<script src="{% static 'js/geollaqta-labels.js' %}?v=2"></script>
+<script src="{% static 'acm/js/cadastral-info.js' %}?v=3"></script>
 {% endif %}
 {% if acm_permissions.pdm_query and acm_permissions.pdm_card %}<script src="{% static 'acm/js/zona-preevaluacion.js' %}?v=8"></script>{% endif %}
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&libraries=places&callback=initComponentMap" async defer></script>

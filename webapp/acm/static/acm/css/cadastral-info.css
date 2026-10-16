@@ -1,10 +1,20 @@
-#cmp-cadastral{position:static;flex-shrink:0;width:100%;border:1px solid var(--border-color,#30363d);border-radius:8px;background:var(--bg-primary,#0d1117);color:var(--text-primary,#e6edf3);font-size:12px}
-#cmp-cadastral>summary{padding:11px 12px;cursor:pointer;font-weight:650}
-#cmp-cadastral-hint{font-size:11px;font-weight:400;color:#a3b5c5;margin-left:8px}
-.cmp-cadastral-content{padding:10px 12px;max-height:55dvh;overflow:auto;border-top:1px solid var(--border-color,#30363d)}
-.cmp-cadastral-visibility{display:flex;gap:6px;align-items:center}.cmp-cadastral-visibility input{accent-color:#5ed8b2}
-#cmp-cadastral-status{font-size:11px;line-height:1.5;color:#9db9ce}#cmp-cadastral-status[data-error=true]{color:#f6bd8f}
-.cmp-cadastral-facade img{display:block;max-width:100%;max-height:180px;margin:0 auto;object-fit:contain;border-radius:6px}
-.cmp-cadastral-facade p{font-size:11px;color:#9aafbf}.cmp-cadastral-facade:has(img:not([hidden])){margin:10px 0}
-#cmp-cadastral [hidden]{display:none!important}#cmp-cadastral dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 15px;margin:12px 0}#cmp-cadastral dl>div{min-width:0}#cmp-cadastral dt{color:#a1b4c4;font-size:11px}#cmp-cadastral dd{margin:2px 0 0;overflow-wrap:anywhere;font-size:12px}#cmp-cadastral h3{font-size:12px;margin:15px 0 5px}
-#cmp-cadastral button,#cmp-cadastral select{font:inherit;color:#e6edf3;border:1px solid #405367;background:#1c2b38;border-radius:6px;padding:6px 9px}#cmp-cadastral button{cursor:pointer}#cmp-cadastral select{display:block;margin-top:5px;max-width:100%}
+/* Compact floating lot card; never participates in the map flex height. */
+#cmp-cadastral{position:absolute;right:12px;top:12px;z-index:125;box-sizing:border-box;width:260px;max-width:calc(100% - 16px);max-height:calc(100% - 16px);display:flex;flex-direction:column;border:1px solid var(--border-color,#405064);border-radius:8px;background:var(--bg-primary,#0d1117);color:var(--text-primary,#e6edf3);font-size:11px;box-shadow:0 5px 20px #0005}
+#cmp-cadastral[hidden]{display:none!important}
+#cmp-cadastral *{box-sizing:border-box}
+#cmp-cadastral-handle{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid #303b49;cursor:move;touch-action:none}
+#cmp-cadastral-handle:focus-visible{outline:2px solid #69d2c5;outline-offset:-2px}
+#cmp-cadastral-title{font-size:12px;font-weight:650;margin:0;line-height:1.3}
+#cmp-cadastral-hint{display:block;font-size:10px;color:#a3b5c5;margin-top:3px;overflow-wrap:anywhere}
+#cmp-cadastral-close{flex:none;width:26px;height:26px;display:grid;place-items:center;padding:0;font-size:21px;line-height:1}
+.cmp-cadastral-content{min-height:0;padding:8px 10px;overflow:auto;overscroll-behavior:contain}
+#cmp-cadastral-status{font-size:10px;line-height:1.4;color:#9db9ce;margin:0 0 6px}#cmp-cadastral-status[data-error=true]{color:#f6bd8f}
+.cmp-cadastral-facade img{display:block;width:100%;height:100px;margin:0 auto 8px;object-fit:contain;background:#091018;border-radius:5px}
+.cmp-cadastral-facade p{font-size:10px;color:#9aafbf;margin:0 0 8px}
+#cmp-cadastral [hidden]{display:none!important}
+#cmp-cadastral dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 10px;margin:8px 0}
+#cmp-cadastral dl>div{min-width:0}#cmp-cadastral dt{color:#a1b4c4;font-size:10px}#cmp-cadastral dd{margin:2px 0 0;overflow-wrap:anywhere;font-size:11px;line-height:1.3}
+#cmp-cadastral-fields>div:first-child{grid-column:1/-1}
+#cmp-cadastral h3{font-size:11px;margin:10px 0 5px;padding-top:7px;border-top:1px solid #303b49}
+#cmp-cadastral button,#cmp-cadastral select{font:inherit;color:#e6edf3;border:1px solid #405367;background:#1c2b38;border-radius:5px;padding:5px 7px}#cmp-cadastral button{cursor:pointer}#cmp-cadastral select{display:block;margin-top:4px;max-width:100%;font-size:10px}
+#cmp-cadastral #cmp-cadastral-close{padding:0;font-size:21px}

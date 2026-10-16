@@ -143,7 +143,7 @@ la atribución catastral; no debe sustituir automáticamente al sector existente
 Se conservan dos distritos completos en memoria y sólo se consultan documentos
 del lote que contiene el pin. Los registros sin geometría se cuentan explícitamente.
 
-Tarjeta «Información catastral», colapsada inicialmente y debajo del mapa:
+Tarjeta flotante «Información catastral», de 260 px y con cierre independiente:
 fachada, códigos, año publicado del catastro y datos documentales verificados.
 Áreas y perímetros provienen de la ficha; el reporte completa los campos ausentes
 de la misma unidad. No se usan áreas de capas, geometría ni otra unidad como
@@ -180,3 +180,32 @@ Se recibieron y validaron los 5.240 lotes actuales de Yanahuara en 11 tandas;
 el proveedor identifica el lote 04012607038027 en ese conjunto completo.
 Los JS v2 responden por HTTP local con bytes verificados; sin sesión la API
 sigue devolviendo 401. La sesión del ACM local requiere el login real de Propify.
+
+
+### Tarjeta flotante, numeración y disponibilidad de documentos
+
+La tarjeta pertenece al contenedor del mapa, sin reducir su altura. Muestra
+fachada, códigos, año y medidas; no incluye el contador del distrito, controles
+de capas, relaciones con zonas, galería ni enlaces a fichas. Se puede mover y
+cerrar sin ocultar los polígonos. La siguiente ubicación del pin la reabre.
+La fachada pública del mismo lote carga directamente en el navegador; un fallo
+de consulta documental no debe impedir ver una imagen disponible.
+
+ACM reutiliza la numeración Canvas de lotes/manzanas con minZoom=0 y
+lotMinZoom=0. No añade peticiones ni marcadores; evita rótulos superpuestos.
+Cuadrantización conserva sus umbrales 17/18. Los vectores del ACM no se ocultan
+con el zoom ni se recargan al desplazar el mapa.
+
+La API distingue documento verificado, documento no publicado y consulta
+no disponible. Un fallo de red no equivale a un campo vacío del documento.
+Las áreas/perímetros siguen saliendo de la ficha o del reporte, sin calcularlos
+a partir de las capas. El navegador distingue carga pendiente y error recuperable.
+
+Comprobación real: el lote 04010483021014 tiene reporte con terreno 201.49 m²,
+construcción 248.98 m² y perímetros 10.00 / 19.78 / 19.67 / 10.00 m. Su reporte
+y fachada se archivaron en R2 y se comprobó la lectura desde Azure. La ficha
+individual permanece pendiente; no se la reemplaza por una ficha inventada.
+La conexión directa desde Azure al origen agota el tiempo de espera; un ensayo
+con un Worker autenticado tampoco pudo descargarlo y queda fuera de la aplicación.
+Por tanto los documentos no archivados todavía dependen de resolver ese acceso.
+No se ha iniciado una extracción masiva ni configurado un relay en Azure.

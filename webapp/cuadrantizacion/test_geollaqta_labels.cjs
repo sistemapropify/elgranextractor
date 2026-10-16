@@ -26,4 +26,6 @@ zoom=16;overlay.draw();assert.equal(canvas.hidden,true,'Hide labels at district 
 numbers.setVisible(false);zoom=19;overlay.draw();assert.equal(canvas.hidden,true);
 texts.length=0;numbers.setVisible(true);assert.equal(canvas.hidden,false);assert.equal(texts.length,3);
 assert.equal(canvas.style.pointerEvents,'none','Lot selection remains available under the text');
+texts.length=0;zoom=14;const acm=labels.create(map,{minZoom:0,lotMinZoom:0});acm.setData([lot1,lot2],[]);
+assert.equal(canvas.hidden,false);assert.deepEqual(texts.map(r=>r.text),['Mz. 038','027','028'],'ACM renders readable numbers without a minimum zoom.');
 console.log('Cadastral numbers: real codes, block grouping, hole-safe positions, zoom and visibility passed.');

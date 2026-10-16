@@ -39,7 +39,7 @@
         const labels=[...groups.values()].map(g=>({kind:'block',text:g.text,point:{lat:g.points.reduce((n,p)=>n+p.lat,0)/g.points.length,lng:g.points.reduce((n,p)=>n+p.lng,0)/g.points.length}}));
         return labels.concat(rows);
     }
-    function create(map){
+    function create(map,options={}){
         const canvas=document.createElement('canvas');canvas.setAttribute('aria-hidden','true');
         Object.assign(canvas.style,{position:'absolute',pointerEvents:'none',zIndex:'130002'});
         const overlay=new google.maps.OverlayView();let rows=[],visible=true;
@@ -48,7 +48,7 @@
         overlay.draw=()=>{
             const projection=overlay.getProjection(),bounds=map.getBounds(),div=map.getDiv(),zoom=map.getZoom();
             if(!projection||!bounds)return;
-            canvas.hidden=!visible||zoom<17;if(canvas.hidden)return;
+            canvas.hidden=!visible||zoom<(options.minZoom??17);if(canvas.hidden)return;
             const ne=bounds.getNorthEast(),sw=bounds.getSouthWest(),origin=projection.fromLatLngToDivPixel(new google.maps.LatLng(ne.lat(),sw.lng()));
             const w=div.clientWidth,h=div.clientHeight,ratio=Math.min(window.devicePixelRatio||1,2);
             canvas.width=w*ratio;canvas.height=h*ratio;canvas.style.width=w+'px';canvas.style.height=h+'px';canvas.style.left=origin.x+'px';canvas.style.top=origin.y+'px';
@@ -56,7 +56,7 @@
             ctx.scale(ratio,ratio);ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
             const occupied=[];let count=0;
             for(const row of rows){
-                if(row.kind==='lot'&&zoom<18)continue;
+                if(row.kind==='lot'&&zoom<(options.lotMinZoom??18))continue;
                 const at=projection.fromLatLngToDivPixel(new google.maps.LatLng(row.point.lat,row.point.lng)),x=at.x-origin.x,y=at.y-origin.y;
                 if(x<0||y<0||x>w||y>h)continue;
                 const block=row.kind==='block';ctx.font=(block?'700 13':'600 11')+'px Arial, sans-serif';

@@ -103,6 +103,13 @@ class CadastralAccessTests(SimpleTestCase):
         read.return_value = archive();read.return_value['reports'][0]['pages'] = pages(land=None)
         self.assertIsNone(master.lot_summary(LOT)['metrics']['land_area'])
 
+    @patch('catastro.master._download', side_effect=OSError('connection timed out'))
+    @patch('catastro.master.manifest', return_value=None)
+    def test_connection_failure_is_not_reported_as_a_blank_document(self, read, download):
+        value = master.lot_summary(LOT)
+        self.assertFalse(value['verified'])
+        self.assertEqual(value['document_status'], 'unavailable')
+
     @patch('catastro.master.manifest')
     def test_report_of_another_lot_is_not_used(self, read):
         read.return_value = archive()
