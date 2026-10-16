@@ -1,3 +1,61 @@
+# DWG viewer visibility and feedback — release 2026-10-16
+
+Status: Validated — viewer checks passed under azure-validate (2026-10-16).
+Recipe: CI/CD, existing main_granextractorservice.yml.
+
+## 1. Scope
+Only the DWG viewer template, stylesheet, script and regression checks.
+Fix SVG hidden attribute handling, prioritize LOTES geometry on opening,
+show upload/reading/drawing/completion status and elapsed time, and allow
+status retries without uploading the file again. Unknown CRS remains CAD;
+no coordinate system or datum is guessed. No ACM/cadastral labels release.
+
+## 2. Existing target
+Azure subscription 1 / 0219eecc-9920-4789-9929-3091a2f09daf.
+App Service granextractorservice, rg-elgranextractor, Brazil South.
+https://acm.propifai.com/catastro/visor-planos/
+Existing OIDC pipeline and resources; no new billing, schema or RBAC changes.
+
+## 3. Integration
+Latest origin/main 9b36df17. Preserve shared D:/PROMETEO local changes and
+all upstream work. No private DWG, session, secret or local data deployed.
+
+## 4. Validation steps
+- [x] Viewer UI regression and JavaScript syntax.
+- [x] Isolated Catastro/DWG suites and template rendering.
+- [x] Static collection, exact bytes and local HTTP.
+- [x] Existing Azure subscription/target and CI credential configuration.
+- [x] Exact release diff/whitespace; CI native build/startup/public checks.
+
+## 5. Execution
+Non-forced push starts the existing production pipeline. User handles long
+monitoring; report dispatch accurately. Pipeline checks public login, viewer
+protection and exact static bytes before marking deployment successful.
+Rollback is a scoped revert through the same pipeline.
+
+## 6. Infrastructure verification
+Application assets only; no Bicep/Terraform/Container Apps or new identities.
+Existing subscription/location are already authorized in this session.
+
+## 7. Validation Proof
+2026-10-16, America/Lima:
+- node catastro/test_dwg_ui.cjs passed native upload, each progress phase,
+  failure/retry, LOTES priority and removal of the actual SVG hidden attribute.
+- node --check visor-planos.js passed.
+- Isolated Django viewer/CAD suite: 13 tests, 12 passed, one optional native
+  fixture skipped locally. Existing CI gates real Linux DWG conversion.
+- collectstatic succeeded in isolated settings; both release JS/CSS match
+  collected bytes and local HTTP 200 responses. Protected viewer leads to login.
+- az account show and az webapp show confirm the authorized existing
+  subscription, Brazil South target and Running state. No resource/RBAC changes.
+- Existing CI OIDC credentials/configuration preserved, no new permissions.
+- Latest origin/main 9b36df17 confirmed; exact six-file scope and git diff
+  --check passed. No SQL migration, collector, ACM or private file changes.
+- Public page/static verification remains an enforced CI step. Per user request,
+  long deployment monitoring is left to the user; dispatch is not live proof.
+
+---
+
 # ACM access and native DWG viewer â€” release 2026-10-16
 
 Status: Approved â€” explicit publication requested by the user.

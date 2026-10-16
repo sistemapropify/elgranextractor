@@ -1,7 +1,7 @@
 {% extends 'propifai_base.html' %}
 {% load static %}
 {% block title %}Visor de planos · Catastro{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/visor-planos.css' %}?v=2">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/visor-planos.css' %}?v=3">{% endblock %}
 {% block content %}
 <main class="planos-workspace" id="planos-workspace">
   <header class="planos-heading">
@@ -16,10 +16,18 @@
         <form id="planos-upload-form">{% csrf_token %}<label class="planos-upload" for="planos-file"><strong>Abrir archivo DWG</strong><span>.dwg · hasta 100 MB</span><input id="planos-file" type="file" accept=".dwg,application/acad,application/x-acad" {% if not cad_available %}disabled{% endif %}></label></form>
         <p class="planos-help">El DWG se conserva como original. Puedes revisar sus capas antes de ubicarlo en el mapa.</p>
         {% if not cad_available %}<p class="planos-help">El lector DWG no está instalado en este servidor.</p>{% endif %}
-        <progress id="planos-import-progress" aria-label="Lectura del archivo DWG" hidden></progress>
+        <div id="planos-import-state" class="planos-import-state" role="status" aria-live="polite" data-state="idle">
+          <strong id="planos-import-title">Ningún archivo seleccionado</strong>
+          <span id="planos-import-detail">Abre un DWG para comenzar la lectura.</span>
+          <span id="planos-import-file" hidden></span>
+          <progress id="planos-import-progress" aria-label="Lectura del archivo DWG" hidden></progress>
+          <span id="planos-import-elapsed" hidden></span>
+          <button class="planos-button planos-small" id="planos-import-retry" type="button" hidden>Consultar estado del plano</button>
+        </div>
         <div class="planos-file-info" id="planos-file-info" hidden><strong id="planos-file-name"></strong><span id="planos-file-count"></span><button class="planos-button" id="planos-remove" type="button">Cerrar plano</button></div>
         <label class="planos-label" for="planos-crs">Ubicación del plano<select id="planos-crs">{% for code, label in cad_crs.items %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
         <p class="planos-help">Si desconoces las coordenadas, usa la vista CAD. Selecciona el sistema correcto para superponerlo en Google Maps.</p>
+        <p id="planos-cad-notice" class="planos-cad-notice" hidden><strong>Vista CAD · coordenadas sin confirmar</strong>El fondo oscuro muestra el plano original. Para verlo sobre Google Maps, selecciona el sistema de coordenadas correcto en «Ubicación del plano».</p>
         <p id="planos-cad-warnings" class="planos-help" hidden></p>
       </div></details>
       <details class="planos-card" open><summary><span class="planos-card-icon">02</span>Capas del plano<span class="planos-count" id="planos-layer-count">0</span><span class="planos-chevron" aria-hidden="true">⌄</span></summary><div class="planos-card-body">
@@ -46,6 +54,6 @@
 </main>
 {% endblock %}
 {% block extra_js %}
-<script src="{% static 'js/visor-planos.js' %}?v=3"></script>
+<script src="{% static 'js/visor-planos.js' %}?v=4"></script>
 {% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;libraries=geometry&amp;callback=initPlanosMap" async defer></script>{% endif %}
 {% endblock %}

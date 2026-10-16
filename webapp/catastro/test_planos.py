@@ -40,7 +40,7 @@ class PlanViewerTests(SimpleTestCase):
         self.assertIn('Abrir archivo DWG', html)
         self.assertIn('accept=".dwg,', html)
         self.assertNotIn('Abrir archivo GeoJSON', html)
-        self.assertIn('visor-planos.js?v=3', html)
+        self.assertIn('visor-planos.js?v=4', html)
         self.assertIn('maps-test-key', html)
         self.assertIn('visor-planos/', html)
         self.assertEqual(response['Cache-Control'], 'private, no-store')
