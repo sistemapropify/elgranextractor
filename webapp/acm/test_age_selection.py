@@ -95,7 +95,10 @@ class AgeSelectionTests(SimpleTestCase):
         p=parameters({**params(),'age':0})
         rows=candidates([at('unknown',20),at('conflict',30,age=0,age_conflict='conflicting_age_values'),
                          record('soil','Terreno',price=150000)],p)
-        self.assertIsNone(calculate(rows,p)['new'])
+        result=calculate(rows,p)
+        self.assertTrue(result['reference_mode'])
+        self.assertEqual(result['reference_ids'], ['unknown', 'conflict'])
+        self.assertIsNone(next(row for row in rows if row['id']=='unknown')['age'])
         self.assertTrue(all(r['issues'] for r in rows if r['kind']=='Casa'))
 
     def test_radius_does_not_rescale_selection_score(self):

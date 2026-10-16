@@ -100,3 +100,16 @@ assert.equal(offer({kind:'Casa', operation:'Venta', price:100000, land:100, buil
 assert.equal(offer({operation:'No especificado'}).operation, 'Operación por confirmar');
 assert.equal(offer({operation:'Venta',operation_status:'review'}).operation, 'Operación por confirmar');
 console.log('Card prices: operation, total amount and explicit built/land unit prices verified.');
+
+// Fallback references keep their identity and quality issues, and are capped by
+// the server's same five IDs for the table, markers and subsequent selections.
+const fallbackRows=Array.from({length:8},(_,index)=>({...apartment,id:'ref-'+index,distance:20+index*20,issues:['Ubicación no exacta']}));
+const fallback={model:'built',reference_mode:true,reference_display_ids:fallbackRows.slice(0,5).map(row=>row.id),
+  reference_ids:['ref-0','ref-1'],house_ids:['ref-0','ref-1'],land_ids:[],
+  breakdown:[{id:'ref-0',reference_used:true,offer_unit:2000,adjusted_total:100000}],messages:[]};
+assert.deepEqual(comparisonRows(fallbackRows,{property_type:'Departamento',radius:500},fallback).map(row=>row.id),fallback.reference_display_ids);
+assert.equal(property(fallbackRows[0],fallback).status,'reference');
+assert.equal(property(fallbackRows[0],fallback).referenceUsed,true);
+assert.equal(property(fallbackRows[0],fallback,new Set(['ref-0'])).referenceUsed,false);
+assert.equal(comparisonRows(fallbackRows,{property_type:'Departamento',radius:500},fallback,new Set(['ref-0'])).length,5,'Deselecting a reference must leave its row available to reselect.');
+console.log('Reference fallback: same five nearest IDs, separate reference status, used amounts and reversible deselection verified.');

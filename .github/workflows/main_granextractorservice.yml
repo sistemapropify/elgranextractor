@@ -81,6 +81,14 @@ jobs:
           node webapp/cuadrantizacion/test_geollaqta_labels.cjs
           node webapp/acm/test_cadastral.cjs
 
+      - name: Validate ACM references and facade
+        run: |
+          node webapp/acm/static/acm/js/components-presentation.test.cjs
+          node webapp/acm/test_valuation_controls.cjs
+          node webapp/acm/test_street_facade.cjs
+          source antenv/bin/activate
+          python webapp/manage.py test acm.test_reference_fallback --settings=acm.access_test_settings --noinput
+
       - name: Collect Django static files
         env:
           # Valores dummy para que Django cargue settings sin conexión a BD.
@@ -298,6 +306,9 @@ jobs:
                   break
                 fi
               done <<'CATASTRO_ASSETS'
+          acm/js/street-facade.js|webapp/acm/static/acm/js/street-facade.js
+          acm/js/components-presentation.js|webapp/acm/static/acm/js/components-presentation.js
+          acm/js/comparison-valuation.js|webapp/acm/static/acm/js/comparison-valuation.js
           acm/js/cadastral-info.js|webapp/acm/static/acm/js/cadastral-info.js
           acm/css/cadastral-info.css|webapp/acm/static/acm/css/cadastral-info.css
           js/catastro-master-data.js|webapp/static/js/catastro-master-data.js

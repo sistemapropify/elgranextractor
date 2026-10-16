@@ -5,7 +5,7 @@ from .listing_operation import resolve_operation
 from .comparable_policy import (age_years, land_only, surface_similarity, selection_metrics,
                                selection_pool, automatic_houses, age_messages)
 
-VERSION = 'componentes-6-antiguedad-grupo-cercano'
+VERSION = 'componentes-7-referencias-secundarias'
 MIN_LANDS = 1
 MIN_HOUSES = 1
 # Portales habilitados en el ACM. La selección se administra aquí, no en el mapa.
@@ -187,6 +187,13 @@ def old_estimate(houses, built):
 
 
 def calculate(records, p, excluded=()):
+    from .reference_fallback import calculate_from_references
+    records = [row for row in records if resolve_operation(row)[0] == 'Venta']
+    primary = _calculate_primary(records, p, excluded)
+    return primary if primary.get('new') else calculate_from_references(records, p, excluded, primary)
+
+
+def _calculate_primary(records, p, excluded=()):
     records = [row for row in records if resolve_operation(row)[0] == 'Venta']
     if p.get('property_type','Casa')!='Casa':
         return calculate_same_type(records,p,excluded)

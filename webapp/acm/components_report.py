@@ -285,7 +285,7 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None):
         table(('Cantidad', 'Motivo'), [(count, reason) for reason, count in sorted(reasons.items(), key=lambda item: -item[1])], (1,5.9))
 
     heading('Alcance de la estimación')
-    doc.add_paragraph('Este cálculo usa precios publicados, no precios finales de compraventa. Solo participan ubicaciones exactas y registros con precio y superficies necesarias. Habitaciones, baños y piso se muestran como información, pero no excluyen comparables ni agregan valor mientras no exista un ajuste económico validado. Una muestra pequeña se calcula y se señala para revisión.')
+    doc.add_paragraph('Este cálculo usa las referencias más cercanas disponibles dentro del radio seleccionado, con precio y metraje válidos. La estimación se obtiene de su mediana de precio por metro cuadrado. Las diferencias de ubicación, antigüedad o disponibilidad deben revisarse al adoptar el valor.' if result.get('reference_mode') else 'Este cálculo usa precios publicados, no precios finales de compraventa. Solo participan ubicaciones exactas y registros con precio y superficies necesarias. Habitaciones, baños y piso se muestran como información, pero no excluyen comparables ni agregan valor mientras no exista un ajuste económico validado. Una muestra pequeña se calcula y se señala para revisión.')
     if result.get('messages'):
         heading('Advertencias del análisis', level=2)
         for message in result['messages']: doc.add_paragraph(message, style='List Bullet')

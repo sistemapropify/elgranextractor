@@ -339,10 +339,11 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     used = _selection(records, result, excluded)
     target_kind = 'Terreno' if result.get('valuation_mode') == 'land_only' else params.get('property_type', 'Casa')
     excluded_set = set() if 'report_ids' in params else set(excluded or ())
-    # Comparables completos del tipo analizado: la evidencia de mercado del informe.
+    used_ids = {row['id'] for row in used}
+    # References remain explicitly identified when the primary ACM is unavailable.
     market = sorted(
         (row for row in records
-         if row['kind'] == target_kind and not row.get('issues')
+         if row['kind'] == target_kind and (row['id'] in used_ids if result.get('reference_mode') else not row.get('issues'))
          and row['id'] not in excluded_set),
         key=lambda row: row.get('distance') or 0,
     )
@@ -545,7 +546,7 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
                 styles['center_small']))
     story.append(Spacer(1, 8 * mm))
     story.append(squared(f'<b>Propiedad Sujeto :</b> {zona()}', styles['value']))
-    story.append(squared(f'<b>Propiedades Comparables :</b> ' +
+    story.append(squared(('<b>Propiedades de referencia :</b> ' if result.get('reference_mode') else '<b>Propiedades Comparables :</b> ') +
                          (f'{len(records)} propiedades seleccionadas para el informe' if 'report_ids' in params else f'{len(used)} propiedades usadas en la estimación'), styles['value']))
     story.append(PageBreak())
 
@@ -606,7 +607,7 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
                 story.extend([Spacer(1,3*mm),image])
         story.append(PageBreak())
 
-    comparable_section('COMPARABLES EN VENTA', market or used, 6)
+    comparable_section('REFERENCIAS EN VENTA' if result.get('reference_mode') else 'COMPARABLES EN VENTA', market or used, 6)
     if target_kind != 'Terreno':
         comparable_section('TERRENOS DE REFERENCIA',
                            [row for row in used if row['kind'] == 'Terreno'], 4)
@@ -614,6 +615,8 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
 
     # ------------------------------------------------------------- Resultado
     story.append(Paragraph('RESULTADO', styles['section']))
+    if result.get('reference_mode'):
+        story.append(Paragraph('Estimación con las referencias más cercanas disponibles dentro del radio seleccionado, usando la mediana de sus precios por metro cuadrado.', styles['body']))
     if result.get('valuation_mode') == 'land_only':
         story.append(Paragraph('Casa de más de 40 años: valoración únicamente del terreno, según la regla configurada. La construcción no aporta valor en este cálculo.', styles['body']))
     elif params.get('age') is not None:

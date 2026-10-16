@@ -193,7 +193,10 @@ class ComponentsEngineTests(SimpleTestCase):
     def test_no_land_never_invents_land_value(self):
         result=calculate(candidates([record('house')],params()),params())
         self.assertIsNone(result['land_unit'])
-        self.assertIsNone(result['new'])
+        self.assertTrue(result['reference_mode'])
+        self.assertEqual(result['model'], 'built')
+        self.assertEqual(result['new']['total'], 350000)
+        self.assertNotIn('land_value', result['new'])
 
     def test_single_comparable_for_other_types(self):
         for target in ('Terreno','Departamento','Oficina'):

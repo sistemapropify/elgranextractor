@@ -46,3 +46,16 @@ sandbox.window.ACMPermissions.adjust_valuation=false;mount();
 assert.doesNotMatch(html,/id="cmp-valuation-knob"/);assert.match(html,/id="cmp-report-notes"/);
 assert.ok(events.includes('acm:valuation-adjusted'));assert.ok(events.includes('acm:report-notes-changed'));
 console.log('Valuation: basic knob, exact typed amount, validation, restore, multiline notes and rerender persistence passed.');
+
+sandbox.window.ACMPermissions={adjust_valuation:true,report_notes:true};api.reset();elements.clear();
+html=api.markup({}, {reference_mode:true,new:{total:125000}});el('#cmp-valuation-knob').max='250000';api.mount();
+assert.match(html,/Valor por referencias/);assert.match(html,/cmp-valuation-knob/);assert.match(html,/Justificación u observaciones/);
+assert.equal(el('#cmp-valuation-amount').value,'');
+el('#cmp-valuation-amount').value='140000';el('#cmp-valuation-amount').events.input();
+el('#cmp-report-notes').value='Ajuste por conservación.';el('#cmp-report-notes').events.input();
+html=api.markup({manual_valuation:api.value()}, {reference_mode:true,new:{total:130000}});
+assert.equal(api.value(),140000);assert.equal(api.notes(),'Ajuste por conservación.');
+api.reset();elements.clear();html=api.markup({}, {reference_mode:true,new:null});el('#cmp-valuation-knob').max='1000';api.mount();
+assert.match(html,/cmp-valuation-knob/);assert.match(html,/cmp-report-notes/);assert.match(html,/cmp-valuation-amount/);
+assert.equal(el('#cmp-adjusted-value').textContent,'Sin cálculo disponible');
+console.log('Reference controls: empty exact-value input, knob, preserved manual amount/notes and no fabricated automatic zero verified.');

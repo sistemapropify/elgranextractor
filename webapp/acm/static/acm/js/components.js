@@ -175,7 +175,7 @@
   };
   window.gm_authFailure=()=>{$('cmp-status').textContent='No se pudo cargar Google Maps. Puedes ingresar latitud y longitud para buscar.';};
   // Keep all consulted records visible so an excluded outer land can be selected again.
-  function visibleRows(){return snapshot?.records||[];}
+  function visibleRows(){const records=snapshot?.records||[];return result?.reference_mode?records.filter(row=>result.reference_display_ids.includes(row.id)):records;}
   const value=r=>presentation.property(r,result,excluded);
   const mapGroup=r=>presentation.group(r,value(r));
   const comparableRows=()=>visibleRows().filter(r=>mapGroup(r)==='property');
@@ -189,8 +189,8 @@
     return (a.distance||0)-(b.distance||0) || String(a.id).localeCompare(String(b.id));
   });}
   function layerRows(){const layers=new Set(Array.from(document.querySelectorAll('[name=map_layer]:checked'),x=>x.value));return visibleRows().filter(r=>{const group=mapGroup(r);return layers.has(group)&&presentation.inMapRadius(r,snapshot.params,result,group);});}
-  function comparisonRows(){return snapshot&&result?presentation.comparisonRows(layerRows(),snapshot.params,result,excluded):[];}
-  function orderedComparisonRows(){const rows=comparisonRows();return result?.selection_method==='nearest'?[...rows].sort((a,b)=>a.distance-b.distance||String(a.id).localeCompare(String(b.id))):similarityOrder(rows);}
+  function comparisonRows(){return snapshot&&result?presentation.comparisonRows(result.reference_mode?visibleRows():layerRows(),snapshot.params,result,excluded):[];}
+  function orderedComparisonRows(){const rows=comparisonRows();return ['nearest','reference_fallback'].includes(result?.selection_method)?[...rows].sort((a,b)=>a.distance-b.distance||String(a.id).localeCompare(String(b.id))):similarityOrder(rows);}
   function markerNumbers(){return presentation.numbering(visibleRows(),orderedComparisonRows());}
   function visibleMapRows(){return layerRows().filter(r=>!unselected.has(r.id));}
   function renderMap(){
@@ -199,7 +199,7 @@
     const mode=$('cmp-marker-mode').value;
     const rows=visibleMapRows(),numbers=markerNumbers();
     rows.forEach(r=>{
-      const number=String(numbers.get(String(r.id))),v=value(r),label=presentation.marker(r,v,mode,!permissions.portal_pins),dim=['reference','excluded','pending'].includes(v.status);
+      const number=String(numbers.get(String(r.id))),v=value(r),label=presentation.marker(r,v,mode,!permissions.portal_pins),dim=['reference','excluded','pending'].includes(v.status)&&!v.referenceUsed;
       const icon=permissions.portal_pins&&icons[r.source]?{url:'/static/requerimientos/data/'+icons[r.source],scaledSize:new google.maps.Size(32,40),anchor:new google.maps.Point(16,40),labelOrigin:new google.maps.Point(16,17)}:{path:'M 0 0 C -3 -7 -12 -17 -12 -25 A 12 12 0 1 1 12 -25 C 12 -17 3 -7 0 0 Z',scale:1,fillColor:r.kind==='Terreno'?'#d6a548':'#3789dd',fillOpacity:1,strokeColor:'#ffffff',strokeWeight:1,labelOrigin:new google.maps.Point(0,-25)};
       const marker=new google.maps.Marker({map,position:{lat:r.lat,lng:r.lng},title:r.title+' · '+Math.round(r.distance)+' m del inmueble objetivo · '+presentation.precision(r).label+' · '+label,opacity:dim?.55:1,zIndex:1000+Math.round((r.overall_similarity||0)*10),icon,label:{text:number,color:'#ffffff',fontSize:number.length>2?'9px':'11px',fontWeight:'700',className:'cmp-pin-number'}});
       marker.addListener('click',()=>selectMapRecord(r.id));markers.push(marker);
@@ -229,7 +229,7 @@
     $('cmp-notices-label').textContent='Avisos del análisis ('+warningCount+')';
     if(r.model!=='components'){
       const basis=r.model==='land'?'terreno':'superficie construida';
-      $('cmp-new').innerHTML='<h2>Valoración · '+escape(r.property_type)+'</h2><p class="cmp-muted">'+(r.house_count+r.land_count)+' comparables seleccionados</p>'+(n?'<div class="cmp-line"><span>Mediana por m² de '+basis+'</span><strong>'+money(n.unit)+'/m²</strong></div><div class="cmp-total">'+money(n.total)+'</div><p class="cmp-muted">'+decimals(snapshot.params[n.area_basis])+' m² × '+money(n.unit)+'/m²</p>':'<p class="cmp-warning">'+r.messages.map(escape).join('<br>')+'</p>');
+      $('cmp-new').innerHTML='<h2>Valoración · '+escape(r.property_type)+'</h2><p class="cmp-muted">'+(r.house_count+r.land_count)+(r.reference_mode?' referencias seleccionadas':' comparables seleccionados')+'</p>'+(n?'<div class="cmp-line"><span>Mediana por m² de '+basis+'</span><strong>'+money(n.unit)+'/m²</strong></div><div class="cmp-total">'+money(n.total)+'</div><p class="cmp-muted">'+decimals(snapshot.params[n.area_basis])+' m² × '+money(n.unit)+'/m²</p>':'<p class="cmp-warning">'+r.messages.map(escape).join('<br>')+'</p>');
       return;
     }
     const usedHouses=Number.isFinite(r.usable_house_count)?r.usable_house_count:0;
@@ -256,18 +256,19 @@
     $('cmp-source-warning').hidden=!(snapshot?.warnings?.length);
     $('cmp-source-warning').textContent=(snapshot?.warnings||[]).join(' ');
     if(!show){$('cmp-comparison-content').replaceChildren();return;}
-    $('cmp-comparison-title').textContent=result.valuation_mode==='land_only'?'Terrenos comparables · casa de más de 40 años':(type||'Propiedad')+'s comparables';
+    $('cmp-comparison-title').textContent=result.reference_mode?'Referencias · '+rows.length+' más cercanas':result.valuation_mode==='land_only'?'Terrenos comparables · casa de más de 40 años':(type||'Propiedad')+'s comparables';
+    $('cmp-comparison-open').textContent=result.reference_mode?'Mostrar cuadro de referencias en el mapa':'Mostrar cuadro de comparables en el mapa';
     const ordered=orderedComparisonRows(),numbers=markerNumbers();
     const surface=(area,similarity)=>area==null?'—':decimals(area)+' m²'+(similarity==null?'':' <span class="cmp-area-similarity '+(similarity<=70?'is-far':similarity<=90?'is-medium':'is-close')+'">('+decimals(similarity)+'%)</span>');
     const age=n=>n==null||!Number.isFinite(Number(n))||Number(n)<0?'—':Number(n)===0?'Estreno':decimals(n)+(Number(n)===1?' año':' años');
-    const used=row=>{const v=value(row);return v.recommended||v.status==='area'||(v.status==='land'&&v.selected);};
-    const usage=row=>{const v=value(row);if(used(row))return 'Usada para valorar';if(v.status==='reference'&&!v.referenceOnly)return 'Solo referencia';if(v.status==='excluded')return 'Desmarcada';return result.new?'Comparable no usado':'Sin valoración';};
+    const used=row=>{const v=value(row);return v.referenceUsed||v.recommended||v.status==='area'||(v.status==='land'&&v.selected);};
+    const usage=row=>{const v=value(row);if(unselected.has(row.id))return 'Desmarcada';if(used(row))return result.reference_mode?'Referencia usada para valorar':'Usada para valorar';if(v.status==='reference'&&!v.referenceOnly)return 'Solo referencia';if(v.status==='excluded')return 'Desmarcada';return result.new?'Comparable no usado':'Sin valoración';};
     $('cmp-comparison-content').innerHTML=calculationTable(
       ['Seleccionar',...(permissions.portal_names?['Portal']:[]),'Precio\nanunciado','Terreno','Construcción','Antigüedad','Distancia','Uso',...(permissions.publication?['Publicación']:[])],
       ordered.map(row=>['<label class="cmp-numbered-select"><input class="cmp-comparison-select" type="checkbox" data-map-select="'+escape(row.id)+'" '+(unselected.has(row.id)?'':'checked')+' aria-label="Mostrar en el mapa e incluir en el informe: '+escape('Propiedad '+numbers.get(String(row.id))+' · '+row.title)+'"><span class="cmp-comparable-number">'+numbers.get(String(row.id))+'</span></label>',...(permissions.portal_names?[escape(row.source.toUpperCase())]:[]),money(row.price),surface(row.land,row.land_similarity),surface(row.built,row.built_similarity),age(row.age),decimals(Math.round(row.distance))+' m',usage(row),...(permissions.publication?[row.url?'<a class="cmp-comparison-ad" href="'+escape(row.url)+'" target="_blank" rel="noopener noreferrer">Ver anuncio</a>':'<span>Sin enlace</span>']:[])]),
       ordered.map(row=>used(row)?'cmp-comparison-used':''),
       ordered.map(row=>'data-record="'+escape(row.id)+'"')
-    )+(ordered.length?'':'<p class="cmp-floating-empty">No hay comparables usados en las capas visibles del mapa.</p>')+(window.ACMComparisonValuation?.markup(snapshot.params,result)||'');
+    )+(ordered.length?'':'<p class="cmp-floating-empty">'+(result.reference_mode?'No hay referencias dentro del radio seleccionado.':'No hay comparables usados en las capas visibles del mapa.')+'</p>')+(window.ACMComparisonValuation?.markup(snapshot.params,result)||'');
     applySelectedRow();
     window.ACMComparisonValuation?.mount();
     updateReportButtons();
@@ -330,6 +331,7 @@
   function features(r){return r.kind==='Terreno'?'':'<p class="cmp-card-sub">Antigüedad: '+age(r.age)+' · Habitaciones: '+decimals(r.rooms)+' · Baños: '+decimals(r.baths)+(r.kind!=='Casa'?' · Piso: '+decimals(r.floor):'')+'</p>';}
   function breakdown(r){
     const v=value(r);
+    if(v.referenceUsed)return '<section class="cmp-breakdown"><h3>Referencia usada para valorar</h3><p>'+money(v.offerUnit)+'/m² × área objetivo = <strong>'+money(v.adjustedTotal)+'</strong>.</p><p class="cmp-issues">'+escape(v.reason)+'</p></section>';
     if(v.status==='area')return '<section class="cmp-breakdown"><h3>'+escape(r.kind)+' · comparable por superficie construida</h3><div class="cmp-breakdown-grid"><div><span>Oferta por m² construido</span><strong>'+money(v.offerUnit)+'/m²</strong></div><div><span>Aplicada al área objetivo</span><strong>'+money(v.adjustedTotal)+'</strong></div></div><p class="cmp-equation">Se compara con inmuebles del mismo tipo; no se presenta como valor de suelo independiente.</p></section>';
     if(v.status==='land')return '<section class="cmp-breakdown"><h3>Terreno · referencia del suelo</h3><div class="cmp-breakdown-grid"><div><span>Oferta por m² de terreno</span><strong>'+money(v.offerUnit)+'/m²</strong></div><div><span>Uso en este análisis</span><small>'+(v.selected?'Incluido en la mediana del suelo':'Fuera del radio requerido; no participa')+'</small></div></div></section>';
     if(result.built_unit_method==='primary_area_reference'&&(v.recommended||v.referenceOnly))return '<section class="cmp-breakdown"><h3>'+(v.recommended?'Propiedad usada para valorar':'Solo referencia · no interviene')+'</h3><p>'+money(r.price)+' + '+money(v.landAdjustment)+' por terreno + '+money(v.builtAdjustment)+' por construcción = <strong>'+money(v.targetEstimate)+'</strong></p><p>'+(v.recommended?(result.usable_house_count===1?'Este es el resultado final para tu inmueble.':'Esta estimación se promedia con las otras casas usadas.'):'Estimación individual solo para comparar. '+escape(v.reason))+'</p></section>';
@@ -421,7 +423,7 @@
       window.dispatchEvent(new Event('resize'));
     }
   }
-  function selection(){const manual=(permissions.adjust_valuation?window.ACMComparisonValuation?.value():null);return {token:snapshot.token,excluded:[...excluded],report_ids:comparisonRows().filter(row=>!unselected.has(row.id)).map(row=>row.id),...(permissions.adjust_valuation?{manual_valuation:manual}:{}),...(permissions.report_notes?{report_notes:window.ACMComparisonValuation?.notes()||''}:{}),...(snapshot.params.weight_reference?{target_areas:{land:snapshot.params.land,built:snapshot.params.built}}:{})};}
+  function selection(){const manual=(permissions.adjust_valuation?window.ACMComparisonValuation?.value():null);return {token:snapshot.token,excluded:[...new Set([...excluded,...(result?.reference_mode?unselected:[])])],report_ids:comparisonRows().filter(row=>!unselected.has(row.id)).map(row=>row.id),...(permissions.adjust_valuation?{manual_valuation:manual}:{}),...(permissions.report_notes?{report_notes:window.ACMComparisonValuation?.notes()||''}:{}),...(snapshot.params.weight_reference?{target_areas:{land:snapshot.params.land,built:snapshot.params.built}}:{})};}
   const perspectiveForm=$('acm-perspective-form');
   perspectiveForm?.addEventListener('submit',event=>{
     if(!snapshot||!result)return;
@@ -439,7 +441,15 @@
     if(open){menu.classList.remove('opens-up');menu.classList.toggle('opens-up',menu.getBoundingClientRect().bottom>$('map-container').getBoundingClientRect().bottom-8);}
   }
   function updateReportButtons(){const none=reportDownloading||window.ACMComparisonValuation?.valid()===false||!result?.new||!comparisonRows().some(row=>!unselected.has(row.id));['cmp-word','cmp-pdf','cmp-html','cmp-comparison-report','cmp-save'].forEach(id=>$(id).disabled=none);document.querySelectorAll('[data-report-format]').forEach(button=>button.disabled=none);if(none)setReportMenu(false);}
-  $('cmp-comparison-content').addEventListener('change',event=>{const id=event.target.dataset.mapSelect;if(!id||!snapshot)return;event.target.checked?unselected.delete(id):unselected.add(id);renderMap();updateReportButtons();$('cmp-save').textContent='Guardar en historial';$('cmp-status').textContent='Marcadores e informe actualizados con las propiedades marcadas.';});
+  $('cmp-comparison-content').addEventListener('change',async event=>{
+    const id=event.target.dataset.mapSelect;if(!id||!snapshot)return;
+    event.target.checked?unselected.delete(id):unselected.add(id);renderMap();updateReportButtons();$('cmp-save').textContent='Guardar en historial';
+    if(!result.reference_mode){$('cmp-status').textContent='Marcadores e informe actualizados con las propiedades marcadas.';return;}
+    const payload=selection(),seq=++sequence;$('cmp-status').textContent='Recalculando con las referencias marcadas…';
+    ['cmp-word','cmp-pdf','cmp-html','cmp-comparison-report','cmp-save'].forEach(key=>$(key).disabled=true);
+    try{const data=await post('calcular',payload);if(seq!==sequence)return;result=data.result;snapshot.params=data.params;render(false);$('cmp-status').textContent='Cálculo actualizado con las referencias marcadas.';}
+    catch(error){if(seq===sequence){clearResult('No se pudo actualizar el cálculo con referencias. Reintenta la búsqueda.');$('cmp-status').textContent=error.message;}}
+  });
   document.addEventListener('acm:report-notes-changed',()=>{updateReportButtons();$('cmp-save').textContent='Guardar en historial';});
   document.addEventListener('acm:valuation-adjusted',()=>{const total=(permissions.adjust_valuation?window.ACMComparisonValuation?.value():null)??result?.new?.total;const displayed=$('cmp-new').querySelector('.cmp-total');if(displayed&&total!=null)displayed.textContent=money(total,2);updateReportButtons();$('cmp-save').textContent='Guardar en historial';});
   function renderSimple(){
@@ -494,6 +504,7 @@
     $('cmp-ai-panel').hidden=!snapshot.records.length;$('cmp-ai-status').textContent='';
     $('cmp-ai-open').disabled=!snapshot.records.length;$('cmp-ai-open').textContent='Recomendaciones de la IA';
     aiProposal=null;$('cmp-proposal').hidden=true;
+    if(result.reference_mode){const key=result.model==='land'?'other_reference':'property_reference';document.querySelector('[name=map_layer][value='+key+']').checked=true;}
     result.breakdown.forEach(d=>{const row=snapshot.records.find(r=>r.id===d.id);if(row)for(const key of ['land_similarity','built_similarity','distance_similarity','overall_similarity'])if(d[key]!=null)row[key]=d[key];});
     renderSummary();renderCalculationExplanation();renderComparison();renderCards();renderMap();renderDetail();renderSimple();$('cmp-export').disabled=false;$('cmp-word').disabled=!result.new;$('cmp-pdf').disabled=!result.new;$('cmp-save').disabled=!result.new;
     updateReportButtons();
@@ -501,7 +512,7 @@
     $('cmp-scenario').hidden=result.model!=='components'||!result.new;
     $('cmp-scenario-land').value=snapshot.params.land;$('cmp-scenario-built').value=snapshot.params.built;
     document.dispatchEvent(new CustomEvent('acm:result',{detail:{available:!!result.new}}));
-    if(askAI)explainAutomatically();
+    if(askAI&&!result.reference_mode)explainAutomatically();
   }
   $('cmp-scenario-apply').addEventListener('click',async()=>{
     if(!snapshot||result?.model!=='components')return;

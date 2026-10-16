@@ -66,7 +66,7 @@ def build_acm_html(params, records, result, excluded=(), generated_at=None):
         )
     else:
         area_key = new.get('area_basis', 'land' if result['model'] == 'land' else 'built')
-        method = 'Mediana del precio por m² de los comparables'
+        method = 'Mediana del precio por m² de las referencias' if result.get('reference_mode') else 'Mediana del precio por m² de los comparables'
         calculation = (
             f"{_money(new.get('unit'))}/m² × {_number(params.get(area_key), ' m²')} "
             f"= {_money(new.get('total'))}."

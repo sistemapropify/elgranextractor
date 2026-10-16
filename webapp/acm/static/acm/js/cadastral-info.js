@@ -4,6 +4,7 @@
         const $=id=>document.getElementById('cmp-cadastral'+(id?'-'+id:'')),card=$('');
         if (!card||map.__acmCadastral||!window.ACMPermissions?.cadastral_info) return;
         map.__acmCadastral=true;
+        const streetFacade=window.ACMStreetFacade?.create(map);
         const spatial=window.CatastroMasterData,cache=new Map(),layer=new google.maps.Data(),labels=window.GeollaqtaLabels?.create(map,{minZoom:0,lotMinZoom:0});
         let provider=null,providerPromise=null,result=null,lot=null,target=null,serial=0,controller=null,areaController=null,timer=null,drawnKey=null,drawnCount=0,highlighted=null,detailsId=null,allowed=true,areaLoading=false,areaEpoch=0,detailLoading=false,photoLookup=null;
         layer.setStyle({clickable:false,fillColor:"#19b9b0",fillOpacity:.06,strokeColor:"#0caaa2",strokeOpacity:.95,strokeWeight:1.6,zIndex:110000});
@@ -23,7 +24,7 @@
             try {
                 const r=await fetch('/acm/catastro/'+path,{credentials:'same-origin',cache:'no-store',signal:stop.signal,headers:{Accept:'application/json'}});
                 if(!r.headers.get('content-type')?.includes('application/json'))throw Error('Inicia sesión para consultar el catastro.');
-                const data=await r.json();if(!r.ok){if(r.status===401||r.status===403){allowed=false;++serial;clearTimeout(timer);clearMap();clearFields();areaController?.abort();result=null;lot=null;cache.clear();card.hidden=true;card.setAttribute('aria-busy','false');}throw Error(data.error||'No se pudo consultar el catastro.');}return data;
+                const data=await r.json();if(!r.ok){if(r.status===401||r.status===403){allowed=false;++serial;clearTimeout(timer);clearMap();clearFields();areaController?.abort();streetFacade?.destroy();result=null;lot=null;cache.clear();card.hidden=true;card.setAttribute('aria-busy','false');}throw Error(data.error||'No se pudo consultar el catastro.');}return data;
             } finally {clearTimeout(deadline);signal?.removeEventListener('abort',abort);}
         }
         function highlight(){
@@ -122,7 +123,7 @@
             if(!allowed)return;
             const location=spatial.point(value);if(!location)return;
             const form=document.getElementById('cmp-form'),radius=Number(form.elements.radius.value),reuse=spatial.covers(result,location,radius);
-            target=location;card.hidden=false;
+            target=location;card.hidden=false;streetFacade?.queue(location);
             if(reuse&&result.complete&&areaLoading){areaController?.abort();clearTimeout(timer);++areaEpoch;areaLoading=false;}
             const selected=reuse?spatial.selectedLot(result,location):null;
             if(reuse&&!force&&selected&&selected.properties.ID_LOTE===detailsId){lot=selected;highlight();return;}
@@ -136,7 +137,7 @@
             card.setAttribute('aria-busy','true');
             timer=setTimeout(()=>update(center,radius,epoch,areaController.signal),450);
         }
-        $('close').addEventListener('click',()=>{card.hidden=true;});
+        $('close').addEventListener('click',()=>{card.hidden=true;streetFacade?.suspend();});
         // Moving or closing the small card never changes the map or its lot layer.
         const host=document.getElementById('map-container'),handle=$('handle');let drag=null;
         function move(x,y){if(!host?.clientWidth)return;card.style.left=Math.max(8,Math.min(host.clientWidth-card.offsetWidth-8,x))+'px';card.style.top=Math.max(8,Math.min(host.clientHeight-card.offsetHeight-8,y))+'px';card.style.right='auto';card.style.bottom='auto';}

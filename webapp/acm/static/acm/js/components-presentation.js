@@ -20,6 +20,12 @@
   }
   function property(record, result, excluded = new Set()) {
     if (!result) return {status:'pending', reason:'Análisis pendiente de actualización'};
+    if (result.reference_mode) {
+      const detail = result.breakdown.find(row => row.id === record.id);
+      return {status:excluded.has(record.id)?'excluded':'reference', referenceUsed:!!detail?.reference_used&&!excluded.has(record.id),
+        offerUnit:detail?.offer_unit, adjustedTotal:detail?.adjusted_total,
+        reason:record.issues.join(' · ')||'Referencia de mercado'};
+    }
     if (record.issues.length) return {status:'reference', reason:record.issues.join(' · ')};
     if (excluded.has(record.id)) return {status:'excluded', reason:'Desmarcada: no interviene en el cálculo'};
     if (record.kind === 'Terreno') {
@@ -56,6 +62,7 @@
   }
   function markerValue(record, value, mode) {
     if (mode === 'price') return 'Anuncio · ' + offer(record).totalLabel + ' ' + money(record.price);
+    if (value.referenceUsed) return 'Referencia ' + money(value.offerUnit) + '/m²';
     if (value.status === 'reference') return 'Solo referencia';
     if (value.status === 'excluded') return 'No seleccionada';
     if (value.status === 'pending') return 'Sin cálculo';
@@ -86,6 +93,7 @@
   }
   function comparisonRows(records, params, result, excluded = new Set()) {
     const targetType = result?.valuation_mode === 'land_only' ? 'Terreno' : params.property_type;
+    if (result?.reference_mode) return records.filter(record => record.kind === targetType && result.reference_display_ids.includes(record.id) && inMapRadius(record, params, result, 'property_reference'));
     const targetGroup = targetType === 'Terreno' ? 'land' : 'property';
     const usedIds = targetType === 'Terreno' ? result?.land_ids : result?.house_ids;
     return records.filter(record => record.kind === targetType &&

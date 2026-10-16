@@ -1,3 +1,68 @@
+# Pending ACM references and facade release - 2026-10-16
+
+Status: Validated - all release checks passed; user requests all pending implementations.
+Recipe: existing GitHub Actions CI/CD main_granextractorservice.yml.
+Existing approved target: Azure subscription 0219eecc-9920-4789-9929-3091a2f09daf,
+rg-elgranextractor / granextractorservice, Brazil South.
+Base: origin/main 1115db47; its deployment 38966994894 completed successfully.
+
+## Scope
+Publish both pending implementations from the shared local preview:
+- Automatic fallback to at most five nearest same-type references within the
+  selected radius, reversible selection and server-side recalculation.
+- Preserve the valuation knob, empty exact-value input and justification.
+- Correct reference labels and consistent PDF/Word/HTML values and role-safe IDs.
+- Compact Street View below the cadastral facade, camera bearing toward the real
+  pin, acquisition date when available, bounded lookup, stale-request protection,
+  retry, and effective role permissions.
+Include the existing local tests and docs. All earliest baseline files match the
+latest production revision. No other shared-checkout edits are being replaced.
+No migrations, new resources, infrastructure, RBAC, credentials, API activation,
+capacity or billing-plan changes.
+
+## Validation steps
+- [x] Isolated release calculation, role, report and history regression tests.
+- [x] Node reference controls, facade and cadastral regressions.
+- [x] Static collection, template compilation and isolated WSGI build.
+- [x] CI YAML parse, exact asset gates, scoped diff and whitespace.
+- [x] Existing Azure subscription and public health/login verification.
+
+## 7. Validation Proof
+Validated at 2026-10-16T16:55:23-05:00 (America/Lima) in the integrated release checkout.
+- Python: manage.py test acm.test_components acm.test_age_selection
+  acm.test_report_selection acm.test_listing_operation acm.test_reference_fallback
+  acm.test_access acm.test_role_analysis acm.test_valuation_notes
+  acm.test_cadastral cuadrantizacion.test_geollaqta
+  --settings=acm.access_test_settings --noinput: 197 passed, 12.442 seconds.
+- Node: presentation, valuation controls, facade, ACM cadastral, district loader,
+  map loading, data transport, gallery, measurements and labels: 10 suites passed.
+- collectstatic completed in temporary output; six emitted ACM assets matched
+  release source bytes. WSGI startup and ACM/Quad templates compiled. Conditional
+  facade markup respects the active role.
+- CI YAML parsed; deployment workflow adds the new regression gate and exact
+  public checks for facade, presentation and valuation assets.
+- git diff --check passed. All earliest local baseline files match origin/main;
+  only the 23 manifest files plus release plan/workflow are included.
+- Existing Azure account is the approved subscription. Previous release
+  38966994894 succeeded. Public health and ACM login return HTTP 200.
+- Six shared-local HTTP assets match the integrated release byte for byte.
+- Earlier browser checks verified real Google facade rendering and a synthetic
+  eight-record search yielding exactly five rows/pins; deselecting and reselecting
+  retained the manual value and justification. Production authenticated UI is
+  user-verified, not claimed from these fixture tests.
+
+Static role verification: no infrastructure, identities, role assignments or
+credentials are changed. Existing OIDC deployment and application role gates are
+preserved. No new Azure provisioning or Google API activation is performed.
+
+Execution after validation: explicit scoped commit and non-forced push to main.
+Use the existing Azure OIDC workflow. User handles deployment monitoring; report
+dispatch separately from a completed/live deployment. CI verifies public health,
+protected pages and exact bytes of the reference/facade scripts.
+Rollback: scoped revert through the same existing workflow.
+
+---
+
 # Full-district Geollaqta layers in Cuadrantización — 2026-10-16
 
 Status: Validated — user explicitly requested publication after local preview.

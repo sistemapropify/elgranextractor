@@ -144,7 +144,7 @@ def project(request, state, result=None, excluded=(), report=False):
     state.setdefault('params', {})['_acm_permissions'] = p
     # The same opaque identifiers must be used in records, results and selections.
     identifier_fields = {'id', 'duplicate_of', 'built_reference_id', 'land_ids', 'house_ids',
-                         'reference_ids', 'report_ids', 'excluded_ids', 'recommended_ids', 'ids'}
+                         'reference_ids', 'reference_display_ids', 'report_ids', 'excluded_ids', 'recommended_ids', 'ids'}
     def replace(value, field=None):
         if isinstance(value, dict):
             return {k: replace(v, k) for k, v in value.items()}
