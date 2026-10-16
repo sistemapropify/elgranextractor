@@ -254,3 +254,29 @@ passed. A live local read of lot 04010222013014 returned land 369.71 m²,
 construction 469.52 m² and boundaries 11.73 / 38.44 / 38.81 / 12.27 m in about
 four seconds; the other map reused the same result without a second source read.
 Its source gallery has no images and the twelve usual facade URLs return 404.
+
+
+### One HTTP response path for both map cards — 2026-10-16
+The ACM lot endpoint now delegates directly to `cuadrantizacion.geollaqta.report_response`,
+the same response handler used by the Cuadrantización report endpoint. It no longer
+runs the separate master-summary discovery path before reading a report. Each entry
+point retains its existing authentication and active-role checks. The document reader
+prefers a readable individual form for the selected unit and fills blanks from that
+unit's report; a form-only unit can also be read. Shared cache revision 3 contains only
+verified measurements, report selectors and facade locations.
+
+Tests assert identical JSON and failure responses for both HTTP cards, ACM access
+without a Prometeo login, denied-role rejection before document access, separate units,
+form priority, report fallback and a successful retry after source failure.
+
+Production diagnosis separately confirmed that the application container timed out
+connecting to COFOPRI after 25 seconds. A trial of the existing Cloudflare connector
+also failed and its original placement was restored; it remains disconnected from
+ACM. No new server, proxy, paid plan or infrastructure was enabled.
+
+The reported lot 04010217042011 was recovered with the existing single-lot collector:
+two original reports and one facade uploaded with hash verification to private R2.
+The two individual-form endpoints returned HTTP 500 and remain explicitly pending.
+The deployed reader in Azure returned its verified archive in 0.951 seconds with
+the source deliberately disconnected for that read test. This repairs that archive;
+it does not establish general live connectivity for unarchived properties.

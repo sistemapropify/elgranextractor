@@ -210,3 +210,43 @@ class SharedCadastralReportTests(SimpleTestCase):
                                                  'pages': pages(land='199', built=None)})
         self.assertEqual(master.lot_summary(LOT)['metrics']['land_area'], '199')
         self.assertEqual(master.lot_summary(LOT)['metrics']['built_area'], '20.5')
+
+
+    @patch('catastro.map_report._archived_reports')
+    @patch('catastro.master.lot_summary', side_effect=AssertionError('ACM must use the exact same handler as Cuadrantización'))
+    def test_both_http_cards_return_identical_document_content_without_prometeo_login_in_acm(self, old, reports):
+        reports.return_value = archive()['reports']
+        request = self.factory.get('/acm/catastro/lotes/' + LOT + '/')
+        request.acm_access = SimpleNamespace(permissions={**DEFAULTS, 'cadastral_info': True})
+        acm = cadastral_views.lot(request, LOT)
+        quad = self.quad()
+        import json
+        self.assertEqual(acm.status_code, 200)
+        self.assertEqual(json.loads(acm.content), quad)
+        self.assertEqual(acm['Cache-Control'], 'no-store')
+        old.assert_not_called()
+
+    @patch('cuadrantizacion.geollaqta.report_response')
+    def test_shared_report_handler_remains_protected_by_active_acm_role(self, report):
+        request = self.factory.get('/acm/catastro/lotes/' + LOT + '/')
+        request.acm_access = SimpleNamespace(permissions={**DEFAULTS, 'cadastral_info': False})
+        self.assertEqual(cadastral_views.lot(request, LOT).status_code, 403)
+        report.assert_not_called()
+
+
+    @patch('catastro.map_report.report_measurements', side_effect=RuntimeError('source offline'))
+    @patch('catastro.master.lot_summary', side_effect=AssertionError('do not start an extra gallery query'))
+    def test_http_cards_report_the_same_failure_and_allow_a_later_retry(self, old, reader):
+        from cuadrantizacion.geollaqta import report
+        request = self.factory.get('/acm/catastro/lotes/' + LOT + '/')
+        request.acm_access = SimpleNamespace(permissions={**DEFAULTS, 'cadastral_info': True})
+        acm = cadastral_views.lot(request, LOT)
+        quad_request = self.factory.get('/', {'ubigeo': LOT[:6]})
+        quad_request.current_user = SimpleNamespace(is_active=True, is_authenticated=True)
+        quad = report(quad_request, LOT)
+        self.assertEqual(acm.status_code, 502)
+        self.assertEqual(acm.content, quad.content)
+        reader.side_effect = None
+        reader.return_value = {'lot_id': LOT, 'metrics': {'land_area': '200'}}
+        self.assertEqual(cadastral_views.lot(request, LOT).status_code, 200)
+        old.assert_not_called()

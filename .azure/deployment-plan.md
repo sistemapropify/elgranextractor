@@ -1,3 +1,46 @@
+# Identical cadastral HTTP responses in ACM and Cuadrantización — 2026-10-16
+
+Status: Validated — continuing the requested production correction.
+Recipe: existing CI/CD main_granextractorservice.yml; application code only.
+Existing target: subscription 0219eecc-9920-4789-9929-3091a2f09daf,
+rg-elgranextractor / granextractorservice, Brazil South. Base origin/main 95dcf6d9,
+whose prior deployment completed successfully. No new server or network provider.
+
+## Scope and validation
+Both authenticated entry points delegate to the same report_response handler.
+Keep the ACM role gate, independent login, document-only fields, separate units,
+individual-form priority, report fallback and the current radius/labels/card UI.
+
+- [x] 111 isolated Django tests pass, including identical HTTP JSON and failures.
+- [x] ACM radius/photo/card, Cuadrantización gallery and measurement Node suites pass.
+- [x] Scoped source review and git diff --check pass.
+- [x] Actual deployed Azure reader verified recovered R2 lot in 0.951 seconds.
+- [x] Final release build, template/static/WSGI and shared-preview HTTP checks.
+
+## 7. Validation Proof
+Commands: manage.py test acm.test_cadastral catastro.test_map_report
+cuadrantizacion.test_geollaqta acm.test_access acm.test_role_analysis
+acm.test_superadmin_access --settings=acm.access_test_settings --noinput: 111 pass.
+Three Node cadastral suites pass. Same-handler tests preserve role denial and
+prove a failed read does not prevent retry. Existing Azure source connection
+failure was reproduced inside the app container, not inferred from SCM.
+Only the explicitly reported lot was archived; its two PDF reports and facade
+were hash-verified in existing R2. Missing individual forms remain pending.
+The Cloudflare trial was restored to its original configuration and not enabled
+in the application. No SQL migrations, resource/RBAC/settings/price changes.
+Release collectstatic, exact static output bytes, isolated WSGI startup and ACM
+template compilation passed. Restarted the shared D:/PROMETEO preview. Its login
+returns 200, ACM document API rejects anonymous access with 401, the legacy
+Cuadrantización route redirects anonymous visitors to login, and the
+card JavaScript returns 200 with exact served-source bytes. Whitespace passed.
+
+Execution: non-forced scoped push to main through the existing Azure OIDC workflow.
+CI checks public page/assets. Do not claim the new backend is live before a
+successful deployment. The user handles monitoring after dispatch.
+Rollback: scoped revert through the same workflow.
+
+---
+
 # ACM cadastral document lookup correction — 2026-10-16
 
 Status: Validated — continuation of the requested production correction.

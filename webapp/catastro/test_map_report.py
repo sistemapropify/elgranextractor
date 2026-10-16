@@ -90,3 +90,16 @@ class MapReportTests(unittest.TestCase):
                 'record_id': RECORD, 'pages': pages(built='2012')}]}), encoding='utf8')
             self.assertNotIn('pages', _archived_reports(LOT)[0])
         state.return_value.close.assert_called_once()
+
+
+    def test_shared_reader_keeps_individual_form_priority_and_report_fallback(self):
+        documents = [{'type':'individual_record_pdf','record_id':RECORD,'pages':pages(land='199',built=None)},
+                     {'type':'cadastral_report_pdf','record_id':RECORD,'pages':pages()}]
+        value = report_measurements(LOT, reports=documents)
+        self.assertEqual(value['metrics']['land_area'], '199')
+        self.assertEqual(value['metrics']['built_area'], '20.5')
+        self.assertEqual(len(value['reports']), 1)
+
+    def test_individual_form_without_report_still_works(self):
+        documents = [{'type':'individual_record_pdf','record_id':RECORD,'pages':pages()}]
+        self.assertEqual(report_measurements(LOT, reports=documents)['metrics']['land_area'], '200')

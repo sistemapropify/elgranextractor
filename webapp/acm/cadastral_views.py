@@ -16,7 +16,9 @@ def configuration(request):
 @required('cadastral_info')
 def lot(request, lot_id):
     try:
-        return JsonResponse(master.lot_summary(lot_id, request.GET.get('record_id') or None))
+        master.validate_lot(lot_id)
+        from cuadrantizacion.geollaqta import report_response
+        return report_response(lot_id, lot_id[:6], request.GET.get('record_id') or None)
     except ValueError as error:
         return JsonResponse({'error': str(error)}, status=400)
 

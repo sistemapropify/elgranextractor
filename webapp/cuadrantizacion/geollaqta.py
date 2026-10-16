@@ -359,29 +359,31 @@ def detail(request, object_id):
 def report(request, lot_id):
     if not _authenticated(request):
         return JsonResponse({'error': 'Inicia sesión para consultar el catastro.'}, status=401)
+    return report_response(lot_id, request.GET.get('ubigeo', DISTRICT), request.GET.get('record_id') or None)
+
+
+def report_response(lot_id, district, record_id=None):
+    """Identical document response for both maps, after their own access checks."""
     try:
-        district = _district(request)['ubigeo']
-        record_id = request.GET.get('record_id') or None
+        if district not in DISTRICTS:
+            raise ValueError('Elige un distrito del catálogo catastral de Arequipa.')
         if not re.fullmatch(district + r'\d{8,12}', lot_id):
             raise ValueError('El lote no pertenece al distrito seleccionado.')
         if record_id and not re.fullmatch(district + r'\d{13}', record_id):
             raise ValueError('El reporte no pertenece al distrito seleccionado.')
     except ValueError as exc:
         return JsonResponse({'error': str(exc)}, status=400)
-    from catastro.map_report import report_cache_key
-    key = report_cache_key(lot_id, record_id)
-    saved = cache.get(key)
-    if saved is not None:
-        response = JsonResponse(saved)
-        response['Cache-Control'] = 'private, no-store'
-        return response
-    from catastro.map_report import report_measurements, ReportUnavailable
+    from catastro.map_report import report_cache_key, report_measurements, ReportUnavailable
     from scrapi.geollaqta_scraper import CollectionError
+    key = report_cache_key(lot_id, record_id)
     try:
-        result = report_measurements(lot_id, record_id)
-        cache.set(key, result, 900)
+        result = cache.get(key)
+        if result is None:
+            result = report_measurements(lot_id, record_id)
+            cache.set(key, result, 900)
         response = JsonResponse(result)
         response['Cache-Control'] = 'private, no-store'
+        response['Vary'] = 'Cookie'
         return response
     except (ReportUnavailable, CollectionError, ValueError, RuntimeError):
         return JsonResponse({'error': 'No se pudo leer el reporte del lote. Las áreas y medidas quedan sin verificar.'}, status=502)
