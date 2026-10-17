@@ -470,6 +470,23 @@ class PropiedadesCompetencia(models.Model):
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
 
+    @property
+    def piso_departamento(self):
+        """Structured scraper value, with a read-only fallback for older ads.
+
+        Stored in datos_crudos, so local previews and active workers do not
+        require a production schema change. Floor count stays a separate concept.
+        """
+        from scrapi.apartment_floor import extract_floor, plain
+        if plain(self.tipo_inmueble) not in ('departamento', 'apartamento', 'duplex', 'triplex', 'flat'):
+            return None
+        raw = self.datos_crudos if isinstance(self.datos_crudos, dict) else {}
+        evidence = raw.get('_floor_evidence') or {}
+        if 'piso_departamento' in raw and isinstance(evidence, dict) and evidence.get('version') == 1:
+            value = raw.get('piso_departamento')
+            return value if isinstance(value, str) and evidence.get('status') == 'explicit' else None
+        return extract_floor(self.tipo_inmueble, raw, self.descripcion, self.titulo)[0]
+
     # ── Precio por m² (uno por cada superficie) ──────────────────────────────
     # Se calcula al vuelo: en un terreno interesa el del área de terreno y en una
     # casa interesa comparar el de terreno contra el de construcción.

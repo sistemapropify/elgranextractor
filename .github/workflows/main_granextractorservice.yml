@@ -99,7 +99,7 @@ jobs:
           source antenv/bin/activate
           python webapp/manage.py test acm.test_client_report acm.test_report_selection acm.test_weighted_adjustments acm.test_reference_fallback acm.test_valuation_notes acm.test_cadastral_facade_template --settings=acm.access_test_settings --noinput
           python webapp/manage.py test catastro.test_parallel catastro.test_collector catastro.test_external_worker catastro.test_views --settings=catastro.test_settings --noinput
-          python webapp/manage.py test ingestas.tests.test_scraping_local_worker ingestas.tests.test_scraping_dashboard_state scrapi.test_properati_areas scrapi.test_properati_age scrapi.test_properati_location --settings=ingestas.scraping_test_settings --noinput
+          python webapp/manage.py test ingestas.tests.test_scraping_local_worker ingestas.tests.test_scraping_dashboard_state ingestas.tests.test_apartment_floor ingestas.tests.test_scraping_export ingestas.tests.test_scraping_integrity scrapi.test_properati_areas scrapi.test_properati_age scrapi.test_properati_location --settings=ingestas.scraping_test_settings --noinput
           node webapp/catastro/test_parallel_dashboard.cjs
           node webapp/ingestas/tests/test_scraping_executor.cjs
           node webapp/cuadrantizacion/test_geollaqta_facade.cjs

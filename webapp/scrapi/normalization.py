@@ -228,6 +228,15 @@ def validate_row(row):
             issues.append('coordinates')
             row['latitud'] = row['longitud'] = None
     raw = dict(row.get('datos_crudos') or {})
+    from .apartment_floor import extract_floor
+    floor, floor_evidence = extract_floor(row.get('tipo_inmueble'), raw,
+                                         row.get('descripcion'), row.get('titulo'))
+    row['piso_departamento'] = floor
+    raw['piso_departamento'] = floor
+    if floor_evidence:
+        raw['_floor_evidence'] = floor_evidence
+    else:
+        raw.pop('_floor_evidence', None)
     raw['_normalizer_version'] = '3'
     if issues:
         raw['_quality_issues'] = issues

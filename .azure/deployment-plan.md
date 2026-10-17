@@ -1,3 +1,36 @@
+# Apartment floor scraper release - 2026-10-17
+
+Status: Validated
+Recipe: existing GitHub Actions CI/CD main_granextractorservice.yml.
+Authorization: user explicitly requested publication of the apartment-floor feature.
+Base: f4a4a5d9bb7662979c558c0998573ade7554780b, equal to origin/main before integration.
+Target: existing subscription 0219eecc-9920-4789-9929-3091a2f09daf,
+rg-elgranextractor / granextractorservice, Brazil South.
+
+## Scope
+Expose Piso del departamento after Operacion in the scraper table and Excel.
+Extract explicit apartment floors from saved description/title and structured fields
+through the shared validator used by all five portals. Keep building total floors
+and ambiguous descriptions separate. Store the value and evidence in existing
+datos_crudos JSON; old records have a read-only fallback. No SQL schema changes,
+new resources, RBAC changes, external APIs or additional extraction requests.
+Preserve unrelated local edits and all latest production changes.
+
+## 7. Validation Proof - 2026-10-17T17:32:02.832852-05:00
+- Integrated eight manifest-scoped files after verifying before/after SHA-256 and current production contents.
+- python manage.py test ingestas.tests.test_apartment_floor ingestas.tests.test_scraping_export ingestas.tests.test_scraping_integrity scrapi.test_properati_areas scrapi.test_properati_age scrapi.test_properati_location --settings=ingestas.scraping_test_settings --noinput --verbosity 0: 63 tests passed, system check clean, exit 0.
+- python manage.py makemigrations ingestas --check --dry-run --settings=ingestas.scraping_test_settings --verbosity 0: exit 0, no schema drift.
+- Shared local preview previously verified authenticated HTTP 200 dashboard and rows, actual apartment floors 7, 2 and 3, and 37 aligned columns; no static asset changes.
+- Existing CI test command now includes floor, export and integrity suites. Existing deployment public page and exact asset checks retained.
+- Scoped git diff --check passed. Existing deployment identity, infrastructure and approved target remain unchanged.
+
+## Publication
+Non-forced push to main starts the existing deployment. User handles monitoring;
+report dispatch separately from confirmed live status. No background deployment polling.
+Rollback: scoped revert through the same pipeline; no data migration to reverse.
+
+---
+
 # Consolidated release — 2026-10-17
 
 Status: Validated
