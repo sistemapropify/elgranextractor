@@ -18,7 +18,7 @@ def lot(request, lot_id):
     try:
         master.validate_lot(lot_id)
         from cuadrantizacion.geollaqta import report_response
-        return report_response(lot_id, lot_id[:6], request.GET.get('record_id') or None)
+        return report_response(lot_id, lot_id[:6], request.GET.get('record_id') or None, report_only=True)
     except ValueError as error:
         return JsonResponse({'error': str(error)}, status=400)
 

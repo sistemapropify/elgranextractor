@@ -56,6 +56,7 @@ class MapReportTests(unittest.TestCase):
         source.return_value.get.return_value = b'gallery'
         url = 'https://catastro.cofopri.gob.pe/geollaqta/reportefichas/vistadetalle.php?id_lote=' + LOT
         self.assertEqual(master._download(url), b'gallery')
+        source.assert_called_once_with(timeout=6)
         source.return_value.get.assert_called_once_with(url, retry=False)
 
     @patch('catastro.map_report.download', side_effect=ReportUnavailable('offline'))
@@ -103,3 +104,72 @@ class MapReportTests(unittest.TestCase):
     def test_individual_form_without_report_still_works(self):
         documents = [{'type':'individual_record_pdf','record_id':RECORD,'pages':pages()}]
         self.assertEqual(report_measurements(LOT, reports=documents)['metrics']['land_area'], '200')
+
+    def test_report_only_ignores_ficha_values_and_uses_an_independent_cache(self):
+        documents=[{'type':'individual_record_pdf','record_id':RECORD,'pages':pages(land='199')},
+                   {'type':'cadastral_report_pdf','record_id':RECORD,'pages':pages(land='200')}]
+        mixed=report_measurements(LOT,reports=documents)
+        only=report_measurements(LOT,reports=documents,report_only=True)
+        self.assertEqual(mixed['metrics']['land_area'],'199')
+        self.assertEqual(only['metrics']['land_area'],'200')
+
+    @patch('catastro.map_report.download')
+    def test_report_only_does_not_download_ficha_when_there_is_no_report(self, download):
+        documents=[{'type':'individual_record_pdf','record_id':RECORD,'source_url':
+                    'https://catastro.cofopri.gob.pe/geollaqta/reportefichas/vistapdf/fichaindividual.php?id='+RECORD}]
+        with self.assertRaises(ReportUnavailable):
+            report_measurements(LOT,reports=documents,report_only=True)
+        download.assert_not_called()
+
+    @patch('catastro.map_report.pdf_pages',return_value=pages())
+    @patch('catastro.map_report.download')
+    @patch('catastro.map_report._archived_reports')
+    def test_report_only_discovers_the_live_report_if_archive_contains_only_a_ficha(self, archived, download, parse):
+        archived.return_value=[{'type':'individual_record_pdf','record_id':RECORD,'pages':pages(land='199')}]
+        html=('<table><tr><td><a href="vistapdf/reporte.php?id='+RECORD+'">Reporte</a></td><td>1/1</td></tr></table>').encode()
+        download.side_effect=[html,b'%PDF-test']
+        value=report_measurements(LOT,report_only=True)
+        self.assertEqual(value['metrics']['land_area'],'200')
+        self.assertEqual(download.call_count,2)
+        self.assertTrue(all('fichaindividual' not in call.args[0] for call in download.call_args_list))
+
+    @patch('catastro.map_report.pdf_pages')
+    @patch('catastro.map_report.download')
+    def test_successful_report_does_not_wait_for_a_remote_failing_ficha(self, download, parse):
+        individual='https://catastro.cofopri.gob.pe/geollaqta/reportefichas/vistapdf/fichaindividual.php?id='+RECORD
+        report='https://catastro.cofopri.gob.pe/geollaqta/reportefichas/vistapdf/reporte.php?id='+RECORD
+        def source(url):
+            if url == individual: raise AssertionError('A valid report must not wait for the broken ficha.')
+            return b'%PDF-test'
+        download.side_effect=source;parse.return_value=pages()
+        documents=[{'type':'individual_record_pdf','record_id':RECORD,'source_url':individual},
+                   {'type':'cadastral_report_pdf','record_id':RECORD,'source_url':report}]
+        value=report_measurements(LOT,reports=documents)
+        self.assertEqual(value['metrics']['land_area'],'200')
+        download.assert_called_once_with(report)
+
+    @patch('catastro.map_report.download',side_effect=AssertionError('Do not reconnect to COFOPRI.'))
+    @patch('catastro.map_report.pdf_pages',return_value=pages())
+    @patch('catastro.map_report.R2')
+    def test_archived_pdf_is_reparsed_from_r2_when_old_extraction_is_missing(self, cloud, parse, download):
+        import hashlib
+        from tempfile import TemporaryDirectory
+        from django.test import override_settings
+        body=b'%PDF-archived';cloud.return_value.get.return_value=(body,{})
+        document={'type':'cadastral_report_pdf','record_id':RECORD,'filename':'reporte-test.pdf',
+                  '_archive_sha256':hashlib.sha256(body).hexdigest()}
+        with TemporaryDirectory() as tmp, patch.dict('os.environ',{'CATASTRO_DATA_DIR':tmp}):
+            value=report_measurements(LOT,reports=[document])
+        self.assertEqual(value['metrics']['built_area'],'20.5')
+        cloud.return_value.get.assert_called_once_with('geollaqta/'+LOT[:6]+'/'+LOT+'/reporte-test.pdf')
+        download.assert_not_called()
+
+    @patch('catastro.map_report.pdf_pages')
+    @patch('catastro.map_report.R2')
+    def test_archive_with_wrong_hash_is_not_used_as_verified_data(self, cloud, parse):
+        from catastro.map_report import archived_pages
+        from tempfile import TemporaryDirectory
+        cloud.return_value.get.return_value=(b'%PDF-modified',{})
+        with TemporaryDirectory() as tmp, patch.dict('os.environ',{'CATASTRO_DATA_DIR':tmp}):
+            self.assertIsNone(archived_pages(LOT,{'filename':'reporte-test.pdf','_archive_sha256':'a'*64}))
+        parse.assert_not_called()

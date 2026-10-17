@@ -112,10 +112,11 @@ class GalleryLinks(HTMLParser):
 
 
 class Source:
-    def __init__(self, checkpoint=lambda: None, delay=1):
+    def __init__(self, checkpoint=lambda: None, delay=1, timeout=25):
         self.checkpoint = checkpoint
         self.delay = max(1, delay)
         self.last_request = 0
+        self.timeout = max(1, min(float(timeout), 25))
         self.opener = build_opener(NoRedirect())
 
     def get(self, url, params=None, retry=True):
@@ -130,7 +131,7 @@ class Source:
             req = Request(url, data=urlencode(params).encode() if params else None,
                           headers={'User-Agent': 'Prometeo-Catastro/1.0', 'Accept': '*/*'})
             try:
-                with self.opener.open(req, timeout=25) as response:
+                with self.opener.open(req, timeout=self.timeout) as response:
                     data = response.read(MAX_FILE + 1)
                 if len(data) > MAX_FILE:
                     raise CollectionError('Archivo superior a 20 MB; queda pendiente.')

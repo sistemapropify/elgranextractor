@@ -19,7 +19,7 @@
         }
         function clearMap(){layer.forEach(f=>layer.remove(f));layer.setMap(null);labels?.setData([],[]);drawnKey=null;drawnCount=0;highlighted=null;}
         async function api(path,signal){
-            const stop=new AbortController(),abort=()=>stop.abort(),deadline=setTimeout(abort,path.startsWith('lotes/')?90000:25000);
+            const stop=new AbortController(),abort=()=>stop.abort(),deadline=setTimeout(abort,path.startsWith('lotes/')?30000:25000);
             signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
             try {
                 const r=await fetch('/acm/catastro/'+path,{credentials:'same-origin',cache:'no-store',signal:stop.signal,headers:{Accept:'application/json'}});
@@ -99,7 +99,7 @@
                 if(value.lot_id!==id)throw Error('La información recibida no corresponde al lote del pin.');
                 if(value.document_status!=='unavailable')cache.set(key,{data:value,until:Date.now()+60000});if(cache.size>30)cache.delete(cache.keys().next().value);
                 metrics(value,stamp);
-            } catch(error){if(stamp===serial&&lot?.properties.ID_LOTE===id){['land','built','floors','units',...sides].forEach(k=>$(k).textContent='Consulta no disponible');status('No se pudieron consultar los datos catastrales.',true);$('retry').hidden=false;}}
+            } catch(error){if(stamp===serial&&lot?.properties.ID_LOTE===id){['land','built','floors','units',...sides].forEach(k=>$(k).textContent='Consulta no disponible');status(error.name==='AbortError'?'La consulta tardó demasiado. Vuelve a consultar.':error.message||'No se pudieron consultar los datos catastrales.',true);$('retry').hidden=false;}}
             finally {if(stamp===serial){detailLoading=false;card.setAttribute('aria-busy',String(!!result&&!result.complete));}}
         }
         function finish(){

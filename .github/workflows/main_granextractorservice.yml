@@ -89,6 +89,11 @@ jobs:
           source antenv/bin/activate
           python webapp/manage.py test acm.test_reference_fallback --settings=acm.access_test_settings --noinput
 
+      - name: Validate direct cadastral report queries
+        run: |
+          source antenv/bin/activate
+          python webapp/manage.py test catastro.test_map_report catastro.test_collector acm.test_cadastral cuadrantizacion.test_geollaqta --settings=acm.access_test_settings --noinput
+
       - name: Collect Django static files
         env:
           # Valores dummy para que Django cargue settings sin conexión a BD.

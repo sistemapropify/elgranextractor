@@ -1,3 +1,55 @@
+# ACM direct cadastral report release - 2026-10-17
+
+Status: Validated - scoped code release requested by the user.
+Recipe: existing GitHub Actions CI/CD main_granextractorservice.yml.
+Approved target: subscription 0219eecc-9920-4789-9929-3091a2f09daf,
+rg-elgranextractor / granextractorservice, Brazil South.
+Base: latest origin/main 29bdc04b6480fa58b8860f7cad8f5bf5c04269e8.
+
+## Scope
+The ACM reads only cadastral report PDFs, with independent temporary cache,
+without attempting individual fichas. Discover the actual report through the
+lot gallery; prior collection is unnecessary. Re-read existing archived PDF
+originals only with matching SHA-256, bounded interactive source timeouts,
+clear retry errors, and the card script cache version. Preserve role gates,
+report identity, separate units and document-only measurements. The collector
+retains its default connection timeout; no concurrency or IP changes.
+Other pending local report design and shared Street View changes are excluded.
+No migrations, new Azure resources, SKU, settings, RBAC or billing changes.
+
+## Validation steps
+- [x] Integrated report, collector, access and map Django tests.
+- [x] ACM card and Cuadrantizacion measurement Node regressions.
+- [x] collectstatic, exact script bytes, template and WSGI build.
+- [x] CI YAML, scoped diff and whitespace checks.
+- [x] Shared local HTTP login/static and production preflight health/login.
+
+## 7. Validation Proof
+Validated at 2026-10-17T14:29:25.301953-05:00 in the integrated release checkout.
+- manage.py test catastro.test_map_report catastro.test_collector
+  acm.test_cadastral cuadrantizacion.test_geollaqta
+  --settings=acm.access_test_settings --noinput: 82 passed, 24.817 seconds.
+- Node acm/test_cadastral.cjs and cuadrantizacion/test_geollaqta_measures.cjs pass.
+- Django collectstatic completed to an isolated output, exact cadastral script
+  bytes matched source, components template compiled with v7 and WSGI loaded.
+- CI YAML parsed and includes the same direct-report/collector test gate.
+- Shared local login and exact cadastral script return HTTP 200. Existing public
+  health and login return HTTP 200. git diff --check passes.
+- Earlier live checks without an archive: three districts returned report areas
+  and all four boundaries in 5-6 seconds, with no individual ficha requests.
+  These local source checks do not establish Azure-to-COFOPRI connectivity.
+- Existing subscription confirmed. ARM plan/cost lookup was unavailable; this
+  code deployment uses existing OIDC and makes no resource/billing changes.
+Static role verification: no identities, infrastructure or role assignments
+change; existing application access tests pass.
+
+Execution: scoped commit and non-forced push to main triggers existing CI/CD.
+The user handles monitoring. Report dispatch separately from completed/live
+success; existing CI checks public health, protected pages and exact assets.
+Rollback: scoped revert through the same workflow.
+
+---
+
 # Pending ACM references and facade release - 2026-10-16
 
 Status: Validated - all release checks passed; user requests all pending implementations.

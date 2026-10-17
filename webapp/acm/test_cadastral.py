@@ -233,6 +233,13 @@ class SharedCadastralReportTests(SimpleTestCase):
         self.assertEqual(cadastral_views.lot(request, LOT).status_code, 403)
         report.assert_not_called()
 
+    @patch('cuadrantizacion.geollaqta.report_response')
+    def test_acm_requests_only_the_report_and_never_the_individual_ficha(self, report):
+        request=self.factory.get('/acm/catastro/lotes/'+LOT+'/')
+        request.acm_access=SimpleNamespace(permissions={**DEFAULTS,'cadastral_info':True})
+        cadastral_views.lot(request,LOT)
+        report.assert_called_once_with(LOT,LOT[:6],None,report_only=True)
+
 
     @patch('catastro.map_report.report_measurements', side_effect=RuntimeError('source offline'))
     @patch('catastro.master.lot_summary', side_effect=AssertionError('do not start an extra gallery query'))

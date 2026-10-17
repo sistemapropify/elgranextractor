@@ -5,6 +5,7 @@ from the other sections of the private archive. Multiple unit reports remain
 separate; their construction areas are never added together.
 """
 import json
+import hashlib
 import re
 import unicodedata
 from urllib.parse import urlsplit
@@ -33,6 +34,11 @@ def _archived_reports(lot_id):
             return None
         reports = [dict(r) for r in data.get('reports', [])
                    if r.get('type') in ('cadastral_report_pdf', 'individual_record_pdf')]
+        artifacts = {a.get('filename'): a for a in data.get('artifacts', [])}
+        for report in reports:
+            original = artifacts.get(report.get('filename'), {})
+            if original.get('sha256'):
+                report['_archive_sha256'] = original['sha256']
         if any(a.get('type') == 'facade_image' for a in data.get('artifacts', [])):
             for report in reports:
                 report['facade_url'] = f'/acm/catastro/lotes/{lot_id}/fachada/'
@@ -76,18 +82,35 @@ def measurements(pages, lot_id):
     }
 
 
-def report_cache_key(lot_id, record_id=None):
-    return 'geollaqta-report-v3:' + lot_id + ':' + (record_id or 'first')
+def report_cache_key(lot_id, record_id=None, *, report_only=False):
+    return ('geollaqta-report-only-v1:' if report_only else 'geollaqta-report-v3:') + lot_id + ':' + (record_id or 'first')
 
 
-def cached_report(lot_id, record_id=None):
-    return cache.get(report_cache_key(lot_id, record_id))
+def cached_report(lot_id, record_id=None, *, report_only=False):
+    return cache.get(report_cache_key(lot_id, record_id, report_only=report_only))
 
 
 def download(url):
     # Both maps use the same source headers, redirect policy and timeout.
     # Interactive reads have one attempt; an outage is never cached as success.
-    return Source().get(url, retry=False)
+    return Source(timeout=6).get(url, retry=False)
+
+
+def archived_pages(lot_id, document):
+    """Re-read archived originals without requiring a new COFOPRI connection."""
+    name, digest = document.get('filename'), document.get('_archive_sha256')
+    if (not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9_-]+\.pdf', name)
+            or not re.fullmatch(r'[a-f0-9]{64}', str(digest or ''))):
+        return None
+    try:
+        from .state import data_dir
+        path = data_dir() / lot_id[:6] / lot_id / name
+        body = path.read_bytes() if path.is_file() else R2(timeout=4).get('geollaqta/'+lot_id[:6]+'/'+lot_id+'/'+name)[0]
+        if not body.lstrip().startswith(b'%PDF-') or hashlib.sha256(body).hexdigest() != digest:
+            return None
+        return pdf_pages(body)
+    except (StorageError, OSError, ValueError, RuntimeError):
+        return None
 
 
 def document_metrics(pages, lot_id):
@@ -111,41 +134,50 @@ def document_metrics(pages, lot_id):
     return result
 
 
-def report_measurements(lot_id, record_id=None, *, reports=None):
+def report_measurements(lot_id, record_id=None, *, reports=None, report_only=False):
     if not re.fullmatch(r'\d{14}', lot_id):
         raise ValueError('Código catastral no válido.')
     if record_id and not re.fullmatch(lot_id[:6] + r'\d{13}', record_id):
         raise ValueError('Reporte catastral no válido.')
-    saved = cached_report(lot_id, record_id)
+    saved = cached_report(lot_id, record_id, report_only=report_only)
     if saved is not None:
         return saved
+    discover = reports is None
     if reports is None:
         reports = _archived_reports(lot_id)
     facade = None
-    if reports is None:
+    if reports is None or (discover and report_only and not any(r.get('type') == 'cadastral_report_pdf' for r in reports)):
         html = download(PORTAL + 'vistadetalle.php?id_lote=' + lot_id)
         parser = GalleryLinks(lot_id[:6])
         parser.feed(html.decode('utf-8', errors='replace'))
         reports = parser.documents
         facade = next(iter(parser.images), None)
     documents = [r for r in reports
-                 if r.get('type') in ('individual_record_pdf', 'cadastral_report_pdf')
+                 if r.get('type') in (('cadastral_report_pdf',) if report_only else ('individual_record_pdf', 'cadastral_report_pdf'))
                  and re.fullmatch(lot_id[:6] + r'\d{13}', str(r.get('record_id', '')))]
     choices = sorted({(r['record_id'], r.get('form_number', '')) for r in documents})
     available_reports = sorted({r['record_id'] for r in documents if r['type'] == 'cadastral_report_pdf'})
     if not choices:
         raise ReportUnavailable('No hay un reporte catastral disponible para este lote.')
     selected = record_id or (available_reports[0] if available_reports else choices[0][0])
+    def named(document):
+        return any(page.get('named_fields') for page in document.get('pages', []))
     candidates = sorted((r for r in documents if r['record_id'] == selected),
-                        key=lambda r: r['type'] != 'individual_record_pdf')
+                        key=lambda r: 0 if r['type'] == 'individual_record_pdf' and named(r)
+                        else 1 if r['type'] == 'cadastral_report_pdf' else 2)
     if not candidates:
         raise ReportUnavailable('El reporte elegido no pertenece al lote.')
     metrics = {'land_area': None, 'built_area': None, 'floors': None, 'units': None,
                'boundaries': {side: None for side in ('frente', 'derecha', 'izquierda', 'fondo')}}
     verified = False
     for document in candidates:
+        if verified and document['type'] == 'individual_record_pdf' and not named(document):
+            # A remote/unmapped ficha must not hold a successfully read report.
+            continue
         try:
             pages = document.get('pages')
+            if pages is None:
+                pages = archived_pages(lot_id, document)
             if pages is None:
                 url = document.get('source_url', '')
                 parsed = urlsplit(url)
@@ -176,6 +208,6 @@ def report_measurements(lot_id, record_id=None, *, reports=None):
               'reports': [{'record_id': rid, 'form_number': number} for rid, number in choices],
               'metrics': metrics, 'facade_url': facade}
     # One validated result serves both HTTP endpoints and keeps units separate.
-    cache.set(report_cache_key(lot_id, record_id), result, 900)
-    cache.set(report_cache_key(lot_id, selected), result, 900)
+    cache.set(report_cache_key(lot_id, record_id, report_only=report_only), result, 900)
+    cache.set(report_cache_key(lot_id, selected, report_only=report_only), result, 900)
     return result

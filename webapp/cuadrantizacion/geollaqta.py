@@ -362,7 +362,7 @@ def report(request, lot_id):
     return report_response(lot_id, request.GET.get('ubigeo', DISTRICT), request.GET.get('record_id') or None)
 
 
-def report_response(lot_id, district, record_id=None):
+def report_response(lot_id, district, record_id=None, *, report_only=False):
     """Identical document response for both maps, after their own access checks."""
     try:
         if district not in DISTRICTS:
@@ -375,11 +375,11 @@ def report_response(lot_id, district, record_id=None):
         return JsonResponse({'error': str(exc)}, status=400)
     from catastro.map_report import report_cache_key, report_measurements, ReportUnavailable
     from scrapi.geollaqta_scraper import CollectionError
-    key = report_cache_key(lot_id, record_id)
+    key = report_cache_key(lot_id, record_id, report_only=report_only)
     try:
         result = cache.get(key)
         if result is None:
-            result = report_measurements(lot_id, record_id)
+            result = report_measurements(lot_id, record_id, **({'report_only': True} if report_only else {}))
             cache.set(key, result, 900)
         response = JsonResponse(result)
         response['Cache-Control'] = 'private, no-store'
