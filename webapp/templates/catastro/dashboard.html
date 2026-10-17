@@ -15,9 +15,11 @@
     <section class="catastro-card"><h2>Descargar catastro</h2>
       <form id="collection-form">{% csrf_token %}
         <label for="district">Distrito</label><select id="district" name="ubigeo">{% for district in districts %}<option value="{{ district.ubigeo }}" {% if district.ubigeo == '040126' %}selected{% endif %} {% if not district.published_lots %}disabled{% endif %}>{{ district.name }}{% if not district.published_lots %} · sin lotes publicados en esta fuente{% endif %}</option>{% endfor %}</select>
+        <label for="collection-workers">Lotes simultáneos</label>
+        <select id="collection-workers" name="workers"><option value="1">1 lote</option><option value="2">2 lotes</option><option value="4">4 lotes</option><option value="6">6 lotes</option><option value="10" selected>10 lotes</option></select>
         <details><summary>Opciones de descarga</summary><label for="lot-id">Un predio específico (opcional)</label><input id="lot-id" inputmode="numeric" maxlength="18" placeholder="Código catastral del lote"><label class="catastro-check"><input type="checkbox" id="retry-missing"> Reintentar documentos pendientes</label></details>
         <p class="catastro-help">Descarga todos los predios publicados del distrito, con todas sus fichas, reportes y fotografías disponibles. Continúa desde los que faltan y conserva lo ya archivado.</p>
-        <div class="catastro-actions"><button class="btn btn-success catastro-button" id="start-collection" type="submit">Descargar distrito completo</button><button class="btn btn-danger catastro-button" id="stop-collection" type="button" hidden>Detener</button></div>
+        <div class="catastro-actions"><button class="btn btn-success catastro-button" id="start-collection" type="submit">Descargar distrito completo</button><button class="btn btn-danger catastro-button" id="stop-collection" type="button" hidden>Pausar descarga</button></div>
       </form>
       <p id="collection-message" role="status" aria-live="polite"></p>
       <p id="collector-status" class="catastro-help" role="status"></p>
@@ -28,4 +30,4 @@
   <section class="catastro-card"><h2>Predios del archivo</h2><p class="catastro-help">Últimos 50 predios del distrito seleccionado. Abre un predio para revisar sus documentos y fotos.</p><div class="catastro-table-wrap"><table><thead><tr><th>Código del lote</th><th>Estado</th><th>Documentos</th><th>Fachadas</th><th>Pendientes</th><th>Archivo</th></tr></thead><tbody id="lots-list"><tr><td colspan="6">Todavía no hay predios archivados en este distrito.</td></tr></tbody></table></div></section>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=4" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=5" defer></script>{% endblock %}

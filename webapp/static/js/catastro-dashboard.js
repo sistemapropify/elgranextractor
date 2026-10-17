@@ -31,15 +31,21 @@
     el('storage-detail').textContent = configured ? 'Bucket: ' + data.storage.bucket + '. Los archivos se guardan por distrito y predio.' : 'Configura las credenciales de R2 en este equipo para iniciar la descarga.';
     el('storage-bytes').textContent = bytes(data.r2_bytes);
     active = data.jobs.find(j => ['queued','running'].includes(j.status)) || null;
+    const previous = data.jobs.find(j => j.ubigeo === el('district').value);
+    const resumable = previous && ['stopped','interrupted','failed'].includes(previous.status);
+    el('start-collection').textContent = resumable ? 'Reanudar distrito' : 'Descargar distrito completo';
     el('start-collection').disabled = busy || !configured || !!active;
     el('stop-collection').hidden = !active;
     el('stop-collection').disabled = busy || !!active?.stop;
+    el('collection-workers').disabled = busy || !!active;
     const jobs = el('jobs-list'); jobs.replaceChildren();
     if (!data.jobs.length) jobs.append(node('p','No hay descargas todavía.'));
     data.jobs.forEach(job => {
       const article = node('article','');
       article.append(node('strong',job.district_name + ' · ' + (labels[job.status] || job.status) + ' · ' + (!job.source_objects && !job.processed && job.status !== 'completed' ? 'inventario pendiente' : job.processed + (job.processed === 1 ? ' predio' : ' predios'))));
       article.append(node('p',job.message || 'Preparando el inventario de lotes de COFOPRI.'));
+      const workers = job.workers || 1;
+      article.append(node('p','Hasta ' + workers + ' ' + (workers === 1 ? 'lote simultáneo' : 'lotes simultáneos')));
       if (job.source_objects) {
         // Remaining also includes records outside an old bounded test scope.
         const done = job.source_objects - job.remaining_objects;
@@ -65,12 +71,12 @@
     catch(error) { message(error.message,true); }
   }
   el('collection-form').addEventListener('submit',async event => {
-    event.preventDefault(); if(busy || active || !configured)return;busy=true;el('start-collection').disabled=true;
-    try { await api('start/',{ubigeo:el('district').value,lot_id:el('lot-id').value.trim() || null,retry_missing:el('retry-missing').checked});message('Descarga iniciada: recorrerá todos los predios encontrados. Puedes salir de esta página y volver para revisar el avance.'); }
+    event.preventDefault(); if(busy || active || !configured)return;busy=true;el('start-collection').disabled=true;el('collection-workers').disabled=true;
+    try { await api('start/',{ubigeo:el('district').value,lot_id:el('lot-id').value.trim() || null,retry_missing:el('retry-missing').checked,workers:Number(el('collection-workers').value)});message('Descarga iniciada: hasta ' + el('collection-workers').value + ' lotes simultáneos. Continúa desde los pendientes. Puedes salir de esta página y volver para revisar el avance.'); }
     catch(error) { message(error.message,true); }
     finally { busy=false;await refresh(); }
   });
-  el('stop-collection').addEventListener('click',async()=>{if(!active || busy)return;busy=true;try{await api('jobs/' + active.id + '/stop/',{});message('La descarga se detendrá al terminar la solicitud en curso.');}catch(error){message(error.message,true);}finally{busy=false;await refresh();}});
+  el('stop-collection').addEventListener('click',async()=>{if(!active || busy)return;busy=true;try{await api('jobs/' + active.id + '/stop/',{});message('Pausa solicitada. Terminarán las solicitudes en curso y el avance quedará guardado. Para continuar, vuelve a iniciar la descarga del mismo distrito.');}catch(error){message(error.message,true);}finally{busy=false;await refresh();}});
   el('district').addEventListener('change',refresh);
   el('refresh-collection').addEventListener('click',refresh);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeout(timer);else refresh();});

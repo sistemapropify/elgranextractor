@@ -108,3 +108,13 @@ código, configurar la credencial/modo en Azure y arrancar el recolector contra
 el dominio de producción. Preservar archivos, configuración y tareas anteriores.
 Para revertir, detener primero el recolector y conservar los registros y R2;
 volver a `server` solo será útil si Azure ya tiene acceso a COFOPRI.
+
+## Concurrencia por ejecución
+
+La respuesta privada claim incluye workers, guardado en el trabajo (1–10).
+El mismo motor aplica ese máximo en modo local, servidor y recolector externo.
+Un servidor antiguo sin ese campo conserva ejecución secuencial. Los callbacks
+heartbeat, progress y lot se ejecutan en el coordinador; ningún hilo de red usa
+la conexión SQLite o envía simultáneamente una confirmación del dashboard.
+Los lotes terminados fuera de orden se confirman individualmente y reanudar
+los omite por su identidad y carga verificada, sin depender de su posición.

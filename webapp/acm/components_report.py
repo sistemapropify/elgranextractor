@@ -1,294 +1,189 @@
-"""Informe Word del ACM por componentes con las operaciones que sustentan el resultado."""
-from datetime import datetime
+"""Editable client report using the same content and selection as the PDF."""
 from io import BytesIO
-from statistics import median
 
 
-def _number(value, decimals=0):
-    if value is None:
-        return 'Sin dato'
-    return f'{float(value):,.{decimals}f}'
+def _fit_one_page(doc):
+    """Fit the editable body to the available A4 height without dropping text."""
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+    from docx.oxml.ns import qn
+    from docx.shared import Pt
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    section = doc.sections[0]
+    width = (section.page_width-section.left_margin-section.right_margin)/12700
+    budget = (section.page_height-section.top_margin-section.bottom_margin)/12700-40
+
+    def points(value):
+        return value.pt if value is not None else 0
+
+    def paragraph_height(p, available):
+        style = p.style
+        size = max([points(run.font.size) for run in p.runs]+[points(style.font.size) or points(doc.styles['Normal'].font.size)])
+        before = points(p.paragraph_format.space_before if p.paragraph_format.space_before is not None else style.paragraph_format.space_before)
+        after = points(p.paragraph_format.space_after if p.paragraph_format.space_after is not None else style.paragraph_format.space_after)
+        available = max(10,available-points(p.paragraph_format.right_indent)-points(p.paragraph_format.left_indent))
+        lines = 0
+        for line in p.text.split('\n'):
+            used = 0; lines += 1
+            for word in line.split():
+                length = stringWidth(word+' ','Helvetica',size)
+                if used and used+length > available:
+                    lines += 1; used = 0
+                lines += int(length//available)
+                used += length % available
+        images = [int(node.get('cy'))/12700 for node in p._p.iter(qn('wp:extent'))]
+        return before+after+max(lines*size*1.2,max(images,default=0)+size*.25)
+
+    def height(parent, available):
+        node = parent._tc if hasattr(parent,'_tc') else parent._element.body
+        total = 0
+        for child in node:
+            if child.tag == qn('w:p'):
+                total += paragraph_height(Paragraph(child,parent),available)
+            elif child.tag == qn('w:tbl'):
+                table = Table(child,parent)
+                total += sum(max(height(cell,cell.width/12700) for cell in row.cells)+2 for row in table.rows)
+        return total
+
+    def paragraphs(parent):
+        yield from parent.paragraphs
+        for table in parent.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    yield from paragraphs(cell)
+
+    for _ in range(5):
+        estimate = height(doc,width)
+        if estimate <= budget:
+            break
+        factor = min(.95,budget/estimate*.97)
+        for style in doc.styles:
+            if style.type != 1: continue
+            if style.font.size is not None: style.font.size=Pt(style.font.size.pt*factor)
+            for name in ('space_before','space_after'):
+                value=getattr(style.paragraph_format,name)
+                if value is not None:setattr(style.paragraph_format,name,Pt(value.pt*factor))
+        for p in paragraphs(doc):
+            for run in p.runs:
+                if run.font.size is not None:run.font.size=Pt(run.font.size.pt*factor)
+            for name in ('space_before','space_after'):
+                value=getattr(p.paragraph_format,name)
+                if value is not None:setattr(p.paragraph_format,name,Pt(value.pt*factor))
+            p.paragraph_format.widow_control=False
+        for picture in doc.inline_shapes:
+            picture.width=int(picture.width*factor);picture.height=int(picture.height*factor)
 
 
-def _money(value):
-    return 'Sin dato' if value is None else f'USD {float(value):,.0f}'
-
-
-def _unit(value):
-    return 'Sin dato' if value is None else f'USD {float(value):,.0f}/m²'
-
-
-def _component_similarity(detail):
-    """Parecido de una casa con el objetivo: similitudes de terreno y construcción.
-
-    Espeja el orden de la pantalla (components.js) para que el informe y la
-    página listen las casas en la misma secuencia.
-    """
-    return (detail.get('land_similarity') or 0) + (detail.get('built_similarity') or 0)
-
-
-def _median_text(values):
-    values = sorted(float(value) for value in values)
-    if not values:
-        return 'No existen valores aptos.'
-    ordered = ', '.join(_unit(value) for value in values)
-    if len(values) % 2:
-        explanation = f'El valor central es {_unit(values[len(values)//2])}.'
-    else:
-        left, right = values[len(values)//2-1:len(values)//2+1]
-        explanation = f'Los dos valores centrales son {_unit(left)} y {_unit(right)}; su promedio es {_unit((left+right)/2)}.'
-    return f'Valores ordenados: {ordered}. {explanation}'
-
-
-def build_acm_docx(params, records, result, excluded=(), generated_at=None):
-    from .report_selection import report_records, report_total, report_unit_price
-    records = report_records(params,records,excluded)
+def build_acm_docx(params, records, result, excluded=(), generated_at=None, user=None, fetch_images=True):
+    from .client_report import prepare_report, age, RESULT_LABELS
+    from .components_pdf import _money, _number, _unit_price, _fecha_larga, _clean
     from docx import Document
-    from docx.enum.section import WD_ORIENT
-    from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
     from docx.shared import Inches, Pt, RGBColor
-
-    generated_at = generated_at or datetime.now()
-    excluded = set() if 'report_ids' in params else set(excluded)
-    by_id = {row['id']: row for row in records}
-    doc = Document()
-    section = doc.sections[0]
-    section.orientation = WD_ORIENT.LANDSCAPE
-    section.page_width, section.page_height = section.page_height, section.page_width
-    section.top_margin = Inches(.55); section.bottom_margin = Inches(.55)
-    section.left_margin = Inches(.55); section.right_margin = Inches(.55)
-
-    for style_name in ('Normal', 'Title', 'Heading 1', 'Heading 2'):
-        style = doc.styles[style_name]
-        style.font.name = 'Aptos'
-        style._element.rPr.rFonts.set(qn('w:ascii'), 'Aptos')
-        style._element.rPr.rFonts.set(qn('w:hAnsi'), 'Aptos')
-        style.font.color.rgb = RGBColor(0, 0, 0)
-    doc.styles['Normal'].font.size = Pt(9.5)
-    doc.styles['Title'].font.size = Pt(22)
-    doc.styles['Heading 1'].font.size = Pt(15)
-    doc.styles['Heading 2'].font.size = Pt(12)
-
-    def shade(cell, fill):
-        tc_pr = cell._tc.get_or_add_tcPr()
-        node = tc_pr.find(qn('w:shd')) or OxmlElement('w:shd')
-        node.set(qn('w:fill'), fill)
-        if node.getparent() is None: tc_pr.append(node)
-
-    def borders(cell):
-        tc_pr = cell._tc.get_or_add_tcPr()
-        edges = tc_pr.first_child_found_in('w:tcBorders')
-        if edges is None:
-            edges = OxmlElement('w:tcBorders'); tc_pr.append(edges)
-        for name in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
-            edge = OxmlElement(f'w:{name}')
-            edge.set(qn('w:val'), 'single'); edge.set(qn('w:sz'), '4'); edge.set(qn('w:color'), 'D9D9D9')
-            edges.append(edge)
-
-    def table(headers, rows, widths=None):
-        tbl = doc.add_table(rows=1, cols=len(headers))
-        tbl.autofit = True
-        for index, text in enumerate(headers):
-            cell = tbl.rows[0].cells[index]; cell.text = str(text); shade(cell, '244A68'); borders(cell)
-            cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-            for run in cell.paragraphs[0].runs:
-                run.font.bold = True; run.font.color.rgb = RGBColor(255,255,255); run.font.size = Pt(8)
-            if widths: cell.width = Inches(widths[index])
-        for row_index, values in enumerate(rows):
-            cells = tbl.add_row().cells
-            for index, text in enumerate(values):
-                cells[index].text = str(text); borders(cells[index]); cells[index].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-                if row_index % 2: shade(cells[index], 'F2F6FA')
-                for paragraph in cells[index].paragraphs:
-                    paragraph.paragraph_format.space_after = Pt(2)
-                    for run in paragraph.runs: run.font.size = Pt(8)
-                if widths: cells[index].width = Inches(widths[index])
-        doc.add_paragraph().paragraph_format.space_after = Pt(1)
-        return tbl
-
-    def heading(text, level=1):
-        paragraph = doc.add_heading(text, level=level)
-        paragraph.paragraph_format.space_before = Pt(10)
-        paragraph.paragraph_format.space_after = Pt(5)
-        return paragraph
-
-    title = doc.add_paragraph(style='Title')
-    title.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    title.add_run('Informe de análisis comparativo de mercado')
-    intro = doc.add_paragraph()
-    intro.add_run('Propósito. ').bold = True
-    intro.add_run('Explicar con los datos seleccionados cómo se obtuvo la estimación, qué anuncios participaron y cuáles fueron las operaciones realizadas. Los importes corresponden a precios de oferta.')
-    doc.add_paragraph(f'Generado el {generated_at:%d/%m/%Y %H:%M}. Método: {result.get("version", "componentes")}')
-
-    heading('Inmueble objetivo')
-    target_rows = [
-        ('Tipo', params['property_type']), ('Radio de propiedades', f'{_number(params["radius"])} m'),
-        ('Área de terreno', f'{_number(params.get("land"),2)} m²' if params.get('land') else 'No aplica'),
-        ('Área construida', f'{_number(params.get("built"),2)} m²' if params.get('built') else 'No aplica'),
-        ('Antigüedad', 'Sin informar' if params.get('age') is None else 'Estreno' if params['age']==0 else f"{params['age']} años"),
-        ('Fuentes consultadas', ', '.join(params.get('sources', []))),
-    ]
-    table(('Dato', 'Valor'), target_rows, (2.2, 4.7))
-
-    heading('Resultado')
-    new = result.get('new')
-    if new:
-        if result['model'] == 'components':
-            result_rows = [('Valor del terreno objetivo', _money(new['land_value'])),
-                           ('Valor de construcción y mejoras', _money(new['built_value'])),
-                           ('Estimación total', _money(report_total(params,result))),
-                           ('Rango de comparables ajustados' if result.get('built_unit_method')=='weighted_adjusted_prices' else 'Rango central orientativo', f'{_money(new["range_low"])} a {_money(new["range_high"])}')]
-        else:
-            result_rows = [('Valor unitario usado', _unit(report_unit_price(params,result,new['unit']))),
-                           ('Estimación total', _money(report_total(params,result))),
-                           ('Rango central orientativo', f'{_money(new["range_low"])} a {_money(new["range_high"])}')]
-        table(('Concepto', 'Resultado'), result_rows, (3.8, 3.1))
-    else:
-        doc.add_paragraph('No se obtuvo una estimación final porque faltaron comparables aptos para completar el método.')
-
-    if params.get('report_notes'):
-        heading('Justificación u observaciones')
-        doc.add_paragraph(params['report_notes'])
-
-    if result['model'] == 'components':
-        heading('Paso 1 Cálculo del valor del suelo')
-        lands = [by_id[row_id] for row_id in result.get('land_ids', []) if row_id in by_id and row_id not in excluded]
-        doc.add_paragraph('Para cada terreno usado se divide el precio anunciado entre su área de terreno. Después se ordenan esos valores y se toma la mediana. La mediana es el valor central y evita que un anuncio extremadamente caro o barato domine el resultado.')
-        land_rows = []
-        land_units = []
-        for row in lands:
-            unit = row['price']/row['land']; land_units.append(unit)
-            land_rows.append((row['source'].upper(), row.get('code') or row['id'], f'{_number(row["distance"])} m',
-                              _money(row['price']), f'{_number(row["land"],2)} m²', _unit(unit)))
-        if land_rows:
-            table(('Portal', 'Código', 'Distancia', 'Precio', 'Terreno', 'Precio por m²'), land_rows, (.7,1.1,.8,1.15,1,1.2))
-            doc.add_paragraph(_median_text(land_units))
-            paragraph = doc.add_paragraph(); paragraph.add_run('Valor de suelo adoptado: ').bold = True; paragraph.add_run(_unit(result['land_unit']))
-        else:
-            if result.get('land_unit') is not None:
-                doc.add_paragraph('Valor de suelo adoptado: '+_unit(result['land_unit']))
-            else:
-                doc.add_paragraph('No hubo terrenos aptos. Sin una referencia de suelo el método no puede separar el valor del terreno del valor de la construcción.')
-
-        heading('Paso 2 Valor que cada casa atribuye a construcción y mejoras')
-        doc.add_paragraph('A cada casa se le descuenta el valor estimado de su terreno. El dinero restante se divide entre el área construida. Ese remanente incluye construcción, antigüedad, estado, distribución, piscina y otras mejoras; no es un costo de obra certificado.')
-        breakdown = {row['id']: row for row in result.get('breakdown', [])}
-        house_rows = []
-        built_units = []
-        # Mismo orden que la pantalla: de mayor a menor parecido (terreno + construcción).
-        house_ids = sorted(
-            (row_id for row_id in result.get('house_ids', [])
-             if row_id in by_id and row_id in breakdown and row_id not in excluded),
-            key=lambda row_id: (-(breakdown[row_id].get('similarity_weight') or 0), -_component_similarity(breakdown[row_id]),
-                                -(breakdown[row_id].get('overall_similarity') or 0),
-                                str(row_id)))
-        for row_id in house_ids:
-            row, detail = by_id[row_id], breakdown[row_id]
-            if detail['usable']: built_units.append(detail['built_unit'])
-            house_rows.append((row['source'].upper(), row.get('code') or row['id'], _money(row['price']),
-                               f'{_number(row["land"],2)} m²', _money(detail['land_value']),
-                               _money(detail['remainder']), f'{_number(row["built"],2)} m²',
-                               f'{_number(detail.get("land_similarity"),1)}%', f'{_number(detail.get("built_similarity"),1)}%',
-                               _unit(detail['built_unit']), _money(detail['target_estimate']),
-                               'Sí' if detail['usable'] else 'No'))
-        if house_rows:
-            table(('Portal','Código','Precio','Terreno','Valor suelo','Remanente','Construido','Sim. terreno','Sim. construcción','Remanente por m²','Valor sugerido','Usada'), house_rows,
-                  (.5,.7,.75,.6,.75,.75,.65,.65,.75,.9,.8,.4))
-            if built_units:
-                if result.get('built_unit_method') == 'primary_area_reference':
-                    if params.get('proposal_explanation'):
-                        doc.add_paragraph('Justificación de la propuesta aceptada: '+params['proposal_explanation'])
-                    doc.add_paragraph('Solo las casas marcadas como usadas intervienen. Cuando se seleccionan varias casas aptas, se promedian sus precios ajustados; las demás permanecen como referencia.')
-                    table(('Casa usada','Precio anunciado','Ajuste terreno','Ajuste construcción','Precio ajustado'),[
-                        (d['id'],_money(d['price']),_money(d['land_adjustment']),_money(d['built_adjustment']),_money(d['target_estimate']))
-                        for d in breakdown.values() if d['usable']])
-                elif result.get('built_unit_method') == 'weighted_adjusted_prices':
-                    doc.add_paragraph('Se ajusta cada precio anunciado por la diferencia de terreno y construcción. Se suman los precios ajustados multiplicados por su peso. La similitud combina 45% terreno, 45% construcción y 10% distancia; el peso es la similitud al cuadrado, normalizada para sumar 100%. Es una regla inicial del método, no una calibración estadística de mercado.')
-                    table(('Comparable','Ajuste terreno','Ajuste construcción','Precio ajustado','Peso aplicado','Aporte al resultado'),[
-                        (d['id'],_money(d.get('land_adjustment')),_money(d.get('built_adjustment')),
-                         _money(d['target_estimate']),f"{_number(d['similarity_weight'],2)}%",_money(d['weighted_contribution']))
-                        for d in sorted(breakdown.values(),key=lambda d:-(d.get('similarity_weight') or 0)) if d['usable'] and d['id'] in by_id])
-                    if params.get('weight_reference'):
-                        doc.add_paragraph('Escenario con la misma muestra y los mismos pesos de la búsqueda inicial; solo cambian las superficies objetivo.')
-                elif result.get('built_unit_method') == 'closest_built_similarity':
-                    chosen_id = result.get('built_reference_id')
-                    chosen = by_id.get(chosen_id, {})
-                    chosen_detail = breakdown.get(chosen_id, {})
-                    doc.add_paragraph(
-                        f'El aporte de construcción y mejoras se toma del comparable con la superficie construida '
-                        f'más parecida al objetivo ({chosen.get("source", "").upper()} · {chosen.get("code", chosen_id)}), '
-                        f'en lugar de promediar metrajes muy distintos. Las demás casas quedan como referencia.'
-                    )
-                    paragraph = doc.add_paragraph(); paragraph.add_run('Aporte unitario adoptado para construcción y mejoras: ').bold = True; paragraph.add_run(_unit(chosen_detail.get('built_unit')))
-                elif result.get('built_unit_method') == 'closest_comparable':
-                    chosen_id = result.get('built_reference_id')
-                    chosen = by_id.get(chosen_id, {})
-                    chosen_detail = breakdown.get(chosen_id, {})
-                    doc.add_paragraph(
-                        f'Solo hubo dos casas y sus aportes quedaron muy dispersos. Se eligió el comparable más parecido '
-                        f'por superficies y distancia ({chosen.get("source", "").upper()} · {chosen.get("code", chosen_id)}), '
-                        f'en lugar de promediar los dos extremos. El otro anuncio queda como referencia.'
-                    )
-                    paragraph = doc.add_paragraph(); paragraph.add_run('Aporte unitario adoptado para construcción y mejoras: ').bold = True; paragraph.add_run(_unit(chosen_detail.get('built_unit')))
-                elif result.get('built_unit_method') == 'weighted_median':
-                    chosen_id = result.get('built_reference_id')
-                    chosen = by_id.get(chosen_id, {})
-                    chosen_detail = breakdown.get(chosen_id, {})
-                    doc.add_paragraph('Los aportes están muy dispersos. Se usó una mediana ponderada por similitud: las casas con terreno, construcción y ubicación más parecidos tienen mayor peso y no se promedian los extremos.')
-                    paragraph = doc.add_paragraph(); paragraph.add_run('Aporte unitario adoptado para construcción y mejoras: ').bold = True; paragraph.add_run(_unit(chosen_detail.get('built_unit')))
-                else:
-                    doc.add_paragraph(_median_text(built_units))
-                    paragraph = doc.add_paragraph(); paragraph.add_run('Aporte unitario adoptado para construcción y mejoras: ').bold = True; paragraph.add_run(_unit(median(built_units)))
-            else:
-                doc.add_paragraph('Ninguna casa dejó un remanente positivo después de descontar el suelo. Por eso no se estimó el aporte de construcción y mejoras.')
-        else:
-            doc.add_paragraph('No hubo casas completas y aptas dentro del radio seleccionado.')
-
-        heading('Paso 3 Aplicación al inmueble objetivo')
-        if new:
-            doc.add_paragraph(f'Terreno: {_number(params["land"],2)} m² × {_unit(result["land_unit"])} = {_money(new["land_value"])}.')
-            doc.add_paragraph(f'Construcción y mejoras: {_number(params["built"],2)} m² × {_unit(new["built_unit"])} = {_money(new["built_value"])}.')
-            final = doc.add_paragraph(); final.add_run('Estimación total: ').bold = True
-            final.add_run(f'{_money(new["land_value"])} + {_money(new["built_value"])} = {_money(new["total"])}.')
-        else:
-            doc.add_paragraph('El proceso se detuvo antes de este paso porque no existió evidencia suficiente para uno de los componentes.')
-    else:
-        heading('Proceso de cálculo')
-        area_key = 'land' if result['model'] == 'land' else 'built'
-        label = 'terreno' if area_key == 'land' else 'área construida'
-        selected_ids = result.get('land_ids', []) or result.get('house_ids', [])
-        selected = [by_id[row_id] for row_id in selected_ids if row_id in by_id and row_id not in excluded]
-        rows = [(row['source'].upper(), row.get('code') or row['id'], _money(row['price']),
-                 f'{_number(row[area_key],2)} m²', _unit(row['price']/row[area_key])) for row in selected]
-        doc.add_paragraph(f'Cada anuncio se convierte a precio por m² de {label}. Se ordenan los valores y se toma la mediana. Finalmente, la mediana se multiplica por el área objetivo.')
-        if rows: table(('Portal','Código','Precio','Área','Precio por m²'), rows, (.8,1.2,1.4,1.2,1.5))
-        if new: doc.add_paragraph(f'{_number(params[area_key],2)} m² × {_unit(new["unit"])} = {_money(new["total"])}.')
-
-    heading('Registros que no participaron')
-    used_house_ids = [d['id'] for d in result['breakdown'] if d['usable']] if result.get('model')=='components' else result.get('house_ids', [])
-    reference = [row for row in records if row['id'] not in set(result.get('land_ids', [])) | set(used_house_ids) or row['id'] in excluded]
-    reasons = {}
-    for row in reference:
-        row_reasons = ['Desmarcada manualmente'] if row['id'] in excluded else (row.get('issues') or ['Fuera del grupo finalmente utilizado'])
-        for reason in row_reasons: reasons[reason] = reasons.get(reason, 0) + 1
-    stored_summary = result.get('reference_summary') or {}
-    if stored_summary:
-        reasons = stored_summary.get('reasons', reasons)
-        reference_count = stored_summary.get('count', len(reference))
-    else:
-        reference_count = len(reference)
-    doc.add_paragraph(f'{reference_count} registros quedaron visibles como referencia y no modificaron el resultado.')
-    if reasons:
-        table(('Cantidad', 'Motivo'), [(count, reason) for reason, count in sorted(reasons.items(), key=lambda item: -item[1])], (1,5.9))
-
-    heading('Alcance de la estimación')
-    doc.add_paragraph('Este cálculo usa las referencias más cercanas disponibles dentro del radio seleccionado, con precio y metraje válidos. La estimación se obtiene de su mediana de precio por metro cuadrado. Las diferencias de ubicación, antigüedad o disponibilidad deben revisarse al adoptar el valor.' if result.get('reference_mode') else 'Este cálculo usa precios publicados, no precios finales de compraventa. Solo participan ubicaciones exactas y registros con precio y superficies necesarias. Habitaciones, baños y piso se muestran como información, pero no excluyen comparables ni agregan valor mientras no exista un ajuste económico validado. Una muestra pequeña se calcula y se señala para revisión.')
-    if result.get('messages'):
-        heading('Advertencias del análisis', level=2)
-        for message in result['messages']: doc.add_paragraph(message, style='List Bullet')
-
-    stream = BytesIO(); doc.save(stream)
+    data=prepare_report(params,records,result,excluded,generated_at,user,fetch_images)
+    doc=Document();section=doc.sections[0]
+    section.page_width=Inches(8.27);section.page_height=Inches(11.69)
+    section.top_margin=Inches(.40);section.bottom_margin=Inches(.48)
+    section.left_margin=Inches(.53);section.right_margin=Inches(.53)
+    width=7.21
+    for name in ('Normal','Title','Heading 1','Heading 2'):
+        style=doc.styles[name];style.font.name='Arial';style.font.color.rgb=RGBColor.from_string('243238')
+        style.paragraph_format.space_after=Pt(3)
+    for node in doc.styles.element.iter(qn('w:pBdr')):
+        node.getparent().remove(node)
+    doc.styles['Normal'].font.size=Pt(8.5)
+    doc.styles['Normal'].paragraph_format.line_spacing=1
+    doc.styles['Title'].font.size=Pt(22);doc.styles['Title'].font.bold=True
+    doc.styles['Title'].font.color.rgb=RGBColor.from_string('008F91')
+    doc.styles['Heading 1'].font.size=Pt(13);doc.styles['Heading 1'].font.color.rgb=RGBColor.from_string('008F91')
+    doc.styles['Heading 1'].paragraph_format.space_before=Pt(8)
+    doc.styles['Heading 1'].paragraph_format.space_after=Pt(5)
+    doc.core_properties.title='Análisis comparativo de mercado';doc.core_properties.author=data['author']
+    def table(parent,widths):
+        if parent is doc:t=parent.add_table(rows=1,cols=len(widths))
+        else:t=parent.add_table(rows=1,cols=len(widths))
+        t.autofit=False
+        for c,w in zip(t.columns,widths):c.width=Inches(w)
+        for c,w in zip(t.rows[0].cells,widths):
+            c.width=Inches(w)
+            pr=c._tc.get_or_add_tcPr();m=OxmlElement('w:tcMar')
+            for side in ('top','left','bottom','right'):
+                node=OxmlElement('w:'+side);node.set(qn('w:w'),'0');node.set(qn('w:type'),'dxa');m.append(node)
+            pr.append(m)
+        rowpr=t.rows[0]._tr.get_or_add_trPr();rowpr.append(OxmlElement('w:cantSplit'))
+        return t
+    def text(parent,value='',bold=False,size=None,color=None,first=False):
+        p=parent.paragraphs[0] if first and parent.paragraphs else parent.add_paragraph()
+        p.paragraph_format.space_after=Pt(2)
+        r=p.add_run(str(value));r.bold=bold
+        if size:r.font.size=Pt(size)
+        if color:r.font.color.rgb=RGBColor.from_string(color)
+        return p
+    def label(parent,value,first=False):return text(parent,value,size=7,color='66757A',first=first)
+    def image(parent,content,w,h,placeholder='Sin fotografía disponible',first=False):
+        from PIL import Image as PILImage
+        p=parent.paragraphs[0] if first and parent.paragraphs else parent.add_paragraph()
+        p.paragraph_format.space_after=Pt(4)
+        if content:
+            try:
+                with PILImage.open(BytesIO(content)) as im:iw,ih=im.size
+                scale=min(w/iw,h/ih)
+                p.add_run().add_picture(BytesIO(content),width=Inches(iw*scale),height=Inches(ih*scale))
+                return
+            except Exception:pass
+        p.add_run(placeholder).font.color.rgb=RGBColor.from_string('66757A')
+        p.paragraph_format.space_before=Pt(h*20);p.paragraph_format.space_after=Pt(h*20)
+    header=table(doc,[5.05,2.16]);left,right=header.rows[0].cells
+    image(left,data['logo'],1.5,.46,'Propify',first=True)
+    label(right,'Preparado por:',first=True);text(right,data['author'],size=9)
+    title=doc.add_paragraph('Análisis comparativo de mercado',style='Title');title.alignment=WD_ALIGN_PARAGRAPH.CENTER
+    p=text(doc,'Información aproximada al '+_fecha_larga(data['date']),size=8,color='66757A');p.alignment=WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_after=Pt(14)
+    hero=table(doc,[3.35,3.86]);left,right=hero.rows[0].cells
+    label(left,'Ubicación',first=True);text(left,data['address'],size=9)
+    label(left,'Tipo de propiedad');text(left,params.get('property_type','Casa'),bold=True,size=10)
+    facts=table(right,[1.2,1.28,1.38])
+    for cell,(caption,value) in zip(facts.rows[0].cells,[('Área de terreno',_number(params.get('land'),2,' m²') if params.get('land') else 'No aplica'),('Área construida',_number(params.get('built'),2,' m²') if params.get('built') else 'No aplica'),('Antigüedad',age(params.get('age')))]):
+        label(cell,caption,first=True);text(cell,value,bold=True,size=9)
+    doc.add_heading('Ubicación de las propiedades',level=1)
+    location=table(doc,[3.62,3.59]);left,right=location.rows[0].cells
+    image(left,data['map'],3.4,1.95,'Mapa no disponible',first=True)
+    label(left,'P  Propiedad sujeto  ·  Números: propiedades seleccionadas')
+    if data['croquis']:label(left,'Croquis referencial de distancias; no representa un mapa de calles.')
+    label(right,'PRECIO PROMEDIO DE VENTA POR M2',first=True);text(right,_money(data['average'])+' /m²',bold=True,size=10)
+    image(right,data['chart'],3.4,1.72,'Sin valores unitarios disponibles')
+    for heading,rows in data['groups']:
+        doc.add_heading(heading.capitalize(),level=1)
+        columns=5;cell_width=width/columns
+        for offset in range(0,len(rows),columns):
+            cards=table(doc,[cell_width]*columns)
+            for cell,row in zip(cards.rows[0].cells,rows[offset:offset+columns]):
+                image(cell,data['photos'].get(row['id']),cell_width-.08,.64,first=True)
+                text(cell,str(data['rows'].index(row)+1)+'. '+_clean(row.get('kind'),'Inmueble'),bold=True,size=8)
+                text(cell,'Terreno '+_number(row.get('land'),2,' m²')+' · Construcción '+_number(row.get('built'),2,' m²'),size=7)
+                text(cell,'Antigüedad: '+age(row.get('age')),size=7)
+                text(cell,_clean(row.get('district') or row.get('title'),'Sin ubicación informada'),size=7)
+                rental='alquil' in str(row.get('operation','')).lower()
+                label(cell,'Precio de alquiler mensual' if rental else 'Precio de venta')
+                text(cell,_money(row.get('price')),bold=True,size=8)
+                text(cell,_money(_unit_price(row))+' /m²'+(' al mes' if rental else ''),size=7)
+    doc.add_heading('Resultados',level=1)
+    results=table(doc,[3.35,3.86]);left,right=results.rows[0].cells
+    summary=text(left,data['summary'],size=9,first=True)
+    summary.paragraph_format.right_indent=Pt(10)
+    if data['values']:
+        for i,(caption,key) in enumerate(RESULT_LABELS):
+            label(right,caption,first=i==0);text(right,_money(data['values'][key]),bold=True,size=11)
+    else:text(right,'No se obtuvo una estimación final porque faltaron comparables aptos.',first=True)
+    if data['notes']:
+        doc.add_heading('Justificación u observaciones',level=1)
+        doc.add_paragraph(data['notes'])
+    footer=section.footer.paragraphs[0];footer.alignment=WD_ALIGN_PARAGRAPH.CENTER
+    footer.add_run('www.propify.pe').font.size=Pt(8)
+    # Keep the editable Word body free of portal URLs, internal codes and metadata.
+    _fit_one_page(doc)
+    stream=BytesIO();doc.save(stream)
     return stream.getvalue()

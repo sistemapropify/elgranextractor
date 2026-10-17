@@ -6,14 +6,12 @@
   <div class="cmp-cadastral-content">
     <p id="cmp-cadastral-status" role="status" aria-live="polite">Consultando el lote…</p>
     <div class="cmp-cadastral-facade"><span class="cmp-facade-label">Foto catastral</span><img id="cmp-cadastral-photo" alt="Fachada del lote catastral seleccionado" loading="lazy" referrerpolicy="no-referrer" hidden><p id="cmp-cadastral-photo-status">Sin fachada disponible</p></div>
-    {% if acm_permissions.street_view %}
     <section id="cmp-street-facade" class="cmp-street-facade" aria-label="Street View hacia el pin" hidden>
       <span class="cmp-facade-label">Street View<time id="cmp-street-date" hidden></time></span>
       <div id="cmp-street-preview" aria-label="Vista de la calle orientada hacia el predio" hidden></div>
       <p id="cmp-street-status" role="status" aria-live="polite"></p>
       <div class="cmp-street-actions"><button id="cmp-street-open" type="button" hidden>Ampliar Street View</button><button id="cmp-street-retry" type="button" hidden>Volver a consultar</button></div>
     </section>
-    {% endif %}
     <label id="cmp-cadastral-report-label" hidden>Unidad / reporte<select id="cmp-cadastral-report"></select></label>
     <dl id="cmp-cadastral-fields">
       <div><dt>Código catastral</dt><dd id="cmp-cadastral-code">Sin lote seleccionado</dd></div>

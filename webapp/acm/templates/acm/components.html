@@ -305,7 +305,8 @@
 <script src="{% static 'js/geollaqta-data.js' %}?v=2"></script>
 <script src="{% static 'js/catastro-master-data.js' %}?v=3"></script>
 <script src="{% static 'js/geollaqta-labels.js' %}?v=2"></script>
-{% if acm_permissions.street_view %}<script src="{% static 'acm/js/street-facade.js' %}?v=1"></script>{% endif %}
+<script src="{% static 'js/street-facade-view.js' %}?v=1"></script>
+<script src="{% static 'acm/js/street-facade.js' %}?v=3"></script>
 <script src="{% static 'acm/js/cadastral-info.js' %}?v=7"></script>
 {% endif %}
 {% if acm_permissions.pdm_query and acm_permissions.pdm_card %}<script src="{% static 'acm/js/zona-preevaluacion.js' %}?v=8"></script>{% endif %}

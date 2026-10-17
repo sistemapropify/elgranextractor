@@ -1,0 +1,41 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const path = require('node:path');
+const html=fs.readFileSync(path.join(__dirname,'../../templates/ingestas/scraping_dashboard.html'),'utf8');
+assert.ok(html.includes('<option value="local_pc" selected>'));
+assert.ok(html.includes('id="localWorkerStatus" role="status" hidden'));
+const source=html.slice(html.indexOf('let localWorkerTimer'),html.indexOf('function control(action)'));
+const nodes={adonExecutor:{value:'azure',addEventListener(name,callback){this[name]=callback;}},localWorkerStatus:{},executorHelp:{}};
+let calls=0, reply, sequence=0;
+const timers=new Map();
+const context={document:{getElementById:id=>nodes[id]},navigator:{onLine:true},AbortController,
+  setTimeout:(fn,ms)=>{timers.set(++sequence,{fn,ms});return sequence;},clearTimeout:id=>timers.delete(id),
+  fetch:()=>{calls++;return new Promise(resolve=>{reply=resolve;});}};
+vm.createContext(context);vm.runInContext(source,context);
+(async()=>{
+  assert.equal(calls,0);
+  assert.equal(nodes.localWorkerStatus.hidden,true);
+  nodes.adonExecutor.value='local_pc';
+  const pending=nodes.adonExecutor.change();
+  assert.equal(calls,1);
+  assert.equal(nodes.localWorkerStatus.hidden,false);
+  nodes.adonExecutor.value='azure';
+  await nodes.adonExecutor.change();
+  reply({ok:true,json:async()=>({message:'PC desconectada'})});
+  await pending;
+  assert.equal(nodes.localWorkerStatus.hidden,true);
+  assert.equal(nodes.localWorkerStatus.textContent,'');
+  assert.equal(timers.size,0);
+  assert.ok(nodes.executorHelp.textContent.includes('Azure'));
+  nodes.adonExecutor.value='local_pc';
+  const again=nodes.adonExecutor.change();
+  reply({ok:true,json:async()=>({message:'PC desconectada'})});
+  await again;
+  assert.equal(nodes.localWorkerStatus.hidden,false);
+  assert.equal(nodes.localWorkerStatus.textContent,'PC desconectada');
+  assert.ok([...timers.values()].some(t=>t.ms===10000));
+  nodes.adonExecutor.value='azure';await nodes.adonExecutor.change();
+  assert.equal(timers.size,0);
+  console.log('Scraper executor: PC default, PC-only status, cancellation and stale responses passed.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

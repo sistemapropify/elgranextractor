@@ -3,10 +3,12 @@
 La tarjeta flotante Información catastral conserva la fotografía de COFOPRI y
 muestra debajo un panorama compacto de Google Street View orientado al pin real
 de consulta. La fecha de captura se muestra cuando Google devuelve `imageDate`,
-sin deducirla del año de catastro. Requiere los permisos efectivos `cadastral_info` y `street_view`;
-los roles que no tienen Street View no reciben el visor ni su script.
+sin deducirla del año de catastro. Se incluye en la tarjeta catastral para todos los roles que pueden ver el catastro,
+incluso cuando el permiso de la herramienta independiente `street_view` está desactivado.
 
-`acm/static/acm/js/street-facade.js` utiliza la Maps JavaScript API existente.
+`static/js/street-facade-view.js` contiene el visor compartido por ACM y
+Cuadrantización. `acm/static/acm/js/street-facade.js` adapta los elementos de la
+tarjeta del ACM. Utilizan la Maps JavaScript API existente.
 Busca el panorama exterior más cercano dentro de 50 m y calcula el rumbo desde
 las coordenadas de la cámara hacia las coordenadas del pin. No utiliza el centro
 del mapa como destino. Si la cámara coincide con el pin, solicita situarlo dentro
@@ -41,7 +43,8 @@ node webapp/acm/test_street_facade.cjs
 node webapp/acm/test_cadastral.cjs
 ```
 
-También se verifican el render condicional por rol y los bytes de los scripts y
+También se verifica que la foto catastral y el visor se incluyan cuando el rol
+tiene acceso al catastro y la herramienta independiente Street View esté desactivada, y los bytes de los scripts y
 CSS servidos por el Django local. La prueba visual aislada usa una foto pública
 de COFOPRI y un panorama real de Google, sin acceder a datos privados ni simular
 una sesión autenticada del ACM.

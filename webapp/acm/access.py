@@ -56,7 +56,7 @@ CATEGORIES = (
         ('report_notes', 'Añadir justificación u observaciones al reporte', True),
         ('history', 'Guardar y consultar historial propio', True),
         ('reports', 'Generar reportes', True),
-        ('report_photos', 'Incluir fotografías en el reporte PDF', True),
+        ('report_photos', 'Incluir fotografías en los reportes PDF y Word', True),
         ('export', 'Exportar datos del análisis', False),
     )),
 )

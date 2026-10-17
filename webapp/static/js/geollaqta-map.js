@@ -27,6 +27,28 @@
         const client = window.GeollaqtaData.createClient(options.data || {});
         const toggle = $('geollaqta-visible'), status = $('geollaqta-status'), card = $('geollaqta-detail');
         const districtSelect = $('geollaqta-district');
+        let facadeView = null, facadeSection = null;
+        function streetFacade(location) {
+            if (!adapter.createStreetFacade) return;
+            if (!facadeSection) {
+                facadeSection = node('section', null, 'geollaqta-section geollaqta-streetview');
+                facadeSection.setAttribute('aria-label', 'Street View del lote seleccionado');
+                const title = node('strong', 'Street View'), date = node('time'); date.hidden = true;
+                title.append(date);
+                const preview = node('div', null, 'geollaqta-streetview-preview'); preview.hidden = true;
+                preview.setAttribute('aria-label', 'Vista de la calle orientada hacia el lote');
+                const status = node('p'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+                const actions = node('div', null, 'geollaqta-controls');
+                const open = node('button', 'Ampliar Street View'), retry = node('button', 'Volver a consultar');
+                open.type = retry.type = 'button'; open.hidden = retry.hidden = true;
+                actions.append(open, retry); facadeSection.append(title, preview, status, actions);
+                facadeView = adapter.createStreetFacade({section: facadeSection, preview, status, open, retry, date});
+                if (!facadeView) status.textContent = 'No se pudo iniciar Street View. Recarga el mapa para volver a intentarlo.';
+            }
+            card.append(facadeSection);
+            if (location) facadeView?.queue(location);
+            else {facadeView?.suspend(); facadeSection.hidden = true;}
+        }
         const layers = new Map(), signatures = new WeakMap(), layer = adapter.createLayer(); layers.set('lotes', layer);
         const numbering=adapter.createLabels?.(),loadedLabels=new Map(),numberToggle=$('geollaqta-numbering');
         let visibleKeys=[],fitDistrict=true;
@@ -52,6 +74,7 @@
             layers.forEach(dataLayer => { dataLayer.revertStyle(); dataLayer.forEach(feature => dataLayer.remove(feature)); dataLayer.setMap(null); signatures.delete(dataLayer); });
             document.querySelectorAll('[data-geollaqta-count]').forEach(element => { element.textContent = ''; });
             selected = null; selectedGeometry = null; card.hidden = true;
+            facadeView?.suspend();
             detailSerial++; detailRequest?.abort();
         }
         function zones() {
@@ -127,7 +150,7 @@
             card.replaceChildren(); card.hidden = false;
             const top = node('div', null, 'geollaqta-detail-header');
             top.append(node('strong', districtEntry.name + ' · lote ' + (selected.getProperty('COD_LOTE') || '')));
-            const close = node('button', 'Cerrar'); close.type = 'button'; close.addEventListener('click', () => { card.hidden = true; layer.revertStyle(); ++detailSerial; detailRequest?.abort(); });
+            const close = node('button', 'Cerrar'); close.type = 'button'; close.addEventListener('click', () => { card.hidden = true; layer.revertStyle(); ++detailSerial; detailRequest?.abort(); facadeView?.suspend(); });
             top.append(close); card.append(top);
             const fields = node('div'); card.append(fields);
             row(fields, 'Código catastral', selected.getProperty('ID_LOTE'));
@@ -169,6 +192,7 @@
             loadReport();
             const zoneSection = node('div', null, 'geollaqta-section'); zoneSection.id = 'geollaqta-zones'; card.append(zoneSection); zones();
             const photos = node('div', 'Cargando fachada…', 'geollaqta-section'); photos.id = 'geollaqta-gallery'; card.append(photos);
+            streetFacade(event.latLng);
             const records = node('div', null, 'geollaqta-section'); records.id = 'geollaqta-records'; card.append(records);
             const feature = {type:'Feature',id:selected.getId(),geometry:selectedGeometry,properties:{}};
             ['ID_LOTE','ID_DIST','COD_SECT','COD_MZNA','COD_LOTE','ANIO_CAT','AREA_TER','AREA_CON','NIVELES','NRO_UNIDADES'].forEach(key => { feature.properties[key] = selected.getProperty(key); });

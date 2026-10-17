@@ -66,7 +66,7 @@ class NativeJobIntegrationTests(TestCase):
         self.assertFalse(local_worker_status('adondevivir-pc:other')['ready'])
 
     def test_start_without_pc_does_not_create_a_job(self):
-        response = self.post(action='start', portales='adondevivir', urls='{}')
+        response = self.post(action='start', portales='adondevivir', urls='{}', adon_executor='local_pc')
         self.assertEqual(response.status_code, 503)
         self.assertFalse(ScrapingJob.objects.exists())
 
@@ -75,7 +75,7 @@ class NativeJobIntegrationTests(TestCase):
     @patch('ingestas.views.threading.Thread')
     def test_start_is_assigned_to_live_pc_without_cloud_dispatch(self, thread, lock, terminate):
         self.worker()
-        response = self.post(action='start', portales='adondevivir', urls='{}')
+        response = self.post(action='start', portales='adondevivir', urls='{}', adon_executor='local_pc')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response.content)['execution_mode'], 'local_pc')
         job = ScrapingJob.objects.get()
@@ -84,6 +84,18 @@ class NativeJobIntegrationTests(TestCase):
         self.assertTrue(job.parametros['native_verification'])
         thread.assert_not_called()
         terminate.assert_not_called()
+
+    @patch('ingestas.views._launch_scraping_job', return_value='watchdog')
+    @patch('ingestas.views._terminate_scraping_browsers', return_value=0)
+    @patch('ingestas.views._acquire_scraping_start_lock', return_value=True)
+    def test_explicit_azure_start_does_not_require_a_connected_pc(self, lock, terminate, launch):
+        response = self.post(action='start', portales='adondevivir', urls='{}', adon_executor='azure')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json.loads(response.content)['execution_mode'], 'watchdog')
+        job = ScrapingJob.objects.get()
+        self.assertFalse(job.parametros['native_verification'])
+        self.assertEqual(job.parametros['execution_scope'], 'portable')
+        launch.assert_called_once_with(job.pk)
 
     def test_cloud_cannot_claim_native_idle_job(self):
         from colas.scraping_tasks import _run_scraping

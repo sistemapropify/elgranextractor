@@ -66,7 +66,7 @@ def claim(request, data):
         state.db.execute("UPDATE jobs SET status='running',lease=?,heartbeat=?,message=? WHERE id=?",
                          (lease,time.time(),'Recolector conectado. Consultando inventario de COFOPRI.',row['id']))
         state.db.commit()
-        job = {k:row[k] for k in ('id','ubigeo','limit_lots','lot_id','retry_missing')}
+        job = {k:row[k] for k in ('id','ubigeo','limit_lots','lot_id','retry_missing','workers')}
         return JsonResponse({'job':job,'lease':lease})
     finally:
         state.close()

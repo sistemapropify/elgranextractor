@@ -41,6 +41,9 @@ class DashboardTests(TestCase):
         self.assertContains(response,'040117')
         self.assertContains(response,'Descargar distrito completo')
         self.assertNotContains(response,'Predios por descarga')
+        self.assertContains(response,'id="collection-workers"')
+        self.assertContains(response,'value="10" selected')
+        self.assertContains(response,'Pausar descarga')
 
     def test_post_requires_csrf_and_does_not_allow_get_to_launch(self):
         self.client.force_login(self.admin)
@@ -74,14 +77,31 @@ class DashboardTests(TestCase):
         with patch('catastro.views.start_job',return_value='example-job') as start:
             response=self.client.post('/catastro/api/start/',data=json.dumps({'ubigeo':'040117','limit':10,'credentials':'ignored'}),content_type='application/json')
             self.assertEqual(response.status_code,202)
-            start.assert_called_once_with('040117',10,None,False)
+            start.assert_called_once_with('040117',10,None,False,workers=None)
 
     def test_default_request_downloads_whole_district_without_a_limit(self):
         self.client.force_login(self.admin)
         with patch('catastro.views.start_job',return_value='district-job') as start:
             response=self.client.post('/catastro/api/start/',data=json.dumps({'ubigeo':'040117'}),content_type='application/json')
             self.assertEqual(response.status_code,202)
-            start.assert_called_once_with('040117',None,None,False)
+            start.assert_called_once_with('040117',None,None,False,workers=None)
+
+    def test_selected_parallelism_is_persisted_and_out_of_range_requests_do_not_launch(self):
+        self.client.force_login(self.admin)
+        with patch('catastro.jobs.credentials'), patch('catastro.jobs.subprocess.Popen') as spawn:
+            spawn.return_value.pid = 123
+            response = self.client.post('/catastro/api/start/', data=json.dumps({'ubigeo':'040117','workers':4}), content_type='application/json')
+            self.assertEqual(response.status_code, 202)
+            state = State(self.tmp.name)
+            job = state.job(response.json()['job_id'])
+            self.assertEqual(job['workers'], 4)
+            state.update_job(job['id'], status='stopped')
+            state.close()
+            spawn.reset_mock()
+            for workers in (0, 11, True, 2.5):
+                response = self.client.post('/catastro/api/start/', data=json.dumps({'ubigeo':'040117','workers':workers}), content_type='application/json')
+                self.assertEqual(response.status_code, 400)
+            spawn.assert_not_called()
 
     def test_r2_only_property_and_original_can_be_read_without_azure_copies(self):
         import fitz

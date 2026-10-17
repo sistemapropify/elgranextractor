@@ -10,7 +10,7 @@ const extraPhoto='https://catastro.cofopri.gob.pe/img_catastro/040126/07042017_1
 const flush = async () => { for(let i=0;i<40;i++) await Promise.resolve(); };
 
 async function fixture(browser=true, options={}) {
-    const elements=new Map(), photos=[], layers=[], pendingReports=[];
+    const elements=new Map(), photos=[], layers=[], pendingReports=[], facadeInstances=[];
     class Element {
         constructor(tag='div') {this.tag=tag;this.children=[];this.events={};this.hidden=false;this.checked=false;this.textContent='';}
         set id(value) {this._id=value;elements.set(value,this);}
@@ -46,17 +46,21 @@ async function fixture(browser=true, options={}) {
             {transport:'browser',service_base:'https://geoportal.cofopri.gob.pe/test',layers:{lotes:{id:10,kind:'polygon',fields:'OBJECTID,ID_DIST'}},ubigeo:'040126'} : {total:5240,ubigeo:'040126'} :
             url.includes('/query') ? {count:5240,objectIds:[]} : {properties:{ID_LOTE:lotId},images:[basePhoto,extraPhoto],records:['https://catastro.cofopri.gob.pe/geollaqta/reportefichas/vistapdf/fichain.php?id=0401262013010431544'],gallery_url:report,gallery_status:'available'});
         }};
+    if(options.streetFacade) sandbox.window.StreetFacadeView={create(map,bindings,configuration){
+        const instance={map,bindings,configuration,queued:[],suspended:0,queue(point){this.queued.push(point);bindings.section.hidden=false;},suspend(){this.suspended++;}};
+        facadeInstances.push(instance);return instance;
+    }};
     for(const file of ['geollaqta-data.js','geollaqta-google.js']) vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../static/js/',file),'utf8'),sandbox);
 vm.runInNewContext(source,sandbox);sandbox.window.GeollaqtaMap.init({addListener(){},getZoom:()=>18,getBounds:()=>({getSouthWest:()=>({lng:()=>-71.57,lat:()=>-16.41}),getNorthEast:()=>({lng:()=>-71.56,lat:()=>-16.40})})});await flush();
     element('geollaqta-visible').checked=true;element('geollaqta-visible').events.change();await flush();
-    const choose=async id=>{
+    const choose=async (id,location=options.streetFacade?{lat:-16.4,lng:-71.5}:undefined)=>{
         const props={ID_LOTE:id,COD_SECT:'07',COD_MZNA:'042',COD_LOTE:'017',ANIO_CAT:2013,AREA_TER:999,AREA_CON:2012};
-        await layers[0].events.click({stop(){},feature:{getId:()=>12344,getProperty:name=>props[name],toGeoJson:callback=>callback({geometry:{type:'Polygon',coordinates:[[[0,0],[1,0],[1,1],[0,0]]]}})}});
+        await layers[0].events.click({stop(){},latLng:location,feature:{getId:()=>12344,getProperty:name=>props[name],toGeoJson:callback=>callback({geometry:{type:'Polygon',coordinates:[[[0,0],[1,0],[1,1],[0,0]]]}})}});
     };
     await choose(lotId);
     await flush();
     const descendants=(el,tag)=>el.children.flatMap(child=>[...(child.tag===tag?[child]:[]),...descendants(child,tag)]);
-    return {api:sandbox.window.GeollaqtaMap,element,photos,choose,descendants,pendingReports};
+    return {api:sandbox.window.GeollaqtaMap,element,photos,choose,descendants,pendingReports,facadeInstances};
 }
 async function main(){
     const f=await fixture();

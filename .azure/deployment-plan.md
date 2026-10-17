@@ -1,3 +1,40 @@
+# Consolidated release — 2026-10-17
+
+Status: Validated
+Recipe: CI/CD — existing main_granextractorservice.yml.
+Authorization: user explicitly requested publishing all pending changes.
+Target remains Azure subscription 1 / 0219eecc-9920-4789-9929-3091a2f09daf,
+rg-elgranextractor / granextractorservice, Brazil South. No provisioning or RBAC changes.
+
+## Scope
+- Client PDF and Word: one page, five comparable columns, logged-in author, existing price labels.
+- Shared Street View facade below cadastral facade in both maps; basic ACM role inclusion.
+- Catastro: bounded 1–10 concurrent lot downloads with durable pause/resume and checkpoints.
+- Portal scraper: visible operation before prices; Properati primary detail area instead of a storage-room area.
+- Adondevivir retains explicit native-PC routing and PC default; PC status is shown only in PC mode.
+- Preserve the existing direct-report ACM handler and all latest production work.
+- Exclude experimental relays, browser profiles, credentials, downloaded documents and diagnostics.
+
+## Validation proof — 2026-10-17T16:22:23-05:00
+- Integrated 49 scoped files onto latest origin/main 069713a8; one script include conflict resolved by preserving current report handler version and adding the shared viewer.
+- 91 ACM/report/facade tests passed with acm.access_test_settings.
+- 66 collector/control/document tests passed with catastro.test_settings.
+- 44 portal scraper/routing/Properati tests passed with ingestas.scraping_test_settings.
+- Eight Node regression suites passed, including shared facade, maps, concurrent dashboard and scraper executor selection.
+- WSGI import, collectstatic, changed Python syntax and workflow YAML passed with isolated build settings; no production SQL was used by these checks.
+- Earlier real local preview verified sale and rental operation before prices; four rendered operation cases preserve all 36 columns.
+- Actual Properati detail block verifies 220 m²; the 10 m² description is a storage room. Regression covers detail override, accessory exclusion, conflicting and recommended properties, and legacy mÂ² decoding.
+- Report previews already rendered and visually reviewed: Word and PDF each one page for 1/5 comparables and long notes.
+- No Django model migration changes. Catastro ledger adds its existing SQLite column idempotently; older jobs preserve their worker setting.
+- Azure CLI confirms the existing authorized subscription. Existing OIDC deployment and exact public asset/page checks are retained and extended for new assets.
+
+## Execution and verification
+Non-forced push to origin/main starts the existing pipeline. Its validation gates run before deployment, then public health/pages and exact static assets are checked.
+The user handles deployment monitoring; report dispatch separately from confirmed live deployment and do not poll repeatedly.
+Rollback: scoped revert through the same workflow. Runtime ledgers and source checkpoints are outside the release.
+
+---
+
 # ACM direct cadastral report release - 2026-10-17
 
 Status: Validated - scoped code release requested by the user.

@@ -121,17 +121,20 @@ class ReportSelectionTests(SimpleTestCase):
             self.assertIsNone(_static_map((-16.4,-71.5),[],'test'))
             self.assertEqual(_static_map((-16.4,-71.5),[],'test'),b'png')
 
-    def test_every_selected_property_gets_a_location_map_and_is_printed(self):
+    def test_client_sheet_limits_the_location_map_and_cards_to_five_nearest_selected_properties(self):
         p=params()
         raw=[record(f'house-{i}',district=f'SELECTED-DISTRICT-{i}') for i in range(7)]+sample()[3:]
         rows=candidates(raw,p)
         p['report_ids']=[row['id'] for row in raw[:7]]
         with patch('acm.components_pdf._static_map',return_value=None) as maps, patch('acm.components_pdf._reverse_geocode',return_value='Cayma'):
             pdf=build_acm_pdf(p,rows,calculate(rows,p),fetch_images=True)
-        self.assertEqual(sum(call.kwargs.get('size')==(320,240) for call in maps.call_args_list),7)
+        self.assertEqual(maps.call_count,1)
+        self.assertEqual(len(maps.call_args.args[1]),6)
         text=_pdf_text(pdf)
-        for i in range(7):
+        for i in range(5):
             self.assertIn(f'SELECTED-DISTRICT-{i}'.encode(),text)
+        for i in range(5,7):
+            self.assertNotIn(f'SELECTED-DISTRICT-{i}'.encode(),text)
 
 
 class SelectedReportEndpointTests(SimpleTestCase):

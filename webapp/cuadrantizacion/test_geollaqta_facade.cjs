@@ -1,0 +1,27 @@
+const assert=require('node:assert/strict');
+const {fixture,flush}=require('./test_geollaqta_gallery.cjs');
+(async()=>{
+    const f=await fixture(true,{streetFacade:true});
+    assert.equal(f.facadeInstances.length,1);
+    const view=f.facadeInstances[0],card=f.element('geollaqta-detail');
+    assert.equal(view.configuration.targetLabel,'el lote seleccionado');
+    assert.deepEqual(view.queued,[{lat:-16.4,lng:-71.5}]);
+    const galleryIndex=card.children.indexOf(f.element('geollaqta-gallery'));
+    const facadeIndex=card.children.indexOf(view.bindings.section);
+    assert.ok(galleryIndex<facadeIndex,'Street View belongs below the cadastral facade gallery.');
+    assert.ok(facadeIndex<card.children.indexOf(f.element('geollaqta-records')),'Keep the individual form links after both facade views.');
+    f.photos[0].events.load();
+    assert.equal(f.descendants(f.element('geollaqta-gallery'),'a').length,1,'Street View must never replace the cadastral photo.');
+    const point={lat:-16.401,lng:-71.501};
+    await f.choose('04012607042018',point);await flush();
+    assert.equal(f.facadeInstances.length,1,'Reuse a single viewer across selected lots.');
+    assert.equal(view.queued[1],point,'Use the exact lot click, not the map centre.');
+    card.children[0].children.find(child=>child.tag==='button').events.click();
+    assert.equal(card.hidden,true);assert.equal(view.suspended,1,'Closing the card suspends pending imagery.');
+    await f.choose('04012607042018',point);await flush();
+    f.element('geollaqta-visible').checked=false;f.element('geollaqta-visible').events.change();await flush();
+    assert.ok(view.suspended>=2,'Turning the cadastral layer off suspends the viewer too.');
+    const failed=await fixture(true,{streetFacade:true,failReport:true});
+    assert.equal(failed.facadeInstances[0].queued.length,1,'A cadastral report error must not prevent the independent Street View lookup.');
+    console.log('Cuadrantizacion facade: correct order, independent cadastral photo/report, clicked-point targeting, reused viewer and close/layer cancellation passed.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

@@ -122,7 +122,7 @@ class ReferenceFallbackTests(SimpleTestCase):
         self.assertIn(b'REFERENCIAS EN VENTA', pdf)
         self.assertIn(b'150,000.00', pdf)
         self.assertIn(b'Conservacion revisada.', pdf)
-        with zipfile.ZipFile(io.BytesIO(build_acm_docx(p, rows, result))) as archive:
+        with zipfile.ZipFile(io.BytesIO(build_acm_docx(p, rows, result, fetch_images=False))) as archive:
             word = archive.read('word/document.xml').decode()
         self.assertIn('Conservacion revisada.', word)
         self.assertIn('150,000', word)

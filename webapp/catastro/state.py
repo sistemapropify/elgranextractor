@@ -58,6 +58,12 @@ class State:
                 if 'source_status' not in {r['name'] for r in self.db.execute('PRAGMA table_info(collector_presence)')}:
                     raise
         self.db.execute('CREATE INDEX IF NOT EXISTS lots_updated ON lots(updated)')
+        if 'workers' not in {r['name'] for r in self.db.execute('PRAGMA table_info(jobs)')}:
+            try:
+                self.db.execute('ALTER TABLE jobs ADD COLUMN workers INTEGER NOT NULL DEFAULT 1')
+            except sqlite3.OperationalError:
+                if 'workers' not in {r['name'] for r in self.db.execute('PRAGMA table_info(jobs)')}:
+                    raise
         self.db.commit()
 
     def close(self):
@@ -89,7 +95,13 @@ class State:
     def upload_bytes(self):
         return self.db.execute('SELECT COALESCE(SUM(bytes),0) FROM uploads').fetchone()[0]
 
-    def create_job(self, ubigeo, limit_lots, lot_id=None, retry_missing=False, executor='server'):
+    def set_lot_bytes(self, lot_id, size):
+        self.db.execute('UPDATE lots SET bytes=? WHERE lot_id=?', (size, lot_id))
+        self.db.commit()
+
+    def create_job(self, ubigeo, limit_lots, lot_id=None, retry_missing=False, executor='server', workers=10):
+        from .parallel import worker_count
+        workers = worker_count(workers)
         self.db.execute('BEGIN IMMEDIATE')
         try:
             active = self.db.execute("SELECT * FROM jobs WHERE status IN ('queued','running') ORDER BY created DESC LIMIT 1").fetchone()
@@ -100,7 +112,7 @@ class State:
             job_id = uuid.uuid4().hex
             self.db.execute('INSERT INTO jobs (id,ubigeo,limit_lots,lot_id,retry_missing,status,created,heartbeat) VALUES (?,?,?,?,?,?,?,?)',
                             (job_id, ubigeo, limit_lots, lot_id, int(retry_missing), 'queued', time.time(), time.time()))
-            self.db.execute('UPDATE jobs SET executor=? WHERE id=?', (executor, job_id))
+            self.db.execute('UPDATE jobs SET executor=?,workers=? WHERE id=?', (executor, workers, job_id))
             self.db.commit()
             return job_id
         except Exception:

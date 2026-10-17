@@ -14,10 +14,13 @@ def main():
     parser.add_argument('--limit', type=int, default=None, help='Opcional: limitar una prueba a 1–500 predios. Por defecto descarga todo el distrito.')
     parser.add_argument('--lot', help='Código catastral de un lote individual.')
     parser.add_argument('--retry-missing', action='store_true', help='Volver a consultar documentos pendientes.')
+    parser.add_argument('--workers', type=int, choices=range(1, 11), default=None,
+                        help='Lotes simultáneos: 1 a 10; por defecto 10 o CATASTRO_MAX_WORKERS.')
     parser.add_argument('--job-id', help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
-        job_id = args.job_id or start_job(args.ubigeo, args.limit, args.lot, args.retry_missing, launch=False)
+        job_id = args.job_id or start_job(args.ubigeo, args.limit, args.lot, args.retry_missing,
+                                        launch=False, workers=args.workers)
         print(json.dumps({'job_id': job_id, 'result': run_job(job_id)}, ensure_ascii=False))
     except (ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)

@@ -66,6 +66,7 @@ class ExternalWorkerTests(SimpleTestCase):
     def test_one_claim_and_lease_protection_and_no_secret_in_status(self):
         job=self.queued();claim=self.post('claim').json()
         self.assertEqual(claim['job']['id'],job)
+        self.assertEqual(claim['job']['workers'],10)
         self.assertIsNone(self.post('claim').json()['job'])
         self.assertEqual(self.post(job+'/heartbeat',lease='wrong').status_code,409)
         self.assertEqual(self.post(job+'/heartbeat',lease=claim['lease']).status_code,200)
@@ -85,6 +86,25 @@ class ExternalWorkerTests(SimpleTestCase):
         again=self.queued();source.gets.clear()
         second=run_once(self.control(),self.worker.name,source,cloud)
         self.assertEqual(second['processed'],0);self.assertEqual(source.gets,[])
+
+    def test_ten_parallel_lots_sync_to_dashboard_and_resume_without_redownload(self):
+        import threading
+        from catastro.test_parallel import DistrictSource
+        source, cloud = DistrictSource(12, threading.Barrier(10)), FakeR2()
+        job = self.queued()
+        result = run_once(self.control(), self.worker.name, source, cloud)
+        self.assertEqual(result['workers'], 10)
+        self.assertEqual(source.maximum, 10)
+        state = State()
+        self.assertEqual(state.job(job)['processed'], 12)
+        self.assertEqual(state.job(job)['remaining_objects'], 0)
+        self.assertEqual(state.snapshot('040117')['totals']['uploaded'], 12)
+        state.close()
+        before = source.galleries.copy()
+        self.queued()
+        resumed = run_once(self.control(), self.worker.name, source, cloud)
+        self.assertEqual(resumed['processed'], 0)
+        self.assertEqual(source.galleries, before)
 
     def test_stop_is_obeyed_before_any_source_download(self):
         job=self.queued();original=self.control();source=FakeSource()

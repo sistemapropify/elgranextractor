@@ -109,7 +109,7 @@ def run_once(control, root, source=None, cloud=None):
         flush()  # Recover uploads acknowledged locally before a lost dashboard connection.
         result = collect(job['ubigeo'],job['limit_lots'] or None,lot_id=job['lot_id'],
                          retry_missing=bool(job['retry_missing']),root=root,source=source,r2=cloud,
-                         progress=progress,checkpoint=checkpoint,keep_local=False)
+                         progress=progress,checkpoint=checkpoint,keep_local=False,workers=job.get('workers', 1))
         flush()
         api('finish',{'status':'failed' if result['failed'] else 'completed',
                       'message':f"{result['processed']} lotes procesados; {result['uploaded']} archivados en R2; "

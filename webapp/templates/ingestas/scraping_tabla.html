@@ -22,6 +22,17 @@
         {% endif %}
     </td>
     <td style="font-size:10px;">{{ p.tipo_inmueble|default:'—' }}</td>
+    <td style="white-space:nowrap;font-weight:700;">
+        {% if p.tipo_operacion == 'Venta' %}
+        <span style="color:#58a6ff;">VENTA</span>
+        {% elif p.tipo_operacion == 'Alquiler' %}
+        <span style="color:#d29922;">ALQUILER</span>
+        {% elif p.tipo_operacion == 'Ambos' %}
+        <span style="color:#bc8cff;">VENTA Y ALQUILER</span>
+        {% else %}
+        <span style="color:#8b949e;">SIN ESPECIFICAR</span>
+        {% endif %}
+    </td>
     <td>{% if p.precio_usd %}${{ p.precio_usd|floatformat:0 }}{% else %}—{% endif %}</td>
     <td>{% if p.precio_soles %}S/{{ p.precio_soles|floatformat:0 }}{% else %}—{% endif %}</td>
     <td>{% if p.area_m2 %}{{ p.area_m2|floatformat:1 }}{% else %}—{% endif %}</td>
@@ -73,7 +84,6 @@
     <td style="min-width:110px;">{% if p.captura_publicacion_url %}<a href="{% url 'ingestas:scraping_captura' p.pk %}" target="_blank" rel="noopener noreferrer">Ver captura</a><br><small>{{ p.captura_publicacion_fecha|date:'d/m/Y H:i' }}</small>{% else %}—{% endif %}</td>
     <td style="font-size:10px;">{{ p.id_origen|default:'—' }}</td>
     <td style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;" title="{{ p.titulo|default:'' }}">{{ p.titulo|default:'—' }}</td>
-    <td>{{ p.tipo_operacion|default:'—' }}</td>
     <td style="font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="{{ p.descripcion|default:'' }}">{{ p.descripcion|default:'—'|truncatechars:50 }}</td>
     <td style="font-size:10px;max-width:100px;overflow:hidden;text-overflow:ellipsis;">{{ p.amenities|default:'—'|truncatechars:30 }}</td>
     <td style="font-size:10px;color:var(--terminal-info);white-space:nowrap;">{{ p.fecha_extraccion|date:'d/m/Y H:i'|default:'—' }}</td>

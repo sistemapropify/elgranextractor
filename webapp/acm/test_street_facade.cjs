@@ -1,6 +1,6 @@
 const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:assert/strict');
 const source = fs.readFileSync(require('node:path').join(__dirname, 'static/acm/js/street-facade.js'), 'utf8');
-function harness(permissions = {cadastral_info: true, street_view: true}) {
+function harness(permissions = {cadastral_info: true, street_view: true}, shared = false) {
     const elements = new Map(), timers = new Map(), requests = [], viewers = [];
     let next = 0;
     const element = id => {
@@ -27,8 +27,13 @@ function harness(permissions = {cadastral_info: true, street_view: true}) {
     const context = {window: {ACMPermissions: permissions}, document: {getElementById: element},
         google: {maps: {StreetViewService: Service, StreetViewPanorama: Panorama, event: {trigger() {}}}},
         setTimeout(fn, ms) {timers.set(++next, {fn, ms}); return next;}, clearTimeout(id) {timers.delete(id);}};
+    vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, '../static/js/street-facade-view.js'), 'utf8'), context);
     vm.runInNewContext(source, context);
-    const instance = context.window.ACMStreetFacade.create({getStreetView: () => full});
+    const map={getStreetView: () => full};
+    const instance = shared ? context.window.StreetFacadeView.create(map, {
+        section:element('cmp-street-facade'),preview:element('cmp-street-preview'),status:element('cmp-street-status'),
+        open:element('cmp-street-open'),retry:element('cmp-street-retry'),date:element('cmp-street-date')
+    }, {targetLabel:'el lote seleccionado'}) : context.window.ACMStreetFacade.create(map);
     async function fire(ms) {
         const matching = [...timers].filter(([, timer]) => timer.ms === ms);
         for (const [id, timer] of matching) {timers.delete(id); timer.fn();}
@@ -38,10 +43,11 @@ function harness(permissions = {cadastral_info: true, street_view: true}) {
     return {instance, element, requests, viewers, full, fire, reply};
 }
 (async () => {
-    for (const permissions of [{cadastral_info: true, street_view: false}, {cadastral_info: false, street_view: true}]) {
+    for (const permissions of [{cadastral_info: false, street_view: true}, {cadastral_info: false, street_view: false}]) {
         const h = harness(permissions); assert.equal(h.instance, null); assert.equal(h.requests.length, 0); assert.equal(h.viewers.length, 0);
     }
-    const h = harness(), target = {lat: -16.4, lng: -71.5};
+    const h = harness({cadastral_info: true, street_view: false}), target = {lat: -16.4, lng: -71.5};
+    assert.ok(h.instance, 'The cadastral facade preview is available even when the separate Street View tool permission is disabled.');
     h.instance.queue({lat: '', lng: null}); await h.fire(750); assert.equal(h.requests.length, 0);
     // Rapid pin movements lead to a single request after the last placement.
     h.instance.queue(target); h.instance.queue({lat: -16.401, lng: -71.5}); h.instance.queue(target);
@@ -77,5 +83,9 @@ function harness(permissions = {cadastral_info: true, street_view: true}) {
     h.instance.queue(target); await h.fire(750); h.instance.destroy(); h.reply(7, moved, 'late-after-permission-loss');
     assert.equal(h.element('cmp-street-facade').hidden, true); assert.notEqual(preview.pano, 'late-after-permission-loss');
     h.instance.queue(moved); await h.fire(750); assert.equal(h.requests.length, 8, 'No calls after access is revoked.');
+    const quad=harness({},true);quad.instance.queue(target);await quad.fire(750);
+    quad.reply(0,{lat:target.lat-.0001,lng:target.lng},'quad','2025-03');quad.viewers[0].loaded();
+    assert.equal(quad.element('cmp-street-status').textContent,'Vista orientada hacia el lote seleccionado.');
+    assert.match(quad.element('cmp-street-date').textContent,/marzo.*2025/);
     console.log('Street View facade: bearing to pin, bounded outdoor coverage, debounce, deduplication, stale replies, timeout, retry, close, roles and single viewer passed.');
 })().catch(error => {console.error(error); process.exitCode = 1;});

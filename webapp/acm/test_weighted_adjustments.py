@@ -46,12 +46,13 @@ class WeightedAdjustmentTests(SimpleTestCase):
         self.assertGreaterEqual(r['new']['total'],min(d['target_estimate'] for d in details))
         self.assertLessEqual(r['new']['total'],max(d['target_estimate'] for d in details))
 
-    def test_word_contains_actual_adjustments_and_weights(self):
+    def test_client_word_contains_result_without_internal_calibration_tables(self):
         p,rows=fixture();r=calculate(rows,p)
-        doc=Document(BytesIO(build_acm_docx(p,rows,r)))
+        doc=Document(BytesIO(build_acm_docx(p,rows,r,fetch_images=False)))
         text=' '.join(p.text for p in doc.paragraphs)+' '.join(c.text for t in doc.tables for row in t.rows for c in row.cells)
-        self.assertIn('Casa usada',text)
-        self.assertIn('Ajuste terreno',text)
+        self.assertIn('VALOR COMERCIAL',text)
+        self.assertIn('212,956.52',text)
+        self.assertNotIn('Ajuste terreno',text)
         self.assertNotIn('Las demás casas quedan como referencia',text)
 
 

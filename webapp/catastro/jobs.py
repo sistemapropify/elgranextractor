@@ -6,11 +6,13 @@ import sys
 
 from .state import State, ROOT
 from .storage import credentials
+from .parallel import worker_count
 from scrapi.geollaqta_scraper import collect, validate, Stopped
 
 
-def start_job(ubigeo, limit=None, lot_id=None, retry_missing=False, launch=True):
+def start_job(ubigeo, limit=None, lot_id=None, retry_missing=False, launch=True, workers=None):
     validate(ubigeo, limit, lot_id)
+    workers = worker_count(workers)
     credentials()  # Fail before queuing when this machine has no R2 configuration.
     executor = os.environ.get('CATASTRO_EXECUTION_MODE', 'server')
     if executor not in ('server', 'external'):
@@ -21,7 +23,7 @@ def start_job(ubigeo, limit=None, lot_id=None, retry_missing=False, launch=True)
             raise ValueError('El recolector externo está pendiente de configuración.')
     state = State()
     try:
-        job_id = state.create_job(ubigeo, int(limit) if limit is not None else 0, lot_id, retry_missing, executor=executor)
+        job_id = state.create_job(ubigeo, int(limit) if limit is not None else 0, lot_id, retry_missing, executor=executor, workers=workers)
         if executor == 'external':
             state.update_job(job_id, message='Esperando conexión del recolector. La descarga comenzará cuando esté disponible.')
         if launch and executor == 'server':
@@ -70,7 +72,8 @@ def run_job(job_id):
                              selected_objects=data.get('selected_objects', 0), remaining_objects=data.get('remaining_objects', 0))
 
         result = collect(job['ubigeo'], job['limit_lots'] or None, lot_id=job['lot_id'],
-                         retry_missing=bool(job['retry_missing']), progress=progress, checkpoint=checkpoint)
+                         retry_missing=bool(job['retry_missing']), progress=progress, checkpoint=checkpoint,
+                         workers=job['workers'])
         remaining = result['remaining_objects']
         next_step = (f"Quedan {remaining} registros sin archivar; puedes reanudar desde el avance guardado."
                      if remaining else "Inventario consultado archivado; los documentos pendientes pueden reintentarse."

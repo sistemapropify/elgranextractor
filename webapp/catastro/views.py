@@ -74,7 +74,7 @@ def start(request):
         if not isinstance(params, dict) or not isinstance(params.get('retry_missing', False), bool):
             raise ValueError('Parámetros no válidos.')
         job_id = start_job(params.get('ubigeo'), params.get('limit'), params.get('lot_id') or None,
-                           params.get('retry_missing', False))
+                           params.get('retry_missing', False), workers=params.get('workers'))
         return JsonResponse({'job_id': job_id}, status=202)
     except (ValueError, TypeError, RuntimeError) as exc:
         return JsonResponse({'error': str(exc)}, status=400)
@@ -89,7 +89,7 @@ def stop(request, job_id):
         if not job:
             return JsonResponse({'error': 'Ejecución no encontrada.'}, status=404)
         if job['status'] in ('queued', 'running'):
-            state.update_job(job_id, stop=1, **({'status':'stopped','message':'Descarga detenida antes de comenzar.'} if job['status']=='queued' else {'message':'Se detendrá al terminar la solicitud en curso.'}))
+            state.update_job(job_id, stop=1, **({'status':'stopped','message':'Descarga detenida antes de comenzar.'} if job['status']=='queued' else {'message':'Pausa solicitada; terminando las solicitudes en curso y conservando el avance.'}))
         return JsonResponse({'stopping': True})
     finally:
         state.close()

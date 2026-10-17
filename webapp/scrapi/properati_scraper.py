@@ -14,7 +14,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from camoufox.async_api import AsyncCamoufox
 from scrapi.camoufox_launcher import camoufox_kwargs
-from scrapi.areas import calcular_areas
+from scrapi.properati_areas import detail_area, property_areas
 from scrapi.normalization import construction_age, listing_operation
 from scrapi.properati_age import construction_features_from_html
 from scrapi.contracts import ScrapingInterrupted
@@ -263,7 +263,7 @@ def estandarizar(prop, fecha_extraccion, fuente="Properati"):
         "precio_soles": limpiar_precio(prop.get("Precio S/.")),
         "precio_usd": limpiar_precio(prop.get("Precio USD")),
         # Área principal + las dos superficies por separado (terreno / construida).
-        **calcular_areas(prop),
+        **property_areas(prop),
         "dormitorios": normalizar_conteo(prop.get("Habitaciones"), tipo_inmueble),
         "banos": normalizar_conteo(prop.get("Banos"), tipo_inmueble),
         "estacionamientos": parse_num_prefix(prop.get("Cocheras")),
@@ -384,7 +384,7 @@ def mapear_a_formato_remax(prop):
             precio_usd = m_usd.group(1)
 
     # Area
-    area_raw = (prop.get("Area") or "").strip()
+    area_raw = (prop.get("Area") or "").replace("Â²", "²").strip()
 
     # Dormitorios, banos
     dorm = (prop.get("Dormitorios") or "").strip()
@@ -889,7 +889,7 @@ async def extraer_listado(page):
             m_area = re.search(r'(\d+[.,]?\d*)\s*m[Â²2]', feats, re.IGNORECASE)
             if m_dorm: dormitorios = m_dorm.group(1)
             if m_bano: banos = m_bano.group(1)
-            if m_area: area = m_area.group(1).replace(',', '.') + ' mÂ²'
+            if m_area: area = m_area.group(1).replace(',', '.') + ' m²'
 
         fecha = parsear_fecha_publicacion(item['fecha_publicacion'])
 
@@ -931,6 +931,10 @@ async def extraer_detalle(page, prop):
         # se prefiere el HTML servidor (con cookies del navegador) para leer
         # mapData.coordinates y mapData.visibility de forma confiable.
         html_content = await _html_servidor(page, url)
+        surface = detail_area(html_content)
+        if surface is not None:
+            prop['Area'] = f'{surface:g} m²'
+            prop['_area_evidence'] = {'source': 'detail_feature', 'area_m2': surface, 'url': url}
         year_features = construction_features_from_html(html_content)
         if year_features:
             prop["Anio Construccion"] = year_features
@@ -1012,7 +1016,12 @@ async def extraer_detalle(page, prop):
             }
         """)
 
-        rendered_years = construction_features_from_html(await page.content())
+        rendered_html = await page.content()
+        rendered_surface = detail_area(rendered_html)
+        if rendered_surface is not None:
+            prop['Area'] = f'{rendered_surface:g} m²'
+            prop['_area_evidence'] = {'source': 'detail_feature', 'area_m2': rendered_surface, 'url': url}
+        rendered_years = construction_features_from_html(rendered_html)
         if rendered_years:
             prop["Anio Construccion"] = rendered_years
 

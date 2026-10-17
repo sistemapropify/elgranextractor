@@ -374,7 +374,7 @@ def word_report(request):
         history,_=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
         from .components_report import build_acm_docx
         safe,visible_result,visible_excluded=project(request,state,result,excluded,report=True)
-        content=build_acm_docx(safe['params'],safe['records'],visible_result,visible_excluded)
+        content=build_acm_docx(safe['params'],safe['records'],visible_result,visible_excluded,user=session_user(request))
         response=HttpResponse(content,content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
         response['Content-Disposition']='attachment; filename="informe-acm.docx"'
         response['X-ACM-History-Code']=history.codigo_display
@@ -486,7 +486,7 @@ def _history_report(request, uuid, kind):
     safe,result,excluded=project(request,snapshot,snapshot['result'],snapshot.get('excluded',()),report=True)
     if kind=='word':
         from .components_report import build_acm_docx
-        content=build_acm_docx(safe['params'],safe['records'],result,excluded)
+        content=build_acm_docx(safe['params'],safe['records'],result,excluded,generated_at=row.created_at,user=session_user(request))
         mime='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         extension='docx'
     else:

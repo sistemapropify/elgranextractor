@@ -24,8 +24,9 @@ antes de la siguiente solicitud. Una nueva ejecución salta los predios ya
 archivados; «Reintentar documentos pendientes» consulta los documentos fallidos.
 El estado distingue descarga de un lote terminada de cobertura completa del distrito.
 Cada ejecución muestra el inventario real, los registros ya archivados y los
-que faltan. Los grupos internos de 100 geometrías se procesan en secuencia
-dentro de la misma ejecución, sin acumular el distrito completo en memoria
+que faltan. El inventario se lee en grupos de 100 geometrías y los predios se
+procesan con hasta 10 descargas simultáneas, sin acumular los documentos del
+distrito completo en memoria
 ni pedir otro inicio por grupo. Reanudar salta lo ya guardado; reintentar
 pendientes revisa cada predio pendiente una sola vez durante esa ejecución.
 
@@ -40,8 +41,11 @@ Por defecto cada ejecución abarca todo el distrito y hay una sola ejecución
 activa. CLI y skill conservan un límite opcional de 1–500 sólo para pruebas;
 el dashboard nunca lo envía. CLI, dashboard y skill usan el mismo
 motor, trabajo y estado. Fallos o procesos muertos pueden reanudarse; el
-heartbeat vence en cinco minutos. COFOPRI se consulta en serie, al menos un
-segundo entre solicitudes; errores de acceso o almacenamiento detienen el lote.
+heartbeat vence en cinco minutos. Hasta 10 lotes pueden esperar conexiones a la
+vez, con un mínimo global de un segundo entre inicios de solicitudes a COFOPRI.
+Un HTTP 429 aplica Retry-After a todos los clientes; no se agregan IP ni se
+eluden respuestas 401/403. Errores de acceso o almacenamiento detienen nuevas
+asignaciones y conservan las cargas confirmadas.
 
 ## Archivos y datos
 
@@ -105,3 +109,33 @@ exige el mismo permiso administrativo que el archivo y responde PNG privado.
 `catastro.reextract.reextract()` vuelve a extraer los PDF locales, verifica sus
 hashes y actualiza el índice actual y una nueva instantánea JSON en R2. No
 descarga de nuevo la fuente ni modifica los PDF o fotografías originales.
+
+## Descarga paralela
+
+El dashboard permite elegir 1, 2, 4, 6 o 10 lotes simultáneos (10 por defecto).
+El botón Pausar descarga detiene nuevas solicitudes y espera las que ya están
+en curso. Reanudar distrito consulta el mismo inventario y omite los lotes ya
+confirmados, aunque hayan terminado fuera de orden. No se inicia otro distrito
+mientras existe un trabajo activo. Los trabajos antiguos conservan 1 trabajador;
+los nuevos guardan la opción elegida en jobs.workers.
+
+CLI: `collect_geollaqta.py --ubigeo 040102 --workers 10`. El valor por defecto
+puede configurarse con CATASTRO_MAX_WORKERS (1–10); el dashboard guarda la
+elección de cada ejecución y el recolector externo la recibe al reclamarla.
+La concurrencia no limita el número total de lotes del distrito.
+
+Cada cliente HTTP y transporte R2 tiene su propia conexión. Solo el coordinador
+usa SQLite y extrae datos del PDF; PyMuPDF no se ejecuta simultáneamente en
+varios hilos. Nunca hay más de 10 trabajos de predios en espera y los contadores
+de cargas confirmadas ocupan memoria constante. Se mantienen todos los PDF,
+fotos, campos, hashes y las dos variantes del índice JSON. Un límite de bytes
+explícito de los antiguos pilotos fuerza ejecución secuencial para respetarlo.
+
+Esta implementación cambia código; no crea servidores, IP, NAT ni recursos
+Azure, y no cambia planes ni escalado. La velocidad final depende de los tiempos
+de COFOPRI, la lectura PDF, R2 y la CPU compartida con el ACM. La conectividad
+de Azure con COFOPRI se verifica por separado: el paralelismo no la corrige.
+
+Pruebas: `manage.py test catastro.test_parallel catastro.test_collector
+catastro.test_external_worker catastro.test_views --settings=catastro.test_settings
+--noinput` y `node webapp/catastro/test_parallel_dashboard.cjs`.

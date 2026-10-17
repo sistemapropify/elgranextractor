@@ -106,6 +106,7 @@ def _logo_bytes():
         from PIL import Image
         with Image.open(LOGO_PATH) as image:
             image = image.convert('RGBA')
+            image = image.crop(image.getbbox())
             image.thumbnail((1600, 1600))
             try:
                 import numpy as np
@@ -215,37 +216,37 @@ def _zona_text(lat, lng, key, fetch=True):
 
 
 def _bar_chart(labels, values, average):
-    """Gráfico de barras con la línea del precio promedio (estilo de referencia)."""
+    """Teal price-per-square-metre bars with the adopted average line."""
     try:
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
-
-        figure, axis = plt.subplots(figsize=(7.6, 4.1), dpi=160)
-        positions = list(range(len(values)))
-        axis.bar(positions, values, width=.62, color=C_BAR, label='Comparables', zorder=2)
-        axis.axhline(average, color=C_LINE, linewidth=2.6, label='Promedio', zorder=3)
-        axis.plot(positions, [average] * len(values), 'o', color=C_LINE,
-                  markersize=6, zorder=4)
-        axis.set_ylim(0, max(values + [average]) * 1.18)
-        axis.set_xticks(positions)
-        axis.set_xticklabels(labels, fontsize=8, color='#666666')
-        axis.grid(axis='y', color='#e8e8e8', linewidth=.8)
-        axis.set_axisbelow(True)
-        for side in ('top', 'right'):
-            axis.spines[side].set_visible(False)
-        for side in ('left', 'bottom'):
-            axis.spines[side].set_color('#cccccc')
-        axis.tick_params(colors='#666666', labelsize=8)
-        axis.legend(loc='upper center', bbox_to_anchor=(.5, 1.14), ncol=2,
-                    frameon=False, fontsize=8)
-        figure.tight_layout()
-        stream = io.BytesIO()
-        figure.savefig(stream, format='png')
-        plt.close(figure)
-        return stream.getvalue()
+        from PIL import Image, ImageDraw, ImageFont
+        if not values:return None
+        canvas=Image.new('RGB',(1000,490),'white');draw=ImageDraw.Draw(canvas)
+        def font(size):
+            for path in ('arial.ttf','DejaVuSans.ttf','/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'):
+                try:return ImageFont.truetype(path,size)
+                except OSError:pass
+            return ImageFont.load_default(size=size)
+        left,right,top,bottom=28,972,34,389
+        maximum=max(max(values),average,1)*1.18
+        for i in range(1,5):
+            y=bottom-(bottom-top)*i/4
+            draw.line((left,y,right,y),fill='#edf3f3',width=2)
+        step=(right-left)/len(values);bar=min(step*.62,130)
+        for i,value in enumerate(values):
+            x=left+step*(i+.5);y=bottom-(bottom-top)*value/maximum
+            for py in range(int(y),bottom+1):
+                f=(py-y)/max(1,bottom-y)
+                color=tuple(int(a+(b-a)*f) for a,b in zip((213,239,239),(0,143,145)))
+                draw.line((x-bar/2,py,x+bar/2,py),fill=color,width=1)
+            draw.text((x,bottom+17),str(labels[i]),font=font(23),fill='#475569',anchor='mt')
+            draw.text((x,bottom+49),f'$ {value:,.0f}',font=font(20),fill='#475569',anchor='mt')
+        y=bottom-(bottom-top)*average/maximum
+        draw.line((left,y,right,y),fill='#334155',width=3)
+        for i in range(len(values)):
+            x=left+step*(i+.5);draw.ellipse((x-4,y-4,x+4,y+4),fill='#334155')
+        stream=io.BytesIO();canvas.save(stream,format='PNG');return stream.getvalue()
     except Exception:
-        logger.warning('ACM PDF: no se pudo dibujar el gráfico', exc_info=True)
+        logger.warning('ACM PDF: no se pudo dibujar el gráfico',exc_info=True)
         return None
 
 
@@ -321,367 +322,108 @@ def _selection(records, result, excluded):
 
 def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
                   user=None, fetch_images=True):
-    """Construye el informe PDF (A4) con la identidad de Propify."""
-    from .report_selection import report_records, report_values, report_unit_price
-    records=report_records(params,records,excluded)
+    """Portrait client report following the supplied Propify visual reference."""
+    from .client_report import prepare_report, age, RESULT_LABELS
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_RIGHT
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.units import mm
     from reportlab.lib.utils import ImageReader
-    from reportlab.platypus import (BaseDocTemplate, Frame, Image, KeepTogether,
-                                    PageBreak, PageTemplate, Paragraph, Spacer,
-                                    Table, TableStyle)
-
-    generated_at = generated_at or datetime.now()
-    new = result.get('new')
-    used = _selection(records, result, excluded)
-    target_kind = 'Terreno' if result.get('valuation_mode') == 'land_only' else params.get('property_type', 'Casa')
-    excluded_set = set() if 'report_ids' in params else set(excluded or ())
-    used_ids = {row['id'] for row in used}
-    # References remain explicitly identified when the primary ACM is unavailable.
-    market = sorted(
-        (row for row in records
-         if row['kind'] == target_kind and (row['id'] in used_ids if result.get('reference_mode') else not row.get('issues'))
-         and row['id'] not in excluded_set),
-        key=lambda row: row.get('distance') or 0,
-    )
-    market_ids = {row['id'] for row in market}
-    used_ids = {row['id'] for row in used}
-    # Registros del tipo analizado que no entraron al cálculo (solo referencia).
-    reference = [row for row in records
-                 if row['kind'] == target_kind and row['id'] not in used_ids
-                 and row['id'] not in market_ids and row['id'] not in excluded_set]
-    key = _maps_key()
-    deadline = time.monotonic() + 45 if fetch_images else None
-    location_maps={}
-    property_photos={}
-    if fetch_images:
-        def location_image(row):
-            return row['id'],(_static_map((row['lat'],row['lng']),[f'color:red|{row["lat"]},{row["lng"]}'],key,size=(320,240),zoom=16,deadline=deadline), _property_photo(row.get('image'),deadline) if params.get('_acm_permissions',{}).get('report_photos',False) else None)
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            images=dict(pool.map(location_image,records))
-            location_maps={identifier:pair[0] for identifier,pair in images.items()}
-            property_photos={identifier:pair[1] for identifier,pair in images.items() if pair[1]}
-
+    from reportlab.platypus import SimpleDocTemplate, Image, KeepInFrame, Paragraph, Spacer, Table, TableStyle
+    data = prepare_report(params, records, result, excluded, generated_at, user, fetch_images)
+    teal = colors.HexColor('#008f91')
+    dark = colors.HexColor('#243238')
+    muted = colors.HexColor('#66757a')
+    width = 519
     styles = {
-        'band': ParagraphStyle('band', fontName='Helvetica-Bold', fontSize=23,
-                               leading=27, textColor=colors.white, alignment=TA_CENTER),
-        'section': ParagraphStyle('section', fontName='Helvetica-Bold', fontSize=17,
-                                  leading=20, textColor=colors.HexColor(C_DARK),
-                                  alignment=TA_CENTER, spaceBefore=2, spaceAfter=6),
-        'center': ParagraphStyle('center', fontName='Helvetica', fontSize=10,
-                                 leading=13, textColor=colors.HexColor(C_TEXT),
-                                 alignment=TA_CENTER),
-        'center_small': ParagraphStyle('center_small', fontName='Helvetica',
-                                       fontSize=8.7, leading=11.5,
-                                       textColor=colors.HexColor(C_TEXT),
-                                       alignment=TA_CENTER),
-        'center_bold': ParagraphStyle('center_bold', fontName='Helvetica-Bold',
-                                      fontSize=11, leading=14,
-                                      textColor=colors.HexColor(C_DARK),
-                                      alignment=TA_CENTER),
-        'label': ParagraphStyle('label', fontName='Helvetica-Bold', fontSize=9.2,
-                                leading=12.5, textColor=colors.HexColor(C_TEXT)),
-        'value': ParagraphStyle('value', fontName='Helvetica', fontSize=10,
-                                leading=13, textColor=colors.HexColor(C_TEXT)),
-        'body': ParagraphStyle('body', fontName='Helvetica', fontSize=10.5,
-                               leading=15, textColor=colors.HexColor(C_TEXT),
-                               alignment=TA_JUSTIFY),
-        'result_label': ParagraphStyle('result_label', fontName='Helvetica-Bold',
-                                       fontSize=11.5, leading=15,
-                                       textColor=colors.HexColor(C_TEXT)),
-        'result_value': ParagraphStyle('result_value', fontName='Helvetica-Bold',
-                                       fontSize=12.5, leading=15,
-                                       textColor=colors.HexColor(C_DARK),
-                                       alignment=TA_RIGHT),
+        'title': ParagraphStyle('client_title', fontName='Helvetica-Bold', fontSize=20, leading=24, textColor=teal, alignment=TA_CENTER),
+        'section': ParagraphStyle('client_section', fontName='Helvetica-Bold', fontSize=13, leading=17, textColor=teal, spaceBefore=10, spaceAfter=7),
+        'body': ParagraphStyle('client_body', fontName='Helvetica', fontSize=9, leading=12, textColor=dark),
+        'small': ParagraphStyle('client_small', fontName='Helvetica', fontSize=7.3, leading=9.6, textColor=dark),
+        'label': ParagraphStyle('client_label', fontName='Helvetica', fontSize=7, leading=9, textColor=muted),
+        'bold': ParagraphStyle('client_bold', fontName='Helvetica-Bold', fontSize=10, leading=13, textColor=dark),
+        'center': ParagraphStyle('client_center', fontName='Helvetica', fontSize=8, leading=11, textColor=muted, alignment=TA_CENTER),
     }
-
-    page_width, page_height = A4
-    margin = 20 * mm
-    width = page_width - 2 * margin
-    logo = _logo_bytes()
-
-    def decorate(canvas, doc):
-        canvas.saveState()
-        if logo:
+    def para(text, style='body'):
+        return Paragraph(escape(str(text)), styles[style])
+    def table(rows, widths, padding=0):
+        t=Table(rows,colWidths=widths,hAlign='LEFT')
+        t.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),padding),
+            ('RIGHTPADDING',(0,0),(-1,-1),padding),('TOPPADDING',(0,0),(-1,-1),padding),('BOTTOMPADDING',(0,0),(-1,-1),padding)]))
+        return t
+    def photo(image,w,h,placeholder='Sin fotografía disponible'):
+        if image:
             try:
-                reader = ImageReader(io.BytesIO(logo))
-                logo_width, logo_height = reader.getSize()
-                draw_width = 40 * mm
-                canvas.drawImage(reader, margin, page_height - 20 * mm,
-                                 width=draw_width,
-                                 height=draw_width * logo_height / logo_width,
-                                 mask='auto')
+                iw,ih=ImageReader(io.BytesIO(image)).getSize()
+                scale=min(w/iw,h/ih)
+                pic=Image(io.BytesIO(image),width=iw*scale,height=ih*scale)
+                box=Table([[pic]],colWidths=[w],rowHeights=[h])
+                box.setStyle(TableStyle([('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
+                return box
             except Exception:
-                logger.warning('ACM PDF: no se pudo dibujar el logotipo', exc_info=True)
-        canvas.setStrokeColor(colors.HexColor(C_PRIMARY))
-        canvas.setLineWidth(1.6)
-        canvas.line(margin, 16 * mm, page_width - margin, 16 * mm)
-        canvas.setFillColor(colors.HexColor(C_MUTED))
-        canvas.setFont('Helvetica', 8)
-        canvas.drawString(margin, 12 * mm,
-                          f'{_fecha_larga(generated_at)} (La Información es Aproximada)')
-        canvas.restoreState()
-
-    def centered(flowable, space=6):
-        return Table([[flowable]], colWidths=[width],
-                     style=TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                                       ('TOPPADDING', (0, 0), (-1, -1), space),
-                                       ('BOTTOMPADDING', (0, 0), (-1, -1), space),
-                                       ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                                       ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
-
-    def zona():
-        return escape(_zona_text(params['lat'], params['lng'], _maps_key(static=False), fetch_images))
-
-    def squared(text, style):
-        """Párrafo con el cuadro teal de la referencia (sin glifos de símbolos)."""
-        box = Table([['']], colWidths=[3 * mm], rowHeights=[3 * mm])
-        box.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), colors.HexColor(C_PRIMARY)),
-                                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                                 ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                                 ('TOPPADDING', (0, 0), (-1, -1), 0),
-                                 ('BOTTOMPADDING', (0, 0), (-1, -1), 0)]))
-        row = Table([[box, Paragraph(text, style)]],
-                    colWidths=[7 * mm, width - 7 * mm])
-        row.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                                 ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                                 ('TOPPADDING', (0, 0), (-1, -1), 3),
-                                 ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
-        return row
-
-    story = []
-
-    # ---------------------------------------------------------------- Portada
-    story.append(Spacer(1, 14 * mm))
-    banner = Table([[Paragraph('ANÁLISIS COMPARATIVO<br/>DE MERCADO', styles['band'])]],
-                   colWidths=[width])
-    banner.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), colors.HexColor(C_PRIMARY)),
-                                ('TOPPADDING', (0, 0), (-1, -1), 16),
-                                ('BOTTOMPADDING', (0, 0), (-1, -1), 16),
-                                ('LEFTPADDING', (0, 0), (-1, -1), 10),
-                                ('RIGHTPADDING', (0, 0), (-1, -1), 10)]))
-    story.append(banner)
-    story.append(Spacer(1, 12 * mm))
-
-    subject_center = (params['lat'], params['lng'])
-    used_points = [(row['lat'], row['lng']) for row in (records if 'report_ids' in params else used)]
-    cover_markers = [f'color:0x047d7d|label:P|{params["lat"]},{params["lng"]}']
-    cover_image = _static_map(subject_center, cover_markers, key, size=(700, 460),
-                              zoom=16, fetch=fetch_images, deadline=deadline)
-    if not cover_image:
-        cover_image = _croquis(subject_center, [], params['radius'])
-    if cover_image:
-        iw,ih=ImageReader(io.BytesIO(cover_image)).getSize()
-        image = Image(io.BytesIO(cover_image), width=120 * mm,
-                      height=120 * mm * ih / iw)
-        image.hAlign = 'CENTER'
-        story.append(image)
-    story.append(Spacer(1, 10 * mm))
-    story.append(Paragraph(zona(), styles['center_bold']))
-    story.append(Spacer(1, 10 * mm))
-    author = _clean(getattr(user, 'get_full_name', lambda: '')() or
-                    getattr(user, 'username', '') or '', 'Propify')
-    story.append(Paragraph(f'Preparado Por {escape(author)}', styles['center_bold']))
-    story.append(PageBreak())
-
-    # ------------------------------------------------------ Propiedad sujeto
-    story.append(Paragraph('PROPIEDAD SUJETO', styles['section']))
-    story.append(centered(Paragraph(f'<b>ZONA :</b> {zona()}', styles['center'])))
-    story.append(Spacer(1, 6 * mm))
-    areas = Table([[
-        Paragraph(f'<b>ÁREA TERRENO :</b> {_number(params.get("land"), 2, " m²") if params.get("land") else "No aplica"}', styles['center_small']),
-        Paragraph(f'<b>ÁREA CONSTRUIDA :</b> {_number(params.get("built"), 2, " m²") if params.get("built") else "No aplica"}', styles['center_small']),
-        Paragraph('<b>ANTIGÜEDAD :</b> '+('Sin informar' if params.get('age') is None else 'Estreno' if params['age']==0 else f"{params['age']} años"), styles['center_small']),
-    ]], colWidths=[width / 3] * 3)
-    areas.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
-    story.append(areas)
-    story.append(Spacer(1, 12 * mm))
-
-    chart_rows = market or used
-    unit_rows = [(row, _unit_price(row)) for row in chart_rows]
-    unit_rows = [(row, unit) for row, unit in unit_rows if unit]
-    average = mean([unit for _, unit in unit_rows]) if unit_rows else None
-    average = report_unit_price(params, result, average)
-    story.append(Paragraph('PRECIO PROMEDIO DE VENTA POR M2', styles['section']))
-    story.append(centered(Paragraph(_money(average), styles['center_bold'])))
-    if unit_rows and average is not None:
-        labels = [f'{index + 1}. {_money(unit)}' for index, (_, unit) in enumerate(unit_rows)]
-        chart = _bar_chart(labels, [unit for _, unit in unit_rows], average)
-        if chart:
-            image = Image(io.BytesIO(chart), width=155 * mm,
-                          height=155 * mm * 4.1 / 7.6)
-            image.hAlign = 'CENTER'
-            story.append(Spacer(1, 4 * mm))
-            story.append(image)
-    story.append(PageBreak())
-
-    # ------------------------------------------------------------ Ubicación
-    story.append(Paragraph('UBICACIÓN DE LAS PROPIEDADES', styles['section']))
-    markers = [f'color:0x047d7d|label:P|{params["lat"]},{params["lng"]}']
-    map_rows=records if 'report_ids' in params else used
-    numbered = [row for row in map_rows if row['kind'] != 'Terreno'][:9]
-    for index, row in enumerate(numbered):
-        markers.append(f'color:red|label:{index + 1}|{row["lat"]},{row["lng"]}')
-    others = [row for row in map_rows if row not in numbered]
-    if others:
-        markers.append('size:mid|color:blue|' + '|'.join(f'{row["lat"]},{row["lng"]}' for row in others))
-    map_image = _static_map(subject_center, markers, key, size=(640, 500), zoom=15,
-                            fetch=fetch_images, deadline=deadline)
-    croquis_fallback = not map_image
-    if croquis_fallback:
-        map_image = _croquis(subject_center, used_points, params['radius'])
-    if map_image:
-        iw,ih=ImageReader(io.BytesIO(map_image)).getSize()
-        image = Image(io.BytesIO(map_image), width=width, height=width * ih / iw)
-        image.hAlign = 'CENTER'
-        story.append(image)
-        if croquis_fallback:
-            story.append(Spacer(1, 2 * mm))
-            story.append(Paragraph(
-                'Croquis referencial de distancias: no representa un mapa de calles.',
-                styles['center_small']))
-    story.append(Spacer(1, 8 * mm))
-    story.append(squared(f'<b>Propiedad Sujeto :</b> {zona()}', styles['value']))
-    story.append(squared(('<b>Propiedades de referencia :</b> ' if result.get('reference_mode') else '<b>Propiedades Comparables :</b> ') +
-                         (f'{len(records)} propiedades seleccionadas para el informe' if 'report_ids' in params else f'{len(used)} propiedades usadas en la estimación'), styles['value']))
-    story.append(PageBreak())
-
-    # --------------------------------------------------------- Comparables
-    def comparable_block(row, thumb):
-        address = (_clean(row.get('district') or '')
-                   or _clean(row.get('title') or '', 'Sin dirección'))
-        facts = [
-            ('ÁREA TERRENO', _number(row.get('land'), 2, ' m²')),
-            ('ÁREA CONSTRUIDA', _number(row.get('built'), 2, ' m²')),
-            ('PRECIO', _money(row.get('price'))),
-            ('PRECIO M2', _money(_unit_price(row))),
-            *([('FECHA DE PUBLICACIÓN', _fecha_corta(row.get('first_seen')))] if params.get('_acm_permissions', {}).get('publication_dates', True) else []),
-        ]
-        facts_table = Table(
-            [[Paragraph(f'<b>{label} :</b>', styles['label']),
-              Paragraph(value, styles['value'])] for label, value in facts],
-            colWidths=[47 * mm, width - 68 * mm - 47 * mm] if thumb
-            else [47 * mm, width - 47 * mm],
-        )
-        facts_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('TOPPADDING', (0, 0), (-1, -1), 1),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
-        ]))
-        if thumb:
-            left = Image(io.BytesIO(thumb), width=64 * mm,
-                         height=64 * mm * 240 / 320)
-            body = Table([[left, facts_table]], colWidths=[68 * mm, width - 68 * mm])
-        else:
-            body = Table([[facts_table]], colWidths=[width])
-        body.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                                  ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                                  ('RIGHTPADDING', (0, 0), (0, 0), 6)]))
-        return KeepTogether([
-            Spacer(1, 5 * mm),
-            centered(Paragraph(f'<b>DIRECCIÓN :</b> {escape(address)}', styles['center']), 2),
-            Spacer(1, 3 * mm),
-            body,
-        ])
-
-    def comparable_section(title, rows, limit):
-        if not rows:
-            return
-        story.append(Paragraph(title, styles['section']))
-        for index, row in enumerate(rows if 'report_ids' in params else rows[:limit]):
-            thumb=location_maps.get(row['id'])
-            if fetch_images and not thumb:
-                thumb=_croquis((params['lat'],params['lng']),[(row['lat'],row['lng'])],params['radius'])
-            story.append(comparable_block(row, thumb))
-            photograph=property_photos.get(row['id'])
-            if photograph:
-                iw,ih=ImageReader(io.BytesIO(photograph)).getSize()
-                scale=min(110*mm/iw,65*mm/ih)
-                image=Image(io.BytesIO(photograph),width=iw*scale,height=ih*scale)
-                image.hAlign='CENTER'
-                story.extend([Spacer(1,3*mm),image])
-        story.append(PageBreak())
-
-    comparable_section('REFERENCIAS EN VENTA' if result.get('reference_mode') else 'COMPARABLES EN VENTA', market or used, 6)
-    if target_kind != 'Terreno':
-        comparable_section('TERRENOS DE REFERENCIA',
-                           [row for row in used if row['kind'] == 'Terreno'], 4)
-    comparable_section('COMPARABLES DE REFERENCIA', reference, 6)
-
-    # ------------------------------------------------------------- Resultado
-    story.append(Paragraph('RESULTADO', styles['section']))
-    if result.get('reference_mode'):
-        story.append(Paragraph('Estimación con las referencias más cercanas disponibles dentro del radio seleccionado, usando la mediana de sus precios por metro cuadrado.', styles['body']))
-    if result.get('valuation_mode') == 'land_only':
-        story.append(Paragraph('Casa de más de 40 años: valoración únicamente del terreno, según la regla configurada. La construcción no aporta valor en este cálculo.', styles['body']))
-    elif params.get('age') is not None:
-        story.append(Paragraph('La selección combina cercanía, antigüedad y áreas. No se aplica un descuento monetario por año de antigüedad.', styles['body']))
-    story.append(Spacer(1, 6 * mm))
-    story.append(Paragraph(
-        'El resultado de la estimación de valor de mercado de su propiedad es precisa y '
-        'se ha realizado teniendo en consideración lo siguiente:', styles['body']))
-    story.append(Spacer(1, 4 * mm))
-    for text in (
-        'Se ha realizado el estudio con comparables listados (otras propiedades), de '
-        'similares características a la suya, que se encuentren ubicadas en su sector.',
-        'Para identificar los comparables, se considera la cercanía y características '
-        'específicas en la propiedad.',
-        'El precio sugerido se ha calculado para obtener un precio de Venta óptimo en un '
-        'tiempo razonable.',
-    ):
-        story.append(squared(text, styles['body']))
-    story.append(Spacer(1, 8 * mm))
-    if new:
-        values = report_values(params,result)
-        result_table = Table([
-            [Paragraph('VALOR DE SALIDA AL MERCADO', styles['result_label']),
-             Paragraph(_money(values['market_entry']), styles['result_value'])],
-            [Paragraph('VALOR COMERCIAL', styles['result_label']),
-             Paragraph(_money(values['commercial']), styles['result_value'])],
-            [Paragraph('VALOR DE REALIZACIÓN INMEDIATA', styles['result_label']),
-             Paragraph(_money(values['immediate']), styles['result_value'])],
-        ], colWidths=[width * .58, width * .42])
-        result_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ]))
-        story.append(result_table)
-        story.append(Spacer(1, 10 * mm))
+                pass
+        box=Table([[para(placeholder,'center')]],colWidths=[w],rowHeights=[h])
+        box.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#f0f7f7')),('VALIGN',(0,0),(-1,-1),'MIDDLE')]))
+        return box
+    story=[]
+    logo=photo(data['logo'],103,33,'Propify')
+    author=[para('Preparado por:','label'),para(data['author'],'small')]
+    header=table([[logo,author]],[365,154]);story.extend([header,Spacer(1,12),para('Análisis comparativo de mercado','title'),Spacer(1,3),para('Información aproximada al '+_fecha_larga(data['date']),'center'),Spacer(1,17)])
+    facts=table([[para('Área de terreno','label'),para('Área construida','label'),para('Antigüedad','label')],
+                 [para(_number(params.get('land'),2,' m²') if params.get('land') else 'No aplica','bold'),
+                  para(_number(params.get('built'),2,' m²') if params.get('built') else 'No aplica','bold'),para(age(params.get('age')),'bold')]], [88,88,103])
+    detail=[para('Ubicación','label'),para(data['address']),Spacer(1,7),para('Tipo de propiedad','label'),para(params.get('property_type','Casa'),'bold')]
+    hero=table([[detail,facts]],[240,279])
+    story.append(hero)
+    story.append(para('Ubicación de las propiedades','section'))
+    map_content=[photo(data['map'],245,142,'Mapa no disponible'),para('P  Propiedad sujeto  ·  Números: propiedades seleccionadas','label')]
+    if data['croquis']:map_content.append(para('Croquis referencial de distancias; no representa un mapa de calles.','label'))
+    chart_content=[para('PRECIO PROMEDIO DE VENTA POR M2','label'),para(_money(data['average'])+' /m²','bold'),photo(data['chart'],250,129,'Sin valores unitarios disponibles')]
+    story.append(table([[map_content,chart_content]],[262,257]))
+    for heading,rows in data['groups']:
+        story.append(para(heading,'section'))
+        columns=5
+        cell_width=(width-8*(columns-1))/columns
+        for offset in range(0,len(rows),columns):
+            cards=[]
+            for row in rows[offset:offset+columns]:
+                n=data['rows'].index(row)+1
+                card=[photo(data['photos'].get(row['id']),cell_width,46),Spacer(1,4),para(str(n)+'. '+_clean(row.get('kind'),'Inmueble'),'small')]
+                card.extend([para('Terreno '+_number(row.get('land'),2,' m²')+' · Construcción '+_number(row.get('built'),2,' m²'),'small'),
+                             para('Antigüedad: '+age(row.get('age')),'small'),
+                             para(_clean(row.get('district') or row.get('title'),'Sin ubicación informada'),'small')])
+                rental='alquil' in str(row.get('operation','')).lower()
+                card.extend([para('Precio de alquiler mensual' if rental else 'Precio de venta','label'),para(_money(row.get('price')),'small'),
+                             para(_money(_unit_price(row))+' /m²'+(' al mes' if rental else ''),'small')])
+                cards.append(card)
+            cards.extend(['']*(columns-len(cards)))
+            cells=[];widths=[]
+            for i,card in enumerate(cards):
+                if i:cells.append('');widths.append(8)
+                cells.append(card);widths.append(cell_width)
+            story.extend([table([cells],widths),Spacer(1,5)])
+    result_blocks=[para('Resultados','section')]
+    if data['values']:
+        values=[]
+        for label,key in RESULT_LABELS:
+            values.append([para(label,'label'),para(_money(data['values'][key]),'bold')])
+        values_table=table(values,[168,100],padding=5)
+        values_table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e6f5f5'))]))
+        result_blocks.append(table([[para(data['summary']),values_table]],[245,274]))
     else:
-        story.append(Paragraph(
-            'No se obtuvo una estimación final porque faltaron comparables aptos para '
-            'completar el método.', styles['body']))
-        story.append(Spacer(1, 10 * mm))
-    if params.get('report_notes'):
-        story.append(Paragraph('JUSTIFICACIÓN U OBSERVACIONES', styles['section']))
-        for line in params['report_notes'].split('\n'):
-            story.append(Paragraph(escape(line) if line else '&#160;', styles['body']))
-        story.append(Spacer(1, 5 * mm))
-    story.append(Paragraph(
-        'El precio puede ajustarse de acuerdo a su gusto, pero hay que tener en cuenta el '
-        'efecto en las ofertas que recibirá y la cantidad de días que su propiedad '
-        'permanecerá en el mercado.', styles['body']))
-    story.append(Spacer(1, 5 * mm))
-    story.append(Paragraph(
-        'Un precio justo es la mejor manera de aumentar el interés de los compradores. '
-        'Estoy a su disposición para atender a sus consultas.', styles['body']))
-
-    buffer = io.BytesIO()
-    document = BaseDocTemplate(
-        buffer, pagesize=A4, leftMargin=margin, rightMargin=margin,
-        topMargin=30 * mm, bottomMargin=22 * mm,
-        title='Análisis comparativo de mercado',
-        author=_clean(getattr(user, 'username', '') or '', 'Propify'),
-        subject='ACM Propify',
-    )
-    frame = Frame(margin, 22 * mm, width, page_height - 30 * mm - 22 * mm, id='body')
-    document.addPageTemplates([PageTemplate(id='acm', frames=[frame], onPage=decorate)])
-    document.build(story)
-    return buffer.getvalue()
+        result_blocks.append(para('No se obtuvo una estimación final porque faltaron comparables aptos.'))
+    story.extend(result_blocks)
+    if data['notes']:
+        story.append(para('Justificación u observaciones','section'))
+        for line in data['notes'].split('\n'):
+            story.append(para(line) if line else Spacer(1,6))
+    def footer(canvas,doc):
+        canvas.saveState();canvas.setFillColor(teal);canvas.rect(0,0,A4[0],9,fill=1,stroke=0)
+        canvas.setFont('Helvetica',8);canvas.setFillColor(muted)
+        canvas.drawCentredString(A4[0]/2,21,'www.propify.pe')
+        canvas.drawRightString(A4[0]-38,21,str(doc.page));canvas.restoreState()
+    stream=io.BytesIO()
+    doc=SimpleDocTemplate(stream,pagesize=A4,leftMargin=38,rightMargin=38,topMargin=29,bottomMargin=37,
+                          title='Análisis comparativo de mercado',author=data['author'],subject='ACM Propify')
+    doc.build([KeepInFrame(width-12,A4[1]-29-37-12,story,mode='shrink')],onFirstPage=footer,onLaterPages=footer)
+    return stream.getvalue()

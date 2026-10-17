@@ -83,7 +83,7 @@ class ValuationNotesReportTests(SimpleTestCase):
         result = calculate(rows, p)
         pdf = build_acm_pdf(p, rows, result, fetch_images=False)
         self.assertIn(b'Mejoras recientes.', _pdf_text(pdf))
-        doc = Document(io.BytesIO(build_acm_docx(p, rows, result)))
+        doc = Document(io.BytesIO(build_acm_docx(p, rows, result, fetch_images=False)))
         text = '\n'.join(paragraph.text for paragraph in doc.paragraphs)
         self.assertIn('Justificación u observaciones', text)
         self.assertIn(p['report_notes'], text)
