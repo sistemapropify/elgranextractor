@@ -10,16 +10,22 @@
 <summary>Comprobaciones automáticas y alertas</summary>
 <div id="scraped-alert-content" style="font-size:12px;line-height:1.5"></div>
 </details></aside>
-<form id="scraped-edit-form" style="flex:1;min-width:0;overflow-y:auto;padding-right:6px">{% csrf_token %}<div id="scraped-edit-fields"></div>
-<label style="display:block;margin:8px 0"><input type="checkbox" name="excluida"> Excluir del cálculo ACM (conservar visible en el mapa para revisión)</label>
-<label style="display:block;margin:8px 0"><input type="checkbox" name="correcta"> Datos cotejados con la publicación: aprobar revisión manual</label>
+<form id="scraped-edit-form" style="flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden">{% csrf_token %}
+<div id="scraped-form-scroll" style="flex:1;min-height:0;overflow-y:auto;padding-right:6px">
+<div id="scraped-edit-fields"></div>
 <p><label>Motivo / notas de revisión<br><textarea name="motivo" style="width:100%"></textarea></label></p>
-<details><summary>Datos del registro y evidencia original (solo lectura)</summary><pre id="scraped-record" style="white-space:pre-wrap;max-height:250px;overflow:auto"></pre></details>
-<p id="scraped-edit-status" role="status"></p><button type="submit">Guardar cambios</button>
-<button type="button" onclick="document.getElementById('scraped-editor').close()">Cerrar</button></form>
+<section aria-labelledby="scraped-tracking-title"><h4 id="scraped-tracking-title">Identificación y seguimiento (solo lectura)</h4><dl id="scraped-readonly" class="scraped-readonly"></dl></section>
+<section aria-labelledby="scraped-original-title"><h4 id="scraped-original-title">Todos los datos originales del scraper (solo lectura)</h4><p>Se conserva la publicación original como evidencia de las correcciones.</p><dl id="scraped-record" class="scraped-readonly scraped-original"></dl></section>
+</div>
+<div style="flex:none;padding-top:8px;border-top:1px solid #425267">
+<label style="display:block;margin:6px 0"><input type="checkbox" name="excluida"> Excluir del cálculo ACM (conservar para revisión)</label>
+<label style="display:block;margin:6px 0"><input type="checkbox" name="correcta"> Marcar como revisada (datos cotejados con la publicación)</label>
+<p id="scraped-edit-status" role="status"></p><button type="submit">Guardar cambios y revisión</button>
+<button type="button" onclick="document.getElementById('scraped-editor').close()">Cerrar</button>
+</div></form>
 </div>
 </dialog>
-<style>#scraped-editor::backdrop{background:#000b}#scraped-editor{font:13px/1.5 system-ui}#scraped-editor[open]{display:flex;flex-direction:column}#scraped-editor p{margin:10px 0}#scraped-editor button{background:#263b4b;color:#fff;border:1px solid #52718b;padding:8px 12px;border-radius:7px;cursor:pointer}#scraped-edit-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}#scraped-edit-fields label{display:block;font-size:11px}#scraped-edit-fields input,#scraped-edit-fields select,#scraped-edit-fields textarea,#scraped-editor textarea{width:100%;box-sizing:border-box;background:#0d1117;color:#e6edf3;border:1px solid #425267;border-radius:5px;padding:6px}#scraped-edit-fields textarea{height:70px}#scraped-alert-content .alerta-item{padding:6px 8px;border-bottom:1px solid #2a3440}#scraped-alert-content .alerta-item:last-child{border-bottom:none}@media (max-width:760px){#scraped-editor-body{flex-direction:column}#scraped-evidence{flex:none!important;min-height:350px}#scraped-alert{max-height:150px}}</style>
+<style>#scraped-editor::backdrop{background:#000b}#scraped-editor{font:13px/1.5 system-ui}#scraped-editor[open]{display:flex;flex-direction:column}#scraped-editor p{margin:10px 0}#scraped-editor button{background:#263b4b;color:#fff;border:1px solid #52718b;padding:8px 12px;border-radius:7px;cursor:pointer}#scraped-edit-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}#scraped-edit-fields>div{min-width:0;margin:4px 0}#scraped-edit-fields fieldset{border:0;padding:0;margin:0;min-width:0}#scraped-edit-fields legend{font-size:11px}#scraped-edit-fields .helptext{font-size:11px;color:#aebdcb}#scraped-edit-fields label{display:block;font-size:11px}#scraped-edit-fields input,#scraped-edit-fields select,#scraped-edit-fields textarea,#scraped-editor textarea{width:100%;box-sizing:border-box;background:#0d1117;color:#e6edf3;border:1px solid #425267;border-radius:5px;padding:6px}#scraped-edit-fields textarea{height:70px}#scraped-edit-fields input[type=checkbox]{width:auto}.scraped-readonly{display:grid;grid-template-columns:minmax(110px,1fr) minmax(0,2fr);gap:6px 12px;font-size:12px}.scraped-readonly dt{color:#aebdcb}.scraped-readonly dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.scraped-original{max-height:400px;overflow:auto;border:1px solid #425267;padding:10px;border-radius:6px}#scraped-alert-content .alerta-item{padding:6px 8px;border-bottom:1px solid #2a3440}#scraped-alert-content .alerta-item:last-child{border-bottom:none}@media (max-width:760px){#scraped-editor-body{flex-direction:column}#scraped-evidence{flex:none!important;min-height:350px}#scraped-alert{max-height:150px}}</style>
 <script>
 (function(){
 const modal=document.getElementById('scraped-editor'), form=document.getElementById('scraped-edit-form'), status=document.getElementById('scraped-edit-status');
@@ -42,6 +48,11 @@ function renderAlert(a){
  (a&&a.alertas||[]).forEach(function(m){el.appendChild(alertItem(m));});
  if(!verdict&&!(a&&a.alertas&&a.alertas.length))el.appendChild(alertItem('Sin alertas automáticas. Compara los datos con la publicación antes de aprobar la revisión manual.'));
 }
+function renderReviewFields(id,fields){
+ const el=document.getElementById(id);el.replaceChildren();
+ (fields||[]).forEach(function(field){const term=document.createElement('dt'),value=document.createElement('dd');term.textContent=field.label;value.textContent=field.value===null||field.value===undefined||field.value===''?'Sin información':String(field.value);el.append(term,value);});
+ if(!el.children.length){const value=document.createElement('dd');value.textContent='Sin datos guardados.';el.append(value);}
+}
 function setPublication(raw){
  publication.hidden=true;publication.style.display='none';publication.removeAttribute('href');missingPublication.hidden=true;
  if(raw===null)return;
@@ -62,7 +73,7 @@ window.openScrapedEditor=async function(id){
  if(saving)return;
  const numericId=Number(id); activeRecordId=Number.isSafeInteger(numericId)&&numericId>0?numericId:null;
  const seq=++sequence;version=null;
- setPublication(null);setEvidence(null);document.getElementById('scraped-record').textContent='';form.elements.excluida.checked=false;form.elements.correcta.checked=false;form.elements.motivo.value='';
+ setPublication(null);setEvidence(null);document.getElementById('scraped-record').replaceChildren();document.getElementById('scraped-readonly').replaceChildren();form.elements.excluida.checked=false;form.elements.correcta.checked=false;form.elements.motivo.value='';
  endpoint='/ingestas/scraping/registros/'+encodeURIComponent(id)+'/editar/';
  document.getElementById('scraped-edit-fields').replaceChildren(); form.querySelector('[type=submit]').disabled=true;
  renderAlert(null);
@@ -71,7 +82,7 @@ window.openScrapedEditor=async function(id){
  if(seq!==sequence)return;
  document.getElementById('scraped-edit-fields').innerHTML=data.html;
  setPublication(data.record.url||'');setEvidence(activeRecordId);
- document.getElementById('scraped-record').textContent=JSON.stringify(data.record,null,2);
+ renderReviewFields('scraped-readonly',data.readonly_fields);renderReviewFields('scraped-record',data.original_fields);
  form.elements.excluida.checked=data.record.excluida;form.elements.correcta.checked=data.record.correcta;form.elements.motivo.value=data.record.motivo;
  version=data.version;form.querySelectorAll('input,select,textarea').forEach(function(el){el.disabled=!data.can_edit;});form.querySelector('[type=submit]').disabled=!data.can_edit;
  renderAlert(data.alertas);

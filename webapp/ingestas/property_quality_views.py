@@ -19,6 +19,7 @@ from .models import (PropiedadesCompetencia, RevisionPropiedadScraping,
                      CambioPropiedadScraping, RevisionIAAlerta)
 from .property_quality import DATA_FIELDS, analyze, number
 from acm.catalog import annotate_catalog, propify_catalog_rows
+from .property_editor_features import FEATURE_FIELDS, FeatureReviewForm, review_details
 
 EDIT_FIELDS = ('titulo', 'tipo_inmueble', 'tipo_operacion', 'precio_soles', 'precio_usd',
     'area_m2', 'area_terreno', 'area_construida', 'dormitorios', 'banos', 'estacionamientos',
@@ -26,10 +27,10 @@ EDIT_FIELDS = ('titulo', 'tipo_inmueble', 'tipo_operacion', 'precio_soles', 'pre
     'precision_ubicacion', 'descripcion', 'amenities', 'url', 'imagen_url',
     'antiguedad_anios', 'agencia_agente')
 
-class PropertyForm(forms.ModelForm):
+class PropertyForm(FeatureReviewForm):
     class Meta:
         model = PropiedadesCompetencia
-        fields = EDIT_FIELDS
+        fields = (*EDIT_FIELDS[:11], *FEATURE_FIELDS, *EDIT_FIELDS[11:])
 
     def clean(self):
         data = super().clean()
@@ -53,6 +54,8 @@ def value(v):
 
 def snapshot(obj, revision):
     data = {field.name: value(field.value_from_object(obj)) for field in obj._meta.concrete_fields}
+    data.update(tiene_cochera=obj.tiene_cochera, tipos_cochera=obj.tipos_cochera,
+                tiene_ascensor=obj.tiene_ascensor, piso_departamento=obj.piso_departamento)
     data.update(excluida=revision.excluida, motivo=revision.motivo,
                 campos_protegidos=revision.campos_protegidos,
                 correcta=revision.correcta)
@@ -97,9 +100,10 @@ class PropertyEditor(APIView):
             revision = RevisionPropiedadScraping.objects.filter(propiedad=obj).first() or RevisionPropiedadScraping(propiedad=obj)
             revision_ia = RevisionIAAlerta.objects.filter(propiedad=obj).first()
             data = snapshot(obj, revision)
-            response = Response({'html': PropertyForm(instance=obj).as_p(), 'record': data,
+            response = Response({'html': PropertyForm(instance=obj).as_div(), 'record': data,
                              'version': version(data), 'can_edit': allowed(request.user),
-                             'alertas': alertas_para(obj, revision, revision_ia)})
+                             'alertas': alertas_para(obj, revision, revision_ia),
+                             **review_details(obj, EDIT_FIELDS)})
             response['Cache-Control'] = 'private, no-store'
             return response
         except Http404:
@@ -126,7 +130,7 @@ class PropertyEditor(APIView):
                 revision.corregida_en = timezone.now() if revision.correcta else None
                 if revision.excluida and not revision.motivo:
                     return Response({'error': 'Indica el motivo para excluir el registro.'}, status=400)
-                changed = set(form.changed_data)
+                changed = set(form.changed_data) | form.apply_review()
                 # Keep the legacy primary surface aligned after a manual area/type edit.
                 if changed.intersection({'area_terreno', 'area_construida', 'tipo_inmueble'}):
                     obj.area_m2 = (obj.area_terreno or obj.area_construida) if obj.tipo_inmueble == 'Terreno' else (obj.area_construida or obj.area_terreno)
@@ -174,6 +178,7 @@ def dashboard(request):
         revision = revisions.get(row['id'])
         row['excluida'] = bool(revision and revision.excluida)
         row['correcta'] = bool(revision and revision.correcta)
+        row['revision_fecha'] = revision.corregida_en if revision else None
         row['motivo'] = revision.motivo if revision else ''
         ia = revisiones_ia.get(row['id'])
         row['ia_veredicto'] = ia.veredicto if ia else None
@@ -228,15 +233,20 @@ def dashboard(request):
         rows = [r for r in rows if r['alertas'] and not r['ia_veredicto']]
     elif state in ('outlier', 'incomplete', 'review'):
         rows = [r for r in rows if r['quality_status'] == state]
+    review_state = request.GET.get('revision', 'todas')
+    if review_state == 'pendientes':
+        rows = [row for row in rows if not row.get('correcta')]
+    elif review_state == 'revisadas':
+        rows = [row for row in rows if row.get('correcta')]
     if request.GET.get('exportar') == 'csv':
         response = HttpResponse(content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = 'attachment; filename="calidad_propiedades.csv"'
         response['Cache-Control'] = 'private, no-store'
         response.write('\ufeff')
         writer = csv.writer(response)
-        writer.writerow([*DATA_FIELDS, 'excluida', 'motivo', 'alertas', 'ruta_acm', 'observaciones_acm'])
+        writer.writerow([*DATA_FIELDS, 'excluida', 'motivo', 'alertas', 'ruta_acm', 'observaciones_acm', 'revisada_manualmente', 'fecha_revision'])
         for row in rows:
-            cells = [row.get(k) for k in DATA_FIELDS] + [row['excluida'], row['motivo'], ' | '.join(row['alertas']), row['acm_status'], ' | '.join(row['acm_issues'])]
+            cells = [row.get(k) for k in DATA_FIELDS] + [row['excluida'], row['motivo'], ' | '.join(row['alertas']), row['acm_status'], ' | '.join(row['acm_issues']), row.get('correcta', False), row.get('revision_fecha')]
             writer.writerow(["'" + c if isinstance(c, str) and c.startswith(('=', '+', '-', '@')) else c for c in cells])
         return response
     params = request.GET.copy()
@@ -247,17 +257,21 @@ def dashboard(request):
     catalog_params['estado'] = 'acm'
     all_params = catalog_params.copy()
     all_params['estado'] = 'todas'
+    pending_params = catalog_params.copy()
+    pending_params['revision'] = 'pendientes'
     portals = list(PropiedadesCompetencia.objects.order_by('fuente').values_list('fuente', flat=True).distinct())
     if acm_mode and 'propify' not in portals:
         portals.append('propify')
     filters = request.GET.copy()
     filters.setdefault('estado', state)
+    filters.setdefault('revision', review_state)
     response = render(request, 'ingestas/property_quality.html', {
         'summary': summary, 'page': Paginator(rows, 50).get_page(request.GET.get('page')),
         'params': params.urlencode(), 'filters': filters,
         'districts': PropiedadesCompetencia.objects.exclude(distrito__isnull=True).exclude(distrito='').order_by('distrito').values_list('distrito', flat=True).distinct(),
         'portals': portals, 'acm_mode': acm_mode, 'catalog_url': '?' + catalog_params.urlencode(),
         'catalog_warnings': warnings, 'all_url': '?' + all_params.urlencode(),
+        'pending_url': '?' + pending_params.urlencode(),
         'types': PropiedadesCompetencia.TIPO_INMUEBLE_CHOICES,
         'estados_publicacion': PropiedadesCompetencia.ESTADO_PUBLICACION_CHOICES,
         'can_edit': allowed(user),

@@ -120,7 +120,7 @@ jobs:
       - name: Validate reviewable ACM property catalogue
         run: |
           source antenv/bin/activate
-          python webapp/manage.py test ingestas.tests.test_acm_catalog ingestas.tests.test_property_quality acm.test_reference_fallback --settings=acm.history_test_settings --noinput --verbosity=0
+          python webapp/manage.py test ingestas.tests.test_acm_catalog ingestas.tests.test_property_quality ingestas.tests.test_property_editor_fields acm.test_reference_fallback --settings=acm.history_test_settings --noinput --verbosity=0
 
       - name: Collect Django static files
         env:

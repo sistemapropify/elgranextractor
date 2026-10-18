@@ -108,6 +108,11 @@ def guardar_propiedades(propiedades, fuente, lifecycle_run_id=None, execution_to
                         revision.campos_protegidos if revision else (),
                         kind=existing.tipo_inmueble, description=existing.descripcion, count=existing.estacionamientos, amenities=existing.amenities)
                     if revision:
+                        if 'piso_departamento' in revision.campos_protegidos:
+                            from copy import deepcopy
+                            for floor_key in ('piso_departamento', '_floor_evidence'):
+                                if floor_key in (existing.datos_crudos or {}):
+                                    defaults['datos_crudos'][floor_key] = deepcopy(existing.datos_crudos[floor_key])
                         if {'tiene_cochera', 'tipos_cochera'} & set(revision.campos_protegidos):
                             defaults.pop('estacionamientos', None)
                         for field in revision.campos_protegidos:
