@@ -49,6 +49,24 @@ class VerificationMailboxTests(TestCase):
             self.exchange('executed', id=self.challenge)
         self.assertEqual(public_state(self.job)['state'], 'waiting')
 
+    def test_properati_reports_receipt_consumption_and_execution_without_exposing_answer(self):
+        self.run.portal = 'properati'
+        self.run.save(update_fields=['portal'])
+        submit_answer(self.job.pk, self.challenge, '123')
+        self.assertEqual(public_state(self.job)['state'], 'submitted')
+        self.assertEqual(self.exchange('poll', id=self.challenge), '123')
+        self.assertEqual(public_state(self.job)['state'], 'consumed')
+        self.exchange('executed', id=self.challenge)
+        state = public_state(self.job)
+        self.assertEqual(state['state'], 'executed')
+        self.assertEqual(state['mode'], 'answer')
+        self.assertNotIn('answer', state)
+        with self.assertRaises(ValueError):
+            submit_answer(self.job.pk, self.challenge, '123')
+        replacement = self.exchange('open', screenshot='new-challenge', seconds=90)
+        self.assertNotEqual(replacement, self.challenge)
+        self.assertEqual(public_state(self.job)['state'], 'waiting')
+
     def test_post_click_feedback_updates_screen_without_unlocking_action(self):
         with self.assertRaises(ValueError):
             self.exchange('feedback', id=self.challenge, screenshot='after-click')
@@ -97,11 +115,13 @@ class VerificationMailboxTests(TestCase):
             self.exchange('refresh', id=self.challenge, screenshot='new-screen')
         self.assertEqual(public_state(self.job)['id'], self.challenge)
 
-    def test_properati_does_not_expose_submitted_answer_screen(self):
+    def test_properati_exposes_receipt_state_without_answer(self):
         self.run.portal = 'properati'
         self.run.save(update_fields=['portal'])
         submit_answer(self.job.pk, self.challenge, '12')
-        self.assertIsNone(public_state(self.job))
+        state = public_state(self.job)
+        self.assertEqual(state['state'], 'submitted')
+        self.assertNotIn('answer', state)
 
 
 class VerificationAccessTests(SimpleTestCase):

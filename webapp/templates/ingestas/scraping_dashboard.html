@@ -751,7 +751,7 @@ async function loadVerification(jobId) {
         document.getElementById('verificationImage').style.cursor = browserMode ? 'crosshair' : 'default';
         document.getElementById('verificationImage').style.maxHeight = browserMode ? 'none' : '480px';
         document.getElementById('verificationImage').alt = browserMode ? 'Pantalla de verificación de Adondevivir' : 'Verificación de Properati';
-        document.getElementById('verificationSubmit').disabled = verificationSending;
+        document.getElementById('verificationSubmit').disabled = verificationSending || item.state !== 'waiting' || verificationPendingId === item.id;
         document.getElementById('verificationRefresh').disabled = verificationSending || verificationPendingId === item.id;
         const nextImageSource = 'data:image/png;base64,' + item.screenshot;
         if (verificationId !== item.id || verificationImageSource !== nextImageSource) {
@@ -766,20 +766,26 @@ async function loadVerification(jobId) {
             image.src = verificationImageSource;
             if (image.complete && image.naturalWidth) verificationRenderedId = item.id;
             document.getElementById('verificationMessage').textContent = 'Disponible hasta ' + new Date(item.expires_at).toLocaleTimeString() + '. Si vence, las fichas pendientes se conservan.';
-            document.getElementById('verificationSubmit').disabled = false;
+            document.getElementById('verificationSubmit').disabled = verificationSending || item.state !== 'waiting';
         }
-        if (browserMode && ['submitted', 'consumed', 'executed'].includes(item.state)) {
+        if (['submitted', 'consumed', 'executed'].includes(item.state)) {
             verificationPendingId = item.id;
             if (!verificationPendingSince) verificationPendingSince = Date.now();
             document.getElementById('verificationRefresh').disabled = true;
             const status = document.getElementById('verificationMessage');
-            status.textContent = item.state === 'executed'
+            status.textContent = !browserMode ? {
+                submitted: 'El servidor recibió tu respuesta. Esperando que el navegador la recoja.',
+                consumed: 'El navegador recibió tu respuesta y está enviándola a Properati.',
+                executed: 'El navegador procesó tu respuesta. Properati todavía debe confirmar el acceso.'
+            }[item.state] : item.state === 'executed'
                 ? 'El navegador ejecutó tu clic. Esperando la pantalla actualizada; el acceso todavía no está confirmado.'
                 : item.state === 'consumed'
                     ? 'El worker recibió la acción y está procesándola en el navegador.'
                     : 'Acción recibida por el servidor. Esperando que el worker la recoja.';
             if (Date.now() - verificationPendingSince > 15000) {
-                status.textContent += ' Lleva más de 15 segundos sin una pantalla nueva. No repitas el clic: el procesamiento está demorado o bloqueado.';
+                status.textContent += browserMode
+                    ? ' Lleva más de 15 segundos sin una pantalla nueva. No repitas el clic: el procesamiento está demorado o bloqueado.'
+                    : ' Properati lleva más de 15 segundos sin confirmar. No repitas la respuesta; aquí aparecerá una nueva imagen si se necesita otro intento.';
             }
             clearTimeout(verificationPollTimer);
             verificationPollTimer = setTimeout(() => loadVerification(jobId), 1500);
@@ -797,27 +803,41 @@ async function loadVerification(jobId) {
 document.getElementById('verificationForm').addEventListener('submit', async function(event) {
     event.preventDefault();
     if (!reportConnectivity()) return;
-    if (!verificationId || !currentJobId) return;
+    if (!verificationId || !currentJobId || verificationSending || verificationPendingId === verificationId) return;
     const jobId = currentJobId;
+    const challengeId = verificationId;
     const button = document.getElementById('verificationSubmit');
     const message = document.getElementById('verificationMessage');
     const form = new FormData();
     form.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-    form.append('verification_id', verificationId);
+    form.append('verification_id', challengeId);
     form.append('answer', document.getElementById('verificationAnswer').value.trim());
     button.disabled = true;
+    verificationSending = true;
+    verificationPendingId = challengeId;
+    verificationPendingSince = Date.now();
+    message.textContent = 'Enviando respuesta al servidor…';
     try {
         const response = await fetch(`/ingestas/scraping/verificacion/${jobId}/`, {
             method: 'POST', body: form, signal: AbortSignal.timeout(10000)
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'No se pudo enviar la respuesta.');
-        message.textContent = 'Respuesta enviada. Esperando la confirmación de Properati…';
+        if (jobId !== currentJobId || verificationId !== challengeId) return;
+        message.textContent = 'El servidor recibió tu respuesta. Falta la confirmación de Properati.';
         document.getElementById('verificationAnswer').value = '';
         appendLog('info', 'Respuesta enviada a Properati; esperando confirmación.');
     } catch (error) {
-        message.textContent = connectionErrorMessage(error, 'El servidor no respondió al enviar la respuesta. Comprueba el estado antes de repetirla.');
-        button.disabled = false;
+        if (jobId === currentJobId && verificationId === challengeId) {
+            message.textContent = connectionErrorMessage(error, 'El servidor no confirmó la recepción. Comprobando si la respuesta llegó antes de permitir otro envío.');
+            verificationPendingId = null;
+        }
+    } finally {
+        verificationSending = false;
+        if (jobId === currentJobId) {
+            clearTimeout(verificationPollTimer);
+            verificationPollTimer = setTimeout(() => loadVerification(jobId), 100);
+        }
     }
 });
 

@@ -14,6 +14,7 @@ class ManualVerificationTests(unittest.IsolatedAsyncioTestCase):
         self.field = SimpleNamespace(
             count=AsyncMock(side_effect=lambda: int(not self.solved)),
             fill=AsyncMock(), press=AsyncMock(side_effect=press),
+            press_sequentially=AsyncMock(),
         )
         async def click(**kwargs):
             self.solved = True
@@ -37,10 +38,13 @@ class ManualVerificationTests(unittest.IsolatedAsyncioTestCase):
         emit = AsyncMock()
         with patch('scrapi.manual_verification.asyncio.sleep', AsyncMock()):
             self.assertTrue(await resolve(page, mailbox, emit))
-        self.field.fill.assert_awaited_once_with('123', timeout=5000)
+        self.field.fill.assert_awaited_once_with('', timeout=5000)
+        self.field.press_sequentially.assert_awaited_once_with('123', delay=40, timeout=5000)
         self.button.click.assert_awaited_once()
         self.assertEqual(mailbox.call_args.args, ('close',))
         self.assertIn('verification.resolved', [c.kwargs['event'] for c in emit.call_args_list])
+        self.assertIn('verification.submitted', [c.kwargs['event'] for c in emit.call_args_list])
+        self.assertIn('executed', [c.args[0] for c in mailbox.call_args_list])
         self.assertNotIn('123', str(emit.call_args_list))
         self.assertIsNone(page._scraping_initial_html)
 
@@ -101,4 +105,17 @@ class ManualVerificationTests(unittest.IsolatedAsyncioTestCase):
         with patch('scrapi.manual_verification.asyncio.sleep', AsyncMock()):
             with self.assertRaisesRegex(ScrapingInterrupted, 'no permitió enviar'):
                 await resolve(page, mailbox, AsyncMock())
+        self.assertEqual(mailbox.call_args.args, ('close',))
+
+    async def test_processed_answer_is_not_reported_as_accepted_without_portal_content(self):
+        page = self.page()
+        self.button.click.side_effect = None
+        mailbox = Mock(side_effect=lambda action, **kwargs: 'id' if action == 'open' else '123')
+        emit = AsyncMock()
+        with patch('scrapi.manual_verification.asyncio.sleep', AsyncMock()):
+            with self.assertRaises(ScrapingInterrupted):
+                await resolve(page, mailbox, emit)
+        events = [call.kwargs['event'] for call in emit.call_args_list]
+        self.assertIn('verification.submitted', events)
+        self.assertNotIn('verification.resolved', events)
         self.assertEqual(mailbox.call_args.args, ('close',))

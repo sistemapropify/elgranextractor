@@ -1,3 +1,58 @@
+# Properati human verification and preserved-job recovery - 2026-10-18
+
+Status: Validated. User explicitly approved publication and recovery of job 229.
+Recipe: CI/CD, existing serialized main_granextractorservice.yml.
+Target: existing granextractorservice / rg-elgranextractor, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf (Azure subscription 1).
+Public: https://acm.propifai.com/ingestas/scraping/dashboard/
+
+## 1. Scope and integration
+Base d3aee8c272838d2d836ec18920656646cfc89e16, latest production/main.
+Forward only the human's bounded answer using keyboard events, expose receipt,
+browser consumption and browser execution separately, reconcile pending UI and
+prevent duplicate submissions. Only actual portal content confirms resolution.
+No CAPTCHA answer is generated, read or logged by the assistant.
+Scoped application changes are already integrated in shared D:/PROMETEO;
+other local edits are preserved and are not included in this release.
+No migrations, infrastructure, resource, RBAC, firewall or credential changes.
+
+## 3. Execution and recovery
+Push without force to existing main workflow. New isolated verification tests
+gate the build. Generate a static release SHA marker before collectstatic.
+After normal public-page/static checks, refresh existing OIDC authentication.
+Only this commit's [resume-properati-229] tag enables one authorized recovery.
+The helper verifies that the public marker serves this exact revision before
+queuing the preserved job, using TLS-verified SQL from the existing SCM host.
+Keep run 119, page 4, 133 saved properties, 18 pending candidates and parameters.
+Reject another active extraction, foreign portal or a changed job; a stored
+release marker makes reruns idempotent. Never retry recovery after a later
+failure of this same release. Properati may still request human verification.
+The user monitors deployment/extraction; report dispatch separately from live
+completion. Rollback is a scoped revert through the same serialized workflow;
+already stored properties, photos, runs and candidates are retained.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-18, America/Lima:
+- 106 isolated Django tests passed for verification, browser verification,
+  recovery, parking/elevators, exports and apartment floor handling.
+- Node real-dashboard verification tests passed: pending states, duplicate
+  submit prevention, stale responses, expiry and Adondevivir regression.
+- Six isolated recovery tests passed: exact public revision, no-write dry run,
+  preserved checkpoint, idempotence, concurrency/portal guards and row conflict.
+- Actual production-side --dry-run returned error-state job 229, saved=133,
+  pending=18, run=119, checkpoint=4 without changing the job.
+- PRODUCTION=true WSGI import and changed dashboard template compilation passed
+  using isolated SQLite databases; collectstatic produced 520 static files.
+- Workflow YAML parsed, including build gates and conditional recovery steps.
+- Actual local dashboard redirects correctly to authentication and shared JS/CSS
+  return HTTP 200. No claim of authenticated live portal acceptance is made.
+- Existing Azure subscription identity and App Service Running/Brazil South
+  were verified using az account show and az webapp show.
+- Infrastructure provisioning and new-role checks are inapplicable to this
+  application-only CI/CD release. Scope/whitespace and latest-main checks gate push.
+
+---
+
 # Scraper parking and elevator fields - release 2026-10-17
 
 Status: Validated - user explicitly requested deployment of the reviewed local implementation.

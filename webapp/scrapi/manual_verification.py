@@ -24,7 +24,10 @@ async def _submit_human_answer(page, answer, emit):
     """Submit one human answer despite transient button/actionability changes."""
     field = page.locator('#math-answer')
     button = page.locator('#verify-btn')
-    await field.fill(answer, timeout=5000)
+    # Some challenges enable their button on keyboard events, which fill()
+    # does not generate. Type only the bounded answer supplied by the human.
+    await field.fill('', timeout=5000)
+    await field.press_sequentially(answer, delay=40, timeout=5000)
     try:
         # Blurring the field lets pages that enable the button on change/blur
         # finish their own validation before Playwright checks actionability.
@@ -101,6 +104,9 @@ async def resolve(page, exchange, emit):
             if urlsplit(page.url).hostname != 'www.properati.com.pe':
                 raise manual_timeout()
             await _submit_human_answer(page, answer, emit)
+            await asyncio.to_thread(exchange, 'executed', id=challenge_id)
+            await emit(event='verification.submitted',
+                message='El navegador procesó tu respuesta; esperando que Properati confirme el acceso.')
             # Wait for actual listing/detail content, not just a changed title.
             for _ in range(15):
                 await asyncio.sleep(2)

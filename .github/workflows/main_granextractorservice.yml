@@ -109,6 +109,14 @@ jobs:
           source antenv/bin/activate
           python webapp/manage.py test ingestas.tests.test_building_features ingestas.tests.test_apartment_floor ingestas.tests.test_scraping_export ingestas.tests.test_scraping_integrity ingestas.tests.test_scraping_recovery ingestas.tests.test_facebook_marketplace_scraper scrapi.test_remax_data scrapi.test_properati_age scrapi.test_detail_age --settings=ingestas.scraping_test_settings --noinput --verbosity=0
 
+      - name: Validate manual portal verification
+        run: |
+          source antenv/bin/activate
+          python webapp/manage.py test ingestas.tests.test_scraping_verification scrapi.test_manual_verification scrapi.test_browser_verification ingestas.tests.test_scraping_recovery --settings=ingestas.scraping_test_settings --noinput --verbosity=0
+          node webapp/scrapi/test_verification_click.cjs
+          python -m unittest scripts/test_resume_scraping_job_azure.py -v
+          python -c 'import json,os; from pathlib import Path; Path("webapp/static/js/scraping-verification-release.json").write_text(json.dumps({"revision":os.environ["GITHUB_SHA"]}))'
+
       - name: Collect Django static files
         env:
           # Valores dummy para que Django cargue settings sin conexión a BD.
@@ -359,6 +367,20 @@ jobs:
           done
           echo "Application or static assets did not become healthy after the 15-minute stabilization window"
           exit 1
+
+      - name: Refresh Azure login for authorized Properati recovery
+        if: success() && contains(github.event.head_commit.message, '[resume-properati-229]')
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BD7ACFF66075413F896FF528B42CABC0 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_0FA92F15F0804AE197DC2EECF943B7DB }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_C521A0DD71BB48CE88443464F4F718FB }}
+
+      - name: Resume Properati 229 once after verified release
+        if: success() && contains(github.event.head_commit.message, '[resume-properati-229]')
+        env:
+          RECOVERY_REVISION: ${{ github.sha }}
+        run: python3 scripts/resume_scraping_job_azure.py --job-id 229 --revision "$RECOVERY_REVISION"
 
       # El health-check puede durar varios minutos. Renovar OIDC otra vez para
       # que la obtencion de logs no falle con AADSTS700024.

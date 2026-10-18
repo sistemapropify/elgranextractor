@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const template = fs.readFileSync(path.join(__dirname, '../templates/ingestas/scraping_dashboard.html'), 'utf8');
 const script = template.slice(template.indexOf('let verificationId ='), template.indexOf('// ── URLs de listado por portal'));
 
-function panel({ stale = false, csrf = true, verification = null } = {}) {
+function panel({ stale = false, csrf = true, verification = null, postResponse = null } = {}) {
     const elements = new Map();
     const get = id => {
         if (!elements.has(id)) elements.set(id, { style: {}, handlers: {},
@@ -22,7 +22,10 @@ function panel({ stale = false, csrf = true, verification = null } = {}) {
         currentJobId: 42, FormData, AbortSignal, setTimeout: () => {}, clearTimeout: () => {},
         navigator: { onLine: true }, window: { addEventListener() {} }, appendLog() {},
         fetch: async (url, options) => {
-            if (options.method === 'POST') posts.push(Object.fromEntries(options.body));
+            if (options.method === 'POST') {
+                posts.push(Object.fromEntries(options.body));
+                if (postResponse) return await postResponse;
+            }
             return { ok: true, json: async () => ({ success: true, verification }) };
         } });
     vm.runInContext(script, context);
@@ -66,5 +69,35 @@ function panel({ stale = false, csrf = true, verification = null } = {}) {
     vm.runInContext('verificationPendingSince = Date.now() - 16000;', delayed.context);
     await vm.runInContext('loadVerification(42)', delayed.context);
     assert.match(delayed.get('verificationMessage').textContent, /más de 15 segundos/);
+
+    for (const [state, expected] of [['submitted', /servidor recibió/], ['consumed', /navegador recibió/], ['executed', /todavía debe confirmar/]]) {
+        const answer = panel({ verification: { id: 'challenge', mode: 'answer', state, screenshot: 'png' } });
+        await vm.runInContext('loadVerification(42)', answer.context);
+        assert.equal(answer.get('verificationPanel').hidden, false);
+        assert.equal(answer.get('verificationSubmit').disabled, true);
+        assert.match(answer.get('verificationMessage').textContent, expected);
+        answer.get('verificationAnswer').value = '123';
+        await answer.get('verificationForm').handlers.submit({ preventDefault() {} });
+        assert.equal(answer.posts.length, 0);
+    }
+    let releaseAnswer;
+    const reply = new Promise(resolve => { releaseAnswer = resolve; });
+    const submitting = panel({ verification: { id: 'challenge', mode: 'answer', state: 'waiting', screenshot: 'png' }, postResponse: reply });
+    vm.runInContext("verificationMode = 'answer';", submitting.context);
+    submitting.get('verificationAnswer').value = '123';
+    const firstPost = submitting.get('verificationForm').handlers.submit({ preventDefault() {} });
+    await submitting.get('verificationForm').handlers.submit({ preventDefault() {} });
+    await vm.runInContext('loadVerification(42)', submitting.context);
+    assert.equal(submitting.posts.length, 1);
+    assert.equal(submitting.get('verificationSubmit').disabled, true);
+    assert.equal(submitting.posts[0].answer, '123');
+    releaseAnswer({ ok: true, json: async () => ({ success: true }) });
+    await firstPost;
+    assert.match(submitting.get('verificationMessage').textContent, /servidor recibió/);
+    const closed = panel();
+    vm.runInContext("verificationPendingId = 'challenge';", closed.context);
+    await vm.runInContext('loadVerification(42)', closed.context);
+    assert.equal(closed.get('verificationPanel').hidden, true);
+    assert.equal(vm.runInContext('verificationPendingId', closed.context), null);
     console.log('PASS: cached image click, scaled coordinates, stale image, session error, pending action');
 })().catch(error => { console.error(error); process.exitCode = 1; });

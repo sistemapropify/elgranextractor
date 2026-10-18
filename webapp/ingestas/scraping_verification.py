@@ -2,7 +2,6 @@
 import re
 from datetime import timedelta
 from django.db import transaction
-from django.db.models import Q
 from django.utils import timezone
 from scrapi.contracts import ScrapingInterrupted
 from .models import ScrapingJob, ScrapingVerification
@@ -25,9 +24,7 @@ def active_for_job(job):
 def public_state(job):
     ScrapingVerification.objects.filter(run__job_id=job.pk, expires_at__lte=timezone.now()).exclude(
         state='closed').update(screenshot='', answer='', state='closed')
-    item = active_for_job(job).filter(
-        Q(state='waiting') | Q(run__portal='adondevivir')
-    ).select_related('run').first()
+    item = active_for_job(job).select_related('run').first()
     if item is None:
         return None
     return {'id': str(item.pk), 'expires_at': item.expires_at.isoformat(),
@@ -92,7 +89,7 @@ def mailbox(run_id, execution_token):
                     expires_at=item.expires_at, screenshot=payload['screenshot'])
                 return str(replacement.pk)
             if action == 'executed':
-                if run.portal != 'adondevivir' or item.state != 'consumed':
+                if run.portal not in ('adondevivir', 'properati') or item.state != 'consumed':
                     raise ValueError('No hay una acción consumida que confirmar.')
                 item.state = 'executed'
                 item.save(update_fields=['state'])
