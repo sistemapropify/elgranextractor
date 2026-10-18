@@ -95,7 +95,7 @@ def mailbox(run_id, execution_token):
                 item.save(update_fields=['state'])
                 return None
             if action == 'feedback':
-                if run.portal != 'adondevivir' or item.state != 'executed':
+                if run.portal not in ('adondevivir', 'properati') or item.state != 'executed':
                     raise ValueError('Solo se actualiza la pantalla de una acción ya ejecutada.')
                 # Same action remains fenced: an updated image never enables
                 # a second click until open() supplies a fresh waiting ID.

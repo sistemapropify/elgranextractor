@@ -112,7 +112,7 @@ jobs:
       - name: Validate manual portal verification
         run: |
           source antenv/bin/activate
-          python webapp/manage.py test ingestas.tests.test_scraping_verification scrapi.test_manual_verification scrapi.test_browser_verification ingestas.tests.test_scraping_recovery --settings=ingestas.scraping_test_settings --noinput --verbosity=0
+          python webapp/manage.py test ingestas.tests.test_scraping_verification scrapi.test_manual_verification scrapi.test_browser_verification ingestas.tests.test_scraping_recovery scrapi.test_camoufox_launcher.CamoufoxLauncherTests.test_manual_answer_disables_generated_cursor_without_relaxing_browser_isolation --settings=ingestas.scraping_test_settings --noinput --verbosity=0
           node webapp/scrapi/test_verification_click.cjs
           python -m unittest scripts/test_resume_scraping_job_azure.py -v
           python -c 'import json,os; from pathlib import Path; Path("webapp/static/js/scraping-verification-release.json").write_text(json.dumps({"revision":os.environ["GITHUB_SHA"]}))'

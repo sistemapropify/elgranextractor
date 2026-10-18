@@ -555,8 +555,11 @@ def run_paged(portal, *, source_url, max_paginas=0, start_page=1,
             launch['headless'] = 'virtual'
         if native_verification:
             launch['headless'] = False
+        from .camoufox_launcher import manual_answer_kwargs
         prepare_browser = (manual_pointer_kwargs
                            if portal == 'adondevivir' and manual_verification
+                           else manual_answer_kwargs
+                           if portal == 'properati' and manual_verification
                            else camoufox_kwargs)
         options = await asyncio.to_thread(prepare_browser, **launch)
         async with AsyncCamoufox(**options) as browser:

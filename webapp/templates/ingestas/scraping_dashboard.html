@@ -826,7 +826,7 @@ document.getElementById('verificationForm').addEventListener('submit', async fun
         if (jobId !== currentJobId || verificationId !== challengeId) return;
         message.textContent = 'El servidor recibió tu respuesta. Falta la confirmación de Properati.';
         document.getElementById('verificationAnswer').value = '';
-        appendLog('info', 'Respuesta enviada a Properati; esperando confirmación.');
+        appendLog('info', 'Respuesta recibida por el servidor; Properati todavía no confirmó el acceso.');
     } catch (error) {
         if (jobId === currentJobId && verificationId === challengeId) {
             message.textContent = connectionErrorMessage(error, 'El servidor no confirmó la recepción. Comprobando si la respuesta llegó antes de permitir otro envío.');

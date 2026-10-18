@@ -258,6 +258,11 @@ def manual_pointer_kwargs(**overrides) -> dict:
     return camoufox_kwargs(**dict(overrides, humanize=False, disable_coop=True))
 
 
+def manual_answer_kwargs(**overrides) -> dict:
+    """Forward human keyboard/form input without generated cursor trajectories."""
+    return camoufox_kwargs(**dict(overrides, humanize=False))
+
+
 def camoufox_kwargs(**overrides) -> dict:
     """Prepara el browser y devuelve opciones validas para AsyncCamoufox."""
     progress_callback = overrides.pop('_progress_callback', None)

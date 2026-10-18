@@ -1,3 +1,52 @@
+# Properati native human input and post-submit feedback - 2026-10-18
+
+Status: Validated. Continuing the authorized production verification repair.
+Recipe: existing serialized main_granextractorservice.yml CI/CD.
+Base: 715a90dd08303545d3603024a5a0b7ab8bbfdd93, successful production run 39157368709.
+Target: existing granextractorservice / rg-elgranextractor, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Public: https://acm.propifai.com/ingestas/scraping/dashboard/
+
+## 1. Evidence and scope
+The human's 14:33 response reached the browser; the native click timed out,
+synthetic DOM click returned, and Properati did not serve requested content.
+A later challenge expired. Older 12:32 errors belong to the prior execution.
+Disable generated cursor trajectories only for Properati manual-answer launches,
+focus the existing page, and fall back to native Enter rather than synthetic
+DOM click. No CAPTCHA solver, answer inspection/export, cookie transfer,
+origin, isolation or authorization relaxation. Other portals retain their options.
+Publish bounded post-submit captures to the same private mailbox, preserving
+its execution/state fencing. Report safe boolean input/button diagnostics and
+actual remaining seconds, and distinguish server receipt from portal acceptance.
+Screenshots/answers never enter logs. A capture failing during navigation does
+not itself reject a successful submit. Job 229 and its preserved queue remain.
+No migrations, new resources, app settings, credentials, firewall or RBAC changes.
+Shared checkout edits were backed up and scoped changes integrated locally;
+the local server was restarted from its existing preview helper.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-18, America/Lima:
+- 74 isolated release Django tests passed: mailbox, manual/browser verification,
+  recovery and manual-answer launcher isolation; Node real-template tests passed.
+- 82 related tests also passed in the shared preview checkout.
+- Linux Python 3.11.2 ran 10 focused native-input/launcher tests successfully,
+  including expiry, interruption, native Enter and post-submit screen feedback.
+- Real installed Camoufox on an offline fixture emitted trusted keyboard events
+  and trusted form submission with the new options; no synthetic fallback used.
+  This proves input dispatch, NOT acceptance by the live Properati service.
+- Production WSGI import, changed dashboard compilation and isolated collectstatic
+  passed (520 files); workflow YAML including the added launcher test parsed.
+- Actual restarted localhost dashboard/login redirect and shared JS/CSS return 200.
+  Authenticated SQL-backed live extraction is not claimed as locally validated.
+- Latest SQL read shows job 229 error with 133 stored properties after expiration.
+  The preserved run/checkpoint/candidates are not reset by this application change.
+- Existing exact-revision public gate and once-only tagged recovery remain in CI.
+- Scope, whitespace and latest-main checks gate push. User handles ongoing
+  deployment/extraction monitoring. Human live verification is still required;
+  no successful Properati acceptance or completed extraction is claimed.
+
+---
+
 # Exact release verification during Azure startup - 2026-10-18
 
 Status: Validated. Continuation of the user-authorized deployment and job recovery.

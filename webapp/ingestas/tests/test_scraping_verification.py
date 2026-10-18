@@ -61,6 +61,9 @@ class VerificationMailboxTests(TestCase):
         self.assertEqual(state['state'], 'executed')
         self.assertEqual(state['mode'], 'answer')
         self.assertNotIn('answer', state)
+        self.exchange('feedback', id=self.challenge, screenshot='after-submit-screen')
+        self.assertEqual(public_state(self.job)['screenshot'], 'after-submit-screen')
+        self.assertEqual(public_state(self.job)['state'], 'executed')
         with self.assertRaises(ValueError):
             submit_answer(self.job.pk, self.challenge, '123')
         replacement = self.exchange('open', screenshot='new-challenge', seconds=90)

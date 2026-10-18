@@ -10,6 +10,16 @@ from scrapi import camoufox_launcher as launcher
 
 
 class CamoufoxLauncherTests(unittest.TestCase):
+    def test_manual_answer_disables_generated_cursor_without_relaxing_browser_isolation(self):
+        with patch.object(launcher, 'ensure_camoufox_installed'), \
+             patch.object(launcher, 'ensure_camoufox_system_dependencies'):
+            ordinary = launcher.camoufox_kwargs(headless=True)
+            manual = launcher.manual_answer_kwargs(headless=True, humanize=True)
+        self.assertTrue(ordinary.pop('humanize'))
+        self.assertFalse(manual.pop('humanize'))
+        self.assertEqual(ordinary, manual)
+        self.assertNotIn('disable_coop', manual)
+
     def test_manual_remote_pointer_supports_cross_origin_controls_only(self):
         with patch.object(launcher, 'ensure_camoufox_installed'), \
              patch.object(launcher, 'ensure_camoufox_system_dependencies'):

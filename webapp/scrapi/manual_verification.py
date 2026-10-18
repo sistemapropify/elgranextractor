@@ -24,10 +24,20 @@ async def _submit_human_answer(page, answer, emit):
     """Submit one human answer despite transient button/actionability changes."""
     field = page.locator('#math-answer')
     button = page.locator('#verify-btn')
+    await asyncio.wait_for(page.bring_to_front(), timeout=5)
     # Some challenges enable their button on keyboard events, which fill()
     # does not generate. Type only the bounded answer supplied by the human.
     await field.fill('', timeout=5000)
     await field.press_sequentially(answer, delay=40, timeout=5000)
+    try:
+        diagnostics = {'button_enabled': await button.is_enabled(timeout=2000),
+                       'button_visible': await button.is_visible(),
+                       'input_matches_human_response': await field.input_value(timeout=2000) == answer}
+    except Exception as exc:
+        diagnostics = {'inspection_error': type(exc).__name__}
+    await emit(event='verification.input_ready',
+        message='Respuesta colocada en el formulario del navegador; enviando a Properati.',
+        **diagnostics)
     try:
         # Blurring the field lets pages that enable the button on change/blur
         # finish their own validation before Playwright checks actionability.
@@ -46,22 +56,16 @@ async def _submit_human_answer(page, answer, emit):
             logger.info('Properati verification completed while the submit button changed')
             return
         logger.warning(
-            'Properati verification button was not actionable (%s); trying form submission fallback',
+            'Properati verification button was not actionable (%s); trying native Enter',
             type(click_error).__name__,
         )
         await emit(
             event='verification.submit_fallback', level='warning',
-            message='Properati cambió el botón; reenviando tu respuesta en la misma verificación.',
+            message='El clic del navegador no terminó; enviando tu misma respuesta con la tecla Enter.',
         )
 
-    # A DOM click avoids false negatives caused only by an overlay/animation,
-    # while still sending exactly the answer supplied by the human.
-    if await button.count():
-        try:
-            await button.evaluate('(element) => element.click()')
-            return
-        except Exception:
-            pass
+    # A synthetic DOM click may return successfully without submitting a
+    # disabled form. Use a native keyboard event for the human's answer.
     try:
         await field.press('Enter', timeout=5000)
     except Exception as enter_error:
@@ -91,7 +95,7 @@ async def resolve(page, exchange, emit):
             challenge_id = await asyncio.to_thread(exchange, 'open',
                 screenshot=base64.b64encode(screenshot).decode('ascii'), seconds=remaining)
             await emit(event='verification.required', level='warning',
-                message='Properati requiere tu respuesta: completa la verificación en el dashboard (máximo 5 minutos).')
+                message=f'Properati requiere tu respuesta en el dashboard. Esta imagen vence en {int(remaining)} segundos.')
             answer = None
             while time.monotonic() < deadline:
                 # Also checks that pause/stop/worker replacement hasn't invalidated this browser.
@@ -108,7 +112,7 @@ async def resolve(page, exchange, emit):
             await emit(event='verification.submitted',
                 message='El navegador procesó tu respuesta; esperando que Properati confirme el acceso.')
             # Wait for actual listing/detail content, not just a changed title.
-            for _ in range(15):
+            for observation in range(15):
                 await asyncio.sleep(2)
                 await asyncio.to_thread(exchange, 'poll', id=challenge_id)
                 if time.monotonic() >= deadline:
@@ -121,6 +125,18 @@ async def resolve(page, exchange, emit):
                     await emit(event='verification.resolved',
                         message='Properati aceptó la verificación; continúa la extracción.')
                     return True
+                if observation in (0, 4):
+                    # Let the human see the real post-submit portal screen.
+                    # Neither the answer nor the screenshot enters the logs.
+                    try:
+                        screenshot = await page.locator('.custom-captcha').screenshot(timeout=5000)
+                    except Exception as exc:
+                        await emit(event='verification.feedback_unavailable', level='debug',
+                            error_type=type(exc).__name__,
+                            message='Properati está cambiando la pantalla; se comprobará otra vez.')
+                    else:
+                        await asyncio.to_thread(exchange, 'feedback', id=challenge_id,
+                            screenshot=base64.b64encode(screenshot).decode('ascii'))
             if not await page.locator('#math-answer').count():
                 raise manual_timeout()
             await emit(event='verification.retry', level='warning',

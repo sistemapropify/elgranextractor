@@ -16,6 +16,7 @@ class ManualVerificationTests(unittest.IsolatedAsyncioTestCase):
             count=AsyncMock(side_effect=lambda: int(not self.solved)),
             fill=AsyncMock(), press=AsyncMock(side_effect=press),
             press_sequentially=AsyncMock(),
+            input_value=AsyncMock(return_value='123'),
         )
         async def click(**kwargs):
             self.solved = True
@@ -24,12 +25,14 @@ class ManualVerificationTests(unittest.IsolatedAsyncioTestCase):
         self.button = SimpleNamespace(
             count=AsyncMock(return_value=1), click=AsyncMock(side_effect=click),
             evaluate=AsyncMock(side_effect=dom_click),
+            is_enabled=AsyncMock(return_value=True), is_visible=AsyncMock(return_value=True),
         )
         self.image = SimpleNamespace(screenshot=AsyncMock(return_value=b'png'))
         selectors = {'#math-answer': self.field, '#verify-btn': self.button,
                      '.custom-captcha': self.image,
                      'article.snippet, #location-map': SimpleNamespace(count=AsyncMock(return_value=1))}
-        return SimpleNamespace(url='https://www.properati.com.pe/detalle/example', locator=selectors.__getitem__)
+        return SimpleNamespace(url='https://www.properati.com.pe/detalle/example',
+            locator=selectors.__getitem__, bring_to_front=AsyncMock())
 
     async def test_only_human_answer_is_sent_in_same_page(self):
         page = self.page()
@@ -82,14 +85,31 @@ class ManualVerificationTests(unittest.IsolatedAsyncioTestCase):
         self.button.click.assert_not_awaited()
         mailbox.assert_called_once_with('close')
 
-    async def test_changed_portal_button_uses_dom_click_fallback(self):
+    async def test_changed_portal_button_uses_native_enter_and_never_synthetic_click(self):
         page = self.page()
         self.button.click.side_effect = TimeoutError()
         mailbox = Mock(side_effect=lambda action, **kwargs: 'id' if action == 'open' else '123')
         with patch('scrapi.manual_verification.asyncio.sleep', AsyncMock()):
             self.assertTrue(await resolve(page, mailbox, AsyncMock()))
-        self.button.evaluate.assert_awaited_once()
+        self.field.press.assert_any_await('Enter', timeout=5000)
+        self.button.evaluate.assert_not_awaited()
         self.assertEqual(mailbox.call_args.args, ('close',))
+
+    async def test_feedback_shows_post_submit_screen_without_claiming_acceptance(self):
+        page = self.page()
+        self.button.click.side_effect = None
+        mailbox = Mock(side_effect=lambda action, **kwargs: 'id' if action == 'open' else '123')
+        emit = AsyncMock()
+        with patch('scrapi.manual_verification.asyncio.sleep', AsyncMock()):
+            with self.assertRaises(ScrapingInterrupted):
+                await resolve(page, mailbox, emit)
+        feedback = [call for call in mailbox.call_args_list if call.args[0] == 'feedback']
+        self.assertTrue(feedback)
+        self.assertEqual(feedback[0].kwargs['screenshot'], 'cG5n')
+        events = [call.kwargs['event'] for call in emit.call_args_list]
+        self.assertIn('verification.input_ready', events)
+        self.assertNotIn('verification.resolved', events)
+        self.assertNotIn('123', str(emit.call_args_list))
 
     async def test_disappearing_button_after_fill_is_accepted_when_content_loaded(self):
         page = self.page()
