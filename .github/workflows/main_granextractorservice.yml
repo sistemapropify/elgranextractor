@@ -327,13 +327,14 @@ jobs:
               QUAD_STATUS=$(http_status /tmp/quad-protected.html https://acm.propifai.com/cuadrantizacion/mapa/)
               EXTRA_STATIC_OK=1
               while IFS='|' read -r asset source; do
-                ASSET_STATUS=$(http_status /tmp/cadastral-asset "https://acm.propifai.com/static/$asset")
+                ASSET_STATUS=$(http_status /tmp/cadastral-asset "https://acm.propifai.com/static/$asset?revision=${GITHUB_SHA}")
                 if [ "$ASSET_STATUS" != "200" ] || ! cmp -s /tmp/cadastral-asset "$source"; then
                   echo "Release asset pending: $asset ($ASSET_STATUS)"
                   EXTRA_STATIC_OK=0
                   break
                 fi
               done <<'CATASTRO_ASSETS'
+          js/scraping-verification-release.json|webapp/static/js/scraping-verification-release.json
           acm/js/street-facade.js|webapp/acm/static/acm/js/street-facade.js
           js/street-facade-view.js|webapp/static/js/street-facade-view.js
           js/catastro-dashboard.js|webapp/static/js/catastro-dashboard.js

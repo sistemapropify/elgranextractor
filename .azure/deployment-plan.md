@@ -1,3 +1,48 @@
+# Exact release verification during Azure startup - 2026-10-18
+
+Status: Validated. Continuation of the user-authorized deployment and job recovery.
+Recipe: existing serialized CI/CD main_granextractorservice.yml; existing Azure
+App Service granextractorservice / rg-elgranextractor, Brazil South, subscription
+0219eecc-9920-4789-9929-3091a2f09daf. No provisioning or identity/role changes.
+Base: c41b21de60b5c44156d17f3c3f9946fe6b19e049.
+Public: https://acm.propifai.com/ingestas/scraping/dashboard/
+
+## 1. Root cause and scope
+Run 39155245422 passed build/tests, Azure publication and public health/static
+checks, then failed only in the authorized recovery step. The normal health gate
+could accept the previous healthy version because unchanged static assets match.
+The recovery helper correctly rejected the missing new marker after about one
+minute; Azure finished starting the new version later. No recovery SQL ran.
+Add the generated exact-SHA marker as the first required release asset inside
+existing 45-attempt stabilization checks. Cache-bust release asset GETs with the
+current GITHUB_SHA. The helper keeps its independent same-revision safety check.
+No application code, migrations, data schema, resources or credentials changed.
+Shared workflow edits were preserved and only these two lines integrated locally.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-18, America/Lima:
+- Retrieved GitHub failed step and actual traceback: wait_for_release exhausted;
+  build and publication succeeded. Current public JSON proves c41b21de is live.
+- Public health and ACM login returned 200. Actual ACM components JS, cadastral
+  viewer JS and CSS match current release Git blob bytes exactly.
+- Parsed actual before/after YAML verification run steps and ran their Bash in
+  an isolated Linux HTTP simulation. Old gate falsely passed the previous
+  healthy release; new gate rejected the first old marker and passed only after
+  the second request served the current marker. All requests cache-busted.
+- A server permanently serving the old marker exhausted simulated retries and
+  failed, preserving the requirement for the requested exact release.
+- SQL recovery --dry-run still reports job 229 error, 133 saved, 18 pending,
+  page 4/run 119; no competing extraction was detected and no job was changed.
+- Actual shared local HTTP page/login redirect and JS/CSS remain accessible.
+- Application source, 72-test verification gate, six recovery tests and validated
+  build are unchanged from the previous successful build in run 39155245422.
+- Scope/whitespace/latest-main checks gate the non-forced retry push. Existing CI
+  checks the public new version before the once-only recovery continuation.
+- User handles ongoing monitoring; report live application separately from the
+  pending CI adjustment. No full extraction-completion claim is made.
+
+---
+
 # Properati deployment gate repair - 2026-10-18
 
 Status: Validated. User reported the failed authorized deployment; retry is in scope.
