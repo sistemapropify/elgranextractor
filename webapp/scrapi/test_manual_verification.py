@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -70,7 +71,12 @@ class ManualVerificationTests(unittest.IsolatedAsyncioTestCase):
     async def test_expiry_does_not_click_or_loop_retries(self):
         page = self.page()
         mailbox = Mock()
-        with patch('scrapi.manual_verification.time.monotonic', side_effect=[0, 301]):
+        # Replace only this module's clock, leaving asyncio's scheduling clock real.
+        clock = SimpleNamespace(monotonic=Mock(side_effect=[0, 301]))
+        loop = asyncio.get_running_loop()
+        before = loop.time()
+        with patch('scrapi.manual_verification.time', clock):
+            self.assertGreaterEqual(loop.time(), before)
             with self.assertRaisesRegex(ScrapingInterrupted, 'portal.paused:'):
                 await resolve(page, mailbox, AsyncMock())
         self.button.click.assert_not_awaited()

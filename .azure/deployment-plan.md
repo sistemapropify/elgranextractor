@@ -1,3 +1,37 @@
+# Properati deployment gate repair - 2026-10-18
+
+Status: Validated. User reported the failed authorized deployment; retry is in scope.
+Recipe: existing CI/CD main_granextractorservice.yml. Same Azure target/subscription.
+Base: ef5cc17c42d1a5a4877475490a4226930a3b077e.
+
+## 1. Scope and cause
+Run 39152715465 failed in the manual-verification test gate before deployment.
+The expiry test patched time.monotonic on the shared standard-library module,
+which also changed asyncio's scheduling clock. Python 3.12/Linux exhausted the
+mock's two values and aborted with StopIteration. Local Python 3.14 had passed.
+Replace only manual_verification's clock namespace and assert that the event
+loop's own clock continues running normally. No application/workflow changes,
+SQL migrations, resource, identity, credential or firewall changes in this retry.
+The same reviewed release and once-only recovery of Properati job 229 remain.
+Shared local test edits were compared and preserved before integration.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-18, America/Lima:
+- Read actual GitHub job/step failure and traceback; deploy job was skipped.
+- Azure App Service remained Running in Brazil South.
+- Linux Python 3.11.2 isolated reproduction: original test suite exits 1 with
+  StopIteration; corrected suite runs all 8 tests successfully, exit 0.
+  Test-only temporary files removed automatically; no database/browser accessed.
+- Same 72-test Django gate now passes locally with the corrected test.
+- Previous production WSGI/template/static and recovery-helper validation remain
+  applicable because their source and deployment configuration are unchanged.
+- Exact commit scope, whitespace, latest-main and local HTTP checks gate push.
+- New tagged push retries the authorized release. Existing CI verifies public
+  pages, assets and exact release marker before requesting job recovery.
+- User handles ongoing deployment/extraction monitoring; dispatch is not live proof.
+
+---
+
 # Properati human verification and preserved-job recovery - 2026-10-18
 
 Status: Validated. User explicitly approved publication and recovery of job 229.
