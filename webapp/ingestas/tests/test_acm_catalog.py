@@ -79,7 +79,7 @@ class CatalogDashboardTests(TestCase):
     def context(self, params=None, propify=None):
         with patch('ingestas.property_quality_views.propify_catalog_rows',return_value=propify or []), \
              patch('ingestas.property_quality_views.render',return_value=HttpResponse('ok')) as render:
-            dashboard(self.request(params or {'estado':'acm'}))
+            dashboard(self.request(params if params is not None else {'estado':'acm'}))
         return render.call_args.args[2]
 
     def test_complete_catalog_is_paginated_and_csv_exports_every_page(self):
@@ -98,10 +98,23 @@ class CatalogDashboardTests(TestCase):
     def test_default_lists_all_even_excluded_retired_and_manually_reviewed(self):
         RevisionPropiedadScraping.objects.create(propiedad=self.property,correcta=True,excluida=True,motivo='Revisar')
         self.property.estado_publicacion='retirada';self.property.save()
-        context=self.context({'portal':'remax'})
+        context=self.context({'portal':'remax','estado':'todas'})
         self.assertEqual(context['filters']['estado'],'todas')
         self.assertEqual(context['page'].paginator.count,1)
         self.assertFalse(context['page'][0]['acm_available'])
+
+    def test_default_page_shows_only_properties_admitted_by_acm(self):
+        invalid=PropiedadesCompetencia.objects.create(fuente='remax',id_origen='missing-price',
+            tipo_inmueble='Casa',tipo_operacion='Venta',precio_usd=None,area_terreno=200,
+            area_construida=120,latitud=-16.4,longitud=-71.5,distrito='Cayma',
+            precision_ubicacion='exacta',estado_publicacion='activa')
+        context=self.context({})
+        self.assertTrue(context['acm_mode'])
+        self.assertEqual(context['filters']['estado'],'acm')
+        self.assertEqual(context['summary']['total'],1)
+        self.assertEqual([row['id'] for row in context['page']],[self.property.pk])
+        self.assertFalse(context['page'][0]['correcta'])
+        self.assertEqual(self.context({'estado':'todas'})['page'].paginator.count,2)
 
     def test_automatic_alerts_are_independent_of_manual_approval(self):
         self.assertEqual(self.context({'estado':'sin_alertas'})['page'].paginator.count,1)
@@ -166,7 +179,7 @@ class CatalogDashboardTests(TestCase):
             'django.template.loaders.filesystem.Loader']}
         with override_settings(TEMPLATES=configured):
             html=render_to_string('ingestas/property_quality.html',context)
-        self.assertIn('Base de propiedades del ACM',html)
+        self.assertIn('Propiedades para el cálculo ACM',html)
         self.assertIn('Fotos y captura',html)
         self.assertIn(f'openScrapedEditor({self.property.pk})',html)
         self.assertIn('Ver publicación',html)

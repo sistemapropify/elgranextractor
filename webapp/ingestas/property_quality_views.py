@@ -155,7 +155,7 @@ def dashboard(request):
     user = user_for(request)
     if not user or not getattr(user, 'is_authenticated', False) or not getattr(user, 'is_active', False):
         return HttpResponse('Inicia sesión para consultar la calidad.', status=401)
-    state = request.GET.get('estado', 'todas')
+    state = request.GET.get('estado', 'acm')
     acm_mode = state == 'acm'
     warnings = []
     query = PropiedadesCompetencia.objects.all()
@@ -192,6 +192,8 @@ def dashboard(request):
     rows = analyze(rows)
     for row in rows:
         annotate_catalog(row)
+    if acm_mode:
+        rows = [row for row in rows if row['acm_available']]
     summary = {'total': len(rows), 'con_alertas': sum(bool(r['alertas']) for r in rows),
                'excluidas': sum(r['excluida'] for r in rows),
                'correctas': sum(1 for r in rows if r.get('correcta')),

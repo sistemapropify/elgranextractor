@@ -100,7 +100,7 @@ class QualityEditorTests(TestCase):
         self.assertFalse(RevisionPropiedadScraping.objects.get(propiedad=self.prop).excluida)
 
     def test_export_real_rows(self):
-        request=RequestFactory().get('/quality/', {'exportar':'csv'})
+        request=RequestFactory().get('/quality/', {'exportar':'csv','estado':'todas'})
         request.current_user=self.user
         response=dashboard(request)
         self.assertEqual(response.status_code,200)

@@ -1,3 +1,51 @@
+# Review properties admitted by the ACM in the existing quality template - 2026-10-18
+
+Status: Validated. User explicitly requested production publication.
+Recipe: existing serialized GitHub Actions main_granextractorservice.yml (CI/CD).
+Target: existing granextractorservice / rg-elgranextractor, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Base: latest production origin/main 654d52b7d33b3a6eb0b4512418a346b9f64c79a5.
+Public: https://acm.propifai.com/ingestas/scraping/calidad/?estado=acm
+
+## 1. Scope and execution
+Keep the existing quality table, filters and audited/protected property editor.
+Default to the ACM-admitted catalogue, using the engine's primary rules and
+shared alternative-reference eligibility. Distinguish principal/alternative
+calculations and do not claim all candidates were selected by a specific ACM.
+Add archived capture alongside editable fields, gallery/live-publication links,
+clear automatic/manual review labels and an explicit all-scraped-records view.
+Preserve authenticated access, CSRF, optimistic conflict checks and audit history.
+Propify uses the existing bounded loader; source failure explicitly flags partial data.
+Scoped changes are integrated into D:/PROMETEO, preserving other local edits.
+No database migrations, new resources, app settings, credentials, firewall or RBAC changes.
+No extraction/recovery is requested by this release; do not use a resume-job tag.
+Push without force only after latest-main and whitespace checks. Existing pipeline
+publishes and verifies the exact public revision and static assets. Rollback is a
+scoped revert through that same pipeline, retaining stored records and corrections.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-18, America/Lima:
+- 44 isolated SQLite Django tests passed in release checkout: ACM eligibility,
+  default-only admitted records, principal/alternative routes, filters, manual
+  flags, pagination/export, source failure, permissions, editing protection/audit,
+  stale-write rejection, embedded private capture and existing fallback regressions.
+- Installed Camoufox tested the actual editor template on an offline fixture:
+  capture/form side by side, per-record evidence changes, read-only/edit transitions,
+  mobile close access, no JavaScript errors. Does not assert live portal content.
+- PRODUCTION=true WSGI import passed with isolated SQLite databases; five affected
+  templates compiled and collectstatic produced 521 files. Workflow YAML parsed
+  and includes the same 44-test review gate on Linux Python 3.12 before publication.
+- Azure account and existing App Service read: expected subscription, Running,
+  Brazil South. No infrastructure provisioning/static role changes apply.
+- Shared localhost source and assets are integrated; the authenticated SQL-backed
+  preview is blocked by Azure SQL firewall 40615. No firewall/authentication bypass.
+- Previously successful deployment 39168010118 matches base 654d52b7. Later failed
+  run 39168529043 belongs to the separate procesar-control workflow, not deployment.
+- Exact-SHA public marker and existing health/static gates remain mandatory.
+- No long-running scraper monitoring or background automation is introduced.
+
+---
+
 # Properati native human input and post-submit feedback - 2026-10-18
 
 Status: Validated. Continuing the authorized production verification repair.

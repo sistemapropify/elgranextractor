@@ -117,6 +117,11 @@ jobs:
           python -m unittest scripts/test_resume_scraping_job_azure.py -v
           python -c 'import json,os; from pathlib import Path; Path("webapp/static/js/scraping-verification-release.json").write_text(json.dumps({"revision":os.environ["GITHUB_SHA"]}))'
 
+      - name: Validate reviewable ACM property catalogue
+        run: |
+          source antenv/bin/activate
+          python webapp/manage.py test ingestas.tests.test_acm_catalog ingestas.tests.test_property_quality acm.test_reference_fallback --settings=acm.history_test_settings --noinput --verbosity=0
+
       - name: Collect Django static files
         env:
           # Valores dummy para que Django cargue settings sin conexión a BD.
