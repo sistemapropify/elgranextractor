@@ -6,7 +6,7 @@ from django import forms
 from django.utils import timezone
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -18,6 +18,7 @@ from cuadrantizacion.views import PrometeoSessionAuthentication
 from .models import (PropiedadesCompetencia, RevisionPropiedadScraping,
                      CambioPropiedadScraping, RevisionIAAlerta)
 from .property_quality import DATA_FIELDS, analyze, number
+from acm.catalog import annotate_catalog, propify_catalog_rows
 
 EDIT_FIELDS = ('titulo', 'tipo_inmueble', 'tipo_operacion', 'precio_soles', 'precio_usd',
     'area_m2', 'area_terreno', 'area_construida', 'dormitorios', 'banos', 'estacionamientos',
@@ -96,9 +97,11 @@ class PropertyEditor(APIView):
             revision = RevisionPropiedadScraping.objects.filter(propiedad=obj).first() or RevisionPropiedadScraping(propiedad=obj)
             revision_ia = RevisionIAAlerta.objects.filter(propiedad=obj).first()
             data = snapshot(obj, revision)
-            return Response({'html': PropertyForm(instance=obj).as_p(), 'record': data,
+            response = Response({'html': PropertyForm(instance=obj).as_p(), 'record': data,
                              'version': version(data), 'can_edit': allowed(request.user),
                              'alertas': alertas_para(obj, revision, revision_ia)})
+            response['Cache-Control'] = 'private, no-store'
+            return response
         except Http404:
             raise
         except Exception as exc:
@@ -152,6 +155,9 @@ def dashboard(request):
     user = user_for(request)
     if not user or not getattr(user, 'is_authenticated', False) or not getattr(user, 'is_active', False):
         return HttpResponse('Inicia sesión para consultar la calidad.', status=401)
+    state = request.GET.get('estado', 'todas')
+    acm_mode = state == 'acm'
+    warnings = []
     query = PropiedadesCompetencia.objects.all()
     for param, field in (('portal', 'fuente'), ('tipo', 'tipo_inmueble'), ('distrito', 'distrito'), ('operacion', 'tipo_operacion')):
         if request.GET.get(param):
@@ -161,7 +167,10 @@ def dashboard(request):
     revisions = {r.propiedad_id: r for r in RevisionPropiedadScraping.objects.all()}
     revisiones_ia = {r.propiedad_id: r for r in RevisionIAAlerta.objects.all()}
     rows = []
-    for row in query.values(*DATA_FIELDS).order_by('id').iterator(chunk_size=1000):
+    query = query.annotate(original_listing_title=F('datos_crudos__Titulo'),
+                           original_listing_title_lower=F('datos_crudos__titulo'))
+    for row in query.values(*DATA_FIELDS, 'antiguedad_anios', 'original_listing_title',
+                            'original_listing_title_lower').order_by('id').iterator(chunk_size=1000):
         revision = revisions.get(row['id'])
         row['excluida'] = bool(revision and revision.excluida)
         row['correcta'] = bool(revision and revision.correcta)
@@ -171,10 +180,24 @@ def dashboard(request):
         row['ia_motivo'] = ia.motivo if ia else ''
         row['ia_correccion'] = ia.correccion if ia else {}
         rows.append(row)
+    if acm_mode and request.GET.get('portal', '') in ('', 'propify'):
+        try:
+            for row in propify_catalog_rows():
+                if all(not request.GET.get(param) or str(row.get(field) or '').casefold() == request.GET[param].casefold()
+                       for param, field in (('tipo', 'tipo_inmueble'), ('distrito', 'distrito'),
+                                           ('operacion', 'tipo_operacion'), ('pub_estado', 'estado_publicacion'))):
+                    rows.append(row)
+        except Exception:
+            warnings.append('Propify no respondió. El listado está incompleto: muestra solo los portales scrapeados. Vuelve a consultar para incluir Propify.')
     rows = analyze(rows)
+    for row in rows:
+        annotate_catalog(row)
     summary = {'total': len(rows), 'con_alertas': sum(bool(r['alertas']) for r in rows),
                'excluidas': sum(r['excluida'] for r in rows),
-               'correctas': sum(1 for r in rows if r['correcta']),
+               'correctas': sum(1 for r in rows if r.get('correcta')),
+               'sin_alertas': sum(not r['alertas'] for r in rows),
+               'acm_principal': sum(r['acm_primary'] for r in rows),
+               'acm_referencia': sum(r['acm_status'] == 'referencia' for r in rows),
                'ia_real': sum(1 for r in rows if r['ia_veredicto'] == 'real'),
                'ia_ruido': sum(1 for r in rows if r['ia_veredicto'] == 'ruido'),
                'ia_dudoso': sum(1 for r in rows if r['ia_veredicto'] == 'dudoso'),
@@ -182,11 +205,19 @@ def dashboard(request):
     # Barra de progreso del triaje: cuantas sospechosas ya tienen veredicto.
     summary['triaje_total'] = summary['con_alertas']
     summary['triaje_revisados'] = summary['con_alertas'] - summary['ia_sin_revisar']
-    state = request.GET.get('estado', 'alertas')
-    if state == 'alertas':
+    if state == 'acm':
+        rows = [r for r in rows if r['acm_available']]
+        route = request.GET.get('acm_ruta')
+        if route in ('principal', 'referencia'):
+            rows = [r for r in rows if r['acm_status'] == route]
+    elif state == 'alertas':
         rows = [r for r in rows if r['alertas'] and not r['correcta']]
     elif state == 'correctas':
         rows = [r for r in rows if r['correcta']]
+    elif state == 'sin_alertas':
+        rows = [r for r in rows if not r['alertas']]
+    elif state == 'con_alertas':
+        rows = [r for r in rows if r['alertas']]
     elif state == 'excluidas':
         rows = [r for r in rows if r['excluida']]
     elif state in ('ia_real', 'ia_ruido', 'ia_dudoso'):
@@ -198,23 +229,39 @@ def dashboard(request):
     if request.GET.get('exportar') == 'csv':
         response = HttpResponse(content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = 'attachment; filename="calidad_propiedades.csv"'
+        response['Cache-Control'] = 'private, no-store'
         response.write('\ufeff')
         writer = csv.writer(response)
-        writer.writerow([*DATA_FIELDS, 'excluida', 'motivo', 'alertas'])
+        writer.writerow([*DATA_FIELDS, 'excluida', 'motivo', 'alertas', 'ruta_acm', 'observaciones_acm'])
         for row in rows:
-            cells = [row.get(k) for k in DATA_FIELDS] + [row['excluida'], row['motivo'], ' | '.join(row['alertas'])]
+            cells = [row.get(k) for k in DATA_FIELDS] + [row['excluida'], row['motivo'], ' | '.join(row['alertas']), row['acm_status'], ' | '.join(row['acm_issues'])]
             writer.writerow(["'" + c if isinstance(c, str) and c.startswith(('=', '+', '-', '@')) else c for c in cells])
         return response
     params = request.GET.copy()
     params.pop('page', None)
-    return render(request, 'ingestas/property_quality.html', {
+    catalog_params = params.copy()
+    for key in ('tab', 'exportar', 'acm_ruta'):
+        catalog_params.pop(key, None)
+    catalog_params['estado'] = 'acm'
+    all_params = catalog_params.copy()
+    all_params['estado'] = 'todas'
+    portals = list(PropiedadesCompetencia.objects.order_by('fuente').values_list('fuente', flat=True).distinct())
+    if acm_mode and 'propify' not in portals:
+        portals.append('propify')
+    filters = request.GET.copy()
+    filters.setdefault('estado', state)
+    response = render(request, 'ingestas/property_quality.html', {
         'summary': summary, 'page': Paginator(rows, 50).get_page(request.GET.get('page')),
-        'params': params.urlencode(), 'filters': request.GET,
-        'portals': PropiedadesCompetencia.objects.order_by('fuente').values_list('fuente', flat=True).distinct(),
+        'params': params.urlencode(), 'filters': filters,
+        'districts': PropiedadesCompetencia.objects.exclude(distrito__isnull=True).exclude(distrito='').order_by('distrito').values_list('distrito', flat=True).distinct(),
+        'portals': portals, 'acm_mode': acm_mode, 'catalog_url': '?' + catalog_params.urlencode(),
+        'catalog_warnings': warnings, 'all_url': '?' + all_params.urlencode(),
         'types': PropiedadesCompetencia.TIPO_INMUEBLE_CHOICES,
         'estados_publicacion': PropiedadesCompetencia.ESTADO_PUBLICACION_CHOICES,
         'can_edit': allowed(user),
     })
+    response['Cache-Control'] = 'private, no-store'
+    return response
 
 
 def disparar_triage(request):

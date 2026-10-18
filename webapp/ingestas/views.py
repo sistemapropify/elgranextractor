@@ -2403,6 +2403,11 @@ class ScrapingPropiedadesView(ListView):
 class ScrapingCaptureView(ScrapingLoginRequiredMixin, TemplateView):
     template_name = 'ingestas/scraping_captura.html'
 
+    def dispatch(self, request, *args, **kwargs):
+        response = super().dispatch(request, *args, **kwargs)
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+        return response
+
     def get_context_data(self, **kwargs):
         from scrapi.publication_capture import capture_metadata
         from urllib.parse import urlsplit
@@ -2417,7 +2422,10 @@ class ScrapingCaptureView(ScrapingLoginRequiredMixin, TemplateView):
                 signed = generate_read_sas_url(url, expiry_minutes=30)
             except AzureStorageError:
                 pass
-        context.update(propiedad=obj, captura=capture, captura_url=signed)
+        context.update(propiedad=obj, captura=capture, captura_url=signed,
+                       capture_base_template='ingestas/capture_embedded_base.html'
+                           if self.request.GET.get('embedded') == '1' else 'propifai_base.html',
+                       capture_embedded=self.request.GET.get('embedded') == '1')
         return context
 
     def render_to_response(self, context, **kwargs):

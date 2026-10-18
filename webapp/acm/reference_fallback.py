@@ -6,6 +6,15 @@ from .comparable_policy import land_only
 from .listing_operation import resolve_operation
 
 
+def reference_usable(row, area, excluded=()):
+    """Shared eligibility for a secondary calculation after type/radius filtering."""
+    from .components_engine import positive
+    return (row['id'] not in excluded and bool(positive(row.get('price')))
+            and bool(positive(row.get(area))) and resolve_operation(row)[0] == 'Venta'
+            and row.get('operation_status') != 'review'
+            and not row.get('review_excluded') and not row.get('duplicate_of'))
+
+
 def calculate_from_references(records, params, excluded, primary):
     from .components_engine import positive
 
@@ -16,11 +25,7 @@ def calculate_from_references(records, params, excluded, primary):
     if not references:
         return primary
     excluded = set(excluded)
-    selected = [row for row in references if row['id'] not in excluded
-                and positive(row.get('price')) and positive(row.get(area))
-                and resolve_operation(row)[0] == 'Venta'
-                and row.get('operation_status') != 'review'
-                and not row.get('review_excluded') and not row.get('duplicate_of')]
+    selected = [row for row in references if reference_usable(row, area, excluded)]
     result = {**primary, 'model': 'land' if area == 'land' else 'built',
               'reference_mode': True, 'reference_ids': [row['id'] for row in selected],
               'reference_display_ids': [row['id'] for row in references],

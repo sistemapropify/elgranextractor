@@ -1,22 +1,25 @@
-<dialog id="scraped-editor" style="margin:auto;width:min(1150px,95vw);height:min(86vh,820px);max-height:92vh;border:1px solid #536478;border-radius:12px;padding:20px;background:#161b22;color:#e6edf3;overflow:hidden">
-<header style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3 style="margin:0">Editar registro scrapeado</h3><button type="button" style="min-height:44px;min-width:90px" onclick="document.getElementById('scraped-editor').close()" aria-label="Cerrar editor">Cerrar ×</button></header>
+<dialog id="scraped-editor" style="margin:auto;width:min(1560px,97vw);height:92vh;max-height:94vh;border:1px solid #536478;border-radius:12px;padding:20px;background:#161b22;color:#e6edf3;overflow:hidden">
+<header style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3 style="margin:0">Revisar datos frente a la publicación</h3><button type="button" style="min-height:44px;min-width:90px" onclick="document.getElementById('scraped-editor').close()" aria-label="Cerrar editor">Cerrar ×</button></header>
 <p style="flex:none">Los campos corregidos quedan protegidos al volver a scrapear. Los datos originales y fechas de seguimiento se conservan como evidencia.</p>
-<p style="flex:none"><a id="scraped-publication" target="_blank" rel="noopener noreferrer" hidden style="display:none;padding:8px 12px;border:1px solid #52718b;border-radius:7px;color:#8dc8ff">Abrir publicación ↗</a><span id="scraped-publication-missing" hidden>Sin enlace de publicación válido en este registro.</span></p>
+<p style="flex:none"><a id="scraped-publication" target="_blank" rel="noopener noreferrer" hidden style="display:none;padding:8px 12px;border:1px solid #52718b;border-radius:7px;color:#8dc8ff">Abrir publicación ↗</a><span id="scraped-publication-missing" hidden>Sin enlace de publicación válido en este registro.</span> <a id="scraped-gallery" target="_blank" rel="noopener noreferrer" hidden style="color:#8dc8ff">Ver fotos</a> · <a id="scraped-capture-original" target="_blank" rel="noopener noreferrer" hidden style="color:#8dc8ff">Ampliar captura</a></p>
 <div id="scraped-editor-body" style="flex:1;min-height:0;display:flex;gap:16px;align-items:stretch">
-<aside id="scraped-alert" style="flex:0 0 320px;max-width:360px;align-self:stretch;overflow-y:auto;background:#0d1117;border:1px solid #425267;border-radius:8px;padding:12px;box-sizing:border-box">
-<div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#8b98a5;margin-bottom:8px">Alertas de este registro</div>
+<aside id="scraped-evidence" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
+<strong>Publicación capturada al extraer</strong>
+<iframe id="scraped-capture" title="Captura de la publicación para comparar los datos" hidden referrerpolicy="no-referrer" style="flex:1;min-height:260px;width:100%;border:1px solid #425267;border-radius:8px;background:#0d1117"></iframe>
+<details id="scraped-alert" style="max-height:180px;overflow-y:auto;background:#0d1117;border:1px solid #425267;border-radius:8px;padding:10px">
+<summary>Comprobaciones automáticas y alertas</summary>
 <div id="scraped-alert-content" style="font-size:12px;line-height:1.5"></div>
-</aside>
+</details></aside>
 <form id="scraped-edit-form" style="flex:1;min-width:0;overflow-y:auto;padding-right:6px">{% csrf_token %}<div id="scraped-edit-fields"></div>
-<label><input type="checkbox" name="excluida"> Excluir del cálculo ACM (conservar visible en el mapa para revisión)</label>
-<label><input type="checkbox" name="correcta"> Marcar como correcta (revisada, sin acción pendiente)</label>
+<label style="display:block;margin:8px 0"><input type="checkbox" name="excluida"> Excluir del cálculo ACM (conservar visible en el mapa para revisión)</label>
+<label style="display:block;margin:8px 0"><input type="checkbox" name="correcta"> Datos cotejados con la publicación: aprobar revisión manual</label>
 <p><label>Motivo / notas de revisión<br><textarea name="motivo" style="width:100%"></textarea></label></p>
-<details><summary>Todos los campos originales del registro (solo lectura)</summary><pre id="scraped-record" style="white-space:pre-wrap;max-height:250px;overflow:auto"></pre></details>
+<details><summary>Datos del registro y evidencia original (solo lectura)</summary><pre id="scraped-record" style="white-space:pre-wrap;max-height:250px;overflow:auto"></pre></details>
 <p id="scraped-edit-status" role="status"></p><button type="submit">Guardar cambios</button>
 <button type="button" onclick="document.getElementById('scraped-editor').close()">Cerrar</button></form>
 </div>
 </dialog>
-<style>#scraped-editor::backdrop{background:#000b}#scraped-editor{font:13px/1.5 system-ui}#scraped-editor[open]{display:flex;flex-direction:column}#scraped-editor p{margin:10px 0}#scraped-editor button{background:#263b4b;color:#fff;border:1px solid #52718b;padding:8px 12px;border-radius:7px;cursor:pointer}#scraped-edit-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}#scraped-edit-fields label{display:block;font-size:11px}#scraped-edit-fields input,#scraped-edit-fields select,#scraped-edit-fields textarea,#scraped-editor textarea{width:100%;box-sizing:border-box;background:#0d1117;color:#e6edf3;border:1px solid #425267;border-radius:5px;padding:6px}#scraped-edit-fields textarea{height:70px}#scraped-alert-content .alerta-item{padding:6px 8px;border-bottom:1px solid #2a3440}#scraped-alert-content .alerta-item:last-child{border-bottom:none}@media (max-width:760px){#scraped-editor-body{flex-direction:column}#scraped-alert{flex:none;max-width:none;max-height:180px}}</style>
+<style>#scraped-editor::backdrop{background:#000b}#scraped-editor{font:13px/1.5 system-ui}#scraped-editor[open]{display:flex;flex-direction:column}#scraped-editor p{margin:10px 0}#scraped-editor button{background:#263b4b;color:#fff;border:1px solid #52718b;padding:8px 12px;border-radius:7px;cursor:pointer}#scraped-edit-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}#scraped-edit-fields label{display:block;font-size:11px}#scraped-edit-fields input,#scraped-edit-fields select,#scraped-edit-fields textarea,#scraped-editor textarea{width:100%;box-sizing:border-box;background:#0d1117;color:#e6edf3;border:1px solid #425267;border-radius:5px;padding:6px}#scraped-edit-fields textarea{height:70px}#scraped-alert-content .alerta-item{padding:6px 8px;border-bottom:1px solid #2a3440}#scraped-alert-content .alerta-item:last-child{border-bottom:none}@media (max-width:760px){#scraped-editor-body{flex-direction:column}#scraped-evidence{flex:none!important;min-height:350px}#scraped-alert{max-height:150px}}</style>
 <script>
 (function(){
 const modal=document.getElementById('scraped-editor'), form=document.getElementById('scraped-edit-form'), status=document.getElementById('scraped-edit-status');
@@ -29,28 +32,37 @@ function alertItem(text,color,weight){
  if(color)el.style.color=color;if(weight)el.style.fontWeight=weight;return el;
 }
 function renderAlert(a){
- const el=document.getElementById('scraped-alert-content');el.replaceChildren();
+ const el=document.getElementById('scraped-alert-content');el.replaceChildren();document.getElementById('scraped-alert').open=Boolean(a&&a.alertas&&a.alertas.length);
  if(a==null)return;
  const verdict=a.ia_veredicto;
- if(verdict==='real')el.appendChild(alertItem('IA · alerta real'+(a.ia_motivo?': '+a.ia_motivo:''),'#57d9a3','600'));
+ if(verdict==='real')el.appendChild(alertItem('IA · alerta real'+(a.ia_motivo?': '+a.ia_motivo:''),'#f07178','600'));
  else if(verdict==='ruido')el.appendChild(alertItem('IA · falso positivo'+(a.ia_motivo?': '+a.ia_motivo:''),'#93a3b1'));
  else if(verdict==='dudoso')el.appendChild(alertItem('IA · dudoso'+(a.ia_motivo?': '+a.ia_motivo:''),'#f4d093'));
  if(a&&a.ia_correccion&&Object.keys(a.ia_correccion).length)el.appendChild(alertItem('IA sugiere: '+JSON.stringify(a.ia_correccion),'#8fd3ff'));
  (a&&a.alertas||[]).forEach(function(m){el.appendChild(alertItem(m));});
- if(!verdict&&!(a&&a.alertas&&a.alertas.length))el.appendChild(alertItem('Sin alertas según estas reglas.'));
+ if(!verdict&&!(a&&a.alertas&&a.alertas.length))el.appendChild(alertItem('Sin alertas automáticas. Compara los datos con la publicación antes de aprobar la revisión manual.'));
 }
 function setPublication(raw){
  publication.hidden=true;publication.style.display='none';publication.removeAttribute('href');missingPublication.hidden=true;
  if(raw===null)return;
- try{const url=new URL(String(raw||''));if(!['https:','http:'].includes(url.protocol))throw Error('Invalid protocol');publication.href=url.href;publication.hidden=false;publication.style.display='inline-block';}
+ try{const url=new URL(String(raw||''));if(!['https:','http:'].includes(url.protocol)||url.username||url.password)throw Error('Invalid protocol');publication.href=url.href;publication.hidden=false;publication.style.display='inline-block';}
  catch(e){missingPublication.hidden=false;}
+}
+function setEvidence(id){
+ const frame=document.getElementById('scraped-capture'), gallery=document.getElementById('scraped-gallery'), full=document.getElementById('scraped-capture-original');
+ frame.hidden=true;frame.src='about:blank';gallery.hidden=true;full.hidden=true;gallery.removeAttribute('href');full.removeAttribute('href');
+ if(!Number.isSafeInteger(id)||id<=0)return;
+ const root='/ingestas/scraping/propiedades/'+id;
+ frame.src=root+'/captura/?embedded=1';frame.hidden=false;
+ gallery.href=root+'/galeria/';gallery.hidden=false;
+ full.href=root+'/captura/';full.hidden=false;
 }
 async function read(response){let body;try{body=await response.json();}catch(e){throw Error('El servidor no devolvió JSON. Comprueba tu sesión y vuelve a intentar.');}if(!response.ok)throw Error(body.error+(body.fields?' '+JSON.stringify(body.fields):''));return body;}
 window.openScrapedEditor=async function(id){
  if(saving)return;
  const numericId=Number(id); activeRecordId=Number.isSafeInteger(numericId)&&numericId>0?numericId:null;
  const seq=++sequence;version=null;
- setPublication(null);document.getElementById('scraped-record').textContent='';
+ setPublication(null);setEvidence(null);document.getElementById('scraped-record').textContent='';form.elements.excluida.checked=false;form.elements.correcta.checked=false;form.elements.motivo.value='';
  endpoint='/ingestas/scraping/registros/'+encodeURIComponent(id)+'/editar/';
  document.getElementById('scraped-edit-fields').replaceChildren(); form.querySelector('[type=submit]').disabled=true;
  renderAlert(null);
@@ -58,10 +70,10 @@ window.openScrapedEditor=async function(id){
  try{const data=await read(await fetch(endpoint,{credentials:'same-origin',headers:{Accept:'application/json'}}));
  if(seq!==sequence)return;
  document.getElementById('scraped-edit-fields').innerHTML=data.html;
- setPublication(data.record.url||'');
+ setPublication(data.record.url||'');setEvidence(activeRecordId);
  document.getElementById('scraped-record').textContent=JSON.stringify(data.record,null,2);
  form.elements.excluida.checked=data.record.excluida;form.elements.correcta.checked=data.record.correcta;form.elements.motivo.value=data.record.motivo;
- version=data.version;form.querySelector('[type=submit]').disabled=!data.can_edit;
+ version=data.version;form.querySelectorAll('input,select,textarea').forEach(function(el){el.disabled=!data.can_edit;});form.querySelector('[type=submit]').disabled=!data.can_edit;
  renderAlert(data.alertas);
  status.textContent=data.can_edit?'':'Tu cuenta no tiene permiso de edición.';
  }catch(error){if(seq===sequence)status.textContent=error.message;}
