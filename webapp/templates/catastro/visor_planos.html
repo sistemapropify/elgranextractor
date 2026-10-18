@@ -27,6 +27,7 @@
         <div class="planos-file-info" id="planos-file-info" hidden><strong id="planos-file-name"></strong><span id="planos-file-count"></span><button class="planos-button" id="planos-remove" type="button">Cerrar plano</button></div>
         <label class="planos-label" for="planos-crs">Ubicación del plano<select id="planos-crs">{% for code, label in cad_crs.items %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
         <p class="planos-help">Si desconoces las coordenadas, usa la vista CAD. Selecciona el sistema correcto para superponerlo en Google Maps.</p>
+        <p class="planos-help">Se carga el plano completo, con lotes, manzanas, números y nombres. Los contornos no tienen relleno. Acerca el mapa para leer los rótulos, que aparecen como texto.</p>
         <p id="planos-cad-notice" class="planos-cad-notice" hidden><strong>Vista CAD · coordenadas sin confirmar</strong>El fondo oscuro muestra el plano original. Para verlo sobre Google Maps, selecciona el sistema de coordenadas correcto en «Ubicación del plano».</p>
         <p id="planos-cad-warnings" class="planos-help" hidden></p>
       </div></details>
@@ -55,6 +56,7 @@
 {% endblock %}
 {% block extra_js %}
 {{ cad_initial_state|json_script:"planos-initial-state" }}
-<script src="{% static 'js/visor-planos.js' %}?v=6"></script>
+<script src="{% static 'js/visor-planos-labels.js' %}?v=2"></script>
+<script src="{% static 'js/visor-planos.js' %}?v=11"></script>
 {% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;libraries=geometry&amp;callback=initPlanosMap" async defer></script>{% endif %}
 {% endblock %}

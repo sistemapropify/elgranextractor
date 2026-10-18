@@ -1,3 +1,53 @@
+# Complete cadastral plan and text overlay — 2026-10-17
+
+Status: Validated — user explicitly authorized publication.
+Recipe: CI/CD, existing main_granextractorservice.yml.
+Target: existing granextractorservice / rg-elgranextractor, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Public: https://acm.propifai.com/catastro/visor-planos/?plano=cdbae0cfc1c64f2f9b450432c789df42
+
+## Scope
+Load every page of active layers, instead of stopping at 2,000 entities.
+Preserve all 28,300 lots, 2,067 blocks and all numbers and place names in the
+user's Cayma drawing. Render outlines without polygon fill. Render the full
+geometry and text datasets in one viewport canvas, with legible labels at
+appropriate zooms and no circle pins. Retain every feature and cancel stale CRS requests.
+Source DWG, geometry coordinates, accounts, other modules, infrastructure,
+roles, app settings, database schema and runtime dependencies are unchanged.
+Integrate on current main 3dfe82da166aac2baa0ee608fafb92d674061fa9.
+The user's standing instruction is to handle deployment monitoring personally.
+Dispatch the existing pipeline and report its run link without claiming that
+an unfinished run is already live.
+
+## Validation steps
+- [x] Exact release scope and latest main comparison.
+- [x] Node syntax, UI and complete-pagination/text-overlay regressions.
+- [x] Isolated Django template/static build with exact asset hashes.
+- [x] Real local HTTP and browser validation with the full Cayma drawing.
+- [x] Git whitespace and source/static integrity.
+- [x] Existing target/pipeline identity and public health.
+No provisioning or role changes: new environment, regional quota and role
+assignment creation gates do not apply to this existing CI/CD code release.
+
+## 7. Validation Proof
+Validated 2026-10-17, America/Lima. Node syntax and three regression suites
+pass, including full pagination, 28,300 retained contours and 30,000 retained
+labels in the renderer test. Isolated Django template compilation and
+collectstatic pass; source and collected asset bytes match. Real local browser
+loaded all 62,224 entities: 30,367 contours and 31,857 labels, across all eight
+non-empty layers. Checked parcel numbers, red block numbers, teal urban names
+and unfilled contours at zoom 17. Full dataset remains loaded while panning.
+Browser screenshot and HTTP/build hashes are saved under
+D:/PROMETEO/outputs/visor-vector-lines-20261017/.
+Existing public login and baseline main asset return HTTP 200. The new overlay
+asset returns 404 before this release, as expected. Existing CI/CD credentials
+and target are reused; local ARM inspection was unavailable with connection
+resets. No infrastructure, setting or role changes are included.
+Other shared work, including the separate local COFOPRI recovery, is excluded.
+
+
+---
+
 # Apartment floor scraper release - 2026-10-17
 
 Status: Validated

@@ -1,9 +1,14 @@
 (() => {
 'use strict';
-const $=id=>document.getElementById(id),ns='http://www.w3.org/2000/svg',layers=new Map();
+const $=id=>document.getElementById(id),ns='http://www.w3.org/2000/svg',layers=new Map(),mapFeatures=new Map();
 let map=null,data=null,meta=null,job=null,serial=0,timer=null,box=[0,0,100,100],drag=null,moved=false,measure=null,points=[],measurement=null;
-let importStarted=0,importClock=null,pollVersion=0;
+let importStarted=0,importClock=null,pollVersion=0,labelLayer=null,firstMapView=true;
+const cadNodes=new Map();
 const geographic=()=>$('planos-crs').value!=='unknown';
+const requestedCRS=new URLSearchParams(location.search).get('crs');if(['EPSG:32719','EPSG:24879','EPSG:32718','EPSG:24878','EPSG:4326'].includes(requestedCRS))$('planos-crs').value=requestedCRS;
+const vectorTypes=new Set(['LINE','LWPOLYLINE','POLYLINE','ARC','CIRCLE','ELLIPSE','SPLINE','SOLID','TRACE','3DFACE','HATCH','MPOLYGON']);
+const vectorGeometry=g=>['LineString','MultiLineString','Polygon','MultiPolygon'].includes(g.type);
+const drawable=row=>row.drawable&&(!geographic()||Object.entries(row.types||{}).some(([type,count])=>count&&(vectorTypes.has(type)||type==='TEXT'||type==='MTEXT')));
 const format=n=>new Intl.NumberFormat('es-PE',{maximumFractionDigits:2}).format(n);
 function status(text,error=false){$('planos-status').textContent=text;$('planos-status').dataset.error=String(error);}
 function importState(phase,detail,filename){
@@ -19,7 +24,14 @@ function importState(phase,detail,filename){
  if(phase==='idle'){importStarted=0;$('planos-import-elapsed').hidden=true;$('planos-import-file').hidden=true;}
 }
 function positions(g){const list=[];function walk(v){if(typeof v[0]==='number')list.push(v);else v.forEach(walk);}walk(g.coordinates);return list;}
-function visible(){return [...layers.values()].filter(l=>l.visible).flatMap(l=>l.features);}
+function visible(){return [...layers.values()].filter(l=>l.visible&&drawable(l)).flatMap(l=>l.features);}
+function clearMapDrawing(){data?.setMap(null);data=null;mapFeatures.clear();labelLayer?.setMap(null);labelLayer=null;}
+function drawMap(features,opacity){
+ if(!labelLayer&&window.PlanosLabels)labelLayer=window.PlanosLabels.create(map);
+ labelLayer?.setFeatures(features,layers,opacity);
+}
+let drawQueued=false;
+function queueDraw(){if(drawQueued)return;if(typeof requestAnimationFrame!=='function'){draw();return;}drawQueued=true;requestAnimationFrame(()=>{drawQueued=false;draw();});}
 function controls(){const has=!!visible().length;['planos-all','planos-none','planos-layer-search'].forEach(id=>$(id).disabled=!meta);$('planos-fit').disabled=!has;$('planos-export').disabled=!has||!geographic();['planos-distance','planos-area'].forEach(id=>$(id).disabled=!geographic()||!map);}
 async function api(path,deadlineMs=path.includes('/capa/')?45000:20000){
  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),deadlineMs);
@@ -51,35 +63,52 @@ function inspect(feature){
  $('planos-selected-layer').textContent=feature.properties.capa;$('planos-selection-empty').hidden=true;$('planos-selection-data').hidden=false;$('planos-selection').open=true;
 }
 function draw(){
- data?.setMap(null);data=null;const svg=$('planos-cad'),host=$('planos-cad-entities'),features=visible(),opacity=Number($('planos-opacity').value)/100;host.replaceChildren();
+ const svg=$('planos-cad'),host=$('planos-cad-entities'),features=visible(),opacity=Number($('planos-opacity').value)/100,mapWasHidden=$('planos-map').hidden;if(geographic()){host.replaceChildren();cadNodes.clear();}
  svg.toggleAttribute('hidden',geographic()||!meta);$('planos-map').hidden=!geographic()&&!!meta;$('planos-coordinates').textContent=!geographic()&&meta?'Coordenadas originales del plano · vista CAD':'WGS84 · longitud / latitud';
  $('planos-cad-notice').hidden=geographic()||!meta;
- if(geographic()&&map){data=new google.maps.Data({map});data.addGeoJson({type:'FeatureCollection',features});data.setStyle(f=>{const c=layers.get(f.getProperty('capa')).color;return {fillColor:c,strokeColor:c,fillOpacity:opacity,strokeWeight:1.5,icon:{path:google.maps.SymbolPath.CIRCLE,scale:4,fillColor:c,fillOpacity:1,strokeColor:c}};});data.addListener('click',event=>{if(measure)addMeasurement(event.latLng);else {const f=features.find(item=>item.id===event.feature.getId());if(f)inspect(f);}});}
- else if(!geographic()&&meta){const span=Math.max((meta.bounds?.[2]||1)-(meta.bounds?.[0]||0),1);
-  features.forEach(feature=>{const g=feature.geometry,c=layers.get(feature.properties.capa).color;let node;
+ if(geographic()&&map){if(mapWasHidden)google.maps.event.trigger(map,'resize');drawMap(features,opacity);}
+ else if(!geographic()&&meta){data?.setMap(null);const span=Math.max((meta.bounds?.[2]||1)-(meta.bounds?.[0]||0),1);
+  const ids=new Set(features.map(f=>String(f.id)));let removed=false;for(const[id,node]of cadNodes)if(!ids.has(id)){cadNodes.delete(id);removed=true;}if(removed)host.replaceChildren(...cadNodes.values());
+  features.forEach(feature=>{const g=feature.geometry,c=layers.get(feature.properties.capa).color;let node=cadNodes.get(String(feature.id));if(node){node.setAttribute('stroke',c);node.setAttribute('stroke-opacity',opacity);return;}
    if(g.type==='Point'){const [x,y]=g.coordinates;node=document.createElementNS(ns,feature.properties.texto?'text':'circle');if(feature.properties.texto){node.setAttribute('x',x);node.setAttribute('y',-y);node.setAttribute('font-size',Math.max(span/500,.01));node.textContent=feature.properties.texto;}else {node.setAttribute('cx',x);node.setAttribute('cy',-y);node.setAttribute('r',Math.max(span/1500,.005));}node.setAttribute('fill',c);}
-   else {node=document.createElementNS(ns,'path');const rings=g.type==='Polygon'?g.coordinates:g.type==='MultiPolygon'?g.coordinates.flat():[g.coordinates];node.setAttribute('d',rings.map(ring=>ring.map(([x,y],i)=>(i?'L':'M')+x+' '+(-y)).join(' ')+(g.type.includes('Polygon')?' Z':'')).join(' '));node.setAttribute('fill',g.type.includes('Polygon')?c:'none');node.setAttribute('fill-opacity',opacity);node.setAttribute('fill-rule','evenodd');node.setAttribute('stroke',c);node.setAttribute('stroke-width','1.3');}
-   node.addEventListener('click',event=>{event.stopPropagation();if(!moved)inspect(feature);});host.append(node);
+   else {node=document.createElementNS(ns,'path');const rings=g.type==='Polygon'?g.coordinates:g.type==='MultiPolygon'?g.coordinates.flat():[g.coordinates];node.setAttribute('d',rings.map(ring=>ring.map(([x,y],i)=>(i?'L':'M')+x+' '+(-y)).join(' ')+(g.type.includes('Polygon')?' Z':'')).join(' '));node.setAttribute('fill','none');node.setAttribute('stroke-opacity',opacity);node.setAttribute('fill-rule','evenodd');node.setAttribute('stroke',c);node.setAttribute('stroke-width','1.3');}
+   node.addEventListener('click',event=>{event.stopPropagation();if(!moved)inspect(feature);});host.append(node);cadNodes.set(String(feature.id),node);
   });
  }controls();
 }
 function renderLayers(){
  const host=$('planos-layers'),filter=$('planos-layer-search').value.toLocaleLowerCase();host.replaceChildren();let i=0;
- for(const [name,row] of layers){const line=document.createElement('div'),check=document.createElement('input'),label=document.createElement('label'),count=document.createElement('small'),color=document.createElement('input');line.className='planos-layer';line.hidden=!name.toLocaleLowerCase().includes(filter);check.type='checkbox';check.checked=row.visible;check.disabled=!row.drawable||row.loading;check.id='plano-layer-'+i++;label.htmlFor=check.id;label.textContent=name;count.textContent=row.count+' entidades · '+row.drawable+' dibujables'+(row.visible?' · '+row.features.length+' cargadas':'');label.append(count);color.type='color';color.value=row.color;color.setAttribute('aria-label','Color de '+name);
-  check.addEventListener('change',async()=>{row.visible=check.checked;if(row.visible&&!row.loaded)await load(name,true);else draw();renderLayers();});color.addEventListener('input',()=>{row.color=color.value;draw();});line.append(check,label,color);
-  if(row.loaded&&row.next!==null){const more=document.createElement('button');more.type='button';more.className='planos-button planos-small planos-more';more.textContent=row.loading?'Cargando…':'Cargar más entidades';more.disabled=row.loading;more.addEventListener('click',()=>load(name));line.append(more);}
+ for(const [name,row] of layers){const line=document.createElement('div'),check=document.createElement('input'),label=document.createElement('label'),count=document.createElement('small'),color=document.createElement('input');line.className='planos-layer';line.hidden=!name.toLocaleLowerCase().includes(filter);check.type='checkbox';check.checked=row.visible&&!!drawable(row);check.disabled=!drawable(row)||row.loading;check.id='plano-layer-'+i++;label.htmlFor=check.id;label.textContent=name;count.textContent=row.count+' entidades · '+row.drawable+' dibujables'+(row.visible?' · '+row.features.length+' cargadas':'')+(geographic()&&!drawable(row)&&row.drawable?' · Rótulos y puntos: solo vista CAD':'');label.append(count);color.type='color';color.value=row.color;color.setAttribute('aria-label','Color de '+name);
+  check.addEventListener('change',async()=>{row.visible=check.checked;if(row.visible&&(!row.loaded||geographic()&&row.next!==null))await loadComplete(name,true);else draw();renderLayers();});color.addEventListener('input',()=>{row.color=color.value;queueDraw();});line.append(check,label,color);
+  if(drawable(row)&&row.loaded&&row.next!==null){const more=document.createElement('button');more.type='button';more.className='planos-button planos-small planos-more';more.textContent=row.loading?'Cargando…':'Cargar más entidades';more.disabled=row.loading;more.addEventListener('click',()=>load(name));line.append(more);}
   host.append(line);
  }$('planos-layer-count').textContent=layers.size;
 }
 async function load(name,center=false){
- const row=layers.get(name);if(!row||row.loading||!row.drawable||row.loaded&&row.next===null)return;
+ const row=layers.get(name);if(!row||row.loading||!drawable(row)||row.loaded&&row.next===null)return;
  const stamp=serial,id=job;row.loading=true;renderLayers();
  try {const v=await api(id+'/capa/?'+new URLSearchParams({layer:name,offset:row.next||0,crs:$('planos-crs').value}));if(stamp!==serial)return;row.features.push(...v.features);row.loaded=true;row.next=v.next_offset;draw();if(center)fit();status('Capa «'+name+'»: '+row.features.length+' de '+row.drawable+' entidades dibujables cargadas.');return true;}
  catch(error){if(stamp===serial){row.visible=false;status(error.message,true);}}
  finally {if(stamp===serial){row.loading=false;renderLayers();}}
 }
+async function loadComplete(name,center=false){
+ const row=layers.get(name),stamp=serial;
+ if(!row||!drawable(row))return false;
+ if(row.loaded&&row.next===null)return true;
+ if(!await load(name,center))return false;
+ // Pagination limits each response, not the displayed plan. Continue every
+ // vector page automatically, yielding so the map can paint between batches.
+ while(stamp===serial&&row.visible&&row.next!==null){
+  const previous=row.next;
+  await new Promise(resolve=>setTimeout(resolve,0));
+  if(stamp!==serial||!row.visible)return false;
+  if(!await load(name))return false;
+  if(row.next===previous&&row.next!==null){status('No se pudo continuar la capa «'+name+'». Reconsulta el plano para completar las entidades restantes.',true);return false;}
+ }
+ return stamp===serial;
+}
 async function ready(value){
- meta=value;layers.clear();value.layers.forEach(row=>layers.set(row.name,{...row,color:/^#[0-9a-f]{6}$/i.test(row.color)?row.color:'#71d5b2',features:[],visible:false,next:0,loaded:false,loading:false}));
+ meta=value;clearMapDrawing();cadNodes.clear();layers.clear();firstMapView=true;value.layers.forEach(row=>layers.set(row.name,{...row,color:/^#[0-9a-f]{6}$/i.test(row.color)?row.color:'#71d5b2',features:[],visible:false,next:0,loaded:false,loading:false}));
  $('planos-file-info').hidden=false;$('planos-file-name').textContent=value.filename;$('planos-file-count').textContent=format(value.bytes/1048576)+' MB · '+value.entities+' entidades · '+layers.size+' capas';
  $('planos-map-caption').textContent=value.filename+' · '+(geographic()?'sistema seleccionado':'coordenadas CAD sin ubicación confirmada');
  const omitted=Object.entries(value.unsupported||{}).map(([key,count])=>key+': '+count).join(' · ');$('planos-cad-warnings').hidden=!omitted;$('planos-cad-warnings').textContent=omitted?'Entidades conservadas en el original que este visor no dibuja: '+omitted:'';
@@ -87,7 +116,7 @@ async function ready(value){
  const geometryCount=row=>['LWPOLYLINE','POLYLINE','HATCH','SOLID'].reduce((n,type)=>n+(row.types[type]||0),0),rows=[...layers.values()].filter(row=>row.drawable);
  const cadastral=rows.filter(row=>/^(lotes?|parcelas?|predios?)(?:$|[ _-])/i.test(row.name)&&geometryCount(row)>(row.types.TEXT||0)+(row.types.MTEXT||0));
  const first=cadastral.sort((a,b)=>geometryCount(b)-geometryCount(a))[0]||rows.sort((a,b)=>geometryCount(b)-geometryCount(a))[0];
- if(first){first.visible=true;importState('drawing','El archivo ya se leyó. Preparando la capa «'+first.name+'»…',value.filename);if(await load(first.name,true))importState('completed',layers.size+' capas disponibles · «'+first.name+'»: '+first.features.length+' de '+first.drawable+' entidades cargadas.'+(geographic()?'':' Vista CAD: coordenadas sin confirmar.'));else importState('disconnected','El DWG ya está leído. No se pudo dibujar la primera capa. '+$('planos-status').textContent);}
+ if(first){first.visible=true;importState('drawing','El archivo ya se leyó. Preparando la capa «'+first.name+'»…',value.filename);if(await loadComplete(first.name,true))importState('completed',layers.size+' capas disponibles · «'+first.name+'»: '+first.features.length+' de '+first.drawable+' entidades cargadas.'+(geographic()?'':' Vista CAD: coordenadas sin confirmar.'));else importState('disconnected','El DWG ya está leído. No se pudo dibujar la primera capa. '+$('planos-status').textContent);}
  else {status('DWG leído. No contiene entidades compatibles para dibujar.',true);importState('completed','El DWG se leyó. No contiene entidades compatibles para dibujar.',value.filename);}
 }
 async function poll(id,attempt=0){
@@ -105,7 +134,7 @@ async function poll(id,attempt=0){
   else {status(error.message,true);importState('disconnected',error.message+' Usa «Consultar estado del plano» para recuperar la lectura conservada.');}
  }}
 }
-function reset(){importState('idle','Abre un DWG para comenzar la lectura.');$('planos-cad-notice').hidden=true;serial++;clearTimeout(timer);$('planos-crs').value='unknown';measure=null;['distance','area'].forEach(key=>$('planos-'+key).setAttribute('aria-pressed','false'));map?.setOptions({draggableCursor:null});data?.setMap(null);data=null;job=null;meta=null;layers.clear();$('planos-cad-entities').replaceChildren();$('planos-cad').setAttribute('hidden','');$('planos-map').hidden=false;$('planos-file-info').hidden=true;$('planos-selection-data').hidden=true;$('planos-selection-empty').hidden=false;$('planos-cad-warnings').hidden=true;$('planos-layers').replaceChildren();$('planos-layer-count').textContent='0';$('planos-file').value='';clearMeasurement();controls();}
+function reset(){importState('idle','Abre un DWG para comenzar la lectura.');$('planos-cad-notice').hidden=true;serial++;clearTimeout(timer);$('planos-crs').value='unknown';measure=null;['distance','area'].forEach(key=>$('planos-'+key).setAttribute('aria-pressed','false'));map?.setOptions({draggableCursor:null});clearMapDrawing();job=null;meta=null;layers.clear();cadNodes.clear();firstMapView=true;$('planos-cad-entities').replaceChildren();$('planos-cad').setAttribute('hidden','');$('planos-map').hidden=false;$('planos-file-info').hidden=true;$('planos-selection-data').hidden=true;$('planos-selection-empty').hidden=false;$('planos-cad-warnings').hidden=true;$('planos-layers').replaceChildren();$('planos-layer-count').textContent='0';$('planos-file').value='';clearMeasurement();controls();}
 function upload(file){return new Promise((resolve,reject)=>{const body=new FormData();body.append('file',file);const xhr=new XMLHttpRequest();xhr.open('POST','/catastro/api/planos/importar/');xhr.timeout=120000;xhr.setRequestHeader('X-CSRFToken',$('planos-upload-form').querySelector('[name=csrfmiddlewaretoken]').value);xhr.upload.addEventListener('progress',event=>{if(event.lengthComputable){$('planos-import-progress').value=event.loaded/event.total;const text='Subiendo DWG: '+Math.round(event.loaded/event.total*100)+'% de '+format(file.size/1048576)+' MB.';status(text);importState('uploading',text,file.name);}});xhr.upload.addEventListener('load',()=>importState('uploading','Archivo enviado. Esperando confirmación del servidor…',file.name));xhr.addEventListener('load',()=>{let v;try{v=JSON.parse(xhr.responseText);}catch(_){reject(Error('Inicia sesión para cargar el DWG.'));return;}if(xhr.status===202)resolve(v);else reject(Error(v.error||'No se pudo cargar el DWG.'));});xhr.addEventListener('timeout',()=>reject(Error('El servidor no confirmó la carga en dos minutos. Consulta si el plano quedó recibido antes de intentarlo nuevamente.')));xhr.addEventListener('error',()=>reject(Error('La carga se interrumpió. Vuelve a seleccionar el DWG.')));xhr.send(body);});}
 $('planos-file').addEventListener('change',async event=>{
  const file=event.target.files[0];if(!file)return;if(!/\.dwg$/i.test(file.name)){status('Selecciona un archivo DWG.',true);event.target.value='';return;}if(file.size>100*1024*1024){status('Esta instancia admite DWG de hasta 100 MB.',true);event.target.value='';return;}
@@ -115,16 +144,18 @@ $('planos-file').addEventListener('change',async event=>{
 });
 $('planos-import-retry').addEventListener('click',()=>{if(job)return poll(job);});
 $('planos-crs').addEventListener('change',async()=>{
- const stamp=++serial;clearMeasurement();measure=null;
- const names=[...layers.values()].filter(row=>row.visible).map(row=>row.name);
+ const stamp=++serial;clearMapDrawing();clearMeasurement();measure=null;
+ if(job)history.replaceState(null,'','?'+new URLSearchParams({plano:job,...(geographic()?{crs:$('planos-crs').value}:{})}));
+ if(geographic()&&map&&firstMapView){layers.forEach(row=>{if(drawable(row))row.visible=true;});firstMapView=false;}
+ const names=[...layers.values()].filter(row=>row.visible&&drawable(row)).map(row=>row.name);
  layers.forEach(row=>{row.features=[];row.next=0;row.loaded=false;row.loading=false;});draw();
  if(!meta)return;
  $('planos-map-caption').textContent=meta.filename+' · '+(geographic()?'sistema seleccionado':'coordenadas CAD sin ubicación confirmada');
  importState('drawing','Actualizando las capas con el sistema de coordenadas seleccionado…',meta.filename);
  let success=true;
- for(const name of names){if(stamp!==serial)return;if(!await load(name,true))success=false;}
+ for(let i=0;i<names.length;i+=2){if(stamp!==serial)return;const results=await Promise.all(names.slice(i,i+2).map(name=>loadComplete(name)));if(results.some(ok=>!ok))success=false;}
  if(stamp!==serial)return;
- if(success)importState('completed',layers.size+' capas disponibles · '+(geographic()?'Vista en Google Maps con el sistema seleccionado.':'Vista CAD: coordenadas sin confirmar.'));
+ if(success){fit();const all=visible(),contours=all.filter(f=>vectorGeometry(f.geometry)).length,labels=all.filter(f=>f.properties.texto).length;if(geographic())status('Plano completo: '+format(contours)+' contornos y '+format(labels)+' rótulos cargados. Acerca el zoom para leerlos.');importState('completed',layers.size+' capas disponibles · '+(geographic()?'Google Maps: plano completo con contornos, números y nombres. Acerca el zoom para leer los rótulos.':'Vista CAD: coordenadas sin confirmar.'));}
  else importState('disconnected','El DWG ya está leído. No se pudieron actualizar todas las capas; puedes reconsultar el plano sin subirlo nuevamente.');
 });
 function clearMeasurement(){measurement?.setMap(null);measurement=null;points=[];$('planos-measure-result').textContent=geographic()?'Selecciona una herramienta y marca puntos en el mapa.':'Confirma el sistema de coordenadas para medir en metros sobre Google Maps.';}
@@ -133,8 +164,8 @@ function addMeasurement(point){points.push(point);measurement?.setMap(null);cons
 $('planos-distance').addEventListener('click',()=>mode('distance'));$('planos-area').addEventListener('click',()=>mode('area'));$('planos-measure-clear').addEventListener('click',clearMeasurement);
 $('planos-fit').addEventListener('click',fit);$('planos-remove').addEventListener('click',()=>{reset();history.replaceState(null,'',location.pathname);status('Plano cerrado. Su original permanece guardado.');});
 $('planos-panels-toggle').addEventListener('click',()=>{const hidden=!$('planos-panels').hidden;$('planos-panels').hidden=hidden;$('planos-workspace').classList.toggle('planos-panels-hidden',hidden);$('planos-panels-toggle').textContent=hidden?'Mostrar tarjetas':'Ocultar tarjetas';$('planos-panels-toggle').setAttribute('aria-expanded',String(!hidden));});
-$('planos-basemap').addEventListener('change',event=>map?.setMapTypeId(event.target.value));$('planos-opacity').addEventListener('input',event=>{$('planos-opacity-value').textContent=event.target.value+'%';draw();});$('planos-layer-search').addEventListener('input',renderLayers);
-$('planos-all').addEventListener('click',async()=>{const stamp=serial;for(const row of layers.values()){if(stamp!==serial)break;if(row.drawable){row.visible=true;if(!row.loaded)await load(row.name);}}draw();renderLayers();fit();});
+$('planos-basemap').addEventListener('change',event=>map?.setMapTypeId(event.target.value));$('planos-opacity').addEventListener('input',event=>{$('planos-opacity-value').textContent=event.target.value+'%';queueDraw();});$('planos-layer-search').addEventListener('input',renderLayers);
+$('planos-all').addEventListener('click',async()=>{const stamp=serial;for(const row of layers.values()){if(stamp!==serial)break;if(drawable(row)){row.visible=true;if(!row.loaded||row.next!==null)await loadComplete(row.name);}}draw();renderLayers();fit();});
 $('planos-none').addEventListener('click',()=>{layers.forEach(row=>row.visible=false);draw();renderLayers();});
 $('planos-export').addEventListener('click',()=>{if(!geographic())return;const blob=new Blob([JSON.stringify({type:'FeatureCollection',features:visible()},null,2)],{type:'application/geo+json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='capas-del-plano.geojson';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);status('Geometrías cargadas exportadas. El DWG original permanece guardado.');});
 const svg=$('planos-cad');
@@ -142,7 +173,7 @@ svg.addEventListener('wheel',event=>{event.preventDefault();const f=event.deltaY
 svg.addEventListener('pointerdown',event=>{if(event.button!==0)return;drag={x:event.clientX,y:event.clientY,box:[...box]};moved=false;});
 svg.addEventListener('pointermove',event=>{if(!drag)return;const dx=event.clientX-drag.x,dy=event.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>3&&!moved){moved=true;svg.setPointerCapture(event.pointerId);}const scale=Math.max(drag.box[2]/svg.clientWidth,drag.box[3]/svg.clientHeight);setBox([drag.box[0]-dx*scale,drag.box[1]-dy*scale,drag.box[2],drag.box[3]]);});
 ['pointerup','pointercancel'].forEach(type=>svg.addEventListener(type,event=>{drag=null;if(svg.hasPointerCapture(event.pointerId))svg.releasePointerCapture(event.pointerId);}));
-window.initPlanosMap=()=>{map=new google.maps.Map($('planos-map'),{center:{lat:-16.3989,lng:-71.535},zoom:15,mapTypeControl:false,streetViewControl:false,fullscreenControl:false,gestureHandling:'greedy'});map.addListener('click',event=>{if(measure&&geographic())addMeasurement(event.latLng);});map.addListener('mousemove',event=>{$('planos-coordinates').textContent=event.latLng.lat().toFixed(6)+', '+event.latLng.lng().toFixed(6)+' · WGS84';});controls();if(meta&&geographic()){draw();fit();}if(!job)status('Abre un archivo DWG para explorar sus capas.');};
+window.initPlanosMap=()=>{map=new google.maps.Map($('planos-map'),{center:{lat:-16.3989,lng:-71.535},zoom:15,mapTypeControl:false,streetViewControl:false,fullscreenControl:false,gestureHandling:'greedy'});map.addListener('click',event=>{if(measure&&geographic())addMeasurement(event.latLng);else{const feature=labelLayer?.pick?.(event.latLng);if(feature)inspect(feature);}});map.addListener('mousemove',event=>{$('planos-coordinates').textContent=event.latLng.lat().toFixed(6)+', '+event.latLng.lng().toFixed(6)+' · WGS84';});controls();if(meta&&geographic()){if(firstMapView)$('planos-crs').dispatchEvent(new Event('change'));else{draw();fit();}}if(!job)status('Abre un archivo DWG para explorar sus capas.');};
 window.gm_authFailure=()=>{if(!job||geographic())status('Google Maps no pudo autorizar este dominio. La vista CAD sigue disponible.',true);};
 controls();const previous=new URLSearchParams(location.search).get('plano');if(previous&&/^[a-f0-9]{32}$/.test(previous)){job=previous;let initial=null;try{initial=JSON.parse($('planos-initial-state')?.textContent||'null');}catch(_){}if(initial?.id===previous&&initial.status==='completed')ready(initial);else poll(job);}else status('Abre un archivo DWG para explorar sus capas.');
 })();
