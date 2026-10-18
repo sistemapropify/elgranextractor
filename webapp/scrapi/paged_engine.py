@@ -206,6 +206,8 @@ async def enrich(portal, source, page, raw):
         raise RuntimeError('detail.not_ready: la ficha no terminó de cargar')
     if any(marker in title for marker in ('just a moment', 'access denied', 'attention required')):
         raise RuntimeError('detail.blocked: la ficha no superó la página de acceso')
+    from .building_feature_detail import enrich_building_features
+    await enrich_building_features(page, raw, portal)
 
 
 async def guarded_navigation(page, portal):

@@ -38,6 +38,9 @@ CAMPOS_EXPORT = [
     'dormitorios',
     'banos',
     'estacionamientos',
+    'tiene_cochera',
+    'tipo_cochera_display',
+    'ascensor_display',
     'distrito',
     'provincia',
     'departamento',
@@ -79,7 +82,10 @@ ENCABEZADOS_EXPORT = {
     'precio_m2_construida': 'Precio/m² construido',
     'dormitorios': 'Dormitorios',
     'banos': 'Baños',
-    'estacionamientos': 'Estacionamientos',
+    'estacionamientos': 'Cocheras (cantidad)',
+    'tiene_cochera': 'Tiene cochera',
+    'tipo_cochera_display': 'Tipo de cochera',
+    'ascensor_display': 'Ascensor',
     'distrito': 'Distrito',
     'provincia': 'Provincia',
     'departamento': 'Departamento',
@@ -181,6 +187,21 @@ def _normalizar_valor(valor):
 
 
 def _valor_campo(propiedad, campo):
+    if campo in ('estacionamientos', 'tiene_cochera', 'tipo_cochera_display', 'ascensor_display'):
+        from scrapi.building_features import read_features, parking_label, yes_no
+        features = getattr(propiedad, 'building_features', None) or read_features(
+            getattr(propiedad, 'tipo_inmueble', None), getattr(propiedad, 'datos_crudos', None),
+            getattr(propiedad, 'descripcion', None), getattr(propiedad, 'estacionamientos', None),
+            getattr(propiedad, 'amenities', None))
+        parking, elevator = features['parking'], features['elevator']
+        if campo == 'estacionamientos':
+            return _normalizar_valor(parking['count'])
+        if campo == 'tiene_cochera':
+            return yes_no(parking['has'])
+        if campo == 'tipo_cochera_display':
+            return parking_label(parking)
+        return 'Sin información · datos contradictorios' if elevator['status'] == 'conflict' else (
+            '—' if elevator['status'] == 'not_applicable' else yes_no(elevator['has']))
     display = getattr(propiedad, f'get_{campo}_display', None)
     valor = display() if callable(display) else getattr(propiedad, campo, None)
     if campo in CAMPOS_CON_DISPLAY and not valor:

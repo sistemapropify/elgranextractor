@@ -586,6 +586,8 @@ async def extraer_detalle(page, prop):
             }
         """)
 
+        prop['_detail_features'] = dict(campos)
+
         def get(k):
             # BUGFIX: la comparacion original 'k.lower() in fk.lower()' nunca
             # matcheaba 'Banos' contra la etiqueta real 'Baños' por la enie

@@ -391,7 +391,8 @@ def standardize(item: dict[str, Any], extraction_date: str | None = None) -> dic
     age, age_evidence = construction_age(raw, extraction_date)
     if age_evidence:
         raw['_age_evidence'] = age_evidence
-    return {
+    from scrapi.building_features import apply_features
+    return apply_features({
         "fuente": "facebook_marketplace",
         "id_origen": str(item.get("id") or ""),
         "fecha_extraccion": extraction_date or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -422,7 +423,7 @@ def standardize(item: dict[str, Any], extraction_date: str | None = None) -> dic
         "antiguedad_anios": age,
         "agencia_agente": item.get("seller_name"),
         "datos_crudos": raw,
-    }
+    })
 
 
 async def scrape_marketplace(

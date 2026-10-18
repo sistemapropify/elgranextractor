@@ -102,7 +102,14 @@ def guardar_propiedades(propiedades, fuente, lifecycle_run_id=None, execution_to
                         defaults['imagen_url'] = archived[0]['url']
                     from ingestas.models import RevisionPropiedadScraping
                     revision = RevisionPropiedadScraping.objects.filter(propiedad=existing).first()
+                    from scrapi.building_features import preserve_features
+                    defaults['datos_crudos'] = preserve_features(
+                        defaults.get('datos_crudos'), existing.datos_crudos,
+                        revision.campos_protegidos if revision else (),
+                        kind=existing.tipo_inmueble, description=existing.descripcion, count=existing.estacionamientos, amenities=existing.amenities)
                     if revision:
+                        if {'tiene_cochera', 'tipos_cochera'} & set(revision.campos_protegidos):
+                            defaults.pop('estacionamientos', None)
                         for field in revision.campos_protegidos:
                             defaults.pop(field, None)
                 if run:

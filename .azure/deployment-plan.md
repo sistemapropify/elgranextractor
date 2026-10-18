@@ -1,3 +1,51 @@
+# Scraper parking and elevator fields - release 2026-10-17
+
+Status: Validated - user explicitly requested deployment of the reviewed local implementation.
+Recipe: CI/CD, existing main_granextractorservice.yml. No provisioning.
+
+## 1. Scope
+Publish only shared extraction, persistence in existing datos_crudos, table,
+gallery, Excel, historical reprocessing command and regression tests for parking
+and elevators. Four physical parking types, explicit zero vs unknown, mixed
+parking, optional spaces, conflicts and protected manual fields are preserved.
+No SQL migrations, new resources, settings, credentials or roles. Production
+historical records are not batch-rewritten as part of publication.
+
+## 2. Existing target and integration
+App Service granextractorservice / rg-elgranextractor, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf (Azure subscription 1).
+Public https://acm.propifai.com/ingestas/scraping/dashboard/ .
+Base da18851b, current origin/main and successful production Actions 39081575010.
+Scoped patch applied over the production base; shared D:/PROMETEO edits retained.
+The local COFOPRI index recovery is operational data repair, not shipped data.
+
+## 3. Execution and rollback
+Push this scoped commit to main without force; existing OIDC/serialized workflow
+builds and deploys. Added isolated scraper tests as a required build step.
+Existing workflow verifies public health, protected pages and exact static assets.
+The user's standing request is to monitor personally: report dispatch separately
+from confirmed live completion and do not repeatedly poll the pipeline.
+Rollback uses a scoped revert through the same workflow, preserving stored data.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-17, America/Lima:
+- 108 isolated SQLite tests passed in the release checkout: all five portal
+  normalization paths, persistence/reload, tri-state fields, mixed/optional
+  parking, conflicts, protection, HTML, Excel and historical resume/idempotence.
+- Production WSGI import passed with PRODUCTION=true and isolated databases;
+  the three changed templates compiled; collectstatic produced 521 files.
+- Workflow YAML parsed and includes the required isolated scraper test gate.
+- Local authenticated table and gallery show separate parking/elevator values;
+  existing local CSS, JS and logo returned HTTP 200. Real archived evidence was
+  checked read-only; no claim of live extraction validation for all five portals.
+- az account show verified the existing subscription; az webapp show confirmed
+  the expected App Service Running in Brazil South. No resource or RBAC changes;
+  infrastructure-specific provisioning checks are inapplicable.
+- GitHub confirmed the base production workflow completed successfully.
+- Scope and whitespace checks are required immediately before commit/push.
+
+---
+
 # Complete cadastral plan and text overlay — 2026-10-17
 
 Status: Validated — user explicitly authorized publication.

@@ -15,6 +15,12 @@
   <a href="{% url 'ingestas:scraping_propiedades' %}">← Propiedades scrapeadas</a>
   <h1>{{ propiedad.titulo|default:'Galería de la propiedad' }}</h1>
   <p>{{ propiedad.fuente|upper }} · {{ fotos|length }} fotos disponibles · {{ fotos_guardadas }} guardadas en Azure</p>
+  <dl aria-label="Cocheras y ascensor">
+    <dt>Cocheras</dt><dd>{{ propiedad.cocheras_cantidad|default_if_none:'Sin información' }}</dd>
+    <dt>Tipo de cochera</dt><dd>{{ propiedad.tipo_cochera_display }}</dd>
+    <dt>Ascensor</dt><dd>{{ propiedad.ascensor_display }}</dd>
+  </dl>
+  {% if propiedad.caracteristicas_por_reconfirmar %}<p>Se conserva un dato confirmado previamente que la última lectura no pudo reconfirmar.</p>{% endif %}
   {% if fotos_no_disponibles %}<p role="alert">No se pudo habilitar el acceso a {{ fotos_no_disponibles }} fotos archivadas. Vuelve a cargar la galería.</p>{% endif %}
   {% if galeria_incompleta %}<p>La última extracción leyó solo el listado. Para completar las fotos se necesita visitar la ficha del anuncio.</p>{% endif %}
   {% if fotos %}

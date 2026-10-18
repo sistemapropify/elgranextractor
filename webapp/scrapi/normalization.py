@@ -241,4 +241,5 @@ def validate_row(row):
     if issues:
         raw['_quality_issues'] = issues
     row['datos_crudos'] = raw
-    return row
+    from .building_features import apply_features
+    return apply_features(row)

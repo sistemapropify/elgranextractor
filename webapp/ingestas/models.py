@@ -488,6 +488,49 @@ class PropiedadesCompetencia(models.Model):
         return extract_floor(self.tipo_inmueble, raw, self.descripcion, self.titulo)[0]
 
     # ── Precio por m² (uno por cada superficie) ──────────────────────────────
+    @property
+    def building_features(self):
+        from scrapi.building_features import read_features
+        return read_features(self.tipo_inmueble, self.datos_crudos, self.descripcion, self.estacionamientos, self.amenities)
+
+    @property
+    def tiene_cochera(self):
+        return self.building_features['parking']['has']
+
+    @property
+    def cocheras_cantidad(self):
+        return self.building_features['parking']['count']
+
+    @property
+    def tipos_cochera(self):
+        return self.building_features['parking']['types']
+
+    @property
+    def tipo_cochera_display(self):
+        from scrapi.building_features import parking_label
+        return parking_label(self.building_features['parking'])
+
+    @property
+    def tiene_ascensor(self):
+        return self.building_features['elevator']['has']
+
+    @property
+    def ascensor_display(self):
+        from scrapi.building_features import yes_no
+        result = self.building_features['elevator']
+        if result['status'] == 'not_applicable':
+            return '—'
+        return 'Sin información · datos contradictorios' if result['status'] == 'conflict' else yes_no(result['has'])
+
+    @property
+    def cochera_display(self):
+        from scrapi.building_features import yes_no
+        return yes_no(self.tiene_cochera)
+
+    @property
+    def caracteristicas_por_reconfirmar(self):
+        return any(self.building_features[k].get('reconfirmed') is False for k in ('parking', 'elevator'))
+
     # Se calcula al vuelo: en un terreno interesa el del área de terreno y en una
     # casa interesa comparar el de terreno contra el de construcción.
     @property

@@ -104,6 +104,11 @@ jobs:
           node webapp/ingestas/tests/test_scraping_executor.cjs
           node webapp/cuadrantizacion/test_geollaqta_facade.cjs
 
+      - name: Validate scraper parking and elevator features
+        run: |
+          source antenv/bin/activate
+          python webapp/manage.py test ingestas.tests.test_building_features ingestas.tests.test_apartment_floor ingestas.tests.test_scraping_export ingestas.tests.test_scraping_integrity ingestas.tests.test_scraping_recovery ingestas.tests.test_facebook_marketplace_scraper scrapi.test_remax_data scrapi.test_properati_age scrapi.test_detail_age --settings=ingestas.scraping_test_settings --noinput --verbosity=0
+
       - name: Collect Django static files
         env:
           # Valores dummy para que Django cargue settings sin conexión a BD.
