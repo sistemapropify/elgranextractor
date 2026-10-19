@@ -1,3 +1,51 @@
+# Complete property review and compact ACM feature columns - 2026-10-19
+
+Status: Validated. User explicitly authorized production publication.
+Recipe: existing serialized main_granextractorservice.yml CI/CD.
+Target: granextractorservice / rg-elgranextractor, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Base: origin/main e932410a3ce9dac929a07d34d75003a5fb2dc9b2.
+Public: https://acm.propifai.com/acm/analisis/
+Review: https://acm.propifai.com/ingestas/scraping/calidad/?estado=acm
+
+## 1. Scope and execution
+Expose parking, parking types, elevator and apartment floor in the existing
+audited property editor, retaining all original source/model evidence.
+Protect corrected values from later scraping; preserve legacy clients,
+permissions, CSRF and optimistic concurrency. Add independent persistent
+manual-review filters and review dates.
+Display compact separate car/presence, Type and apartment-floor columns in
+the existing ACM comparable table. Houses show parking; land layout is unchanged.
+Unknown values remain unknown. These fields do not change valuation.
+Shared D:/PROMETEO preview contains these scoped changes and preserves other edits.
+No migrations, resources, settings, credentials, firewall or RBAC changes.
+No scraper recovery or resume-job tag. Normal push only after latest-main check.
+Existing pipeline verifies exact public revision and static assets; rollback
+uses a scoped revert through the same pipeline, preserving stored corrections.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-19, America/Lima:
+- 59 isolated SQLite Django tests passed: ACM catalogue, quality/editor,
+  complete fields, correction protection, manual review, reference fallback
+  and comparable feature projection.
+- Three Node suites passed: actual comparable renderer, presentation and
+  numbered markers; separate apartment/house/land layouts, explicit no versus
+  unknown, multi-level floors, escaping and stable comparable IDs.
+- PRODUCTION=true WSGI import, six template compilations and collectstatic
+  passed (521 files); workflow YAML parses with required review test gate.
+  Build log: D:/PROMETEO/outputs/acm-review-icon-release-20261019/build.log.
+- Offline Camoufox checked actual template/renderer with installed CSS;
+  final icon-column preview approved by user publication request.
+- Shared local HTTP assets returned 200 and matched all three source files
+  byte for byte; analysis redirects correctly to authenticated login.
+  Local authenticated SQL remains blocked by firewall 40615; no bypass used.
+- Azure read confirms expected subscription, Running App Service, Brazil South.
+- Latest origin/main fetched; scoped release has no unrelated shared edits.
+- Public exact-revision/static verification stays required for success.
+  User handles ongoing monitoring; dispatch is not reported as a live release.
+
+---
+
 # Review properties admitted by the ACM in the existing quality template - 2026-10-18
 
 Status: Validated. User explicitly requested production publication.

@@ -341,6 +341,7 @@ jobs:
                 fi
               done <<'CATASTRO_ASSETS'
           js/scraping-verification-release.json|webapp/static/js/scraping-verification-release.json
+          acm/css/components.css|webapp/acm/static/acm/css/components.css
           acm/js/street-facade.js|webapp/acm/static/acm/js/street-facade.js
           js/street-facade-view.js|webapp/static/js/street-facade-view.js
           js/catastro-dashboard.js|webapp/static/js/catastro-dashboard.js
