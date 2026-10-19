@@ -1,3 +1,44 @@
+# Close selected ACM property card - 2026-10-19
+
+Status: Validated. User explicitly authorized publication.
+Recipe: existing serialized main_granextractorservice.yml CI/CD.
+Target: granextractorservice / rg-elgranextractor, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Base: origin/main bf170c2629fea285b165e72f7a7830fe337fa2fc.
+Public: https://acm.propifai.com/acm/analisis/
+
+## 1. Scope and execution
+Add a separate accessible X button to the selected property's sidebar header.
+Use the existing clearSelectedRecord handler to hide the full sidebar/resizer,
+clear the highlighted comparable row and allow another marker to reopen it.
+Preserve the existing content-collapse button. Bump JS/CSS cache versions.
+Shared D:/PROMETEO preview contains these changes, preserving other local edits.
+No database migrations, resources, settings, permissions or scraper job changes.
+Normal push after latest-main check; existing pipeline verifies public revision
+and matching JS/CSS. Rollback is a scoped revert through that same pipeline.
+User handles ongoing monitoring; dispatch does not mean the revision is live.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-19, America/Lima:
+- Actual selected-card template and HTTP-served JS/CSS tested using installed
+  Camoufox on a fixture at desktop and mobile widths: close expanded card,
+  reopen another selected property, close collapsed card with keyboard,
+  clear row highlight and hide resizer; no JavaScript errors.
+- Local analysis/login endpoint and both changed static files returned 200;
+  static bytes match shared source. Authenticated SQL is not asserted tested.
+  Proof: D:/PROMETEO/outputs/acm-close-selected-property-20261019/validation.json.
+- node webapp/acm/test_numbered_markers.cjs passed.
+- node webapp/acm/test_comparable_features.cjs passed.
+- PRODUCTION=true WSGI import, six templates including acm/components.html,
+  collectstatic (521 files) and workflow YAML parse passed.
+  Proof: D:/PROMETEO/outputs/acm-close-selected-property-20261019/build.log.
+- Existing App Service read confirms Running in Brazil South. No new RBAC
+  or infrastructure validation applies to this three-file UI correction.
+- origin/main fetched, no intervening revisions; scoped whitespace check passed.
+- Public exact-revision/static verification is required before claiming success.
+
+---
+
 # Complete property review and compact ACM feature columns - 2026-10-19
 
 Status: Validated. User explicitly authorized production publication.
