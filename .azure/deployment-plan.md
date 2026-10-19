@@ -1,3 +1,43 @@
+# Shared verified cadastral reports - 2026-10-19
+
+Status: Validated. User explicitly requested publication of the report correction.
+Recipe: existing serialized main_granextractorservice.yml CI/CD.
+Target: granextractorservice / rg-elgranextractor, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Base: origin/main 2496b0b6e0bd34aa86df23114b26a6654419b4af.
+Public: https://acm.propifai.com/acm/analisis/
+
+## 1. Scope
+Only publish shared report copies, independent archive reading and regression
+tests. Read validated public report PDFs from private R2 when COFOPRI is offline
+from Azure. Original PDFs have immutable SHA256 names; publish their catalogue
+after acknowledging PDF and metadata. Preserve per-unit selection, permissions,
+private responses and unknown fields. Collector progress and datos.json remain.
+No new infrastructure, migrations, settings, roles or extraction jobs.
+Pending local lot-label sizing and separated local ledger remain unpublished;
+the release cherry-picks only the report correction onto latest origin/main.
+Shared D:/PROMETEO has the same report implementation and its working preview.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-19, America/Lima:
+- 92 Django tests passed on the isolated production branch: map_report,
+  report_snapshot, collector, ACM cadastral endpoint and geollaqta.
+- PRODUCTION=true WSGI import, six templates, collectstatic (521 files),
+  and workflow YAML parsing passed via the existing build_check.py.
+- Real lot 04011703036035 returned 325 / 141.3 m2 and 13 / 25 / 25 / 13 m
+  from R2 in a process without local files and without a COFOPRI connection.
+  Azure's read-only diagnostic retrieved that PDF and verified its SHA256.
+- Latest shared HTTP preview: analysis/login 200, exact static source bytes,
+  unauthenticated private report endpoint 401. No browser session extraction.
+- Azure account matches the existing subscription; App Service Running,
+  Brazil South. No RBAC/IaC changes apply to this application-only release.
+- Latest main fetched; only scoped report changes are included. Use normal push.
+- Existing CI verifies public exact-revision marker and page/static health.
+  Dispatch alone is not a live-release claim. User handles ongoing monitoring.
+- Rollback is a scoped revert through CI; private PDF evidence is retained.
+
+---
+
 # Close selected ACM property card - 2026-10-19
 
 Status: Validated. User explicitly authorized publication.
