@@ -12,8 +12,9 @@ from urllib.parse import urlsplit
 
 from django.core.cache import cache
 
-from .state import State
+from .state import data_dir
 from .storage import R2, StorageError
+from . import report_snapshot
 from scrapi.geollaqta_scraper import Source, GalleryLinks, PORTAL, pdf_pages
 
 
@@ -22,9 +23,8 @@ class ReportUnavailable(RuntimeError):
 
 
 def _archived_reports(lot_id):
-    state = State()
     try:
-        path = state.root / lot_id[:6] / lot_id / 'datos.json'
+        path = data_dir() / lot_id[:6] / lot_id / 'datos.json'
         if path.is_file():
             data = json.loads(path.read_text(encoding='utf-8'))
         else:
@@ -48,8 +48,6 @@ def _archived_reports(lot_id):
         return reports or None
     except (StorageError, ValueError, OSError):
         return None
-    finally:
-        state.close()
 
 
 def measurements(pages, lot_id):
@@ -145,6 +143,8 @@ def report_measurements(lot_id, record_id=None, *, reports=None, report_only=Fal
     discover = reports is None
     if reports is None:
         reports = _archived_reports(lot_id)
+    if discover and (reports is None or (report_only and not any(r.get('type') == 'cadastral_report_pdf' for r in reports))):
+        reports = report_snapshot.read(lot_id, record_id) or reports
     facade = None
     if reports is None or (discover and report_only and not any(r.get('type') == 'cadastral_report_pdf' for r in reports)):
         html = download(PORTAL + 'vistadetalle.php?id_lote=' + lot_id)
@@ -175,6 +175,7 @@ def report_measurements(lot_id, record_id=None, *, reports=None, report_only=Fal
             # A remote/unmapped ficha must not hold a successfully read report.
             continue
         try:
+            downloaded = None
             pages = document.get('pages')
             if pages is None:
                 pages = archived_pages(lot_id, document)
@@ -191,7 +192,10 @@ def report_measurements(lot_id, record_id=None, *, reports=None, report_only=Fal
                 if not body.lstrip().startswith(b'%PDF-'):
                     continue
                 pages = pdf_pages(body)
+                downloaded = body
             extracted = document_metrics(pages, lot_id)
+            if downloaded is not None and document['type'] == 'cadastral_report_pdf':
+                report_snapshot.save(lot_id, document, documents, downloaded)
             for field in ('land_area', 'built_area', 'floors', 'units'):
                 if metrics[field] is None:
                     metrics[field] = extracted[field]

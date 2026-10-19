@@ -93,7 +93,7 @@ jobs:
       - name: Validate direct cadastral report queries
         run: |
           source antenv/bin/activate
-          python webapp/manage.py test catastro.test_map_report catastro.test_collector acm.test_cadastral cuadrantizacion.test_geollaqta --settings=acm.access_test_settings --noinput
+          python webapp/manage.py test catastro.test_map_report catastro.test_report_snapshot catastro.test_collector acm.test_cadastral cuadrantizacion.test_geollaqta --settings=acm.access_test_settings --noinput
 
       - name: Validate reports, facade, concurrent collector and portal areas
         run: |

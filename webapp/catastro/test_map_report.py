@@ -22,6 +22,12 @@ def pages(built='20.5', land='200'):
 class MapReportTests(unittest.TestCase):
     def setUp(self):
         cache.clear()
+        reader = patch('catastro.map_report.report_snapshot.read', return_value=None)
+        writer = patch('catastro.map_report.report_snapshot.save')
+        self.snapshot_read = reader.start()
+        self.snapshot_save = writer.start()
+        self.addCleanup(reader.stop)
+        self.addCleanup(writer.stop)
 
     def test_areas_and_four_measures_are_independent_of_vector_values(self):
         result=measurements(pages(),LOT)
@@ -77,20 +83,19 @@ class MapReportTests(unittest.TestCase):
         with self.assertRaises(ReportUnavailable): report_measurements(LOT, reports=reports)
         download.assert_not_called()
 
-    @patch('catastro.map_report.State')
-    def test_old_archive_extraction_is_read_again_instead_of_trusting_wrong_columns(self, state):
+    @patch('catastro.map_report.data_dir')
+    def test_old_archive_extraction_is_read_again_instead_of_trusting_wrong_columns(self, root):
         import tempfile, json
         from pathlib import Path
         from catastro.map_report import _archived_reports
         with tempfile.TemporaryDirectory() as directory:
-            state.return_value.root = Path(directory)
+            root.return_value = Path(directory)
             folder = Path(directory) / LOT[:6] / LOT
             folder.mkdir(parents=True)
             (folder / 'datos.json').write_text(json.dumps({'lot_id': LOT, 'district_ubigeo': LOT[:6],
                 'extraction_revision': 1, 'reports': [{'type': 'cadastral_report_pdf',
                 'record_id': RECORD, 'pages': pages(built='2012')}]}), encoding='utf8')
             self.assertNotIn('pages', _archived_reports(LOT)[0])
-        state.return_value.close.assert_called_once()
 
 
     def test_shared_reader_keeps_individual_form_priority_and_report_fallback(self):

@@ -110,6 +110,26 @@ exige el mismo permiso administrativo que el archivo y responde PNG privado.
 hashes y actualiza el índice actual y una nueva instantánea JSON en R2. No
 descarga de nuevo la fuente ni modifica los PDF o fotografías originales.
 
+## Copias de reportes consultados en el mapa
+
+Las consultas correctas al reporte guardan su PDF original en
+`geollaqta/UBIGEO/ID_LOTE/map-reports/`, además de la copia local. El nombre del
+PDF incluye su SHA256; los metadatos conservan el lote, el identificador del
+reporte, la URL de origen y la fecha de consulta. El índice de reportes se publica
+sólo después de confirmar el PDF y sus metadatos en R2. Una caída de R2 conserva
+la consulta local y permite reintentar la copia en una lectura posterior.
+
+Cuando COFOPRI no responde desde Azure, ambos mapas pueden leer esa copia
+privada. Se comprueban identidad, hash y medidas desde el PDF, sin sumar las
+áreas de unidades distintas. Las lecturas no abren la base SQLite del recolector.
+Estas copias no reemplazan `datos.json`, no marcan un lote como descargado por
+completo y no sustituyen las fichas ni las fotografías del archivo distrital.
+Un lote que nunca fue consultado o archivado todavía necesita una conexión
+operativa con COFOPRI. No se inventan medidas si no existe un PDF verificable.
+
+Pruebas: `manage.py test catastro.test_map_report catastro.test_report_snapshot
+acm.test_cadastral cuadrantizacion.test_geollaqta --settings=acm.access_test_settings`.
+
 ## Descarga paralela
 
 El dashboard permite elegir 1, 2, 4, 6 o 10 lotes simultáneos (10 por defecto).
