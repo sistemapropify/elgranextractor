@@ -40,7 +40,7 @@ async def _submit_human_answer(page, answer, emit):
     except Exception as exc:
         diagnostics = {'inspection_error': type(exc).__name__}
     await emit(event='verification.input_ready',
-        message='Respuesta colocada en el formulario del navegador; enviando a Properati.',
+        message='Respuesta colocada en el formulario; comprobando si Properati permite enviarla.',
         **diagnostics)
     try:
         # Blurring the field lets pages that enable the button on change/blur
@@ -50,7 +50,16 @@ async def _submit_human_answer(page, answer, emit):
         pass
 
     try:
-        if not await button.is_enabled(timeout=2000):
+        # The page may validate input asynchronously after blur. Observe its
+        # own enabled state; never remove disabled or force a click.
+        for observation in range(11):
+            if await _content_ready(page):
+                return
+            if await button.is_enabled(timeout=2000):
+                break
+            if observation < 10:
+                await asyncio.sleep(0.5)
+        else:
             raise HumanAnswerNotAccepted()
         await button.click(timeout=5000)
         return
@@ -93,9 +102,12 @@ async def resolve(page, exchange, emit):
         return False
     if not await page.locator('#math-answer').count() or not await page.locator('#verify-btn').count():
         return False
-    deadline = time.monotonic() + 300
+    session_deadline = time.monotonic() + 900
     try:
         for attempt in range(3):
+            # Every human attempt needs its own usable response window.
+            # Still cap the whole verification session at fifteen minutes.
+            deadline = min(session_deadline, time.monotonic() + 300)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise manual_timeout()

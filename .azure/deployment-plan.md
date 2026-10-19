@@ -1,3 +1,15 @@
+# Properati human response timing - 2026-10-19
+
+Status: Validated. Existing production scraper correction authorized by user.
+Recipe: existing serialized GitHub Actions CI/CD, same subscription and app below.
+Base: origin/main 6d5004e987579b29e25c940b9d74462b630dc580.
+Scope: only manual verification timing and honest input status. Observe portal enabled state for up to five seconds; never force it. Each of three attempts receives up to 300 seconds, entire session capped at 900. No database, infrastructure, RBAC, or collector changes.
+
+## 7. Validation Proof
+2026-10-19 America/Lima: 12 unittest scrapi.test_manual_verification tests passed in shared D preview and isolated latest-main release. Regressions prove delayed native enablement succeeds, permanently disabled controls never click, and each retry gets 300 seconds. Local dashboard HTTP 200. Existing public App Service Running verified with explicit original subscription. No new resource or role assignments; existing deployment identity retained. CI performs backend tests and exact public release/static verification. Actual portal acceptance still requires a human answer and is not proven by unit tests. Rollback is a scoped revert; saved properties and pending queue preserved.
+
+---
+
 # Properati disabled human-submit control - 2026-10-19
 
 Status: Validated. User requested correction of the production scraper.

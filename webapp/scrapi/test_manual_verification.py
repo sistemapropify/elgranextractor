@@ -57,8 +57,9 @@ class ManualVerificationTests(unittest.IsolatedAsyncioTestCase):
         self.button.is_enabled.return_value = False
         mailbox = Mock(side_effect=lambda action, **kwargs: 'id' if action == 'open' else '123')
         emit = AsyncMock()
-        with self.assertRaises(ScrapingInterrupted):
-            await resolve(page, mailbox, emit)
+        with patch('scrapi.manual_verification.asyncio.sleep', AsyncMock()):
+            with self.assertRaises(ScrapingInterrupted):
+                await resolve(page, mailbox, emit)
         self.button.click.assert_not_awaited()
         self.assertFalse(any(c.args[0] == 'Enter' for c in self.field.press.call_args_list))
         events = [c.kwargs['event'] for c in emit.call_args_list]
@@ -89,7 +90,7 @@ class ManualVerificationTests(unittest.IsolatedAsyncioTestCase):
         page = self.page()
         mailbox = Mock()
         # Replace only this module's clock, leaving asyncio's scheduling clock real.
-        clock = SimpleNamespace(monotonic=Mock(side_effect=[0, 301]))
+        clock = SimpleNamespace(monotonic=Mock(side_effect=[0, 901, 901]))
         loop = asyncio.get_running_loop()
         before = loop.time()
         with patch('scrapi.manual_verification.time', clock):
@@ -98,6 +99,34 @@ class ManualVerificationTests(unittest.IsolatedAsyncioTestCase):
                 await resolve(page, mailbox, AsyncMock())
         self.button.click.assert_not_awaited()
         mailbox.assert_called_once_with('close')
+
+    async def test_portal_can_enable_submit_after_async_input_validation(self):
+        page = self.page()
+        self.button.is_enabled.side_effect = [False, False, False, True]
+        mailbox = Mock(side_effect=lambda action, **kwargs: 'id' if action == 'open' else '123')
+        emit = AsyncMock()
+        with patch('scrapi.manual_verification.asyncio.sleep', AsyncMock()):
+            self.assertTrue(await resolve(page, mailbox, emit))
+        self.button.click.assert_awaited_once()
+        self.button.evaluate.assert_not_awaited()
+
+    async def test_new_attempt_gets_full_window_after_previous_answer_failed(self):
+        page = self.page()
+        self.button.is_enabled.return_value = False
+        windows = []
+        def exchange(action, **kwargs):
+            if action == 'open':
+                windows.append(kwargs['seconds'])
+                return 'id'
+            return '123'
+        clock = SimpleNamespace(monotonic=Mock(return_value=0))
+        async def emit(**kwargs):
+            if kwargs['event'] == 'verification.answer_not_accepted':
+                clock.monotonic.return_value += 200
+        with patch('scrapi.manual_verification.time', clock), patch('scrapi.manual_verification.asyncio.sleep', AsyncMock()):
+            with self.assertRaises(ScrapingInterrupted):
+                await resolve(page, exchange, emit)
+        self.assertEqual(windows, [300, 300, 300])
 
     async def test_changed_portal_button_uses_native_enter_and_never_synthetic_click(self):
         page = self.page()
