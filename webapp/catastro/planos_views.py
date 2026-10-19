@@ -1,4 +1,5 @@
 """Map workspace for reviewing georeferenced plans without altering the archive."""
+import json
 from django.conf import settings
 from django.shortcuts import render
 from django.http import JsonResponse
@@ -7,7 +8,7 @@ from django.views.decorators.http import require_GET, require_POST
 from map_config import google_maps_api_key
 
 from .views import admin_required
-from . import cad_reader
+from . import cad_reader, plan_adjustments
 
 
 @require_GET
@@ -72,3 +73,31 @@ def layer_features(request, job_id):
         return JsonResponse({'error': 'No se pudo mostrar la capa con estos parámetros. Revisa el sistema de coordenadas.'}, status=400)
     except Exception:
         return JsonResponse({'error': 'No se pudo transformar la capa. Revisa el sistema de coordenadas seleccionado.'}, status=422)
+
+
+@csrf_protect
+@admin_required
+def adjustments(request, job_id):
+    if request.method not in ('GET', 'POST'):
+        return JsonResponse({'error': 'Método no permitido.'}, status=405)
+    try:
+        crs = request.GET.get('crs', 'unknown')
+        if request.method == 'POST':
+            if len(request.body) > 8 * 1024 * 1024:
+                raise ValueError('Los ajustes superan el tamaño admitido.')
+            payload = json.loads(request.body)
+            if not isinstance(payload, dict):
+                raise ValueError('Formato de ajustes no válido.')
+            user = getattr(request, 'current_user', None) or request.user
+            value = plan_adjustments.save(job_id, crs, payload, getattr(user, 'username', '') or getattr(user, 'pk', 'administrador'))
+        else:
+            value = plan_adjustments.read(job_id, crs)
+        response = JsonResponse(value)
+        response['Cache-Control'] = 'private, no-store'
+        return response
+    except plan_adjustments.Conflict as error:
+        return JsonResponse({'error': str(error)}, status=409)
+    except (ValueError, TypeError, KeyError, OverflowError) as error:
+        return JsonResponse({'error': str(error) or 'Ajustes no válidos.'}, status=400)
+    except OSError:
+        return JsonResponse({'error': 'No se pudieron guardar o leer los ajustes. Tus cambios siguen en pantalla; vuelve a intentar.'}, status=503)

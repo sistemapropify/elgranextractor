@@ -10,6 +10,7 @@ urlpatterns = [
     path('api/planos/importar/', planos_views.upload, name='planos_upload'),
     path('api/planos/<str:job_id>/', planos_views.import_status, name='planos_status'),
     path('api/planos/<str:job_id>/capa/', planos_views.layer_features, name='planos_layer'),
+    path('api/planos/<str:job_id>/ajustes/', planos_views.adjustments, name='planos_adjustments'),
     path('api/status/', views.status, name='status'),
     path('api/start/', views.start, name='start'),
     path('api/worker/claim/', worker_api.claim, name='worker_claim'),

@@ -90,6 +90,16 @@ jobs:
           source antenv/bin/activate
           python webapp/manage.py test acm.test_reference_fallback --settings=acm.access_test_settings --noinput
 
+      - name: Validate saved block adjustments and readable lot labels
+        run: |
+          node webapp/catastro/test_plan_fit.cjs
+          node webapp/catastro/test_plan_labels.cjs
+          node webapp/catastro/test_vector_map_ui.cjs
+          node webapp/catastro/test_plan_edit_geometry.cjs
+          node webapp/catastro/test_plan_editor.cjs
+          source antenv/bin/activate
+          python webapp/manage.py test catastro.test_plan_adjustments catastro.test_planos --settings=acm.access_test_settings --noinput
+
       - name: Validate direct cadastral report queries
         run: |
           source antenv/bin/activate
@@ -358,6 +368,10 @@ jobs:
           js/geollaqta-map.js|webapp/static/js/geollaqta-map.js
           js/cuadrantizacion-street-view.js|webapp/static/js/cuadrantizacion-street-view.js
           css/cuadrantizacion-street-view.css|webapp/static/css/cuadrantizacion-street-view.css
+          js/visor-planos-fit.js|webapp/static/js/visor-planos-fit.js
+          js/visor-planos-labels.js|webapp/static/js/visor-planos-labels.js
+          js/visor-planos-edit-geometry.js|webapp/static/js/visor-planos-edit-geometry.js
+          js/visor-planos-editor.js|webapp/static/js/visor-planos-editor.js
           CATASTRO_ASSETS
               if [ "$ACM_STATUS" = "200" ] && [ "$VIEWER_STATUS" = "302" ] \
                 && [ "$ACM_JS_STATUS" = "200" ] && [ "$CAD_JS_STATUS" = "200" ] && [ "$CAD_CSS_STATUS" = "200" ] \

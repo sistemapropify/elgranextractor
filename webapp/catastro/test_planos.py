@@ -1,5 +1,7 @@
 from types import SimpleNamespace
+from copy import deepcopy
 from unittest.mock import patch
+from django.conf import settings
 
 from django.test import RequestFactory, SimpleTestCase, override_settings
 
@@ -8,6 +10,15 @@ from .planos_views import viewer
 
 class PlanViewerTests(SimpleTestCase):
     def setUp(self):
+        templates = deepcopy(settings.TEMPLATES)
+        templates[0]['APP_DIRS'] = False
+        templates[0]['OPTIONS']['context_processors'] = ['django.template.context_processors.request']
+        templates[0]['OPTIONS']['loaders'] = [
+            ('django.template.loaders.locmem.Loader', {'propifai_base.html': '<html><head>{% block extra_head %}{% endblock %}</head><body>{% block content %}{% endblock %}{% block extra_js %}{% endblock %}</body></html>'}),
+            'django.template.loaders.filesystem.Loader', 'django.template.loaders.app_directories.Loader']
+        template_settings = override_settings(TEMPLATES=templates)
+        template_settings.enable()
+        self.addCleanup(template_settings.disable)
         template_patch = patch('django.template.base.Template._render',
                                lambda template, context: template.nodelist.render(context))
         template_patch.start()
@@ -61,13 +72,16 @@ class PlanViewerTests(SimpleTestCase):
         html = response.content.decode()
         self.assertIn('Visor de planos', html)
         self.assertIn('id="planos-map"', html)
-        self.assertEqual(html.count('<details class="planos-card"'), 5)
+        self.assertEqual(html.count('<details class="planos-card"'), 6)
         self.assertIn('Abrir archivo DWG', html)
         self.assertIn('accept=".dwg,', html)
         self.assertNotIn('Abrir archivo GeoJSON', html)
-        self.assertIn('visor-planos.js?v=6', html)
+        self.assertIn('visor-planos.js?v=14', html)
+        self.assertIn('Mover manzana', html)
+        self.assertIn('Mover puntas', html)
+        self.assertNotIn('Girar', html)
         self.assertIn('maps-test-key', html)
-        self.assertIn('visor-planos/', html)
+        self.assertIn('id="planos-edit-card"', html)
         self.assertEqual(response['Cache-Control'], 'private, no-store')
 
     @override_settings(GOOGLE_MAPS_API_KEY='')

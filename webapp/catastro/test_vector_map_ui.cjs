@@ -22,8 +22,8 @@ class Data{
  addGeoJson(collection){this.addCalls++;for(const raw of collection.features){assert.notEqual(raw.geometry.type,'Point','CAD text must never create a Google Maps pin');this.features.push({raw,getId:()=>raw.id,getProperty:k=>raw.properties[k]});}}
  setStyle(fn){this.style=fn;for(const f of this.features){const style=fn(f);assert.equal(style.fillOpacity,0,'Parcel interiors must remain transparent');assert.equal(style.icon,undefined,'Vector rendering must not define circle icons');}}
 }
-let mapInstance,resizeEvents=0;
-const google={maps:{Data,Map:class{constructor(){mapInstance=this;this.handlers={};}addListener(n,f){this.handlers[n]=f;}setOptions(){}fitBounds(b){this.lastBounds=b;}},LatLngBounds:class{extend(){return this;}},event:{trigger(_,name){if(name==='resize')resizeEvents++;}},geometry:{spherical:{computeArea:()=>1}}}};
+let mapInstance,resizeEvents=0,fitCalls=0;
+const google={maps:{Data,Map:class{constructor(){mapInstance=this;this.handlers={};this.type='roadmap';}addListener(n,f){this.handlers[n]=f;}setOptions(){}getMapTypeId(){return this.type;}setMapTypeId(v){this.type=v;}fitBounds(b){fitCalls++;this.lastBounds=b;}},LatLngBounds:class{extend(){return this;}},event:{trigger(_,name){if(name==='resize')resizeEvents++;}},geometry:{spherical:{computeArea:()=>1}}}};
 const requests=[],frames=[];let pageYields=0;
 const labelFrames=[],canvasInstances=[];
 const context={window:{PlanosLabels:{create:()=>{const canvas={setMap(map){this.map=map;},setFeatures(features,layers,opacity){this.features=features;this.layers=layers;this.opacity=opacity;labelFrames.push(features.filter(f=>f.properties.texto));}};canvasInstances.push(canvas);return canvas;}}},google,document:{getElementById:get,createElement:t=>new Element(t),createElementNS:(_,t)=>new Element(t)},location:{search:'',pathname:'/catastro/visor-planos/'},history:{replaceState(){}},URLSearchParams,AbortController,
@@ -32,6 +32,7 @@ const context={window:{PlanosLabels:{create:()=>{const canvas={setMap(map){this.
  fetch:async url=>{requests.push(url);const query=new URLSearchParams(url.split('?')[1]||'');let payload=meta;if(url.includes('/capa/')){const labels=query.get('layer')==='NUMEROS_LOTES';payload={features:labels?[label]:query.get('offset')==='2000'?[second]:[first,mixedLabel],next_offset:labels||query.get('offset')==='2000'?null:2000};}return{ok:true,headers:{get:()=> 'application/json'},json:async()=>payload};}
 };
 const row=name=>get('planos-layers').children.find(n=>n.children[1].textContent===name);
+context.window.PlanosFit=require('../static/js/visor-planos-fit.js');
 const check=name=>row(name).children[0];
 (async()=>{
  vm.runInNewContext(source,context);context.window.initPlanosMap();
@@ -47,6 +48,8 @@ const check=name=>row(name).children[0];
  assert.ok(labelFrames.at(-1).some(f=>f.properties.texto==='12'));
  assert.equal(check('NUMEROS_LOTES').disabled,false);assert.equal(check('NUMEROS_LOTES').checked,true);
  assert.ok(resizeEvents>0);const initialRequests=requests.length;
+ get('planos-satellite').handlers.click();assert.equal(mapInstance.type,'hybrid');assert.equal(get('planos-basemap').value,'hybrid');
+ const firstFits=fitCalls;
  check('LOTES').checked=false;await check('LOTES').handlers.change();assert.equal(data.features.length,1);
  check('LOTES').checked=true;await check('LOTES').handlers.change();assert.equal(data.features.length,4);
  assert.equal(requests.length,initialRequests,'Do not re-download a loaded layer');
@@ -59,6 +62,8 @@ const check=name=>row(name).children[0];
  assert.ok(get('planos-cad-entities').children.some(n=>n.tag==='text'),'Switching back restores the visible CAD text layer');
  get('planos-crs').value='EPSG:24879';await get('planos-crs').handlers.change();
  assert.equal(canvasInstances.length,2,'Changing CRS invalidates geographic geometry instead of reusing stale coordinates');
+ assert.equal(fitCalls,firstFits+1,'Only returning to the CAD view fits that original view; later CRS changes preserve the map camera');
+ assert.equal(mapInstance.type,'hybrid','CRS changes retain the satellite basemap');
  assert.notEqual(canvasInstances[1],data);assert.ok(mapInstance.lastBounds);
  console.log('Vector map: complete vector and text layers, no circle pins/fills, cached geometry, automatic pages, opacity throttling and CRS changes verified.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

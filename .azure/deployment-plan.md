@@ -1,3 +1,55 @@
+# Saved block alignment, satellite and parcel labels - 2026-10-19
+
+Status: Validated. User explicitly requested this production deployment.
+Recipe: existing serialized main_granextractorservice.yml CI/CD.
+Target: granextractorservice / rg-elgranextractor, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Base: origin/main 5562e6713925b99520e526a9b514f210b3dcadf5.
+Public: https://acm.propifai.com/catastro/visor-planos/
+
+## 1. Scope
+Move an entire manzana with its contained lots and labels, or move its corners.
+No rotation control. Piecewise affine mesh keeps shared lot edges connected;
+reject crossed boundaries and inverted mesh triangles. Versioned visual edits
+are independent of original DWG/geometry, keyed by plan ID and source CRS.
+Staff authorization, CSRF, per-member containment and stale-save conflict checks.
+Save timestamp and automatic reload allow continuation through the same URL.
+Satellite toggle is visible in the header; later CRS changes preserve the camera
+and basemap. Include previously prepared adaptive lot-label sizing (10-16 px).
+Shared D:/PROMETEO contains this same implementation and working local preview.
+Existing Azure CATASTRO_DATA_DIR=/home/data/catastro is persistent; adjustment
+JSON/history live beside the existing plan under that root. No SQL migrations,
+infrastructure, app settings, roles, collector ledger or scraper changes.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-19, America/Lima:
+- 14 Django tests passed on the isolated production branch: plan_adjustments,
+  plan viewer, staff/anonymous authorization, CSRF, version conflicts, restore,
+  original-file byte preservation, invalid meshes and out-of-block membership.
+- Five Node suites passed: plan_fit, plan_labels, vector_map_ui,
+  plan_edit_geometry and plan_editor. Covers complete layers, map camera and
+  satellite retention, linked translations, shared-edge deformation, labels,
+  undo, save failure retention, reload and restore. No rotation UI.
+- Browser fixture with a real Cayma block (28328, 29 entities): full current
+  viewer template and local HTTP-served assets, move, move corner, actual save
+  into a temporary independent plan, reload restored it; source SQLite hash
+  unchanged and no JavaScript errors. Google API is a controlled test adapter,
+  not a claim of an authenticated production editing session.
+- WSGI under PRODUCTION=true, two templates, route reverse, collectstatic
+  (527 files) and workflow YAML passed using isolated SQLite databases.
+- Local HTTP page and adjustments API require login; all five served viewer JS
+  assets match the shared source byte for byte. Fixture/admin tests are separate
+  from the real server. Production browser sessions were not extracted.
+- Existing subscription and Running/Brazil South App Service confirmed. Existing
+  persistent archive setting read only; no RBAC/IaC modifications apply.
+- CI adds these regression checks and compares all new public JS assets to the
+  exact deployed revision, in addition to existing public page/health checks.
+- Normal push only. Rollback is a scoped revert; original source and saved
+  visual adjustment JSON/history remain on persistent storage.
+- User handles ongoing monitoring. Dispatch is not proof of a live release.
+
+---
+
 # Shared verified cadastral reports - 2026-10-19
 
 Status: Validated. User explicitly requested publication of the report correction.

@@ -1,12 +1,12 @@
 {% extends 'propifai_base.html' %}
 {% load static %}
 {% block title %}Visor de planos · Catastro{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/visor-planos.css' %}?v=3">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/visor-planos.css' %}?v=4">{% endblock %}
 {% block content %}
 <main class="planos-workspace" id="planos-workspace">
   <header class="planos-heading">
     <div><span class="planos-eyebrow">CATASTRO</span><h1>Visor de planos</h1></div>
-    <div class="planos-heading-actions"><button class="planos-button" id="planos-fit" type="button" disabled>Centrar plano</button><button class="planos-button" id="planos-panels-toggle" type="button" aria-expanded="true" aria-controls="planos-panels">Ocultar tarjetas</button></div>
+    <div class="planos-heading-actions"><button class="planos-button" id="planos-satellite" type="button" aria-pressed="false" disabled>Satélite</button><button class="planos-button" id="planos-fit" type="button" disabled>Centrar plano</button><button class="planos-button" id="planos-panels-toggle" type="button" aria-expanded="true" aria-controls="planos-panels">Ocultar tarjetas</button></div>
   </header>
   <section class="planos-canvas" aria-label="Área de trabajo del plano">
     <div id="planos-map" aria-label="Mapa de Google Maps"></div>
@@ -47,7 +47,18 @@
         <p class="planos-empty" id="planos-selection-empty">Haz clic en un polígono, una línea o un punto del plano.</p>
         <div id="planos-selection-data" hidden><span class="planos-selected-layer" id="planos-selected-layer"></span><dl id="planos-selected-properties"></dl><p class="planos-help">Las medidas se calculan sobre la geometría del mapa; no son áreas registrales.</p></div>
       </div></details>
-      <details class="planos-card"><summary><span class="planos-card-icon">05</span>Exportar selección de capas<span class="planos-chevron" aria-hidden="true">⌄</span></summary><div class="planos-card-body"><p class="planos-help">Con el plano ubicado, exporta las entidades cargadas de sus capas visibles como GeoJSON. El aporte al Catastro maestro se incorporará después de la revisión.</p><button class="planos-button planos-primary" id="planos-export" type="button" disabled>Descargar geometrías cargadas</button></div></details>
+      <details class="planos-card" id="planos-edit-card" open><summary><span class="planos-card-icon">05</span>Ajustar manzanas<span class="planos-chevron" aria-hidden="true">⌄</span></summary><div class="planos-card-body">
+        <p class="planos-help">Ubica el plano sobre Google Maps y selecciona una manzana. Sus lotes y números se ajustan juntos.</p>
+        <button class="planos-button" id="planos-edit-select" type="button" disabled>Seleccionar manzana</button>
+        <div class="planos-inline"><button class="planos-button" id="planos-edit-move" type="button" aria-pressed="false" disabled>Mover manzana</button><button class="planos-button" id="planos-edit-vertices" type="button" aria-pressed="false" disabled>Mover puntas</button></div>
+        <output id="planos-edit-status" class="planos-measure-result" aria-live="polite">Confirma las coordenadas para ajustar sobre el mapa.</output>
+        <p id="planos-edit-last-saved" class="planos-help">Este plano todavía no tiene ajustes guardados.</p>
+        <div class="planos-inline"><button class="planos-button planos-small" id="planos-edit-undo" type="button" disabled>Deshacer</button><button class="planos-button planos-small" id="planos-edit-restore" type="button" disabled>Restaurar manzana</button></div>
+        <button class="planos-button planos-primary" id="planos-edit-save" type="button" disabled>Guardar ajustes</button>
+        <button class="planos-button planos-small" id="planos-edit-close" type="button" hidden>Terminar ajuste</button>
+        <p class="planos-help">Alineación visual. El DWG y sus coordenadas originales se conservan. La exportación incluye los ajustes guardados o visibles.</p>
+      </div></details>
+      <details class="planos-card"><summary><span class="planos-card-icon">06</span>Exportar selección de capas<span class="planos-chevron" aria-hidden="true">⌄</span></summary><div class="planos-card-body"><p class="planos-help">Con el plano ubicado, exporta las entidades cargadas de sus capas visibles como GeoJSON. El aporte al Catastro maestro se incorporará después de la revisión.</p><button class="planos-button planos-primary" id="planos-export" type="button" disabled>Descargar geometrías cargadas</button></div></details>
     </aside>
     <div class="planos-map-caption"><span class="planos-live-dot"></span><span id="planos-map-caption">Arequipa · sin plano abierto</span></div>
   </section>
@@ -56,7 +67,10 @@
 {% endblock %}
 {% block extra_js %}
 {{ cad_initial_state|json_script:"planos-initial-state" }}
-<script src="{% static 'js/visor-planos-labels.js' %}?v=2"></script>
-<script src="{% static 'js/visor-planos.js' %}?v=11"></script>
+<script src="{% static 'js/visor-planos-fit.js' %}?v=1"></script>
+<script src="{% static 'js/visor-planos-labels.js' %}?v=4"></script>
+<script src="{% static 'js/visor-planos-edit-geometry.js' %}?v=1"></script>
+<script src="{% static 'js/visor-planos-editor.js' %}?v=1"></script>
+<script src="{% static 'js/visor-planos.js' %}?v=14"></script>
 {% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;libraries=geometry&amp;callback=initPlanosMap" async defer></script>{% endif %}
 {% endblock %}

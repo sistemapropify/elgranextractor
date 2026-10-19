@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict'),g=require('../static/js/visor-planos-edit-geometry.js');
+const feature=(id,layer,coords,type='Polygon')=>({id,properties:{capa:layer},geometry:{type,coordinates:coords}});
+const block=feature(1,'MANZANAS',[[[0,0],[10,0],[10,10],[0,10],[0,0]]]);
+const left=feature(2,'LOTES',[[[0,0],[5,0],[5,10],[0,10],[0,0]]]),right=feature(3,'LOTES',[[[5,0],[10,0],[10,10],[5,10],[5,0]]]);
+const text=feature(4,'NUMEROS_LOTES',[2,4],'Point'),outside=feature(5,'LOTES',[[[20,20],[25,20],[25,25],[20,20]]]);
+const crossing=feature(6,'LOTES',[[[9,9],[12,9],[12,12],[9,9]]]);
+const all=[block,left,right,text,outside,crossing],before=JSON.stringify(all),group=g.group(block,all);
+assert.deepEqual(group.member_ids,[1,2,3,4]);assert.deepEqual(group.skipped,[6]);
+const translated=group.source.map(([x,y])=>[x+20,y-4]);
+for(const f of all.slice(0,4)){const out=g.transform(f,group.source,translated);g.points(f.geometry).forEach((p,i)=>{const q=g.points(out.geometry)[i];assert.ok(Math.abs(q[0]-p[0]-20)<1e-9);assert.ok(Math.abs(q[1]-p[1]+4)<1e-9);});}
+const target=group.source.map(p=>p.slice());target[2]=[12,13];assert.equal(g.valid(group.source,target),true);
+const l=g.transform(left,group.source,target),r=g.transform(right,group.source,target);
+const lp=g.points(l.geometry),rp=g.points(r.geometry),shared=lp.filter(p=>rp.some(q=>Math.hypot(p[0]-q[0],p[1]-q[1])<1e-8));
+assert.ok(shared.length>=3,'Shared edges split at mesh boundaries and remain identical');
+assert.ok(g.points(g.transform(text,group.source,target).geometry).every(p=>g.contains(p,g.ring(g.transform(block,group.source,target)))));
+const folded=group.source.map(p=>p.slice());folded[1]=[-5,15];assert.equal(g.valid(group.source,folded),false);assert.throws(()=>g.transform(left,group.source,folded));
+const concave=[[0,0],[8,0],[8,3],[3,3],[3,8],[0,8]],next=concave.map(([x,y])=>[x+.3,y+.2]);assert.equal(g.valid(concave,next),true);assert.equal(g.triangles(concave).length,4);
+assert.equal(JSON.stringify(all),before,'Editing never mutates imported source coordinates');
+assert.deepEqual(g.ring(feature(8,'MANZANAS',[[[0,0],[5,0],[10,0],[10,10],[0,10],[0,0]]])),[[0,0],[10,0],[10,10],[0,10]]);
+console.log('Block edits: translations, shared-edge deformation, labels, concave outlines, fold rejection and immutable source verified.');
