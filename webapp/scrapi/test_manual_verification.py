@@ -52,6 +52,20 @@ class ManualVerificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('123', str(emit.call_args_list))
         self.assertIsNone(page._scraping_initial_html)
 
+    async def test_disabled_button_never_claims_submission_or_uses_enter(self):
+        page = self.page()
+        self.button.is_enabled.return_value = False
+        mailbox = Mock(side_effect=lambda action, **kwargs: 'id' if action == 'open' else '123')
+        emit = AsyncMock()
+        with self.assertRaises(ScrapingInterrupted):
+            await resolve(page, mailbox, emit)
+        self.button.click.assert_not_awaited()
+        self.assertFalse(any(c.args[0] == 'Enter' for c in self.field.press.call_args_list))
+        events = [c.kwargs['event'] for c in emit.call_args_list]
+        self.assertIn('verification.answer_not_accepted', events)
+        self.assertNotIn('verification.submitted', events)
+        self.assertFalse(any(c.args[0] == 'executed' for c in mailbox.call_args_list))
+
     async def test_stopped_job_cannot_submit_to_browser(self):
         page = self.page()
         def exchange(action, **kwargs):

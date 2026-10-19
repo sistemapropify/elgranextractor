@@ -9,6 +9,10 @@ from .contracts import ScrapingInterrupted
 logger = logging.getLogger(__name__)
 
 
+class HumanAnswerNotAccepted(RuntimeError):
+    """The portal did not enable its submit control; no answer was submitted."""
+
+
 def manual_timeout():
     return ScrapingInterrupted('portal.paused: verificación manual no completada; pendientes conservados')
 
@@ -46,8 +50,12 @@ async def _submit_human_answer(page, answer, emit):
         pass
 
     try:
+        if not await button.is_enabled(timeout=2000):
+            raise HumanAnswerNotAccepted()
         await button.click(timeout=5000)
         return
+    except HumanAnswerNotAccepted:
+        raise
     except Exception as click_error:
         # Some challenge implementations submit on input/change and remove the
         # button while click() is waiting. That is already a successful submit.
@@ -107,7 +115,12 @@ async def resolve(page, exchange, emit):
                 raise manual_timeout()
             if urlsplit(page.url).hostname != 'www.properati.com.pe':
                 raise manual_timeout()
-            await _submit_human_answer(page, answer, emit)
+            try:
+                await _submit_human_answer(page, answer, emit)
+            except HumanAnswerNotAccepted:
+                await emit(event='verification.answer_not_accepted', level='warning',
+                    message='Properati mantiene deshabilitado el botón de envío. La respuesta no se envió. Revisa la nueva imagen antes de responder de nuevo.')
+                continue
             await asyncio.to_thread(exchange, 'executed', id=challenge_id)
             await emit(event='verification.submitted',
                 message='El navegador procesó tu respuesta; esperando que Properati confirme el acceso.')

@@ -1,3 +1,41 @@
+# Properati disabled human-submit control - 2026-10-19
+
+Status: Validated. User requested correction of the production scraper.
+Recipe: existing serialized GitHub Actions CI/CD for granextractorservice.
+Target: rg-elgranextractor / granextractorservice, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Base: origin/main de2051079265bfeeee02db02f715aafeb9050e50.
+Public: https://acm.propifai.com/ingestas/scraping/dashboard/
+
+## 1. Scope
+Only correct Properati manual verification reporting. If the portal keeps its
+submit button disabled after human input and blur, do not try Enter or claim
+submission; reopen the existing human-response mailbox with a current image.
+Human solves verification; do not enable portal controls or solve automatically.
+Saved properties, candidate queue, checkpoint and portal/browser scope remain.
+No database migrations, settings, infrastructure, RBAC or collector changes.
+Local collector downloads were separately stopped, removed at the user's
+request and disabled. Those local-only controls are not in this release.
+
+## 7. Validation Proof
+azure-validate completed 2026-10-19 America/Lima:
+- 10 manual verification async tests passed in the shared preview checkout and
+  again on the isolated latest-main release. New regression confirms a disabled
+  button never clicks, presses Enter or marks the human action executed/submitted.
+- Existing success, trusted keyboard fallback, stopped job, timeout, origin
+  restriction, feedback and content confirmation regressions pass.
+- Production source diff limited to the handler, regression test and this proof.
+- Existing Python/Django runtime and serialized CI, already validated for this
+  deployment target. No resource or role modifications apply. Existing pipeline
+  includes the complete manual verification regression suite before deployment.
+- Shared local source contains the same correction, preserving other work.
+  The local preview remains running. No real CAPTCHA is solved during testing.
+- Normal push, no forced history changes. Existing CI checks exact public
+  revision and assets before reporting a live release. User handles monitoring.
+- Rollback: scoped revert; original saved properties and queues stay intact.
+
+---
+
 # Saved block alignment, satellite and parcel labels - 2026-10-19
 
 Status: Validated. User explicitly requested this production deployment.
