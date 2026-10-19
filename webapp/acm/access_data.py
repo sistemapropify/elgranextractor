@@ -87,7 +87,8 @@ def project(request, state, result=None, excluded=(), report=False):
         record.pop('_operation_title', None)
         record.pop('_operation_title_lower', None)
         if not p['metadata']:
-            allowed = {'id', 'source', 'code', 'title', 'kind', 'description', 'rooms', 'baths', 'floor', 'age',
+            allowed = {'id', 'source', 'code', 'title', 'kind', 'description', 'rooms', 'baths', 'floor', 'floor_label', 'age',
+                       'parking_has', 'parking_types', 'parking_status',
                        'price', 'converted', 'land', 'built', 'lat', 'lng', 'precision', 'state',
                        'first_seen', 'last_seen', 'operation', 'operation_status', 'district', 'url', 'image', 'distance',
                        'land_similarity', 'built_similarity', 'distance_similarity', 'overall_similarity', 'issues', 'duplicate_of'}

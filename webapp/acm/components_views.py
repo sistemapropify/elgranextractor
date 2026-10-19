@@ -165,14 +165,25 @@ def scraped_rows(p):
             'precio_usd','precio_soles','area_terreno','area_construida','latitud','longitud',
             'precision_ubicacion','estado_publicacion','primera_vez_vista','ultima_vez_vista',
             'fecha_primera_ausencia','fecha_retiro_confirmado','ausencias_consecutivas',
-            'distrito','url','imagen_url','descripcion','dormitorios','banos','antiguedad_anios','age_conflict').iterator(chunk_size=500):
+            'distrito','url','imagen_url','descripcion','dormitorios','banos','antiguedad_anios','age_conflict',
+            'estacionamientos','amenities','datos_crudos').iterator(chunk_size=500):
         usd=positive(row['precio_usd']);pen=positive(row['precio_soles'])
+        # Reuse the same verified/legacy feature readers as the quality editor.
+        # Raw source evidence stays on the server; only compact values are emitted.
+        feature_record = PropiedadesCompetencia(tipo_inmueble=row['tipo_inmueble'],
+            descripcion=row['descripcion'], titulo=row['titulo'], estacionamientos=row['estacionamientos'],
+            amenities=row['amenities'], datos_crudos=row['datos_crudos'])
+        parking = feature_record.building_features['parking']
+        floor_label = feature_record.piso_departamento
         lifecycle_state = row['estado_publicacion'] or 'sin_verificar'
         yield {'id':f"{row['fuente']}-{row['id']}",'record_id':row['id'],
             'source':row['fuente'],'code':row['id_origen'],
             'title':row['titulo'] or row['id_origen'],'kind':row['tipo_inmueble'],
             'description':row['descripcion'] or '',
-            'rooms':row['dormitorios'],'baths':row['banos'],'floor':None,
+            'rooms':row['dormitorios'],'baths':row['banos'],
+            'floor':int(floor_label) if floor_label is not None and str(floor_label).isdigit() else None,
+            'floor_label':floor_label, 'parking_has':parking['has'],
+            'parking_types':parking.get('types'), 'parking_status':parking['status'],
             'age':number(row['antiguedad_anios']),
             'age_conflict':None if row['id'] in confirmed_age else row['age_conflict'],
             'price':usd or (pen/3.44 if pen else None),'converted':not bool(usd) and bool(pen),
@@ -205,7 +216,8 @@ def propify_rows():
             'age':number(row.get('antiquity_years')),
             'baths':(number(row.get('bathrooms')) or 0)+(number(row.get('half_bathrooms')) or 0)*.5 if row.get('bathrooms') is not None else None,
             # unit_location is not a verified floor number; do not guess it.
-            'floor':None,
+            'floor':None, 'floor_label':None, 'parking_has':None,
+            'parking_types':None, 'parking_status':'unknown',
             'price':price/3.44 if price and converted else price,'converted':converted,
             'land':positive(row['land_area_m2']),'built':positive(row['built_area_m2']),
             'lat':row['lat'],'lng':row['lng'],'precision':'exacta','state':'activa',

@@ -1399,3 +1399,6 @@
 .map-sidebar[hidden] { display: none !important; }
 .cmp-resizer[hidden] { display: none !important; }
 #cmp-results.cmp-only-selection > :not(#cmp-selected-card) { display: none !important; }
+
+/* Keep property features within the existing comparison column. */
+.cmp-comparison-features{max-width:165px;line-height:1.2}.cmp-comparison-features>span,.cmp-comparison-features>small{display:block;max-width:165px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cmp-comparison-features>small{font-size:10px;margin-top:2px;color:inherit;opacity:.85}

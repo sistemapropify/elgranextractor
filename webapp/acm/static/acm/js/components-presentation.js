@@ -71,6 +71,24 @@
     if (mode === 'improvements') return (value.status === 'review' ? 'Revisar: ' : 'Mejoras ') + money(value.builtUnit) + '/m²';
     return 'Suelo estim. ' + money(value.landUnit) + '/m²';
   }
+  const parkingNames = {
+    lineal_techada:'Lineal techada', lineal_no_techada:'Lineal no techada',
+    paralela_techada:'Paralela techada', paralela_no_techada:'Paralela no techada'
+  };
+  function comparisonFeatures(record) {
+    const output = {floor:'', parking:''};
+    if (record.kind === 'Departamento') {
+      const floor = record.floor_label ?? record.floor;
+      output.floor = 'Piso: ' + (floor == null || floor === '' ? '—' : String(floor));
+    }
+    if (!['Casa','Departamento'].includes(record.kind)) return output;
+    const types = (Array.isArray(record.parking_types) ? record.parking_types : [])
+      .filter(key => Object.prototype.hasOwnProperty.call(parkingNames,key)).map(key => parkingNames[key]);
+    output.parking = 'Cochera: ' + (record.parking_status === 'conflict' ? 'Por confirmar' :
+      record.parking_has === false ? 'No' : record.parking_has === true ?
+      'Sí · ' + (types.join(' + ') || 'tipo sin informar') : 'Sin información');
+    return output;
+  }
   function numbering(records, orderedComparables) {
     const ids = [...new Set([...orderedComparables, ...records].map(row => String(row.id)))];
     return new Map(ids.map((id, index) => [id, index + 1]));
@@ -114,7 +132,7 @@
     }
     return rings;
   }
-  const api = {numbering, offer, property, marker, precision, group, comparisonRows, mapRadius, inMapRadius, mapRings};
+  const api = {comparisonFeatures, numbering, offer, property, marker, precision, group, comparisonRows, mapRadius, inMapRadius, mapRings};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ACMComponentsPresentation = api;
 })(typeof window !== 'undefined' ? window : globalThis);
