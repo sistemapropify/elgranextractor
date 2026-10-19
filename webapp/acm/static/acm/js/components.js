@@ -565,6 +565,7 @@
   $('cmp-cards').addEventListener('click',e=>{const locate=e.target.closest('[data-locate]');if(locate){locateProperty(locate.dataset.locate);return;}const button=e.target.closest('[data-detail]');if(button)openDetail(button.dataset.detail);});
   $('cmp-detail-close').addEventListener('click',()=>$('cmp-detail').close());
   $('cmp-selected-toggle')?.addEventListener('click',()=>setSelectedCardOpen($('cmp-selected-content').hidden));
+  $('cmp-selected-close')?.addEventListener('click',clearSelectedRecord);
   $('cmp-calculation-open').addEventListener('click',()=>{if(snapshot&&!$('cmp-calculation').open)$('cmp-calculation').showModal();});
   $('cmp-comparison-open').addEventListener('click',()=>{
     if(!snapshot||!result)return;

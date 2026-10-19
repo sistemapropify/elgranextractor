@@ -1377,6 +1377,11 @@
 
 /* ===== Tarjeta lateral: la propiedad elegida con un pin del mapa ===== */
 .cmp-selected-card { background: #0f1720; border: 1px solid #2b3947; }
+.cmp-selected-toolbar { display: flex; align-items: center; }
+.cmp-selected-toolbar .cmp-selected-header { flex: 1; min-width: 0; width: auto; }
+.cmp-selected-close { flex: 0 0 36px; width: 36px; height: 36px; margin-right: 4px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #e6edf3; font-size: 25px; line-height: 1; cursor: pointer; }
+.cmp-selected-close:hover { background: #263545; }
+.cmp-selected-close:focus-visible { outline: 2px solid #7ee787; outline-offset: -2px; }
 .cmp-selected-header {
   display: flex; align-items: center; gap: 8px; width: 100%;
   padding: 10px 12px; background: none; border: 0; cursor: pointer;
