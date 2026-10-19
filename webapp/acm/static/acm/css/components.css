@@ -1400,5 +1400,5 @@
 .cmp-resizer[hidden] { display: none !important; }
 #cmp-results.cmp-only-selection > :not(#cmp-selected-card) { display: none !important; }
 
-/* Keep property features within the existing comparison column. */
-.cmp-comparison-features{max-width:165px;line-height:1.2}.cmp-comparison-features>span,.cmp-comparison-features>small{display:block;max-width:165px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cmp-comparison-features>small{font-size:10px;margin-top:2px;color:inherit;opacity:.85}
+/* Separate, compact property feature columns. */
+.cmp-floating-card .cmp-feature-icon{font-size:13px!important;text-align:center;min-width:22px}.cmp-feature-value{display:block;min-width:20px;text-align:center}.cmp-feature-type{display:block;max-width:105px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cmp-feature-floor{display:block;max-width:60px;min-width:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}

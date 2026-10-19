@@ -76,17 +76,21 @@
     paralela_techada:'Paralela techada', paralela_no_techada:'Paralela no techada'
   };
   function comparisonFeatures(record) {
-    const output = {floor:'', parking:''};
+    const output = {floor:'', parking:'', type:'', parkingTitle:'', typeTitle:''};
     if (record.kind === 'Departamento') {
       const floor = record.floor_label ?? record.floor;
-      output.floor = 'Piso: ' + (floor == null || floor === '' ? '—' : String(floor));
+      output.floor = floor == null || floor === '' ? '—' : String(floor);
     }
     if (!['Casa','Departamento'].includes(record.kind)) return output;
     const types = (Array.isArray(record.parking_types) ? record.parking_types : [])
       .filter(key => Object.prototype.hasOwnProperty.call(parkingNames,key)).map(key => parkingNames[key]);
-    output.parking = 'Cochera: ' + (record.parking_status === 'conflict' ? 'Por confirmar' :
-      record.parking_has === false ? 'No' : record.parking_has === true ?
-      'Sí · ' + (types.join(' + ') || 'tipo sin informar') : 'Sin información');
+    const conflict = record.parking_status === 'conflict';
+    output.parking = conflict ? '—' : record.parking_has === true ? 'Sí' : record.parking_has === false ? 'No' : '—';
+    output.type = !conflict && record.parking_has === true && types.length ? types.join(' + ') : '—';
+    output.parkingTitle = conflict ? 'Cochera: datos contradictorios; por confirmar' :
+      record.parking_has === true ? 'Tiene cochera' : record.parking_has === false ? 'Sin cochera' : 'Cochera: sin información';
+    output.typeTitle = output.type !== '—' ? output.type : record.parking_has === false && !conflict ?
+      'No aplica: sin cochera' : 'Tipo de cochera: sin información';
     return output;
   }
   function numbering(records, orderedComparables) {

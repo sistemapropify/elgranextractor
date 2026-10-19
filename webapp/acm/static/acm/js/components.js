@@ -244,7 +244,7 @@
     const left=ordered[ordered.length/2-1],right=ordered[ordered.length/2];
     return 'Ordenados: '+formatted+'. Se promedian los dos centrales: ('+money(left)+' + '+money(right)+') ÷ 2 = '+money((left+right)/2)+'/m².';
   }
-  function calculationTable(headers,rows,rowClasses,rowAttrs){return '<div class="cmp-calc-scroll"><table class="cmp-calc-table"><thead><tr>'+headers.map(h=>'<th>'+escape(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map((row,i)=>'<tr'+(rowClasses&&rowClasses[i]?' class="'+rowClasses[i]+'"':'')+(rowAttrs&&rowAttrs[i]?' '+rowAttrs[i]:'')+'>'+row.map(value=>'<td>'+value+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';}
+  function calculationTable(headers,rows,rowClasses,rowAttrs,headerAttrs={}){return '<div class="cmp-calc-scroll"><table class="cmp-calc-table"><thead><tr>'+headers.map(h=>'<th'+(headerAttrs[h]?' '+headerAttrs[h]:'')+'>'+escape(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map((row,i)=>'<tr'+(rowClasses&&rowClasses[i]?' class="'+rowClasses[i]+'"':'')+(rowAttrs&&rowAttrs[i]?' '+rowAttrs[i]:'')+'>'+row.map(value=>'<td>'+value+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';}
   // Parecido de una casa con el inmueble objetivo: suma de las similitudes de
   // terreno y de construccion.
   function componentSimilarity(detail){return (detail.land_similarity||0)+(detail.built_similarity||0);}
@@ -261,18 +261,25 @@
     const ordered=orderedComparisonRows(),numbers=markerNumbers();
     const surface=(area,similarity)=>area==null?'—':decimals(area)+' m²'+(similarity==null?'':' <span class="cmp-area-similarity '+(similarity<=70?'is-far':similarity<=90?'is-medium':'is-close')+'">('+decimals(similarity)+'%)</span>');
     const age=n=>n==null||!Number.isFinite(Number(n))||Number(n)<0?'—':Number(n)===0?'Estreno':decimals(n)+(Number(n)===1?' año':' años');
-    const characteristics=row=>{
-      const extra=presentation.comparisonFeatures(row), first=age(row.age)+(extra.floor?' · '+extra.floor:'');
-      return '<div class="cmp-comparison-features"><span title="'+escape(first)+'">'+escape(first)+'</span>'+
-        (extra.parking?'<small title="'+escape(extra.parking)+'">'+escape(extra.parking)+'</small>':'')+'</div>';
+    const featureType=result.valuation_mode==='land_only'?'Terreno':type;
+    const showParking=['Casa','Departamento'].includes(featureType), showFloor=featureType==='Departamento';
+    const extraCells=row=>{
+      const extra=presentation.comparisonFeatures(row);
+      return [...(showParking?[
+        '<span class="cmp-feature-value" title="'+escape(extra.parkingTitle)+'">'+escape(extra.parking)+'</span>',
+        '<span class="cmp-feature-type" title="'+escape(extra.typeTitle)+'">'+escape(extra.type)+'</span>'
+      ]:[]),...(showFloor?['<span class="cmp-feature-floor" title="'+escape(extra.floor==='—'?'Piso: sin información':'Piso: '+extra.floor)+'">'+escape(extra.floor)+'</span>']:[])];
     };
     const used=row=>{const v=value(row);return v.referenceUsed||v.recommended||v.status==='area'||(v.status==='land'&&v.selected);};
     const usage=row=>{const v=value(row);if(unselected.has(row.id))return 'Desmarcada';if(used(row))return result.reference_mode?'Referencia usada para valorar':'Usada para valorar';if(v.status==='reference'&&!v.referenceOnly)return 'Solo referencia';if(v.status==='excluded')return 'Desmarcada';return result.new?'Comparable no usado':'Sin valoración';};
     $('cmp-comparison-content').innerHTML=calculationTable(
-      ['Seleccionar',...(permissions.portal_names?['Portal']:[]),'Precio\nanunciado','Terreno','Construcción','Características','Distancia','Uso',...(permissions.publication?['Publicación']:[])],
-      ordered.map(row=>['<label class="cmp-numbered-select"><input class="cmp-comparison-select" type="checkbox" data-map-select="'+escape(row.id)+'" '+(unselected.has(row.id)?'':'checked')+' aria-label="Mostrar en el mapa e incluir en el informe: '+escape('Propiedad '+numbers.get(String(row.id))+' · '+row.title)+'"><span class="cmp-comparable-number">'+numbers.get(String(row.id))+'</span></label>',...(permissions.portal_names?[escape(row.source.toUpperCase())]:[]),money(row.price),surface(row.land,row.land_similarity),surface(row.built,row.built_similarity),characteristics(row),decimals(Math.round(row.distance))+' m',usage(row),...(permissions.publication?[row.url?'<a class="cmp-comparison-ad" href="'+escape(row.url)+'" target="_blank" rel="noopener noreferrer">Ver anuncio</a>':'<span>Sin enlace</span>']:[])]),
+      ['Seleccionar',...(permissions.portal_names?['Portal']:[]),'Precio\nanunciado','Terreno','Construcción','Antigüedad',...(showParking?['🚗','Tipo']:[]),...(showFloor?['🏢']:[]),'Distancia','Uso',...(permissions.publication?['Publicación']:[])],
+      ordered.map(row=>['<label class="cmp-numbered-select"><input class="cmp-comparison-select" type="checkbox" data-map-select="'+escape(row.id)+'" '+(unselected.has(row.id)?'':'checked')+' aria-label="Mostrar en el mapa e incluir en el informe: '+escape('Propiedad '+numbers.get(String(row.id))+' · '+row.title)+'"><span class="cmp-comparable-number">'+numbers.get(String(row.id))+'</span></label>',...(permissions.portal_names?[escape(row.source.toUpperCase())]:[]),money(row.price),surface(row.land,row.land_similarity),surface(row.built,row.built_similarity),age(row.age),...extraCells(row),decimals(Math.round(row.distance))+' m',usage(row),...(permissions.publication?[row.url?'<a class="cmp-comparison-ad" href="'+escape(row.url)+'" target="_blank" rel="noopener noreferrer">Ver anuncio</a>':'<span>Sin enlace</span>']:[])]),
       ordered.map(row=>used(row)?'cmp-comparison-used':''),
-      ordered.map(row=>'data-record="'+escape(row.id)+'"')
+      ordered.map(row=>'data-record="'+escape(row.id)+'"'),
+      {'🚗':'class="cmp-feature-icon" scope="col" title="Cochera" aria-label="Cochera"',
+       'Tipo':'scope="col" title="Tipo de cochera"',
+       '🏢':'class="cmp-feature-icon" scope="col" title="Piso del departamento" aria-label="Piso del departamento"'}
     )+(ordered.length?'':'<p class="cmp-floating-empty">'+(result.reference_mode?'No hay referencias dentro del radio seleccionado.':'No hay comparables usados en las capas visibles del mapa.')+'</p>')+(window.ACMComparisonValuation?.markup(snapshot.params,result)||'');
     applySelectedRow();
     window.ACMComparisonValuation?.mount();
