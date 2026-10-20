@@ -38,9 +38,17 @@ def calculate_from_references(records, params, excluded, primary):
               'selection_count': len(selected), 'eligible_count': 0,
               'new': None, 'old': None, 'land_unit': None, 'breakdown': [],
               'messages': ['No se obtuvo un cálculo con comparables aptos. Se muestran hasta cinco referencias del mismo tipo, las más cercanas dentro del radio seleccionado.']}
+    # A house's independent soil calculation remains useful even when its
+    # construction cannot be estimated with suitable houses. Keep its evidence
+    # without presenting the area-based fallback as a component calculation.
+    if target == 'Casa':
+        for key in ('land_unit', 'land_ids', 'land_count', 'land_radius', 'land_dispersion'):
+            if key in primary:
+                result[key] = primary[key]
+        result['messages'] = list(primary.get('messages', [])) + result['messages']
     # A failed primary calculation may have component details; none of those
     # should masquerade as a decomposition in this separate area-based method.
-    for key in ('built_unit_method', 'built_reference_id', 'recommended_ids', 'land_dispersion', 'usable_house_count'):
+    for key in ('built_unit_method', 'built_reference_id', 'recommended_ids', 'usable_house_count'):
         result.pop(key, None)
     if not selected:
         result['messages'].append('No hay referencias seleccionadas con precio y metraje válidos para calcular.')

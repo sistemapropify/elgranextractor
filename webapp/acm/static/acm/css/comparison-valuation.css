@@ -7,6 +7,10 @@
 .cmp-comparison-valuation { padding: 7px 8px; color: #e6edf3; font-size: 11px; }
 .cmp-valuation-line { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 5px 10px; padding: 3px 0; }
 .cmp-valuation-line>span:first-child { color: #b5c4d3; }
+.cmp-valuation-soil strong { color: #f3d695; font-size: 15px; }
+.cmp-valuation-evidence { margin: 2px 0 7px; color: #a9b9c9; font-size: 10px; line-height: 1.4; }
+.cmp-valuation-components { margin: 8px 0; padding-top: 7px; border-top: 1px solid #405062; }
+.cmp-valuation-components>strong { color: #80e9b7; }
 .cmp-valuation-adjustment { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 5px; padding-top: 8px; border-top: 1px solid #405062; }
 .cmp-valuation-summary { display: grid; gap: 5px; color: #80e9b7; }
 #cmp-adjusted-value { font-size: 24px; line-height: 1.2; font-variant-numeric: tabular-nums; }

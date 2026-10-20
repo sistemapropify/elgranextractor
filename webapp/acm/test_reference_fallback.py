@@ -62,6 +62,33 @@ class ReferenceFallbackTests(SimpleTestCase):
         self.assertEqual(result['new']['total'], 105000)
         self.assertNotIn('built_value', result['new'])
 
+    def test_house_fallback_preserves_independent_soil_estimate_and_evidence(self):
+        p, rows = self.references('Casa', count=2)
+        rows += candidates([record('soil', 'Terreno', land=150, price=90000,
+                                    lat=p['lat'] + 700 / 111195)], p)
+        result = calculate(rows, p)
+        self.assertTrue(result['reference_mode'])
+        self.assertEqual(result['model'], 'built')
+        self.assertEqual(result['land_unit'], 600)
+        self.assertEqual(result['land_ids'], ['soil'])
+        self.assertEqual(result['land_count'], 1)
+        self.assertEqual(result['land_radius'], 1000)
+        self.assertEqual(result['reference_display_ids'], ['0', '1'])
+        self.assertEqual(result['new']['total'], 105000)
+        self.assertNotIn('built_value', result['new'])
+        self.assertTrue(any('no hay casas seleccionadas' in message for message in result['messages']))
+        excluded = calculate(rows, p, ['soil'])
+        self.assertIsNone(excluded['land_unit'])
+        self.assertEqual(excluded['land_ids'], [])
+
+    def test_soil_remains_available_when_all_house_references_are_deselected(self):
+        p, rows = self.references('Casa', count=2)
+        rows += candidates([record('soil', 'Terreno', land=150, price=90000)], p)
+        result = calculate(rows, p, ['0', '1'])
+        self.assertIsNone(result['new'])
+        self.assertEqual(result['land_unit'], 600)
+        self.assertEqual(result['land_ids'], ['soil'])
+
     def test_lands_and_old_houses_use_land_area_only(self):
         p = parameters({**params(), 'property_type': 'Terreno', 'land': 200, 'built': 0})
         rows = candidates([record('land', 'Terreno', land=100, price=100000, precision='aproximada')], p)

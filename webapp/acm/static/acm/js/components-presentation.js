@@ -21,6 +21,9 @@
   function property(record, result, excluded = new Set()) {
     if (!result) return {status:'pending', reason:'Análisis pendiente de actualización'};
     if (result.reference_mode) {
+      if(record.kind==='Terreno'&&result.model==='built'&&result.land_ids.includes(record.id)){
+        return {status:excluded.has(record.id)?'excluded':'land', selected:!excluded.has(record.id), offerUnit:record.price/record.land};
+      }
       const detail = result.breakdown.find(row => row.id === record.id);
       return {status:excluded.has(record.id)?'excluded':'reference', referenceUsed:!!detail?.reference_used&&!excluded.has(record.id),
         offerUnit:detail?.offer_unit, adjustedTotal:detail?.adjusted_total,

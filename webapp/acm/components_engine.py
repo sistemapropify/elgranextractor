@@ -92,7 +92,7 @@ def reason(record, p):
     if record.get('review_excluded'): issues.append('Excluida por revisión de calidad')
     if record['kind'] == 'Terreno' and positive(record.get('built')):
         issues.append('Terreno con construcción: revisar antes de usar como suelo')
-    if record['kind'] in ('Casa','Terreno') and positive(record.get('land')) and not .5 <= record['land']/p['land'] <= 2:
+    if record['kind'] in ('Casa','Terreno') and positive(record.get('land')) and positive(p.get('land')) and not .5 <= record['land']/p['land'] <= 2:
         issues.append('Terreno fuera del rango de tamaño comparable (0,5 a 2 veces)')
     if record['kind'] != 'Terreno' and not land_only(p) and positive(record.get('built')) and not .5 <= record['built']/p['built'] <= 2:
         issues.append('Construcción fuera del rango de tamaño comparable (0,5 a 2 veces)')
@@ -138,7 +138,7 @@ def candidates(records, p):
         row['kind'] = kind(row.get('kind'))
         if not row['kind']: continue
         target=p.get('property_type','Casa')
-        if row['kind'] not in ({'Casa','Terreno'} if target=='Casa' else {target}): continue
+        if row['kind'] not in {target, 'Terreno'}: continue
         for key in ('lat', 'lng', 'price', 'land', 'built','rooms','baths','floor'): row[key] = number(row.get(key))
         row['age'] = age_years(row.get('age'))
         if row['lat'] is None or row['lng'] is None or not -90<=row['lat']<=90 or not -180<=row['lng']<=180:
@@ -146,7 +146,7 @@ def candidates(records, p):
         row['distance'] = round(distance(p['lat'],p['lng'],row['lat'],row['lng']),2)
         # Use the same evidence pool for deduplication and land validation at
         # every display radius. Filter visible houses only after these checks.
-        if row['distance'] > (p['max_radius'] if target=='Casa' else p['radius']): continue
+        if row['distance'] > (p['max_radius'] if row['kind']=='Terreno' or target=='Casa' else p['radius']): continue
         # La similitud se calcula para cada registro, incluidos los que quedan
         # como referencia, para que el agente pueda encontrarlos en el mapa y
         # decidir con evidencia si conviene incluirlos.
@@ -190,7 +190,37 @@ def calculate(records, p, excluded=()):
     from .reference_fallback import calculate_from_references
     records = [row for row in records if resolve_operation(row)[0] == 'Venta']
     primary = _calculate_primary(records, p, excluded)
-    return primary if primary.get('new') else calculate_from_references(records, p, excluded, primary)
+    result = primary if primary.get('new') else calculate_from_references(records, p, excluded, primary)
+    result['zone_land'] = zone_land_estimate(records, p, excluded)
+    return result
+
+
+def zone_land_estimate(records, p, excluded=()):
+    """Independent neighborhood soil indicator, even for units without a lot area.
+
+    Use sale offers for vacant, active, exactly located land. Lot size relative
+    to the subject is irrelevant to this zonal indicator; component valuation
+    retains its own comparable-selection rules.
+    """
+    excluded = set(excluded)
+    eligible = []
+    for row in records:
+        if row['kind'] != 'Terreno' or row['id'] in excluded or row.get('duplicate_of'):
+            continue
+        if 'Posible casa anunciada también como terreno' in row.get('issues', []):
+            continue
+        if not positive(row.get('land')) or row['distance'] > p['max_radius']:
+            continue
+        if reason(row, {**p, 'property_type': 'Terreno', 'land': row['land']}):
+            continue
+        eligible.append(row)
+    radius = min(500, p['max_radius'])
+    while radius < p['max_radius'] and not any(row['distance'] <= radius for row in eligible):
+        radius = min(radius + 500, p['max_radius'])
+    lands = [row for row in eligible if row['distance'] <= radius]
+    return {'unit': median(row['price'] / row['land'] for row in lands) if lands else None,
+            'count': len(lands), 'radius': radius, 'ids': [row['id'] for row in lands],
+            'method': 'median_offer_unit'}
 
 
 def _calculate_primary(records, p, excluded=()):

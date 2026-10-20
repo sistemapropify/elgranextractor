@@ -1,3 +1,38 @@
+# Basic ACM neighborhood soil price - 2026-10-20
+
+Status: Validated. User explicitly requested publication in the current chat.
+Recipe: existing serialized GitHub Actions App Service pipeline.
+Target: granextractorservice / rg-elgranextractor, Brazil South, subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Public: https://acm.propifai.com/acm/analisis/
+Base: origin/main 5c3135dc5f9f868d30da544cb951231ea5c4f909.
+
+## 1. Scope
+Show neighborhood land offer price per square meter above the property valuation in the basic view for Casa, Departamento, Oficina and Terreno, even without a subject lot area. Use the median of valid vacant-land sale offers within 500 m, expanding only if necessary up to the existing configured limit. Preserve existing property-model totals, quality exclusions and anonymized role access. Keep valid soil evidence when house valuation falls back to references. Restore the available house land/construction breakdown in the map valuation footer.
+No infrastructure, schema, dependencies, credentials, access policies or collector changes.
+Shared local preview at D:/PROMETEO already serves the tested source files.
+
+## 3. Validation steps
+- Test the exact release against current origin/main: engine, references, age, adjustment, report-selection, role and basic-access regressions.
+- Run JavaScript controls/presentation/feature regressions and syntax checks.
+- Render the real template, collect static assets and check exact source bytes.
+- Confirm the existing Azure target is Running and the preceding release succeeded.
+- Review exact Git scope, then publish without force through the existing pipeline.
+
+## 5. Execution and rollback
+Push only this release to main after final validation; if main advances, integrate first. Wait for CI/CD completion and verify the public release marker, changed assets, login and API access guards. Roll back by a new revert commit through the same pipeline if required.
+
+## 7. Validation Proof
+Validated with azure-validate on 2026-10-20, America/Lima:
+- Exact release at current origin/main passed 154 isolated tests: acm.test_zone_land, acm.test_reference_fallback, acm.test_components, acm.test_age_selection, acm.test_weighted_adjustments, acm.test_access, acm.test_role_analysis, acm.test_report_selection; --settings=acm.access_test_settings --noinput.
+- Node valuation controls, component presentation, feature columns and marker numbering suites passed; components.js syntax passed.
+- Real components template compiled. Django collectstatic completed; all four modified JS/CSS outputs match the release source exactly.
+- Shared local HTTP assets matched current source; the basic view was inspected with synthetic house, apartment, office and land examples.
+- Explicit Azure subscription query confirmed the existing granextractorservice is Running in Brazil South. No resource, identity or role-assignment changes.
+- Previous main release 5c3135dc was successfully deployed by workflow run 39471939847.
+- Git whitespace check passed; release scope is ten ACM source/test files plus this deployment record. Public version/assets and preserved anonymous access guards remain mandatory after CI/CD completion.
+
+---
+
 # Preserve ACM photo dimensions and open carousel from existing image — 2026-10-20
 
 Status: Validated.

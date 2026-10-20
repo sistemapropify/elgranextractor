@@ -175,7 +175,7 @@
   };
   window.gm_authFailure=()=>{$('cmp-status').textContent='No se pudo cargar Google Maps. Puedes ingresar latitud y longitud para buscar.';};
   // Keep all consulted records visible so an excluded outer land can be selected again.
-  function visibleRows(){const records=snapshot?.records||[];return result?.reference_mode?records.filter(row=>result.reference_display_ids.includes(row.id)):records;}
+  function visibleRows(){const records=snapshot?.records||[];return result?.reference_mode?records.filter(row=>result.reference_display_ids.includes(row.id)||result.land_ids.includes(row.id)):records;}
   const value=r=>presentation.property(r,result,excluded);
   const mapGroup=r=>presentation.group(r,value(r));
   const comparableRows=()=>visibleRows().filter(r=>mapGroup(r)==='property');

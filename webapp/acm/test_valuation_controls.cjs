@@ -59,3 +59,44 @@ api.reset();elements.clear();html=api.markup({}, {reference_mode:true,new:null})
 assert.match(html,/cmp-valuation-knob/);assert.match(html,/cmp-report-notes/);assert.match(html,/cmp-valuation-amount/);
 assert.equal(el('#cmp-adjusted-value').textContent,'Sin cálculo disponible');
 console.log('Reference controls: empty exact-value input, knob, preserved manual amount/notes and no fabricated automatic zero verified.');
+
+// The breakdown must be visible in the map's valuation footer, including for
+// roles that can read valuations but cannot adjust them.
+const target={property_type:'Casa',land:150,built:200};
+const components={model:'components',property_type:'Casa',land_unit:600,land_count:2,land_radius:1000,
+  new:{total:190000,land_value:90000,built_value:100000}};
+for(const adjust of [true,false]){
+  sandbox.window.ACMPermissions={adjust_valuation:adjust,report_notes:true};api.reset();
+  const rendered=api.markup(target,components);
+  assert.match(rendered,/Precio estimado del terreno por m²/);
+  assert.match(rendered,/Valorización por componentes/);
+  assert.match(rendered,/Construcción y mejoras/);
+  assert.match(rendered,/2 terreno\(s\) de la zona/);
+  assert.match(rendered,/1[.,\s]?000 m/);
+  assert.ok(rendered.indexOf('Precio estimado del terreno por m²')<rendered.indexOf('Valorización de la propiedad'));
+  assert.ok(rendered.indexOf('Valorización por componentes')<rendered.indexOf('Valorización de la propiedad'));
+}
+api.reset();
+const fallback=api.markup(target,{model:'built',reference_mode:true,land_unit:600,land_count:1,land_radius:500,new:{total:105000}});
+assert.match(fallback,/Precio estimado del terreno por m²/);
+assert.match(fallback,/Desglose por componentes no disponible/);
+assert.doesNotMatch(fallback,/cmp-valuation-components/);
+const noSoil=api.markup(target,{model:'built',reference_mode:true,land_unit:null,new:{total:105000}});
+assert.match(noSoil,/No disponible/);
+assert.doesNotMatch(noSoil,/\$\s*0[.,]00\/m²/);
+assert.match(api.markup(target,{...components,new:null}),/Precio estimado del terreno por m²/);
+console.log('Soil price, evidence, component breakdown and incomplete/reference calculations verified for both valuation roles.');
+for(const type of ['Casa','Departamento','Oficina','Terreno']){
+  for(const adjust of [true,false]){
+    sandbox.window.ACMPermissions={adjust_valuation:adjust,report_notes:true};api.reset();
+    const rendered=api.markup({property_type:type,land:0,built:100},{model:'built',land_unit:null,
+      zone_land:{unit:700,count:3,radius:1000,ids:['soil']},new:{total:105000}});
+    assert.match(rendered,/Precio estimado del terreno por m²/);
+    assert.match(rendered,/700/);
+    assert.match(rendered,/3 terreno\(s\) de la zona/);
+    assert.ok(rendered.indexOf('Precio estimado del terreno por m²')<rendered.indexOf('Valorización de la propiedad'));
+  }
+}
+assert.match(api.markup({property_type:'Oficina'},{model:'built',zone_land:{unit:700,count:1,radius:500},new:null}),/700/);
+assert.match(api.markup({property_type:'Departamento'},{model:'built',zone_land:{unit:null,count:0,radius:2000},new:{total:100000}}),/No disponible/);
+console.log('Basic view: independent soil indicator is visible for houses, apartments, offices and land, with and without price-adjustment permission.');

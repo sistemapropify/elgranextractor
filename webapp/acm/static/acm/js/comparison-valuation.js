@@ -15,15 +15,36 @@
   function amountInput(){
     return '<div class="cmp-valuation-entry"><label for="cmp-valuation-amount">Escribe el valor ajustado</label><input id="cmp-valuation-amount" type="text" inputmode="decimal" autocomplete="off" value="'+escape(draft)+'" aria-describedby="cmp-valuation-error" aria-label="Escribe el valor ajustado en dólares"><small id="cmp-valuation-error" role="alert" hidden>Ingresa un monto válido, con hasta dos decimales.</small></div>';
   }
+  function calculationDetails(params,result){
+    const soil=result.zone_land?result.zone_land.unit:result.land_unit??(result.model==='land'?result.new?.unit:null);
+    const hasSoil=Number.isFinite(soil)&&soil>0;
+    const landTarget=!!result.zone_land||['Casa','Departamento','Oficina','Terreno'].includes(params.property_type)||result.property_type==='Casa'||result.model==='land';
+    let html='';
+    if(landTarget){
+      html+='<div class="cmp-valuation-line cmp-valuation-soil"><span>Precio estimado del terreno por m²</span><strong>'+(hasSoil?money(soil)+'/m²':'No disponible')+'</strong></div>';
+      const count=result.zone_land?.count??result.land_count??0,radius=result.zone_land?.radius??result.land_radius??0;
+      html+='<p class="cmp-valuation-evidence">'+(hasSoil?'Mediana de precio anunciado ÷ área de '+Number(count)+' terreno(s) de la zona · radio de suelo '+Number(radius).toLocaleString('es-PE')+' m.':'No hay terrenos aptos seleccionados para estimar el precio del suelo.')+'</p>';
+    }
+    if(result.model==='components'){
+      const n=result.new;
+      html+='<div class="cmp-valuation-components"><strong>Valorización por componentes</strong>'+
+        (hasSoil&&result.land_unit>0&&result.land_unit!==soil?'<div class="cmp-valuation-line"><span>Suelo aplicado al desglose</span><strong>'+money(result.land_unit)+'/m²</strong></div>':'')+
+        '<div class="cmp-valuation-line"><span>Terreno · '+area(params.land)+'</span><strong>'+(Number.isFinite(n?.land_value)?money(n.land_value):result.land_unit>0?money(params.land*result.land_unit):'No disponible')+'</strong></div>'+
+        '<div class="cmp-valuation-line"><span>Construcción y mejoras · '+area(params.built)+'</span><strong>'+(Number.isFinite(n?.built_value)?money(n.built_value):'No disponible')+'</strong></div></div>';
+    }else if(params.property_type==='Casa'&&result.model!=='land'){
+      html+='<p class="cmp-valuation-evidence">Desglose por componentes no disponible: '+(result.land_unit>0?'faltan casas aptas para estimar construcción y mejoras. El total usa referencias por m² construido.':'falta una referencia de suelo comparable con el inmueble. El total usa referencias por m² construido.')+'</p>';
+    }
+    return html;
+  }
   function markup(params,result){
-    if(!result.new&&!result.reference_mode)return '';
+    if(!result.new&&!result.reference_mode&&!(result.land_unit>0)&&!result.zone_land)return '';
     if(!notesTouched)notes=params.report_notes||'';
-    if(window.ACMPermissions&&!window.ACMPermissions.adjust_valuation)return '<footer id="cmp-comparison-valuation" class="cmp-comparison-valuation"><div class="cmp-valuation-line"><span>Valorización de la propiedad</span><strong>'+(result.new?money(result.new.total):'Sin cálculo disponible')+'</strong></div>'+observations()+'</footer>';
+    const details=calculationDetails(params,result);
+    if(window.ACMPermissions&&!window.ACMPermissions.adjust_valuation)return '<footer id="cmp-comparison-valuation" class="cmp-comparison-valuation">'+details+'<div class="cmp-valuation-line"><span>Valorización de la propiedad</span><strong>'+(result.new?money(result.new.total):'Sin cálculo disponible')+'</strong></div>'+observations()+'</footer>';
     const calculated=result.new?.total??0;
     if(base!==calculated){base=calculated;total=params.manual_valuation??base;edited=params.manual_valuation!=null;valid=true;draft='';}
-    const soil=result.land_unit??(result.model==='land'?result.new?.unit:null);
     return '<footer id="cmp-comparison-valuation" class="cmp-comparison-valuation">'+
-      (soil==null?'':'<div class="cmp-valuation-line"><span>Suelo de la zona</span><strong>'+money(soil)+'/m²</strong></div>')+
+      details+
       '<div class="cmp-valuation-line"><span>Áreas del inmueble a valorar</span><span>Terreno <strong>'+area(params.land)+'</strong> · Construcción <strong>'+area(params.built)+'</strong></span></div>'+
       '<div class="cmp-valuation-adjustment"><div class="cmp-valuation-summary"><span>Valorización de la propiedad</span><strong id="cmp-adjusted-value" aria-live="polite">'+(result.new||edited?money(total):'Sin cálculo disponible')+'</strong><div class="cmp-valuation-baseline">'+(result.reference_mode?'Valor por referencias: ':'Valor ACM calculado: ')+'<strong>'+(result.new?money(base):'Sin cálculo disponible')+'</strong><span id="cmp-valuation-variation" aria-live="polite">'+variationLabel()+'</span></div></div>'+
       '<div class="cmp-valuation-controls"><div class="cmp-valuation-dial"><div class="cmp-valuation-leds" aria-hidden="true"></div><div class="cmp-valuation-face" aria-hidden="true"><div class="cmp-valuation-pointer"></div></div>'+
