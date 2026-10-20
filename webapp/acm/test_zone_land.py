@@ -74,3 +74,13 @@ class ZoneLandTests(SimpleTestCase):
         self.assertTrue(all(value.startswith('c-') for value in result['zone_land']['ids']))
         self.assertEqual(result['zone_land']['ids'], [client['records'][0]['id']])
         self.assertNotIn('remax', str(result['zone_land']).lower())
+
+    def test_zonal_indicator_does_not_replace_adopted_unit_for_target_land(self):
+        p = parameters({**params(), 'property_type': 'Terreno', 'land': 1212, 'built': 0})
+        rows = candidates([record('comparable', 'Terreno', price=787800, land=1212),
+                           record('small-a', 'Terreno', price=120000, land=150),
+                           record('small-b', 'Terreno', price=127500, land=150)], p)
+        result = calculate(rows, p)
+        self.assertEqual(result['zone_land']['unit'], 800)
+        self.assertEqual(result['new']['unit'], 650)
+        self.assertEqual(result['new']['total'], 650 * 1212)

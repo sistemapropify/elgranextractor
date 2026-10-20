@@ -222,7 +222,7 @@ class ComponentsEngineTests(SimpleTestCase):
         self.assertTrue(rows[0]['issues'])
 
     def test_invalid_parameters_and_currency_are_not_guessed(self):
-        for key,value in [('lat',float('nan')),('radius',-1),('land',0),('built',None)]:
+        for key,value in [('lat',float('nan')),('radius',-1),('land',0),('built',float('nan'))]:
             with self.subTest(key=key),self.assertRaises(ValueError):parameters({**params(),key:value})
 
 

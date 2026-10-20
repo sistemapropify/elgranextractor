@@ -15,7 +15,7 @@ def report_total(params, result):
 
 def report_unit_price(params, result, default=None):
     """Use the final target value per m² without changing report headings."""
-    if 'manual_valuation' not in params:
+    if report_total(params, result) is None:
         return default
     from math import isfinite
     area_key = (result.get('new') or {}).get('area_basis')

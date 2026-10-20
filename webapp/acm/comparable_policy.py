@@ -14,7 +14,8 @@ def age_years(value):
 
 def land_only(params):
     age = age_years(params.get('age'))
-    return params.get('property_type', 'Casa') == 'Casa' and age is not None and age > 40
+    return params.get('property_type', 'Casa') == 'Casa' and (
+        (age is not None and age >= 30) or params.get('built') in (None, '', 0))
 
 
 def surface_similarity(value, target):

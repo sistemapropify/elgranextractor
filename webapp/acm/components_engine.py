@@ -5,7 +5,7 @@ from .listing_operation import resolve_operation
 from .comparable_policy import (age_years, land_only, surface_similarity, selection_metrics,
                                selection_pool, automatic_houses, age_messages)
 
-VERSION = 'componentes-7-referencias-secundarias'
+VERSION = 'componentes-9-casa-construccion-opcional'
 MIN_LANDS = 1
 MIN_HOUSES = 1
 # Portales habilitados en el ACM. La selección se administra aquí, no en el mapa.
@@ -42,9 +42,9 @@ def parameters(data):
         raise ValueError('Antigüedad: ingresa años enteros entre 0 y 150, o déjala vacía.')
     for key, low, high in [('lat',-90,90), ('lng',-180,180), ('radius',100,2000),
                            ('max_radius',100,5000), ('land',.01,1000000), ('built',.01,1000000)]:
-        optional = (key=='built' and (target=='Terreno' or land_only(output))) or (key=='land' and target in ('Departamento','Oficina'))
+        optional = (key=='built' and target in ('Terreno','Casa')) or (key=='land' and target in ('Departamento','Oficina'))
         value = number(data.get(key))
-        if optional and value in (None,0):
+        if optional and (value == 0 or data.get(key) in (None, '')):
             output[key] = 0
             continue
         if value is None or not low <= value <= high:
@@ -97,7 +97,7 @@ def reason(record, p):
     if record['kind'] != 'Terreno' and not land_only(p) and positive(record.get('built')) and not .5 <= record['built']/p['built'] <= 2:
         issues.append('Construcción fuera del rango de tamaño comparable (0,5 a 2 veces)')
     if record['kind'] != 'Terreno' and land_only(p):
-        issues.append('Casa objetivo de más de 40 años: se valora con terrenos, sin aporte de construcción')
+        issues.append('Casa objetivo: se valora con terrenos, sin aporte de construcción por antigüedad o falta de área construida')
     elif record['kind'] != 'Terreno' and p.get('age') is not None:
         if age_years(record.get('age')) is None or record.get('age_conflict'):
             issues.append('Antigüedad sin informar o con evidencia contradictoria')
@@ -266,7 +266,8 @@ def _calculate_primary(records, p, excluded=()):
                                   'usable':True} for r in lands], status='ok',
                       new={'total':total, 'unit':unit, 'area_basis':'land', 'land_value':total,
                            'built_value':0, 'range_low':q25*p['land'], 'range_high':q75*p['land']})
-        result['messages'].append('Casa con más de 40 años: valorada únicamente como terreno según la regla configurada. Construcción sin aporte en este cálculo; no se descuentan gastos de demolición.')
+        cause = 'Casa con 30 años o más' if (age_years(p.get('age')) or 0) >= 30 else 'Casa sin área construida informada'
+        result['messages'].append(cause + ': valorada únicamente como terreno. Construcción sin aporte en este cálculo; no se descuentan gastos de demolición.')
         return result
     residuals=[]
     usable_rows=[]

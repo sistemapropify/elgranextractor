@@ -1,3 +1,34 @@
+# ACM house land-only and adopted report unit - 2026-10-20
+
+Status: Validated
+Recipe: existing GitHub Actions CI/CD.
+Authorization: explicit user request to publish all three completed ACM corrections.
+Base: latest origin/main cf5806c2e34fc37415188dbe76ba1418e54fad59.
+Target: existing granextractorservice / rg-elgranextractor and unchanged pipeline OIDC identity/subscription secret.
+Public: https://acm.propifai.com/acm/analisis/
+No CLI provisioning, new resources, SQL migration, role assignment or credential changes.
+The local CLI default subscription differs from the historical plan ID; it is not used for this deployment. The existing authorized pipeline target and credentials remain unchanged.
+
+## Scope
+Houses aged 30 or older use land only, including exactly 30. Missing or zero built area is optional for a house at any age and uses land-only valuation; valid built area retains the younger-house model. Apartments/offices still require built area. The form keeps optional construction editable and selects the corresponding map layer. Without suitable land, no house-construction fallback is invented.
+Land cards show the unit actually applied to the target instead of a different zone indicator. Adjusted values update the land equation and unit together. PDF/Word use final target total divided by the appropriate target area, whether automatic or manually adjusted, retaining client-facing titles.
+Preserve all current production cadastral/map/history/scraper work and local edits outside scope.
+
+## 7. Validation Proof - 2026-10-20T17:44:18.517874-05:00
+- Verified all 12 scoped source/test files against their earliest pre-change backups and exact current production before integration; no baseline conflicts.
+- python webapp/manage.py test acm.test_age_selection acm.test_zone_land acm.test_reference_fallback acm.test_report_selection acm.test_client_report acm.test_components.ComponentsEngineTests acm.test_valuation_notes acm.test_weighted_adjustments --settings=acm.access_test_settings --noinput --verbosity 0: 119 tests passed, system check clean.
+- Node test_age_controls.cjs, test_valuation_controls.cjs, components-presentation.test.cjs and test_report_feedback.cjs passed. components.js syntax check passed.
+- Production-configured offline WSGI import, three templates, collectstatic and exact changed JS assets passed using isolated in-memory SQLite. Workflow YAML parsed successfully; added age/engine/zone regression gates and retained existing exact public asset verification.
+- Shared real localhost login/analysis HTTP 200 and components.js v79 exact byte match HTTP 200; prior manual unit fixture 650 x 1212 = 787800, adjusted 789012 / 1212 = 651 verified in PDF/Word and controls.
+- No models/schema changes. Existing pipeline roles and target unchanged.
+
+## Execution
+Non-forced main push starts the existing serialized CI/CD. User handles monitoring; report dispatch separately from confirmed live success and do not repeatedly poll.
+Existing workflow verifies health, login guards and exact public assets before declaring deployment successful.
+Rollback: scoped revert through the same workflow; no data migration to reverse.
+
+---
+
 # Basic cadastral PDFs and organized map cards - 2026-10-20
 
 Status: Validated. User explicitly requested immediate publication after implementation in this chat.

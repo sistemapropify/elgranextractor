@@ -37,13 +37,15 @@
     $('cmp-status').textContent='Mueve el pin o modifica los datos y vuelve a pulsar Buscar y calcular.';
   }
   function configureType(){
-    const type=form.elements.property_type.value,house=type==='Casa',oldHouse=house&&form.elements.age.value!==''&&Number(form.elements.age.value)>40,land=type==='Terreno',soil=land||oldHouse;
-    [['land',house||land],['built',!soil],['age',!land],['rooms',house||type==='Departamento'],['baths',!land],['floor',!house&&!land]].forEach(([key,show])=>{
+    const type=form.elements.property_type.value,house=type==='Casa',oldHouse=house&&form.elements.age.value!==''&&Number(form.elements.age.value)>=30,land=type==='Terreno',hideBuilt=land||oldHouse,soil=hideBuilt||(house&&(form.elements.built.value.trim()===''||Number(form.elements.built.value)===0));
+    [['land',house||land],['built',!hideBuilt],['age',!land],['rooms',house||type==='Departamento'],['baths',!land],['floor',!house&&!land]].forEach(([key,show])=>{
       $('cmp-'+key+'-field').hidden=!show;form.elements[key].disabled=!show;
-      if(key==='land'||key==='built')form.elements[key].required=show;
+      if(key==='land'||key==='built')form.elements[key].required=show&&(key!=='built'||!house);
     });
+    form.elements.built.min=house?'0':'0.01';
+    document.querySelector('label[for="cmp-built"]').textContent=house?'Construcción (m², opcional)':'Construcción (m²)';
     const methodLabel=$('cmp-method-label');
-    if(methodLabel)methodLabel.textContent=oldHouse?'Casa de más de 40 años: valoración únicamente del terreno':house?'Casa: suelo + construcción y mejoras':land?'Terreno: comparables de suelo':'Comparables de '+type.toLowerCase()+' por superficie construida';
+    if(methodLabel)methodLabel.textContent=oldHouse?'Casa de 30 años o más: valoración únicamente del terreno':house?(soil?'Casa sin área construida: valoración únicamente del terreno':'Casa: suelo + construcción y mejoras'):land?'Terreno: comparables de suelo':'Comparables de '+type.toLowerCase()+' por superficie construida';
     document.querySelector('[data-tab="Casa"]').hidden=soil;
     document.querySelector('[data-tab="Terreno"]').hidden=!house&&!land;
     const mode=$('cmp-marker-mode');if(mode.options){mode.options[0].textContent=house||land?'Suelo / m²':'Oferta / m² construido';mode.options[1].disabled=!house;}if(!house&&mode.value==='improvements')mode.value='land';
@@ -257,7 +259,7 @@
     $('cmp-source-warning').hidden=!(snapshot?.warnings?.length);
     $('cmp-source-warning').textContent=(snapshot?.warnings||[]).join(' ');
     if(!show){$('cmp-comparison-content').replaceChildren();return;}
-    $('cmp-comparison-title').textContent=result.reference_mode?'Referencias · '+rows.length+' más cercanas':result.valuation_mode==='land_only'?'Terrenos comparables · casa de más de 40 años':(type||'Propiedad')+'s comparables';
+    $('cmp-comparison-title').textContent=result.reference_mode?'Referencias · '+rows.length+' más cercanas':result.valuation_mode==='land_only'?'Terrenos comparables · casa valorada como terreno':(type||'Propiedad')+'s comparables';
     $('cmp-comparison-open').textContent=result.reference_mode?'Mostrar cuadro de referencias en el mapa':'Mostrar cuadro de comparables en el mapa';
     const ordered=orderedComparisonRows(),numbers=markerNumbers();
     const surface=(area,similarity)=>area==null?'—':decimals(area)+' m²'+(similarity==null?'':' <span class="cmp-area-similarity '+(similarity<=70?'is-far':similarity<=90?'is-medium':'is-close')+'">('+decimals(similarity)+'%)</span>');
@@ -558,8 +560,8 @@
     // Restablecer antes de recargar evita recuperar los campos anteriores del navegador.
     form.reset();$('cmp-address').value='';window.location.assign(window.location.pathname.includes('analisis-pruebas')?'/acm/analisis-pruebas/':'/acm/analisis/');
   });
-  form.addEventListener('input',e=>{if(e.target.name){if(['property_type','age'].includes(e.target.name))configureType();$('cmp-radius-label').textContent=form.elements.radius.value+' m';invalidate();}});
-  form.addEventListener('change',e=>{if(e.target.name){if(['property_type','age'].includes(e.target.name))configureType();invalidate();}});
+  form.addEventListener('input',e=>{if(e.target.name){if(['property_type','age','built'].includes(e.target.name))configureType();$('cmp-radius-label').textContent=form.elements.radius.value+' m';invalidate();}});
+  form.addEventListener('change',e=>{if(e.target.name){if(['property_type','age','built'].includes(e.target.name))configureType();invalidate();}});
   $('cmp-address').addEventListener('keydown',e=>{if(e.key==='Enter')e.preventDefault();});
   document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{tab=button.dataset.tab;if(snapshot)renderCards();}));
   $('cmp-marker-mode').addEventListener('change',renderMap);

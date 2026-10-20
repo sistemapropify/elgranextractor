@@ -18,16 +18,18 @@
   function amountInput(){
     return '<div class="cmp-valuation-entry"><label for="cmp-valuation-amount">Escribe el valor ajustado</label><input id="cmp-valuation-amount" type="text" inputmode="decimal" autocomplete="off" value="'+escape(draft)+'" aria-describedby="cmp-valuation-error" aria-label="Escribe el valor ajustado en dólares"><small id="cmp-valuation-error" role="alert" hidden>Ingresa un monto válido, con hasta dos decimales.</small></div>';
   }
-  function calculationDetails(params,result){
-    const soil=result.zone_land?result.zone_land.unit:result.land_unit??(result.model==='land'?result.new?.unit:null);
-    const hasSoil=Number.isFinite(soil)&&soil>0;
+  function calculationDetails(params,result,value){
+    const appliedLand=result.model==='land'&&result.new&&Number(params.land)>0;
+    const soil=appliedLand?value/Number(params.land):result.zone_land?result.zone_land.unit:result.land_unit??(result.model==='land'?result.new?.unit:null);
+    const hasSoil=Number.isFinite(soil)&&(appliedLand?soil>=0:soil>0);
     const landTarget=!!result.zone_land||['Casa','Departamento','Oficina','Terreno'].includes(params.property_type)||result.property_type==='Casa'||result.model==='land';
     let html='';
     if(landTarget){
-      html+='<div class="cmp-valuation-line cmp-valuation-soil"><span>Precio estimado del terreno por m²</span><strong>'+(hasSoil?money(soil)+'/m²':'No disponible')+'</strong></div>';
-      const count=result.zone_land?.count??result.land_count??0,radius=result.zone_land?.radius??result.land_radius??0;
-      html+='<p class="cmp-valuation-evidence">'+(hasSoil?'Mediana de precio anunciado ÷ área de '+Number(count)+' terreno(s) de la zona · radio de suelo '+Number(radius).toLocaleString('es-PE')+' m.':'No hay terrenos aptos seleccionados para estimar el precio del suelo.')+'</p>';
+      html+='<div class="cmp-valuation-line cmp-valuation-soil"><span>Precio estimado del terreno por m²</span><strong'+(appliedLand?' id="cmp-applied-soil-unit"':'')+'>'+(hasSoil?money(soil)+'/m²':'No disponible')+'</strong></div>';
+      const count=appliedLand?result.land_count??result.selection_count??0:result.zone_land?.count??result.land_count??0,radius=appliedLand?result.land_radius??params.radius:result.zone_land?.radius??result.land_radius??0;
+      html+='<p class="cmp-valuation-evidence">'+(hasSoil?(appliedLand?'Valor aplicado al inmueble · '+Number(count)+' terreno(s) usados para valorar · radio ':'Mediana de precio anunciado ÷ área de '+Number(count)+' terreno(s) de la zona · radio de suelo ')+Number(radius).toLocaleString('es-PE')+' m.':'No hay terrenos aptos seleccionados para estimar el precio del suelo.')+'</p>';
     }
+    if(appliedLand)html+='<p id="cmp-land-equation" class="cmp-valuation-evidence">'+area(unitArea)+' × '+unitPrice(value)+' = '+money(value)+'</p>';
     if(result.model==='components'){
       const n=result.new;
       html+='<div class="cmp-valuation-components"><strong>Valorización por componentes</strong>'+
@@ -44,10 +46,11 @@
     if(!notesTouched)notes=params.report_notes||'';
     const basis=['land','built'].includes(result.new?.area_basis)?result.new.area_basis:result.model==='land'||params.property_type==='Terreno'?'land':'built';
     unitArea=Number(params[basis]);unitLabel=basis==='land'?'de terreno':'construido';
-    const details=calculationDetails(params,result);
+    let details=calculationDetails(params,result,result.new?.total);
     if(window.ACMPermissions&&!window.ACMPermissions.adjust_valuation)return '<footer id="cmp-comparison-valuation" class="cmp-comparison-valuation">'+details+'<div class="cmp-valuation-line"><span>Valorización de la propiedad</span><strong>'+(result.new?money(result.new.total):'Sin cálculo disponible')+'</strong></div>'+unitMarkup(result.new?.total)+observations()+'</footer>';
     const calculated=result.new?.total??0;
     if(base!==calculated){base=calculated;total=params.manual_valuation??base;edited=params.manual_valuation!=null;valid=true;draft='';}
+    details=calculationDetails(params,result,total);
     return '<footer id="cmp-comparison-valuation" class="cmp-comparison-valuation">'+
       details+
       '<div class="cmp-valuation-line"><span>Áreas del inmueble a valorar</span><span>Terreno <strong>'+area(params.land)+'</strong> · Construcción <strong>'+area(params.built)+'</strong></span></div>'+
@@ -66,7 +69,7 @@
     const amount=host.querySelector('#cmp-valuation-amount'),error=host.querySelector('#cmp-valuation-error');
     let max=Math.min(LIMIT,Math.max(Number(knob.max),Math.ceil(total/1000)*1000));const leds=[];
     for(let i=0;i<25;i++){const led=document.createElement('span');led.className='cmp-valuation-led';led.style.setProperty('--led-angle',(-135+i*270/24)+'deg');led.style.setProperty('--led-color','hsl('+(i*60/24)+' 85% 63%)');host.querySelector('.cmp-valuation-leds').append(led);leds.push(led);}
-    function paint(keepInput=false){max=Math.min(LIMIT,Math.max(max,Math.ceil(total/1000)*1000));knob.max=max;knob.value=total;knob.step=rounded?1000:0.01;if(!keepInput)amount.value=draft;error.hidden=valid;amount.setAttribute('aria-invalid',String(!valid));label.textContent=base>0||edited?money(total):'Sin cálculo disponible';host.querySelector('#cmp-adjusted-unit').textContent=unitPrice(base>0||edited?total:null);host.querySelector('#cmp-valuation-variation').textContent=variationLabel();restore.disabled=!edited&&valid;const part=total/max;dial.style.setProperty('--dial-angle',(-135+270*part)+'deg');leds.forEach((led,i)=>led.classList.toggle('lit',i/24<=part));knob.setAttribute('aria-valuetext',money(total));}
+    function paint(keepInput=false){max=Math.min(LIMIT,Math.max(max,Math.ceil(total/1000)*1000));knob.max=max;knob.value=total;knob.step=rounded?1000:0.01;if(!keepInput)amount.value=draft;error.hidden=valid;amount.setAttribute('aria-invalid',String(!valid));label.textContent=base>0||edited?money(total):'Sin cálculo disponible';host.querySelector('#cmp-adjusted-unit').textContent=unitPrice(base>0||edited?total:null);const appliedSoil=host.querySelector('#cmp-applied-soil-unit');if(appliedSoil)appliedSoil.textContent=unitPrice(total);const equation=host.querySelector('#cmp-land-equation');if(equation)equation.textContent=area(unitArea)+' × '+unitPrice(total)+' = '+money(total);host.querySelector('#cmp-valuation-variation').textContent=variationLabel();restore.disabled=!edited&&valid;const part=total/max;dial.style.setProperty('--dial-angle',(-135+270*part)+'deg');leds.forEach((led,i)=>led.classList.toggle('lit',i/24<=part));knob.setAttribute('aria-valuetext',money(total));}
     function change(value){const step=rounded?1000:100;total=Math.min(LIMIT,Math.max(0,Math.round(value/step)*step));edited=true;valid=true;draft='';paint();document.dispatchEvent(new CustomEvent('acm:valuation-adjusted'));}
     amount.addEventListener('input',()=>{
       draft=amount.value;

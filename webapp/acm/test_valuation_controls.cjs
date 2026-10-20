@@ -154,3 +154,24 @@ const readOnly=api.markup({property_type:'Departamento',built:200},{model:'built
 assert.match(readOnly,/Precio por m² construido/);assert.ok(readOnly.includes(usd(1500)));
 assert.ok(readOnly.indexOf('Valorización de la propiedad')<readOnly.indexOf('id="cmp-adjusted-unit"'));
 console.log('Property unit price: initial total, knob, wheel, keyboard, typed amount, rounding, reset, area changes, manual values, land-only homes and read-only roles passed.');
+
+// Zonal soil may differ from selected comparables. The land card must show
+// the adopted unit and keep its equation consistent after every adjustment.
+sandbox.window.ACMPermissions={adjust_valuation:true,report_notes:true};api.reset();
+const landResult={model:'land',land_count:1,land_radius:500,land_unit:650,
+  zone_land:{unit:800,count:3,radius:500},new:{total:787800,unit:650,area_basis:'land'}};
+mountUnit({property_type:'Terreno',land:1212,built:0},landResult);
+assert.equal(el('#cmp-applied-soil-unit').textContent,usd(650));
+assert.ok(!html.includes(usd(800)),'Zonal soil must not be presented as the applied unit');
+assert.match(html,/1 terreno\(s\) usados para valorar/);
+el('#cmp-valuation-amount').value='789012';el('#cmp-valuation-amount').events.input();
+assert.equal(api.value(),789012);
+assert.equal(el('#cmp-applied-soil-unit').textContent,usd(651));
+assert.equal(el('#cmp-adjusted-unit').textContent,usd(651));
+assert.ok(el('#cmp-land-equation').textContent.includes(usd(651)));
+el('#cmp-restore-value').events.click();
+assert.equal(el('#cmp-applied-soil-unit').textContent,usd(650));
+sandbox.window.ACMPermissions.adjust_valuation=false;api.reset();
+const landReadOnly=api.markup({property_type:'Terreno',land:1212,built:0},landResult);
+assert.ok(landReadOnly.includes(usd(650)));assert.ok(!landReadOnly.includes(usd(800)));
+console.log('Land: adopted unit, exact target area, adjusted total, restoration and read-only view agree.');

@@ -106,19 +106,78 @@ class AgeSelectionTests(SimpleTestCase):
         p=parameters({**params(),'age':20})
         self.assertEqual(selection_metrics(row,p),selection_metrics(row,{**p,'radius':1000}))
 
-    def test_house_41_uses_only_terrain_but_40_still_uses_construction(self):
-        for age, expected in ((40,'components'),(41,'land')):
-            p=parameters({**params(),'age':age,'built':200 if age==40 else ''})
+    def test_house_from_30_uses_only_land_but_29_still_uses_construction(self):
+        for age, expected in ((29,'components'),(30,'land'),(31,'land'),(40,'land'),(80,'land')):
+            p=parameters({**params(),'age':age,'built':200 if age==29 else ''})
             rows=candidates([at('house',20,age=age),record('soil','Terreno',price=150000)],p)
             r=calculate(rows,p)
             self.assertEqual(r['model'],expected)
-            if age==41:
+            if age>=30:
                 self.assertEqual(r['new']['total'],150000)
                 self.assertEqual(r['new']['built_value'],0)
                 self.assertEqual(r['new']['area_basis'],'land')
                 self.assertEqual(r['house_ids'],[])
                 self.assertEqual(r['property_type'],'Casa')
                 self.assertEqual(r['valuation_mode'],'land_only')
+
+    def test_house_30_ignores_built_area_and_never_falls_back_to_house_prices(self):
+        from .report_selection import report_unit_price
+        for built in (0, 200, 9999):
+            p=parameters({**params(), 'age':30, 'land':1212, 'built':built})
+            rows=candidates([record('house',price=9999999,land=1212,built=200,age=30),
+                             record('soil','Terreno',price=787800,land=1212)],p)
+            result=calculate(rows,p)
+            self.assertEqual(result['new']['total'],787800)
+            self.assertEqual(result['new']['unit'],650)
+            self.assertEqual(result['new']['built_value'],0)
+            self.assertEqual(report_unit_price(p,result),650)
+            self.assertEqual(report_unit_price({**p,'manual_valuation':789012},result),651)
+            only_houses=[row for row in rows if row['kind']=='Casa']
+            self.assertIsNone(calculate(only_houses,p)['new'])
+
+    def test_house_30_reference_fallback_still_uses_land_area(self):
+        p=parameters({**params(), 'age':30, 'land':1212, 'built':9000})
+        rows=candidates([record('soil','Terreno',price=787800,land=1212,precision='aproximada')],p)
+        result=calculate(rows,p)
+        self.assertTrue(result['reference_mode'])
+        self.assertEqual(result['valuation_mode'],'land_only')
+        self.assertEqual(result['new']['area_basis'],'land')
+        self.assertEqual(result['new']['total'],787800)
+
+    def test_house_can_calculate_with_only_land_area_at_any_age(self):
+        from .report_selection import report_unit_price
+        for age in (None, 0, 15, 29, 30):
+            for built in (None, '', 0):
+                with self.subTest(age=age, built=built):
+                    p=parameters({**params(), 'age':age, 'land':1212, 'built':built})
+                    self.assertEqual(p['built'],0)
+                    raw=[record('soil','Terreno',price=787800,land=1212),
+                         record('house',price=9999999,land=1212,built=200,age=10)]
+                    result=calculate(candidates(raw,p),p)
+                    self.assertEqual(result['valuation_mode'],'land_only')
+                    self.assertEqual(result['new']['total'],787800)
+                    self.assertEqual(result['new']['area_basis'],'land')
+                    self.assertEqual(result['new']['built_value'],0)
+                    self.assertEqual(result['house_ids'],[])
+                    self.assertEqual(report_unit_price(p,result),650)
+                    self.assertEqual(report_unit_price({**p,'manual_valuation':789012},result),651)
+                    if age is None or age<30:
+                        self.assertTrue(any('sin área construida' in msg for msg in result['messages']))
+                    without_soil=candidates([raw[1]],p)
+                    self.assertIsNone(calculate(without_soil,p)['new'])
+        with self.assertRaises(ValueError):
+            parameters({**params(),'built':'dato inválido'})
+        with self.assertRaises(ValueError):
+            parameters({**params(),'built':-1})
+
+    def test_house_without_built_area_can_use_land_references(self):
+        p=parameters({**params(),'land':1212,'built':''})
+        rows=candidates([record('soil','Terreno',land=1212,price=787800,precision='aproximada')],p)
+        result=calculate(rows,p)
+        self.assertTrue(result['reference_mode'])
+        self.assertEqual(result['valuation_mode'],'land_only')
+        self.assertEqual(result['new']['total'],787800)
+        self.assertEqual(result['new']['area_basis'],'land')
 
     def test_old_apartment_and_office_still_need_built_area(self):
         for target in ('Departamento','Oficina'):

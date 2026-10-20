@@ -75,9 +75,34 @@ class ReportSelectionTests(SimpleTestCase):
             p={**params(),'property_type':kind,'land':200,'built':100,'manual_valuation':240000}
             result={'model':'land' if kind=='Terreno' else 'components','new':{'total':300000}}
             self.assertEqual(report_unit_price(p,result),240000/p[area_key])
-            p.pop('manual_valuation');self.assertEqual(report_unit_price(p,result,1234),1234)
+            p.pop('manual_valuation');self.assertEqual(report_unit_price(p,result,1234),300000/p[area_key])
         self.assertIsNone(report_unit_price({'manual_valuation':100,'built':0},{'new':{}}))
         self.assertEqual(report_unit_price({'manual_valuation':100,'land':20,'built':100},{'new':{'area_basis':'land'}}),5)
+
+    def test_land_report_uses_adopted_unit_instead_of_unweighted_comparable_average(self):
+        from .client_report import prepare_report
+        from .components_report import build_acm_docx
+        from docx import Document
+        p = {**params(), 'property_type': 'Terreno', 'land': 1212, 'built': 0}
+        rows = candidates([record(str(i), 'Terreno', land=1212, price=unit*1212)
+                           for i, unit in enumerate((600, 650, 1000))], p)
+        result = calculate(rows, p)
+        self.assertEqual(result['new']['total'], 787800)
+        for adjusted, expected_total, expected_unit in ((False, 787800, 650), (True, 789012, 651)):
+            with self.subTest(adjusted=adjusted):
+                inputs = {**p, **({'manual_valuation': 789012} if adjusted else {})}
+                data = prepare_report(inputs, rows, result, fetch_images=False)
+                self.assertEqual(data['average'], expected_unit)
+                self.assertEqual(data['values']['commercial'], expected_total)
+                self.assertEqual(data['average'] * p['land'], expected_total)
+                pdf = _pdf_text(build_acm_pdf(inputs, rows, result, fetch_images=False))
+                self.assertIn(f'{expected_unit:,.2f}'.encode(), pdf)
+                self.assertIn(f'{expected_total:,.2f}'.encode(), pdf)
+                doc = Document(io.BytesIO(build_acm_docx(inputs, rows, result, fetch_images=False)))
+                text = '\n'.join(cell.text for table in doc.tables for row in table.rows for cell in row.cells)
+                self.assertIn(f'{expected_unit:,.2f}', text)
+                self.assertIn(f'{expected_total:,.2f}', text)
+                self.assertNotIn('Nuevo precio', text)
 
     def test_pdf_heading_and_chart_use_final_value_per_m2_without_adjustment_labels(self):
         p={**params(),'property_type':'Departamento','land':0,'built':90,'manual_valuation':110000}

@@ -51,15 +51,15 @@
             </div>
 
             <div class="form-group" id="cmp-built-field">
-              <label for="cmp-built">Construcción (m²)</label>
-              <input id="cmp-built" name="built" type="number" min="0.01" max="1000000" step="any" required placeholder="200" class="form-control">
+              <label for="cmp-built">Construcción (m², opcional)</label>
+              <input id="cmp-built" name="built" type="number" min="0" max="1000000" step="any" placeholder="200" class="form-control">
             </div>
           </div>
 
           <div class="form-group" id="cmp-age-field">
             <label for="cmp-age">Antigüedad (años, opcional)</label>
             <input id="cmp-age" name="age" type="number" min="0" max="150" step="1" placeholder="Sin informar · 0 = estreno" class="form-control" aria-describedby="cmp-age-help">
-            <small id="cmp-age-help">Vacío: prioriza distancia. 0: estreno. Solo casas: más de 40 años se valora como terreno.</small>
+            <small id="cmp-age-help">Vacío: prioriza distancia. 0: estreno. Solo casas: desde 30 años o sin área construida se valora como terreno.</small>
           </div>
           <div class="cmp-info-fields" role="group" aria-labelledby="cmp-info-label">
             <div class="cmp-info-label" id="cmp-info-label">Características (informativas)</div>
@@ -302,10 +302,10 @@
 <script src="{% static 'acm/js/workspace-layout.js' %}?v=1"></script>
 <script src="{% static 'acm/js/map-card-docking.js' %}?v=1"></script>
 <script src="{% static 'acm/js/floating-comparison.js' %}?v=9"></script>
-<script src="{% static 'acm/js/comparison-valuation.js' %}?v=11"></script>
+<script src="{% static 'acm/js/comparison-valuation.js' %}?v=12"></script>
 {% if replication %}{{ replication|json_script:"cmp-replication-data" }}{% endif %}
 {% if analysis_resume %}{{ analysis_resume|json_script:"cmp-role-analysis-data" }}{% endif %}
-<script src="{% static 'acm/js/components.js' %}?v=77"></script>
+<script src="{% static 'acm/js/components.js' %}?v=79"></script>
 <script src="{% static 'acm/js/property-gallery.js' %}?v=2"></script>
 {% if acm_permissions.ai %}<script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>{% endif %}
 {% if acm_permissions.pdm_polygons %}
