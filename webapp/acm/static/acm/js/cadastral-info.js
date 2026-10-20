@@ -35,6 +35,13 @@
             strokeColor:feature.getProperty('MASTER_LAYER')==='manzanas'?'#008f6c':feature.getProperty('REFERENCE_ONLY')?'#d69822':'#0caaa2',
             strokeOpacity:.95,strokeWeight:feature.getProperty('MASTER_LAYER')==='manzanas'?2:1.6,zIndex:feature.getProperty('MASTER_LAYER')==='manzanas'?110001:110000}));
         const sides=['frente','derecha','izquierda','fondo'];
+        function pdfLink(value){
+            const link=$('pdf');if(!link)return;
+            link.hidden=true;link.removeAttribute('href');
+            if(!window.ACMPermissions?.cadastral_pdf||!value?.selected_record_id||value.document_status==='unavailable')return;
+            link.setAttribute('href','/acm/catastro/lotes/'+encodeURIComponent(value.lot_id)+'/reporte.pdf?record_id='+encodeURIComponent(value.selected_record_id));
+            link.hidden=false;
+        }
         function status(text,error=false){$('status').textContent=text;$('status').hidden=!text;$('status').dataset.error=String(error);}
         function clearFields(){
             if(photoLookup)clearTimeout(photoLookup.timer);photoLookup=null;
@@ -44,6 +51,7 @@
             ['land','built',...sides].forEach(k=>$(k).textContent='Sin dato');
             $('photo').hidden=true;$('photo').removeAttribute('src');$('photo-status').hidden=false;$('photo-status').textContent='Sin fachada disponible';
             $('report-label').hidden=true;$('report').replaceChildren();
+            pdfLink();
         }
         function clearMap(){layer.forEach(f=>layer.remove(f));layer.setMap(null);labels?.setData([],[]);drawnKey=null;drawnCount=0;drawnBlockCount=0;highlighted=null;}
         async function api(path,signal){
@@ -117,6 +125,7 @@
             attempt();
         }
         function metrics(value,stamp){
+            pdfLink(value);
             const data=value.metrics||{};
             $('land').textContent=data.land_area??'Sin dato';$('built').textContent=data.built_area??'Sin dato';
             $('floors').textContent=data.floors??'Sin dato';$('units').textContent=data.units??'Sin dato';
@@ -132,6 +141,7 @@
         }
         async function details(stamp,record=''){
             if(!lot||lot.properties.REFERENCE_ONLY)return;
+            pdfLink();
             detailLoading=true;
             const id=lot.properties.ID_LOTE,key=id+':'+record;
             try {
@@ -169,7 +179,7 @@
             if(!allowed)return;
             const location=spatial.point(value);if(!location)return;
             const form=document.getElementById('cmp-form'),radius=Number(form.elements.radius.value),reuse=spatial.covers(result,location,radius);
-            target=location;scheduleRevisionCheck();card.hidden=false;streetFacade?.queue(location);
+            target=location;scheduleRevisionCheck();card.hidden=false;if(!$('content').hidden)streetFacade?.queue(location);
             if(reuse&&result.complete&&areaLoading){areaController?.abort();clearTimeout(timer);++areaEpoch;areaLoading=false;}
             const selected=reuse?spatial.selectedLot(result,location):null;
             if(reuse&&!force&&selected&&spatial.featureIdentity(selected)===detailsId){lot=selected;highlight();return;}
@@ -184,14 +194,23 @@
             timer=setTimeout(()=>update(center,radius,epoch,areaController.signal),450);
         }
         $('close').addEventListener('click',()=>{card.hidden=true;streetFacade?.suspend();});
+        $('toggle').addEventListener('click',()=>{
+            const content=$('content'),toggle=$('toggle');content.hidden=!content.hidden;
+            card.dataset.collapsed=String(content.hidden);
+            toggle.setAttribute('aria-expanded',String(!content.hidden));
+            toggle.setAttribute('aria-label',(content.hidden?'Expandir':'Colapsar')+' información catastral');
+            toggle.textContent=content.hidden?'+':'−';
+            if(content.hidden)streetFacade?.suspend();else if(target)streetFacade?.queue(target);
+        });
         // Moving or closing the small card never changes the map or its lot layer.
         const host=document.getElementById('map-container'),handle=$('handle');let drag=null;
-        function move(x,y){if(!host?.clientWidth)return;card.style.left=Math.max(8,Math.min(host.clientWidth-card.offsetWidth-8,x))+'px';card.style.top=Math.max(8,Math.min(host.clientHeight-card.offsetHeight-8,y))+'px';card.style.right='auto';card.style.bottom='auto';}
-        handle.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button'))return;e.preventDefault();const r=card.getBoundingClientRect(),h=host.getBoundingClientRect();drag={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left-h.left,top:r.top-h.top};handle.setPointerCapture(e.pointerId);});
+        function move(x,y){if(!host?.clientWidth)return;const bounds=window.ACMCardDock?.bounds()||{top:8,bottom:8};card.style.left=Math.max(8,Math.min(host.clientWidth-card.offsetWidth-8,x))+'px';card.style.top=Math.max(bounds.top,Math.min(host.clientHeight-card.offsetHeight-bounds.bottom,y))+'px';card.style.right='auto';card.style.bottom='auto';}
+        handle.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button')||card.classList.contains('cmp-map-docked'))return;e.preventDefault();const r=card.getBoundingClientRect(),h=host.getBoundingClientRect();drag={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left-h.left,top:r.top-h.top};handle.setPointerCapture(e.pointerId);});
         handle.addEventListener('pointermove',e=>{if(drag)move(drag.left+e.clientX-drag.x,drag.top+e.clientY-drag.y);});
         ['pointerup','pointercancel','lostpointercapture'].forEach(name=>handle.addEventListener(name,()=>{drag=null;}));
-        handle.addEventListener('keydown',e=>{if(e.target!==handle)return;const shifts={ArrowLeft:[-10,0],ArrowRight:[10,0],ArrowUp:[0,-10],ArrowDown:[0,10]},d=shifts[e.key];if(!d)return;e.preventDefault();const r=card.getBoundingClientRect(),h=host.getBoundingClientRect();move(r.left-h.left+d[0],r.top-h.top+d[1]);});
-        document.addEventListener('acm:workspace-resize',()=>{if(card.hidden||!card.style.left)return;move(parseFloat(card.style.left),parseFloat(card.style.top));});
+        handle.addEventListener('keydown',e=>{if(e.target!==handle||card.classList.contains('cmp-map-docked'))return;const shifts={ArrowLeft:[-10,0],ArrowRight:[10,0],ArrowUp:[0,-10],ArrowDown:[0,10]},d=shifts[e.key];if(!d)return;e.preventDefault();const r=card.getBoundingClientRect(),h=host.getBoundingClientRect();move(r.left-h.left+d[0],r.top-h.top+d[1]);});
+        document.addEventListener('acm:workspace-resize',()=>{if(card.hidden||card.classList.contains('cmp-map-docked')||!card.style.left)return;move(parseFloat(card.style.left),parseFloat(card.style.top));});
+        document.addEventListener('acm:card-dock-layout',()=>{if(card.hidden||card.classList.contains('cmp-map-docked')||!card.style.left)return;move(parseFloat(card.style.left),parseFloat(card.style.top));});
         $('retry').addEventListener('click',()=>{if(target)queue(target,true);});
         $('report').addEventListener('change',()=>{if(!lot)return;const stamp=++serial;controller?.abort();controller=new AbortController();card.setAttribute('aria-busy','true');details(stamp,$('report').value);});
         document.addEventListener('acm:target-location',e=>queue(e.detail));

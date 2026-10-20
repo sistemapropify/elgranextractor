@@ -1,3 +1,40 @@
+# Basic cadastral PDFs and organized map cards - 2026-10-20
+
+Status: Validated. User explicitly requested immediate publication after implementation in this chat.
+Recipe: existing serialized GitHub Actions App Service pipeline.
+Target: granextractorservice / rg-elgranextractor, Brazil South, subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Base: origin/main bc931d8a64bf88116950be4ab3c11bbab58d5100.
+Public: https://acm.propifai.com/acm/analisis/
+
+## 1. Scope
+Enable Abrir reporte PDF by default in basic cadastral information for every role. Serve the verified original of the selected lot/unit through authenticated ACM, reusing validated shared copies, preserving explicit cadastral access restrictions and keeping the current analysis-report permission independent.
+Add collapse/expand next to the cadastral close button. Place the expanded comparison table at the lower left of the map, with plan-layer controls initially above it. Dock collapsed search, comparison, plan layers, PDM, cadastral and selected-property cards along the upper map margin; overflow continues below in nonoverlapping rows. Restore original DOM and positions on expansion, preserve map/data and close actions, fit expanded floating cards between occupied margins and retain keyboard access.
+No schema, infrastructure, Azure RBAC, secrets, resources, collector configuration or user-data migrations. Shared D:/PROMETEO preview serves the same tested source.
+
+## 3. Validation steps
+- Test exact-release PDF defaults, login/role denials, original bytes, selection changes, shared snapshot integrity, cadastral reading and existing histories/role guards in isolated SQLite.
+- Run real cadastral controls and existing valuation/report/map/role JavaScript regressions; syntax-check new layout modules.
+- Exercise actual templates/scripts in browser fixtures at wide and narrow map widths, including collapse, overflow, expansion and closing.
+- Validate production-configured WSGI import, templates, collectstatic, exact assets and final workflow YAML; confirm existing Azure target.
+- Publish without force after latest-main check, require successful CI/CD and verify exact public revision, changed assets, health, login redirects and PDF access protection.
+
+## 5. Execution and rollback
+Use existing main workflow; add cadastral PDF/card regression gate and new dock asset comparisons. Revert only this scoped commit through the same pipeline if necessary. Existing ACM global history and prior valuations remain in the release baseline.
+
+## 7. Validation Proof
+Validated with azure-validate on 2026-10-20, America/Lima:
+- Exact-release python -B webapp/manage.py test acm.test_cadastral_pdf acm.test_cadastral_facade_template acm.test_cadastral acm.test_access acm.test_superadmin_access acm.test_history_visibility catastro.test_map_report catastro.test_report_snapshot --settings=acm.access_test_settings --noinput --verbosity=0: all 121 tests passed, no system-check issues.
+- Original PDF tests verify inline response, role/default policies, session denial, R2 hashes, lot/report identity and shared original reuse without source contact or local cache creation. No live cadastral originals were downloaded for validation.
+- Node suites test_cadastral.cjs, test_valuation_controls.cjs, test_report_feedback.cjs, test_numbered_markers.cjs and test_role_analysis.cjs passed. Both docking/floating modules passed node --check.
+- Actual browser fixture checked six collapsed cards with zero pairwise rectangle intersections at map widths 1100 and 340 pixels; overflow correctly occupied the lower rail. Expanded comparison started 8 pixels from left and 32 pixels above bottom. Cadastral expansion stayed between occupied rails, and close/expand restored original parents and controls.
+- Production-configured offline WSGI import and three actual templates passed. collectstatic completed on C: and all six changed JS/CSS assets exactly matched source. Initial D: static build ran out of space; the rejected temporary-folder cleanup was left unexecuted. No production resource/storage settings changed.
+- Five shared localhost assets returned HTTP 200 with exact source bytes; unauthenticated cadastral PDF route returned HTTP 401. Local explicit role policies contain no cadastral_pdf override.
+- Existing explicitly targeted App Service is Running in Brazil South. No infrastructure/RBAC changes require provisioning or assignments.
+- Final workflow parsed and includes PDF/card tests plus public exact dock assets. Latest-main integration and scoped whitespace check passed.
+- Public exact release marker, all changed assets, health and access guards remain required after the deployment succeeds.
+
+---
+
 # Global ACM history and creator column - 2026-10-20
 
 Status: Validated. User explicitly requested production publication in this chat.

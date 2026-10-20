@@ -384,6 +384,7 @@
     content.hidden=!open;
     toggle.setAttribute('aria-expanded',String(!!open));
     if(card)card.classList.toggle('is-open',!!open);
+    if(selectedMapId!=null)setSidePanel(!!open);
   }
   function renderSelectedCard(){
     const host=$('cmp-selected-content'),hint=$('cmp-selected-hint');

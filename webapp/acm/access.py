@@ -27,6 +27,7 @@ CATEGORIES = (
         ('pdm_card', 'Mostrar tarjeta PDM', False),
         ('street_view', 'Usar Street View', False),
         ('cadastral_info', 'Catastro maestro: lotes del radio e información catastral', True),
+        ('cadastral_pdf', 'Abrir reporte catastral PDF', True),
     )),
     ('Propiedades comparables', (
         ('property_data', 'Consultar datos de la propiedad', True),

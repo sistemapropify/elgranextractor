@@ -74,6 +74,18 @@ class SnapshotTests(unittest.TestCase):
         self.assertNotIn('pages', reports[0])
         self.assertIn('pages', reports[1])
 
+    def test_original_pdf_opens_shared_copy_without_disk_cache_or_source(self):
+        self.mirror()
+        with patch.dict(os.environ, {'CATASTRO_DATA_DIR': self.remote}), \
+             patch('catastro.map_report.report_measurements', return_value={'selected_record_id': RECORD}), \
+             patch('catastro.map_report._archived_reports', return_value=None), \
+             patch('catastro.map_report.download', side_effect=AssertionError('source offline')):
+            self.assertEqual(map_report.report_pdf(LOT, RECORD), PDF)
+            self.assertEqual(list(Path(self.remote).rglob('*')), [])
+            pdf_key = next(key for key in self.cloud.objects if key.endswith('.pdf'))
+            self.cloud.objects[pdf_key] = PDF + b'changed'
+            self.assertIsNone(report_snapshot.read(LOT, RECORD, as_pdf=True))
+
     def test_storage_failure_preserves_success_and_next_read_retries_mirror(self):
         with patch.object(self.cloud, '_put_verified', side_effect=StorageError('offline')) as put:
             with patch('catastro.map_report.download', return_value=PDF), patch('catastro.map_report.pdf_pages', return_value=pages()):

@@ -39,3 +39,13 @@ class CadastralFacadeTemplateTests(SimpleTestCase):
         self.assertNotIn('id="cmp-street-preview"', html)
         self.assertNotIn('/static/js/street-facade-view.js', html)
         self.assertNotIn('/static/acm/js/street-facade.js', html)
+
+    def test_basic_role_can_open_cadastral_pdf_without_analysis_reports_permission(self):
+        html = self.render(reports=False)
+        self.assertIn('id="cmp-cadastral-pdf"', html)
+        self.assertIn('Abrir reporte PDF', html)
+
+    def test_explicit_cadastral_pdf_restriction_hides_link_only(self):
+        html = self.render(cadastral_pdf=False)
+        self.assertIn('id="cmp-cadastral-fields"', html)
+        self.assertNotIn('id="cmp-cadastral-pdf"', html)

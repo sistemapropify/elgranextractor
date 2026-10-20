@@ -32,7 +32,10 @@ function inventory(p){
 async function fetcher(url,options={}){
  requests.push({url,options});
  if(url.includes('/configuracion/'))return response(config);
- if(url.includes('/acm/catastro/lotes/'))return response({lot_id:url.split('/lotes/')[1].split('/')[0],verified:!documentsFailed,document_status:documentsFailed?'unavailable':'verified',metrics:{land_area:'200',built_area:'20.5',floors:null,units:null,boundaries:{frente:'10'}},facade_url:null,reports:[]});
+ if(url.includes('/acm/catastro/lotes/')){
+  const lot_id=url.split('/lotes/')[1].split('/')[0],record=new URLSearchParams(url.split('?')[1]||'').get('record_id')||lot_id+'00001';
+  return response({lot_id,selected_record_id:record,verified:!documentsFailed,document_status:documentsFailed?'unavailable':'verified',metrics:{land_area:'200',built_area:'20.5',floors:null,units:null,boundaries:{frente:'10'}},facade_url:null,reports:[{record_id:lot_id+'00001'},{record_id:lot_id+'00002'}]});
+ }
  assert.ok(url.endsWith('/10/query'),'Do not load a district, sector or boundary inventory.');
  const p=options.body;assert.equal(p.has('resultRecordCount'),false);
  if(p.get('returnIdsOnly'))return response({objectIds:inventory(p)});
@@ -41,7 +44,7 @@ async function fetcher(url,options={}){
  if(hold)await new Promise(resolve=>gates.push(resolve));
  return response({features:ids.map(id=>lot(id))});
 }
-const context={window:{ACMPermissions:{cadastral_info:true},GeollaqtaLabels:{create(map,options){assert.equal(options.minZoom,0);assert.equal(options.lotMinZoom,0);return {setData(lots){labelUpdates.push(lots.length);}};}}},document:{getElementById:id=>id.endsWith('-data')?null:get(id),createElement:()=>new Element(),addEventListener:(name,fn)=>events[name]=fn},google:{maps:{Data}},fetch:fetcher,AbortController,URLSearchParams,setTimeout(fn,ms){const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);}};
+const context={window:{ACMPermissions:{cadastral_info:true,cadastral_pdf:true},GeollaqtaLabels:{create(map,options){assert.equal(options.minZoom,0);assert.equal(options.lotMinZoom,0);return {setData(lots){labelUpdates.push(lots.length);}};}}},document:{getElementById:id=>id.endsWith('-data')?null:get(id),createElement:()=>new Element(),addEventListener:(name,fn)=>events[name]=fn},google:{maps:{Data}},fetch:fetcher,AbortController,URLSearchParams,setTimeout(fn,ms){const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);}};
 for(const name of ['static/js/geollaqta-data.js','static/js/catastro-master-data.js','acm/static/acm/js/cadastral-info.js'])vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..',name),'utf8'),context);
 const flush=async()=>{for(let i=0;i<60;i++)await Promise.resolve();};
 async function fire(){const entry=[...timers].find(([,v])=>v.ms===450);if(!entry)return;timers.delete(entry[0]);return entry[1].fn();}
@@ -55,6 +58,16 @@ const gis=()=>requests.filter(r=>r.url.startsWith('https://')).length;
  const layer=Data.instances[0];assert.equal(layer.features.length,1201);assert.equal(layer.map,map);assert.ok(layer.drawSizes.some(n=>n>0&&n<1201));assert.equal(get('cmp-cadastral').attributes['aria-busy'],'false');
  assert.equal(requests.filter(r=>r.options.body?.get('returnIdsOnly')).length,1);
  assert.equal(get('cmp-cadastral-code').textContent,'04010407001002');assert.match(get('cmp-cadastral-hint').textContent,/Cerro Colorado/);assert.equal(get('cmp-cadastral-land').textContent,'200');assert.equal(get('cmp-cadastral-built').textContent,'20.5');
+ assert.equal(get('cmp-cadastral-pdf').hidden,false);
+ assert.match(get('cmp-cadastral-pdf').attributes.href,/04010407001002\/reporte\.pdf\?record_id=0401040700100200001$/);
+ const beforeCollapse=gis();get('cmp-cadastral-toggle').events.click();
+ assert.equal(get('cmp-cadastral-content').hidden,true);assert.equal(get('cmp-cadastral-toggle').attributes['aria-expanded'],'false');
+ assert.equal(get('cmp-cadastral').hidden,false);assert.equal(layer.map,map);assert.equal(gis(),beforeCollapse);
+ get('cmp-cadastral-toggle').events.click();assert.equal(get('cmp-cadastral-content').hidden,false);
+ assert.equal(get('cmp-cadastral-toggle').attributes['aria-expanded'],'true');
+ get('cmp-cadastral-report').value='0401040700100200002';get('cmp-cadastral-report').events.change();
+ assert.equal(get('cmp-cadastral-pdf').hidden,true);await flush();
+ assert.match(get('cmp-cadastral-pdf').attributes.href,/record_id=0401040700100200002$/);
  assert.ok(labelUpdates.includes(1201));assert.equal(get('cmp-cadastral-photo').src,'https://catastro.cofopri.gob.pe/img_catastro/040104/07001002.jpg');assert.equal(layer.styleFor(layer.features.find(f=>f.getId()===2)).strokeWeight,2.6);
  const image=get('cmp-cadastral-photo');image.onerror();assert.match(image.src,/07001002_1\.jpg$/);image.onerror();assert.match(image.src,/07001002_2\.jpg$/,'Missing suffix 1 must not hide an available suffix 2 facade.');image.onload();assert.equal(image.hidden,false);assert.equal(get('cmp-cadastral-photo-status').hidden,true);
  const oldLoaded=image.onload;
@@ -62,12 +75,13 @@ const gis=()=>requests.filter(r=>r.url.startsWith('https://')).length;
  oldLoaded();assert.equal(get('cmp-cadastral-photo-status').hidden,false,'A late photo response from another lot must not replace this lot.');
  const details=requests.filter(r=>r.url.includes('/lotes/')).length;await move(1);await flush();assert.equal(requests.filter(r=>r.url.includes('/lotes/')).length,details,'Movement inside the same lot preserves its pending/cached card.');
  await move(50);assert.equal(gis(),initial,'Street gaps inside the footprint do not trigger a new download.');assert.match(get('cmp-cadastral-status').textContent,/no está dentro de un lote/);
+ assert.equal(get('cmp-cadastral-pdf').hidden,true);assert.equal(get('cmp-cadastral-pdf').attributes.href,undefined);
  await move(505);assert.equal(gis(),initial,'A loaded boundary lot remains usable even beyond the original circle.');
  get('cmp-cadastral-close').events.click();assert.equal(layer.map,map);await move();assert.equal(get('cmp-cadastral').hidden,false);
  documentsFailed=true;const batchesBefore=requests.filter(r=>r.options.body?.get('objectIds')).length;
  await move(800);await flush();assert.equal(layer.features.length,2);assert.equal(requests.filter(r=>r.options.body?.get('returnIdsOnly')).length,2,'Leaving the footprint creates one new circular inventory.');
  const newBatches=requests.filter(r=>r.options.body?.get('objectIds')).slice(batchesBefore);assert.deepEqual(newBatches.map(r=>r.options.body.get('objectIds')),['2001'],'Do not download geometry of overlapping lot 3 again.');
- assert.equal(get('cmp-cadastral-land').textContent,'Consulta no disponible');documentsFailed=false;get('cmp-cadastral-retry').events.click();await fire();await flush();assert.equal(get('cmp-cadastral-land').textContent,'200');
+ assert.equal(get('cmp-cadastral-land').textContent,'Consulta no disponible');assert.equal(get('cmp-cadastral-pdf').hidden,true);documentsFailed=false;get('cmp-cadastral-retry').events.click();await fire();await flush();assert.equal(get('cmp-cadastral-land').textContent,'200');
  const beforeReturn=gis();await move();await flush();assert.equal(gis(),beforeReturn,'Returning to an earlier footprint reuses its cache.');
  get('cmp-form').elements.radius.value='300';get('cmp-form').elements.radius.events.change();await fire();await flush();assert.equal(requests.filter(r=>r.options.body?.get('returnIdsOnly')).length,3,'Changing the selected radius refreshes its footprint.');
  await move(3000);await flush();assert.equal(layer.features.length,0);assert.match(get('cmp-cadastral-status').textContent,/dentro de este radio/);const empty=gis();await move(3050);assert.equal(gis(),empty,'An empty checked footprint is cached too.');

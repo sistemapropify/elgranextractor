@@ -1,0 +1,46 @@
+.cmp-card-dock {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  z-index: 400;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: none;
+}
+.cmp-card-dock:empty { display: none; }
+#cmp-card-dock-top { top: 8px; flex-wrap: nowrap; }
+#cmp-card-dock-bottom { bottom: 8px; flex-wrap: wrap; overflow-y: auto; overscroll-behavior: contain; }
+#map-container .cmp-card-dock > .cmp-map-docked {
+  position: relative !important;
+  inset: auto !important;
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: 0;
+  max-width: min(260px, 100%);
+  max-height: none;
+  margin: 0;
+  pointer-events: auto;
+}
+.cmp-card-dock .cmp-floating-header,
+.cmp-card-dock #cmp-cadastral-handle { cursor: default; }
+#map-container .cmp-card-dock #cmp-controls { width: 200px; padding: 7px 9px; }
+.cmp-card-dock #cmp-controls > :not(.cmp-search-toggle) { display: none !important; }
+.cmp-card-dock #cmp-controls .cmp-search-toggle { margin: 0; padding: 0; border: 0; }
+.cmp-card-dock #cmp-cadastral-hint,
+.cmp-card-dock .cmp-selected-hint { display: none; }
+.cmp-card-dock #cmp-cadastral { width: 220px; }
+.cmp-card-dock #cmp-selected-card { border-radius: 7px; }
+#map-container > .cmp-floating-card:not(.cmp-map-docked) {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100% - var(--cmp-dock-top, 8px) - var(--cmp-dock-bottom, 8px) - 8px);
+}
+#map-container > .cmp-floating-card:not(.cmp-map-docked) > .cmp-floating-header,
+#map-container > .cmp-floating-card:not(.cmp-map-docked) > footer { flex: none; }
+#map-container > .cmp-floating-card:not(.cmp-map-docked) > [id$="-content"] { min-height: 0; overflow: auto; }
+#map-container > #cmp-cadastral:not(.cmp-map-docked),
+#map-container > #cmp-controls:not(.cmp-map-docked) {
+  top: max(12px, var(--cmp-dock-top, 8px));
+  max-height: calc(100% - max(12px, var(--cmp-dock-top, 8px)) - max(12px, var(--cmp-dock-bottom, 8px)));
+}

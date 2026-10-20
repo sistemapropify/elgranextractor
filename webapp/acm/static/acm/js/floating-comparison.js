@@ -10,16 +10,19 @@
   let position = null, drag = null, frame = 0;
   const margin = 8;
   function move(x, y) {
+    const bounds = window.ACMCardDock?.bounds() || {top: margin, bottom: margin};
+    const minY = Math.max(margin, bounds.top);
     const maxX = Math.max(margin, host.clientWidth - card.offsetWidth - margin);
-    const maxY = Math.max(margin, host.clientHeight - card.offsetHeight - margin);
-    position = {x: Math.round(Math.max(margin, Math.min(maxX, x))), y: Math.round(Math.max(margin, Math.min(maxY, y)))};
+    const maxY = Math.max(minY, host.clientHeight - card.offsetHeight - Math.max(margin, bounds.bottom));
+    position = {x: Math.round(Math.max(margin, Math.min(maxX, x))), y: Math.round(Math.max(minY, Math.min(maxY, y)))};
     card.style.left = position.x + 'px';
     card.style.top = position.y + 'px';
   }
   function fit() {
-    if (card.hidden) return;
+    if (card.hidden || card.classList.contains('cmp-map-docked')) return;
+    const bounds = window.ACMCardDock?.bounds() || {top: margin, bottom: 32};
     move(position ? position.x : anchor.endsWith('left') ? margin : anchor.endsWith('center') ? (host.clientWidth - card.offsetWidth) / 2 : host.clientWidth - card.offsetWidth - margin,
-         position ? position.y : anchor.startsWith('bottom') ? host.clientHeight - card.offsetHeight - 32 : margin);
+         position ? position.y : anchor.startsWith('bottom') ? host.clientHeight - card.offsetHeight - Math.max(32, bounds.bottom) : bounds.top);
   }
   function schedule() {
     if (frame) return;
@@ -32,7 +35,7 @@
     if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
   }
   handle.addEventListener('pointerdown', event => {
-    if (event.button !== 0 || event.target.closest('button')) return;
+    if (event.button !== 0 || event.target.closest('button') || card.classList.contains('cmp-map-docked')) return;
     event.preventDefault();
     event.stopPropagation();
     fit();
@@ -48,7 +51,7 @@
   handle.addEventListener('pointercancel', stop);
   handle.addEventListener('lostpointercapture', stop);
   handle.addEventListener('keydown', event => {
-    if (event.target !== handle) return;
+    if (event.target !== handle || card.classList.contains('cmp-map-docked')) return;
     const step = event.shiftKey ? 40 : 10;
     const deltas = {ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step]};
     if (!deltas[event.key]) return;
@@ -74,12 +77,13 @@
     schedule();
   });
   document.addEventListener('acm:workspace-resize', schedule);
+  document.addEventListener('acm:card-dock-layout', schedule);
   const observer = new ResizeObserver(schedule);
   observer.observe(host);
   observer.observe(card);
   schedule();
   }
-  initialize('cmp-comparison', 'comparación', 'top-right', 'acm:comparison-updated');
-  initialize('cmp-plan-layers', 'capas del plano', 'bottom-left');
+  initialize('cmp-comparison', 'comparación', 'bottom-left', 'acm:comparison-updated');
+  initialize('cmp-plan-layers', 'capas del plano', 'top-center');
   initialize('cmp-pdm-zone', 'zona de uso', 'bottom-right');
 })();

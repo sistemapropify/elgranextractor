@@ -111,6 +111,34 @@ def archived_pages(lot_id, document):
         return None
 
 
+def report_pdf(lot_id, record_id=None):
+    """Return the original report for the same verified lot/unit as the card."""
+    result = report_measurements(lot_id, record_id, report_only=True)
+    selected = result['selected_record_id']
+    for document in _archived_reports(lot_id) or []:
+        if document.get('type') != 'cadastral_report_pdf' or document.get('record_id') != selected:
+            continue
+        name, digest = document.get('filename', ''), document.get('_archive_sha256', '')
+        if not re.fullmatch(r'[A-Za-z0-9_-]+\.pdf', name) or not re.fullmatch(r'[a-f0-9]{64}', digest):
+            continue
+        try:
+            body = R2(timeout=5).get(f'geollaqta/{lot_id[:6]}/{lot_id}/{name}')[0]
+            if body.lstrip().startswith(b'%PDF-') and hashlib.sha256(body).hexdigest() == digest:
+                document_metrics(pdf_pages(body), lot_id)
+                return body
+        except (StorageError, OSError, ValueError, RuntimeError):
+            continue
+    body = report_snapshot.read(lot_id, selected, as_pdf=True)
+    if body is not None:
+        return body
+    # The selected record was checked against this lot's available reports.
+    body = download('https://catastro.cofopri.gob.pe/geollaqta/reportefichas/vistapdf/reporte.php?id=' + selected)
+    if not body.lstrip().startswith(b'%PDF-'):
+        raise ReportUnavailable('El servicio no devolvió un reporte PDF.')
+    document_metrics(pdf_pages(body), lot_id)
+    return body
+
+
 def document_metrics(pages, lot_id):
     result = measurements(pages, lot_id)
     fields = [f for page in pages for f in page.get('named_fields', [])]

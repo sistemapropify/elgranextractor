@@ -16,15 +16,23 @@ La caché temporal de reportes del ACM está separada de la lectura mixta de
 fichas/reportes. Ningún valor de área o lindero se sustituye por atributos GIS.
 Un reporte ausente o no disponible queda como tal, sin intentar una ficha.
 
+En el ACM básico, **Información catastral → Abrir reporte PDF** está habilitado
+por defecto para todos los roles. Abre el original del lote y la unidad/reporte
+seleccionados en una pestaña nueva; no depende del permiso de informes del ACM.
+El enlace aparece cuando hay un reporte disponible y se limpia al cambiar de
+lote, unidad o ante un fallo de consulta. Mantiene la sesión y los controles de
+acceso catastral, así como cualquier restricción explícita configurada por rol.
+
 Se mantienen los cambios de la corrección anterior: espera acotada de conexiones,
 lectura de originales archivados con hash si hace falta reextraerlos y mensajes
 con el motivo de error en la tarjeta.
 
-Validación: 82 pruebas de lectura, mapas y permisos; tres consultas reales directas,
+Validación: 65 pruebas de lectura, mapas y permisos; tres consultas reales directas,
 sin archivo previo ni carga de documentos: Mariano Melgar 04010907014023,
 Cerro Colorado 04010483021014 y Yanahuara 04012607041014. Las tres devolvieron
 áreas y cuatro medidas perimétricas en 5–6 segundos, solicitando solo la galería
 y reporte.php, sin llamadas a fichaindividual.php ni archivos nuevos en R2.
 
-Publicación mediante el flujo existente de GitHub Actions hacia Azure. La validación
-funcional del ACM autenticado en producción queda a cargo del usuario.
+El PDF se entrega en la misma sesión del ACM, sin exponer las credenciales del
+archivo compartido. La tarjeta puede colapsarse con el botón junto a la X; las
+tarjetas colapsadas se organizan en los márgenes superior e inferior del mapa.

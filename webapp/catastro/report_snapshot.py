@@ -63,7 +63,7 @@ def _get(lot_id, name, cloud):
     return path.read_bytes() if path.is_file() else cloud.get(_prefix(lot_id) + name)[0]
 
 
-def read(lot_id, record_id=None):
+def read(lot_id, record_id=None, *, as_pdf=False):
     """Return report candidates with the selected PDF freshly parsed and checked."""
     try:
         _prefix(lot_id)
@@ -98,6 +98,8 @@ def read(lot_id, record_id=None):
         from .map_report import document_metrics
         pages = pdf_pages(body)
         document_metrics(pages, lot_id)  # Includes sector, block and lot validation.
+        if as_pdf:
+            return body
         document['pages'] = pages
         root = data_dir() / lot_id[:6] / lot_id / 'map-reports'
         receipt = root / (selected + '-' + digest + '.shared')

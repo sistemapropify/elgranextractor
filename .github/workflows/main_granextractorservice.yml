@@ -157,6 +157,14 @@ jobs:
           source antenv/bin/activate
           python webapp/manage.py test acm.test_history_visibility acm.test_access acm.test_superadmin_access acm.test_role_analysis acm.test_valuation_notes acm.test_client_report --settings=acm.access_test_settings --noinput --verbosity=0
 
+      - name: Validate basic cadastral PDF and map card controls
+        run: |
+          source antenv/bin/activate
+          python webapp/manage.py test acm.test_cadastral_pdf acm.test_cadastral_facade_template acm.test_cadastral catastro.test_map_report catastro.test_report_snapshot --settings=acm.access_test_settings --noinput --verbosity=0
+          node webapp/acm/test_cadastral.cjs
+          node --check webapp/acm/static/acm/js/map-card-docking.js
+          node --check webapp/acm/static/acm/js/floating-comparison.js
+
       - name: Collect Django static files
         env:
           # Valores dummy para que Django cargue settings sin conexión a BD.
@@ -375,6 +383,9 @@ jobs:
                 fi
               done <<'CATASTRO_ASSETS'
           js/scraping-verification-release.json|webapp/static/js/scraping-verification-release.json
+          acm/js/map-card-docking.js|webapp/acm/static/acm/js/map-card-docking.js
+          acm/css/map-card-docking.css|webapp/acm/static/acm/css/map-card-docking.css
+          acm/js/floating-comparison.js|webapp/acm/static/acm/js/floating-comparison.js
           acm/css/history.css|webapp/acm/static/acm/css/history.css
           acm/css/components.css|webapp/acm/static/acm/css/components.css
           js/acm-property-gallery-release.json|webapp/static/js/acm-property-gallery-release.json

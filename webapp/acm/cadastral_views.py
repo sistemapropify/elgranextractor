@@ -74,3 +74,21 @@ def facade(request, lot_id):
         return response
     except (OSError, ValueError, RuntimeError):
         raise Http404
+
+
+@require_GET
+@required('cadastral_pdf')
+@required('cadastral_info')
+def report_pdf(request, lot_id):
+    try:
+        from catastro.map_report import report_pdf as original_pdf
+        master.validate_lot(lot_id)
+        body = original_pdf(lot_id, request.GET.get('record_id') or None)
+        response = HttpResponse(body, content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="reporte-catastral-{lot_id}.pdf"'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+    except ValueError:
+        return JsonResponse({'error': 'Lote o reporte catastral no válido.'}, status=400)
+    except (OSError, RuntimeError):
+        return JsonResponse({'error': 'El PDF catastral no está disponible. Vuelve a intentarlo.'}, status=502)

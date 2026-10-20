@@ -18,6 +18,7 @@ urlpatterns = [
     path('catastro/fuentes/<slug:source_id>/radio/', cadastral_views.reference_geometry, name='cadastral_reference'),
     path('catastro/lotes/<str:lot_id>/', cadastral_views.lot, name='cadastral_lot'),
     path('catastro/lotes/<str:lot_id>/fachada/', cadastral_views.facade, name='cadastral_facade'),
+    path('catastro/lotes/<str:lot_id>/reporte.pdf', cadastral_views.report_pdf, name='cadastral_report_pdf'),
     path('login/', portal_views.login, name='login'),
     path('logout/', portal_views.logout, name='logout'),
     path('vista-por-rol/', portal_views.perspective, name='perspective'),
