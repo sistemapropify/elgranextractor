@@ -152,6 +152,11 @@ jobs:
           node webapp/acm/test_basic_photo_card.cjs
           python -c 'import json,os; from pathlib import Path; Path("webapp/static/js/acm-property-gallery-release.json").write_text(json.dumps({"revision":os.environ["GITHUB_SHA"]}))'
 
+      - name: Validate ACM global history and original authors
+        run: |
+          source antenv/bin/activate
+          python webapp/manage.py test acm.test_history_visibility acm.test_access acm.test_superadmin_access acm.test_role_analysis acm.test_valuation_notes acm.test_client_report --settings=acm.access_test_settings --noinput --verbosity=0
+
       - name: Collect Django static files
         env:
           # Valores dummy para que Django cargue settings sin conexión a BD.
@@ -370,6 +375,7 @@ jobs:
                 fi
               done <<'CATASTRO_ASSETS'
           js/scraping-verification-release.json|webapp/static/js/scraping-verification-release.json
+          acm/css/history.css|webapp/acm/static/acm/css/history.css
           acm/css/components.css|webapp/acm/static/acm/css/components.css
           js/acm-property-gallery-release.json|webapp/static/js/acm-property-gallery-release.json
           acm/js/components.js|webapp/acm/static/acm/js/components.js

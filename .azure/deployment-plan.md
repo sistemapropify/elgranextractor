@@ -1,3 +1,38 @@
+# Global ACM history and creator column - 2026-10-20
+
+Status: Validated. User explicitly requested production publication in this chat.
+Recipe: existing serialized GitHub Actions App Service pipeline.
+Target: granextractorservice / rg-elgranextractor, Brazil South, subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Base: origin/main e0f22cc39526c38a14bee79109c4550481ce5974.
+Public: https://acm.propifai.com/acm/historial/
+
+## 1. Scope
+Allow the real Gerente General role and verified Propify superusers (including adminpropify) to list, replicate and download all agents' saved ACMs. Show creator username and full name in a Usuario column, preserve original creator/date in reports and save author identity for new snapshots without changing deduplication. Resolve legacy authors with one bounded directory query per page.
+Keep other agents restricted to their own histories, including direct URLs. Role preview cannot elevate an unprivileged account; previewing an agent stays personal. Retain explicit history/report restrictions and owner-only deletion.
+Shared local preview contains the tested change. Preserve unrelated local edits, including the separate cadastral PDF permission. No schema, infrastructure, RBAC, secrets, resource or collector changes.
+
+## 3. Validation steps
+- Run exact-release history/identity/role/report regressions with isolated SQLite.
+- Validate production-configured WSGI startup, actual templates, collected CSS and pipeline YAML.
+- Confirm the existing Azure target and latest origin/main, then publish without force.
+- Require successful CI/CD, exact public revision marker and CSS bytes, healthy application and anonymous access guards.
+
+## 5. Execution and rollback
+Use the existing main deployment workflow and its public verification gate; add the history regression suite and exact CSS check. Roll back through a scoped revert commit if required. No new environment or subscription is selected.
+
+## 7. Validation Proof
+Validated with azure-validate on 2026-10-20, America/Lima:
+- Exact-release command: python -B webapp/manage.py test acm.test_history_visibility acm.test_access acm.test_superadmin_access acm.test_role_analysis acm.test_valuation_notes acm.test_client_report --settings=acm.access_test_settings --noinput --verbosity=0. All 83 tests passed, with no system check issues.
+- Tested global/personal scope, role preview, explicit denial, direct downloads, owner-only deletion, batch legacy attribution, original report author/date, escaping, pagination and stable saved-snapshot deduplication.
+- Offline production-configured WSGI import passed; three actual portal templates compiled, collectstatic completed and collected history.css exactly matched source. Database aliases isolated in-memory and skill bookkeeping disabled only for offline validation.
+- Workflow YAML parsed and includes the same 83-test gate plus public history.css byte comparison.
+- Shared localhost CSS returned HTTP 200 with exact source bytes; protected history retained its login redirect. Actual-template browser fixture displayed the Usuario column and all synthetic agent rows; personal fixture exposed only its owner.
+- Explicitly targeted App Service read confirmed Running in Brazil South. No infrastructure or Azure RBAC changes require provisioning or assignment updates.
+- Latest origin/main was fetched. Release scope excludes unrelated shared edits; git diff --check passed after preserving original workflow line endings.
+- Public revision, assets, health and guards remain required after deployment before reporting success.
+
+---
+
 # Live unit price and report-download feedback - 2026-10-20
 
 Status: Validated. User explicitly requested publication in this chat.

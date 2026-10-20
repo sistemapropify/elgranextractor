@@ -7,9 +7,10 @@ Prospección no modifica la sesión del ACM. Se requiere ingresar una vez en el 
 
 ## Páginas
 
-- `/acm/`: dashboard personal.
+- `/acm/`: dashboard personal o global según el acceso al historial.
 - `/acm/analisis/`: nuevo análisis y vista por rol.
-- `/acm/historial/`: historial exclusivo del identificador Propify autenticado.
+- `/acm/historial/`: historial personal; Gerente General y superadministradores
+  verificados de Propify (incluido `adminpropify`) ven los ACM de todos los agentes.
 - `/acm/configuracion/`: configuración de accesos, exclusiva del rol real
   **Administrador** de Propify.
 - `/acm/login/`: ingreso con Propify. Cerrar sesión es un POST con CSRF y no
@@ -73,7 +74,17 @@ firmas SAS renovadas de Azure no invalidan la revisión de la misma foto.
 
 Los análisis nuevos usan `ACMPortalAnalysis.owner_id`, el ID estable de Propify,
 y conservan en el servidor la evidencia original para aplicar los permisos al
-descargar. Administrador tampoco puede descargar historiales ajenos.
+descargar. El rol real **Gerente General** y la marca `is_superuser` verificada en
+Propify permiten consultar, replicar y descargar los análisis de todos los agentes.
+Un Administrador sin esa marca mantiene acceso solo a sus propios análisis.
+Seleccionar Gerente General desde una cuenta sin ese alcance no concede acceso
+global; una perspectiva de agente vuelve a mostrar únicamente el historial propio.
+Los permisos explícitos de historial y reportes siguen aplicándose.
+
+La columna **Usuario** muestra el usuario creador y su nombre completo. Los nuevos
+análisis guardan esa identidad en el snapshot; los anteriores resuelven sus autores
+en una consulta agrupada de Propify. Los reportes conservan el autor y la fecha del
+ACM original. Consultar un ACM ajeno no cambia su propietario ni permite eliminarlo.
 
 La tabla anterior `ACMLink` se conserva sin modificar ni reasignar sus registros.
 No se asocia por coincidencias de correo o de nombre. El comando

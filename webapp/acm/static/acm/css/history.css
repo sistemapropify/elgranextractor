@@ -1,0 +1,12 @@
+.acm-history-scroll { overflow-x: auto; border: 1px solid #30363d; border-radius: 8px; }
+.acm-history-table { width: 100%; border-collapse: collapse; color: #e6edf3; font-size: 13px; text-align: left; }
+.acm-history-table th { padding: 13px 14px; background: #161f2b; color: #a9c6df; font-weight: 600; }
+.acm-history-table td { padding: 14px; border-top: 1px solid #30363d; vertical-align: top; }
+.acm-history-table td:first-child { white-space: nowrap; }
+.acm-history-table td:nth-child(4) { min-width: 160px; overflow-wrap: anywhere; }
+.acm-history-table small { display: block; margin-top: 5px; color: #aebaca; }
+.acm-history-table .acm-row-actions { gap: 6px; min-width: 165px; align-items: center; }
+.acm-history-table .acm-button { padding: 6px 9px; font-size: 12px; white-space: nowrap; }
+.acm-history-table form { margin: 0; }
+.acm-history-date { white-space: nowrap; }
+@media (max-width: 720px) { .acm-history-table th, .acm-history-table td { padding: 11px 10px; } }

@@ -112,6 +112,13 @@ class ACMAccess:
         return self.role['id'] != self.own_role['id']
 
     @property
+    def can_view_all_history(self):
+        manager = self.own_role['name'].strip().casefold() == 'gerente general'
+        if not self.permissions.get('history') or not (self.user.is_superuser or manager):
+            return False
+        return not self.previewing or self.role['name'].strip().casefold() == 'gerente general'
+
+    @property
     def fingerprint(self):
         data = [self.user.pk, self.role['id'], self.revision, self.permissions, self.nonce]
         return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()

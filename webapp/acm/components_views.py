@@ -18,6 +18,7 @@ from django.views.decorators.http import require_GET, require_POST
 from map_config import google_maps_api_key
 from .access import required, template_context
 from .access_data import issue_snapshot, read_snapshot, project, restore_selection
+from .history_access import visible_history, attach_authors
 
 from .components_engine import candidates, calculate, parameters, positive, number, SOURCES
 
@@ -117,9 +118,7 @@ def page(request, replication=None):
 @require_GET
 @authenticated
 def replicate_history(request, uuid):
-    from .access_models import ACMPortalAnalysis
-    from .access import database
-    history = get_object_or_404(ACMPortalAnalysis.objects.using(database()), id=uuid, owner_id=session_user(request).pk)
+    history = get_object_or_404(visible_history(request), id=uuid)
     try:
         params = parameters(history.snapshot['params'])
     except (ValueError, TypeError, KeyError):
@@ -495,19 +494,18 @@ def history_pdf_report(request, uuid):
 
 
 def _history_report(request, uuid, kind):
-    from .access_models import ACMPortalAnalysis
-    from .access import database
-    row=get_object_or_404(ACMPortalAnalysis.objects.using(database()), id=uuid, owner_id=session_user(request).pk)
+    row=get_object_or_404(visible_history(request), id=uuid)
+    author=attach_authors([row], session_user(request))[0].author
     snapshot=row.snapshot
     safe,result,excluded=project(request,snapshot,snapshot['result'],snapshot.get('excluded',()),report=True)
     if kind=='word':
         from .components_report import build_acm_docx
-        content=build_acm_docx(safe['params'],safe['records'],result,excluded,generated_at=row.created_at,user=session_user(request))
+        content=build_acm_docx(safe['params'],safe['records'],result,excluded,generated_at=row.created_at,user=author)
         mime='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         extension='docx'
     else:
         from .components_pdf import build_acm_pdf
-        content=build_acm_pdf(safe['params'],safe['records'],result,excluded,generated_at=row.created_at,user=session_user(request))
+        content=build_acm_pdf(safe['params'],safe['records'],result,excluded,generated_at=row.created_at,user=author)
         mime='application/pdf';extension='pdf'
     response=HttpResponse(content,content_type=mime)
     response['Content-Disposition']=f'attachment; filename="{row.codigo_display}.{extension}"'

@@ -1,1 +1,36 @@
-{% extends 'acm/portal_base.html' %}{% block content %}<main class="acm-portal"><p class="acm-eyebrow">ACM · HISTORIAL PERSONAL</p><h1>Mis análisis</h1><p>{{ history_page.paginator.count }} análisis guardados.</p>{% for row in history_page %}<article class="acm-history-row"><div><strong>{{ row.codigo_display }}</strong><p>{{ row.snapshot.params.property_type }} · {{ row.snapshot.params.address }} · {{ row.created_at|date:'d/m/Y H:i' }}</p></div><div class="acm-row-actions"><a class="acm-button" href="{% url 'acm:componentes_historial_replicar' row.id %}">Replicar</a>{% if acm_permissions.reports %}<a class="acm-button" href="{% url 'acm:componentes_historial_pdf' row.id %}">PDF</a><a class="acm-button" href="{% url 'acm:componentes_historial_word' row.id %}">Word</a>{% endif %}<form method="post" action="{% url 'acm:delete_analysis' row.id %}">{% csrf_token %}<button class="acm-button" type="submit" data-delete-analysis>Eliminar</button></form></div></article>{% empty %}<p>Aquí aparecerán únicamente los análisis de tu cuenta.</p>{% endfor %}<nav class="acm-pagination" aria-label="Páginas del historial">{% if history_page.has_previous %}<a href="?page={{ history_page.previous_page_number }}">Anterior</a>{% endif %}<span>Página {{ history_page.number }} de {{ history_page.paginator.num_pages }}</span>{% if history_page.has_next %}<a href="?page={{ history_page.next_page_number }}">Siguiente</a>{% endif %}</nav></main>{% endblock %}
+{% extends 'acm/portal_base.html' %}
+{% load static %}
+{% block extra_head %}{{ block.super }}<link rel="stylesheet" href="{% static 'acm/css/history.css' %}?v=1">{% endblock %}
+{% block content %}
+<main class="acm-portal">
+  <p class="acm-eyebrow">ACM · {% if acm_access.can_view_all_history %}HISTORIAL DE AGENTES{% else %}HISTORIAL PERSONAL{% endif %}</p>
+  <h1>{% if acm_access.can_view_all_history %}Todos los ACM{% else %}Mis análisis{% endif %}</h1>
+  <p>{{ history_page.paginator.count }} análisis guardados.</p>
+  <div class="acm-history-scroll">
+    <table class="acm-history-table">
+      <thead><tr><th scope="col">Código</th><th scope="col">Usuario</th><th scope="col">Inmueble</th><th scope="col">Dirección</th><th scope="col">Fecha</th><th scope="col">Acciones</th></tr></thead>
+      <tbody>
+      {% for row in history_page %}
+        <tr>
+          <td><strong>{{ row.codigo_display }}</strong></td>
+          <td><strong>{{ row.author.username }}</strong>{% if row.author.get_full_name %}<small>{{ row.author.get_full_name }}</small>{% endif %}</td>
+          <td>{{ row.snapshot.params.property_type }}</td>
+          <td>{{ row.snapshot.params.address|default:'—' }}</td>
+          <td class="acm-history-date">{{ row.created_at|date:'d/m/Y H:i' }}</td>
+          <td><div class="acm-row-actions">
+            <a class="acm-button" href="{% url 'acm:componentes_historial_replicar' row.id %}">Replicar</a>
+            {% if acm_permissions.reports %}<a class="acm-button" href="{% url 'acm:componentes_historial_pdf' row.id %}">PDF</a><a class="acm-button" href="{% url 'acm:componentes_historial_word' row.id %}">Word</a>{% endif %}
+            {% if row.is_own %}<form method="post" action="{% url 'acm:delete_analysis' row.id %}">{% csrf_token %}<button class="acm-button" type="submit" data-delete-analysis>Eliminar</button></form>{% endif %}
+          </div></td>
+        </tr>
+      {% empty %}<tr><td colspan="6">{% if acm_access.can_view_all_history %}Todavía no hay análisis guardados.{% else %}Aquí aparecerán los análisis de tu cuenta.{% endif %}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <nav class="acm-pagination" aria-label="Páginas del historial">
+    {% if history_page.has_previous %}<a href="?page={{ history_page.previous_page_number }}">Anterior</a>{% endif %}
+    <span>Página {{ history_page.number }} de {{ history_page.paginator.num_pages }}</span>
+    {% if history_page.has_next %}<a href="?page={{ history_page.next_page_number }}">Siguiente</a>{% endif %}
+  </nav>
+</main>
+{% endblock %}

@@ -7,7 +7,7 @@
 <div class="nav-section-title">ACM</div>
 <a href="{% url 'acm:acm_dashboard' %}" class="nav-item {% if request.path == '/acm/' %}active{% endif %}"><span class="nav-icon">◫</span><span>Dashboard</span></a>
 <a href="{% url 'acm:acm_analisis' %}" class="nav-item {% if '/analisis' in request.path %}active{% endif %}"><span class="nav-icon">＋</span><span>Nuevo análisis</span></a>
-{% if acm_permissions.history %}<a href="{% url 'acm:historial_acm' %}" class="nav-item {% if '/historial/' in request.path %}active{% endif %}"><span class="nav-icon">◷</span><span>Historial</span></a>{% endif %}
+{% if acm_permissions.history %}<a href="{% url 'acm:historial_acm' %}" class="nav-item {% if '/historial/' in request.path %}active{% endif %}"><span class="nav-icon">◷</span><span>{% if acm_access.can_view_all_history %}Historial general{% else %}Historial{% endif %}</span></a>{% endif %}
 {% if show_acm_configuration %}<a href="{% url 'acm:role_settings' %}" class="nav-item {% if '/configuracion/' in request.path %}active{% endif %}"><span class="nav-icon">⚙</span><span>Configuración de accesos</span></a>{% endif %}
 {% endblock %}
 {% block header_title_area %}<div class="header-title">ACM <span>· Propify</span></div>{% endblock %}

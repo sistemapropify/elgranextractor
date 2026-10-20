@@ -192,5 +192,8 @@ def persist_history(user, params, records, result, excluded=()):
         raise ValueError('Primero completa el cálculo.')
     snapshot = {'params': params, 'records': records, 'result': result, 'excluded': list(excluded)}
     fingerprint = hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()
+    snapshot['author'] = {'id': str(user.pk), 'username': user.username,
+                          'first_name': getattr(user, 'first_name', ''),
+                          'last_name': getattr(user, 'last_name', '')}
     return ACMPortalAnalysis.objects.using(database()).get_or_create(
         owner_id=str(user.pk), fingerprint=fingerprint, defaults={'snapshot': snapshot})

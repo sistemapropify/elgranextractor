@@ -1,4 +1,4 @@
-"""Independent Propify login, own history, role settings and perspective controls."""
+"""Propify login, scoped history, role settings and perspective controls."""
 import hashlib
 import ipaddress
 import json
@@ -21,6 +21,7 @@ from .access import (CATEGORIES, DEFAULTS, SESSION_PREVIEW, SESSION_PROFILE, SES
                      database, get_access, policy_for, required, role_catalog, set_perspective, template_context)
 from .access_data import photo_digest, project, unseal
 from .access_models import ACMPhotoReview, ACMPortalAnalysis, ACMRoleAudit, ACMRolePolicy
+from .history_access import visible_history, attach_authors
 
 
 @csrf_protect
@@ -99,17 +100,18 @@ def logout(request):
 
 @required(page=True)
 def dashboard(request):
-    rows = ACMPortalAnalysis.objects.using(database()).filter(owner_id=request.acm_access.user.pk)
+    rows = visible_history(request)
     context = template_context(request)
-    context.update({'analysis_count': rows.count(), 'recent': list(rows[:5])})
+    context.update({'analysis_count': rows.count(), 'recent': attach_authors(rows[:5], request.acm_access.user)})
     return render(request, 'acm/portal_dashboard.html', context)
 
 
 @required('history', page=True)
 def history(request):
-    rows = ACMPortalAnalysis.objects.using(database()).filter(owner_id=request.acm_access.user.pk)
+    rows = visible_history(request)
     context = template_context(request)
     context['history_page'] = Paginator(rows, 25).get_page(request.GET.get('page'))
+    context['history_page'].object_list = attach_authors(context['history_page'].object_list, request.acm_access.user)
     return render(request, 'acm/portal_history.html', context)
 
 
