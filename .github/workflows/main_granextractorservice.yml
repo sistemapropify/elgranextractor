@@ -149,6 +149,7 @@ jobs:
           python webapp/manage.py test acm.test_access acm.test_property_gallery acm.test_comparable_features --settings=acm.access_test_settings --noinput
           node --check webapp/acm/static/acm/js/property-gallery.js
           node webapp/acm/test_listing_card.cjs
+          node webapp/acm/test_basic_photo_card.cjs
           python -c 'import json,os; from pathlib import Path; Path("webapp/static/js/acm-property-gallery-release.json").write_text(json.dumps({"revision":os.environ["GITHUB_SHA"]}))'
 
       - name: Collect Django static files

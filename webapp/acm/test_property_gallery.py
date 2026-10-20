@@ -102,6 +102,19 @@ class PropertyGalleryTests(TestCase):
         photos = property_photos({'source': 'remax', 'id': self.obj.pk})
         self.assertEqual([p['url'] for p in photos], [self.urls[0]])
 
+    def test_card_prefers_stored_photo_over_legacy_cover(self):
+        from .components_views import scraped_rows
+        from .test_components import params
+        stored = 'https://granextractormedia.blob.core.windows.net/photos/stored.jpg'
+        self.obj.tipo_inmueble = 'Casa'
+        self.obj.tipo_operacion = 'Venta'
+        self.obj.latitud, self.obj.longitud = -16.4, -71.5
+        self.obj.datos_crudos = {'_photo_gallery': [{'url': stored, 'stored': True}]}
+        self.obj.save()
+        with patch('cuadrantizacion.views._map_image_url', side_effect=lambda url: url):
+            row = next(scraped_rows(params()))
+        self.assertEqual(row['image'], stored)
+
     def test_host_validation_keeps_internal_addresses_blocked(self):
         with patch('acm.portal_views.socket.getaddrinfo', return_value=[(2, 1, 6, '', ('127.0.0.1', 443))]):
             with self.assertRaises(ValueError):

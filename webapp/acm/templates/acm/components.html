@@ -3,8 +3,8 @@
 {% block title %}ACM · Suelo y construcción{% endblock %}
 {% block extra_head %}
 {{ block.super }}
-<link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=35">
-<link rel="stylesheet" href="{% static 'acm/css/property-gallery.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=36">
+<link rel="stylesheet" href="{% static 'acm/css/property-gallery.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'acm/css/comparison-valuation.css' %}?v=6">
 <link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
 <link rel="stylesheet" href="{% static 'acm/css/nearby-places.css' %}?v=2">
@@ -300,8 +300,8 @@
 <script src="{% static 'acm/js/comparison-valuation.js' %}?v=9"></script>
 {% if replication %}{{ replication|json_script:"cmp-replication-data" }}{% endif %}
 {% if analysis_resume %}{{ analysis_resume|json_script:"cmp-role-analysis-data" }}{% endif %}
-<script src="{% static 'acm/js/components.js' %}?v=72"></script>
-<script src="{% static 'acm/js/property-gallery.js' %}?v=1"></script>
+<script src="{% static 'acm/js/components.js' %}?v=74"></script>
+<script src="{% static 'acm/js/property-gallery.js' %}?v=2"></script>
 {% if acm_permissions.ai %}<script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>{% endif %}
 {% if acm_permissions.pdm_polygons %}
 {{ capas_vectoriales|json_script:"capas-vectoriales-data" }}

@@ -1,14 +1,12 @@
-.cmp-photo-open { display:block; padding:0!important; border:0!important; background:transparent!important; cursor:pointer; border-radius:7px; overflow:hidden; width:78px; height:78px; }
-.cmp-photo-open img { display:block; width:100%; height:100%; object-fit:cover; }
-.cmp-detail .cmp-photo-open { width:112px; height:100px; }
-.map-sidebar .cmp-card-top > .cmp-photo-open { width:100%; height:auto; aspect-ratio:16/9; max-height:190px; margin-bottom:9px; background:#0d141d!important; }
-.map-sidebar .cmp-photo-open img { width:100%; height:100%; object-fit:contain; }
-.cmp-photo-open:focus-visible { outline:3px solid #6ee2bc; outline-offset:2px; }
+.cmp-card-top > img[data-property-gallery] { cursor:pointer; }
 .cmp-gallery { width:min(1060px,calc(100vw - 24px)); }
 .cmp-gallery-stage { display:grid; grid-template-columns:44px minmax(0,1fr) 44px; align-items:center; gap:10px; padding:12px; min-height:200px; }
 .cmp-gallery-stage img { width:100%; height:min(58dvh,620px); object-fit:contain; background:#080d13; }
 .cmp-gallery-stage button,.cmp-gallery-thumbs button { color:#edf3f8; background:#202b38; border:1px solid #526579; border-radius:7px; cursor:pointer; min-height:44px; }
 .cmp-gallery-stage button { font-size:28px; }
+#cmp-gallery-prev { grid-column:1; }
+#cmp-gallery-image { grid-column:2; }
+#cmp-gallery-next { grid-column:3; }
 .cmp-gallery-stage button:disabled { opacity:.4; cursor:default; }
 .cmp-gallery-status { margin:0; padding:0 16px 12px; text-align:center; color:#d7e2ed; }
 .cmp-gallery-thumbs { display:flex; flex-wrap:wrap; gap:8px; padding:0 16px 16px; max-height:180px; overflow:auto; }
@@ -16,8 +14,6 @@
 .cmp-gallery-thumbs button[aria-pressed=true] { border:3px solid #6ee2bc; padding:1px; }
 .cmp-gallery-thumbs img { display:block; width:100%; height:100%; object-fit:cover; border-radius:4px; }
 @media(max-width:480px) {
-  .cmp-photo-open { width:66px; height:66px; }
-  .cmp-detail .cmp-photo-open { width:78px; height:78px; }
   .cmp-gallery-stage { grid-template-columns:36px minmax(0,1fr) 36px; gap:4px; padding:8px; }
   .cmp-gallery-thumbs button { width:72px; height:56px; }
 }

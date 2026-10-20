@@ -41,6 +41,11 @@
       if(request===current&&dialog.open)render(data.photos||[]);
     }catch(error){if(error.name!=='AbortError'&&request===current)status.textContent=error.message;}
   });
+  document.addEventListener('keydown',event=>{
+    if(event.target.matches('img[data-property-gallery]')&&['Enter',' '].includes(event.key)){
+      event.preventDefault();event.target.click();
+    }
+  });
   image.addEventListener('error',()=>{image.hidden=true;status.textContent='Foto '+(index+1)+' de '+photos.length+' no disponible. Puedes elegir otra foto.';});
   previous.addEventListener('click',()=>show(index-1));next.addEventListener('click',()=>show(index+1));
   document.getElementById('cmp-gallery-close').addEventListener('click',()=>dialog.close());

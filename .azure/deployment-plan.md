@@ -1,3 +1,19 @@
+# Preserve ACM photo dimensions and open carousel from existing image — 2026-10-20
+
+Status: Validated.
+User authorization: correct production after the photo release. User explicitly requires the existing "Sin foto" space to show the property photo with unchanged form/card dimensions, and clicking that same image to open a modal carousel with all property photos.
+Mode: MODIFY existing App Service through the existing GitHub Actions workflow.
+Target: granextractorservice / rg-elgranextractor, Brazil South, subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Public: https://acm.propifai.com/acm/analisis/
+
+Scope: restore the original direct image element. Add only click/keyboard gallery attributes to it; no wrapper or extra card-footer button. Remove all gallery stylesheet rules that set photo/card/form dimensions; carousel geometry is scoped to its own modal. Original components.css stays byte-identical to pre-gallery revision 57520179. Guard basic hidden marker controls without select.options so basic cards can initialize. Preserve enabled basic photo access and prefer an already stored property image over a legacy cover. No analysis/form/card sizing, infrastructure, credentials, migrations or collector changes.
+
+Validation: 57 access/gallery/feature tests and listing-card Node regression passed; carousel JS syntax passed. Shared served checkout integrated with existing local edits preserved. Local authenticated HTML and original CSS/JS returned 200. Complete local page, using 25 real comparables and the user session in its basic Gerente General perspective: form 280 x 184.4 px, selected card 273.6 x 682.85 px, direct image 248 x 139.5 px; each dimension exactly equals the same page without the carousel stylesheet. The photo loaded, its original parent remains cmp-card-top, clicking it opened a ten-photo modal, and next navigation advanced to photo 2/10. Screenshots saved. Node regression covers the basic hidden marker control and full selector for house/apartment/land. CI must verify exact public release assets.
+
+Deployment: integrate latest origin/main, use existing production workflow, verify marker, original layout assets and authenticated image protection. Preserve current COFOPRI queue.
+
+---
+
 # ACM basic property photos and complete gallery — 2026-10-20
 
 Status: Validated.
@@ -11,6 +27,16 @@ Scope: basic roles see property photos by default, independently of portal name/
 Validation proof: real shared-local HTTP page and three gallery/card assets returned 200. Real search returned 25 comparables, a 17-photo gallery and two real JPEG HTTP 200 responses. 46 existing access/feature tests and 10 gallery tests passed, including ordering/deduplication, legacy covers, owner/role/revision isolation, denial, review-only policy, parameterized Propify queries and idempotent audited migration. Listing-card Node regression and JS syntax check passed. Repeat relevant tests in release; CI compares the new public assets exactly.
 
 Deployment: latest origin/main integrated; existing production workflow retained. Verify exact release marker, gallery JS/CSS, protected endpoints and App Service health. No local sessions copied to production.
+
+
+Post-deployment verification — 2026-10-20:
+- GitHub Actions run 39464172044 succeeded in all jobs. Release: 4f123f1e9bacce03ae92950b200f0315186d36dd.
+- Public gallery marker returned that exact revision. components.js, property-gallery.js, property-gallery.css and portal-access.js returned HTTP 200 and matched committed release bytes.
+- Public login returned 200. Anonymous gallery/photo endpoints returned 401.
+- Read-only production SQL confirmed migration 0006_basic_property_photos applied, with photos and unreviewed_photos enabled for the existing basic roles 3, 20 and 8.
+- Local browser verified 17-photo gallery, thumbnails and next-photo navigation using real captured images; temporary loopback QA proxy stopped after verification.
+- Authenticated production UI was not inspected in the agent browser, which has no user login session. No local sessions copied to production.
+Publication: live at https://acm.propifai.com/acm/analisis/ .
 
 ---
 

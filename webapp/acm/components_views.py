@@ -177,10 +177,9 @@ def scraped_rows(p):
         parking = feature_record.building_features['parking']
         floor_label = feature_record.piso_departamento
         lifecycle_state = row['estado_publicacion'] or 'sin_verificar'
-        cover = row['imagen_url']
-        if not cover:
-            photos = gallery_photos(row['datos_crudos'])
-            cover = photos[0]['url'] if photos else None
+        photos = gallery_photos(row['datos_crudos'], row['imagen_url'])
+        cover = next((photo['url'] for photo in photos if photo.get('stored')),
+                     photos[0]['url'] if photos else None)
         yield {'id':f"{row['fuente']}-{row['id']}",'record_id':row['id'],
             'source':row['fuente'],'code':row['id_origen'],
             'title':row['titulo'] or row['id_origen'],'kind':row['tipo_inmueble'],
