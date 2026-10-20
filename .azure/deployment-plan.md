@@ -1,3 +1,38 @@
+# Live unit price and report-download feedback - 2026-10-20
+
+Status: Validated. User explicitly requested publication in this chat.
+Recipe: existing serialized GitHub Actions App Service pipeline.
+Target: granextractorservice / rg-elgranextractor, Brazil South, subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Base: origin/main 6d939fd1a206c8b82d581083700b9a5e2f10e871.
+Public: https://acm.propifai.com/acm/analisis/
+
+## 1. Scope
+Show the final property value per square meter immediately below its total, updating with dial, wheel, keyboard, typed amounts, rounding, restored values and changed surfaces. Use built area for ordinary houses, apartments and offices; land area for land and houses valued as land only. Keep the independent neighborhood soil indicator unchanged.
+Make report generation/download feedback visible beside its button, preserve current value and notes on failure, and identify authenticated expired snapshots correctly while rejecting tampered tokens. Verify that PDFs and saved report snapshots include the adjusted total and justification.
+No schema, infrastructure, dependencies, roles, credentials or collector changes. Shared local preview serves the current tested files.
+
+## 3. Validation steps
+- Run exact-release regression tests for roles, report values, notes, snapshot expiration, references and land indicators.
+- Run actual JavaScript controls and download behavior tests; compile templates and collect static assets.
+- Verify existing Azure target health; stage only scoped code/tests and this record.
+- Publish without force after confirming main has not advanced, wait for the workflow and compare public committed assets.
+
+## 5. Execution and rollback
+Use the existing main deployment workflow. Preserve other local work and all currently published features. Roll back with a new revert commit if required.
+
+## 7. Validation Proof
+Validated with azure-validate on 2026-10-20, America/Lima:
+- Exact release on current origin/main passed 165 Django tests: snapshot expiry, valuation notes, neighborhood soil, reference fallback, components, age selection, weighted adjustments, role access, role analysis and report selection; --settings=acm.access_test_settings --noinput.
+- Real PDF endpoint test confirms USD 487,038.39 and the submitted justification in both generated PDF and saved history.
+- Node suites passed for actual download payload/error feedback, valuation unit updates and component presentation. Components.js syntax passed.
+- Actual components template compiled; collectstatic completed and all three changed JS/CSS artifacts match the release source.
+- Shared localhost assets matched current source. Browser fixture confirmed live unit updates and preserved values/notes on failure.
+- Existing explicitly targeted App Service is Running in Brazil South. No infrastructure, schema, role or credential changes.
+- Git whitespace check passed; scope is nine ACM code/test files plus this record. Previous production revision is 6d939fd1.
+- Public release marker, exact changed assets, health and anonymous access restrictions will be checked after CI/CD succeeds.
+
+---
+
 # Basic ACM neighborhood soil price - 2026-10-20
 
 Status: Validated. User explicitly requested publication in the current chat.

@@ -123,6 +123,7 @@
   }
   function fitSearchRadius(){if(map&&circles.length)map.fitBounds(circles[0].getBounds(),{top:40,right:24,bottom:32,left:Math.min($('cmp-controls').offsetWidth+24,Math.round($('map-container').clientWidth*.35))});}
   function clearResult(message){
+    reportStatus('');
     if(aiController)aiController.abort();aiController=null;aiExplanation=null;
     $('cmp-ai-panel').hidden=true;$('cmp-ai-status').textContent='';
     aiProposal=null;$('cmp-proposal').hidden=true;
@@ -595,12 +596,13 @@
     try{const data=await post('guardar',selection());button.textContent='Guardado · '+data.code;$('cmp-status').textContent=data.created?'Análisis guardado en el historial.':'Este mismo análisis ya estaba guardado en el historial.';}
     catch(error){$('cmp-status').textContent=error.message;button.disabled=false;}
   });
+  function reportStatus(message){const host=$('cmp-report-status');if(host){host.textContent=message;host.hidden=!message;}}
   async function downloadReport(url,extension,label){
-    if(!snapshot||!result?.new||reportDownloading||window.ACMComparisonValuation?.valid()===false||!comparisonRows().some(row=>!unselected.has(row.id)))return;reportDownloading=true;updateReportButtons();let downloaded=false;$('cmp-status').textContent='Generando informe '+label+' con las operaciones del análisis…';
+    if(!snapshot||!result?.new||reportDownloading||window.ACMComparisonValuation?.valid()===false||!comparisonRows().some(row=>!unselected.has(row.id)))return;reportDownloading=true;updateReportButtons();let downloaded=false;$('cmp-status').textContent='Generando informe '+label+' con las operaciones del análisis…';reportStatus('Generando informe '+label+'…');
     try{const response=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:JSON.stringify(selection())});
       if(!response.ok){let body={};try{body=await response.json();}catch(e){}throw Error(body.error||('No se pudo generar el informe '+label+'.'));}
-      const code=response.headers.get('X-ACM-History-Code')||'';const objectUrl=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=objectUrl;a.download=(code||'informe-acm')+extension;a.click();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);downloaded=true;$('cmp-save').textContent=code?'Guardado · '+code:'Guardado en historial';$('cmp-status').textContent='Informe '+label+' descargado y análisis guardado en el historial.';
-    }catch(error){$('cmp-status').textContent=error.message;}finally{reportDownloading=false;updateReportButtons();if(downloaded)$('cmp-save').disabled=true;}
+      const code=response.headers.get('X-ACM-History-Code')||'';const objectUrl=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=objectUrl;a.download=(code||'informe-acm')+extension;a.click();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);downloaded=true;$('cmp-save').textContent=code?'Guardado · '+code:'Guardado en historial';$('cmp-status').textContent='Informe '+label+' descargado y análisis guardado en el historial.';reportStatus('Informe '+label+' descargado.');
+    }catch(error){$('cmp-status').textContent=error.message;reportStatus(error.message);}finally{reportDownloading=false;updateReportButtons();if(downloaded)$('cmp-save').disabled=true;}
   }
   $('cmp-word').addEventListener('click',()=>downloadReport(form.dataset.reportUrl,'.docx','Word'));
   $('cmp-pdf').addEventListener('click',()=>downloadReport(form.dataset.pdfUrl,'.pdf','PDF'));

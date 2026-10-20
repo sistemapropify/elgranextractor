@@ -2,12 +2,15 @@
 (() => {
   'use strict';
   let base=null,total=null,edited=false,rounded=false,notes='',notesTouched=false,valid=true,draft='';
+  let unitArea=null,unitLabel='construido';
   const LIMIT=1000000000;
   const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money=n=>n.toLocaleString('es-PE',{style:'currency',currency:'USD',maximumFractionDigits:2});
   const area=n=>Number(n||0).toLocaleString('es-PE',{maximumFractionDigits:2})+' m²';
   function variationLabel(){if(!edited)return '';if(!(base>0))return 'Variación no disponible';const pct=(total-base)/base*100;return 'Variación: '+(pct>0?'+':'')+pct.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';}
-  function reset(){base=null;total=null;edited=false;rounded=false;notes='';notesTouched=false;valid=true;draft='';}
+  function reset(){base=null;total=null;edited=false;rounded=false;notes='';notesTouched=false;valid=true;draft='';unitArea=null;unitLabel='construido';}
+  function unitPrice(value){return Number.isFinite(value)&&Number.isFinite(unitArea)&&unitArea>0?money(value/unitArea)+'/m²':'No disponible';}
+  function unitMarkup(value){return '<div class="cmp-valuation-unit"><span>Precio por m² '+unitLabel+'</span> <strong id="cmp-adjusted-unit" aria-live="polite">'+unitPrice(value)+'</strong></div>';}
   function observations(){
     if(window.ACMPermissions?.report_notes===false)return '';
     return '<div class="cmp-valuation-notes"><label for="cmp-report-notes">Justificación u observaciones</label><textarea id="cmp-report-notes" rows="2" maxlength="10000" placeholder="Justifica el valor o añade una observación para el reporte.">'+escape(notes)+'</textarea></div>';
@@ -39,14 +42,16 @@
   function markup(params,result){
     if(!result.new&&!result.reference_mode&&!(result.land_unit>0)&&!result.zone_land)return '';
     if(!notesTouched)notes=params.report_notes||'';
+    const basis=['land','built'].includes(result.new?.area_basis)?result.new.area_basis:result.model==='land'||params.property_type==='Terreno'?'land':'built';
+    unitArea=Number(params[basis]);unitLabel=basis==='land'?'de terreno':'construido';
     const details=calculationDetails(params,result);
-    if(window.ACMPermissions&&!window.ACMPermissions.adjust_valuation)return '<footer id="cmp-comparison-valuation" class="cmp-comparison-valuation">'+details+'<div class="cmp-valuation-line"><span>Valorización de la propiedad</span><strong>'+(result.new?money(result.new.total):'Sin cálculo disponible')+'</strong></div>'+observations()+'</footer>';
+    if(window.ACMPermissions&&!window.ACMPermissions.adjust_valuation)return '<footer id="cmp-comparison-valuation" class="cmp-comparison-valuation">'+details+'<div class="cmp-valuation-line"><span>Valorización de la propiedad</span><strong>'+(result.new?money(result.new.total):'Sin cálculo disponible')+'</strong></div>'+unitMarkup(result.new?.total)+observations()+'</footer>';
     const calculated=result.new?.total??0;
     if(base!==calculated){base=calculated;total=params.manual_valuation??base;edited=params.manual_valuation!=null;valid=true;draft='';}
     return '<footer id="cmp-comparison-valuation" class="cmp-comparison-valuation">'+
       details+
       '<div class="cmp-valuation-line"><span>Áreas del inmueble a valorar</span><span>Terreno <strong>'+area(params.land)+'</strong> · Construcción <strong>'+area(params.built)+'</strong></span></div>'+
-      '<div class="cmp-valuation-adjustment"><div class="cmp-valuation-summary"><span>Valorización de la propiedad</span><strong id="cmp-adjusted-value" aria-live="polite">'+(result.new||edited?money(total):'Sin cálculo disponible')+'</strong><div class="cmp-valuation-baseline">'+(result.reference_mode?'Valor por referencias: ':'Valor ACM calculado: ')+'<strong>'+(result.new?money(base):'Sin cálculo disponible')+'</strong><span id="cmp-valuation-variation" aria-live="polite">'+variationLabel()+'</span></div></div>'+
+      '<div class="cmp-valuation-adjustment"><div class="cmp-valuation-summary"><span>Valorización de la propiedad</span><strong id="cmp-adjusted-value" aria-live="polite">'+(result.new||edited?money(total):'Sin cálculo disponible')+'</strong>'+unitMarkup(result.new||edited?total:null)+'<div class="cmp-valuation-baseline">'+(result.reference_mode?'Valor por referencias: ':'Valor ACM calculado: ')+'<strong>'+(result.new?money(base):'Sin cálculo disponible')+'</strong><span id="cmp-valuation-variation" aria-live="polite">'+variationLabel()+'</span></div></div>'+
       '<div class="cmp-valuation-controls"><div class="cmp-valuation-dial"><div class="cmp-valuation-leds" aria-hidden="true"></div><div class="cmp-valuation-face" aria-hidden="true"><div class="cmp-valuation-pointer"></div></div>'+
       '<input id="cmp-valuation-knob" type="range" min="0" max="'+Math.max(1000,Math.ceil(base*2/1000)*1000)+'" step="100" value="'+total+'" aria-label="Ajustar valorización de la propiedad" title="Rueda: USD 1,000. Mayús + rueda: USD 100. También puedes girar la perilla."></div>'+
       '<div class="cmp-valuation-round-control"><span id="cmp-round-label">Redondear</span><label class="cmp-valuation-rocker"><span class="cmp-valuation-rocker-face" aria-hidden="true"><span class="cmp-valuation-rocker-i"></span><span class="cmp-valuation-rocker-o"></span></span><input id="cmp-round-value" type="checkbox" role="switch" aria-labelledby="cmp-round-label" '+(rounded?'checked':'')+'></label><small>USD 1,000</small></div>'+
@@ -61,7 +66,7 @@
     const amount=host.querySelector('#cmp-valuation-amount'),error=host.querySelector('#cmp-valuation-error');
     let max=Math.min(LIMIT,Math.max(Number(knob.max),Math.ceil(total/1000)*1000));const leds=[];
     for(let i=0;i<25;i++){const led=document.createElement('span');led.className='cmp-valuation-led';led.style.setProperty('--led-angle',(-135+i*270/24)+'deg');led.style.setProperty('--led-color','hsl('+(i*60/24)+' 85% 63%)');host.querySelector('.cmp-valuation-leds').append(led);leds.push(led);}
-    function paint(keepInput=false){max=Math.min(LIMIT,Math.max(max,Math.ceil(total/1000)*1000));knob.max=max;knob.value=total;knob.step=rounded?1000:0.01;if(!keepInput)amount.value=draft;error.hidden=valid;amount.setAttribute('aria-invalid',String(!valid));label.textContent=base>0||edited?money(total):'Sin cálculo disponible';host.querySelector('#cmp-valuation-variation').textContent=variationLabel();restore.disabled=!edited&&valid;const part=total/max;dial.style.setProperty('--dial-angle',(-135+270*part)+'deg');leds.forEach((led,i)=>led.classList.toggle('lit',i/24<=part));knob.setAttribute('aria-valuetext',money(total));}
+    function paint(keepInput=false){max=Math.min(LIMIT,Math.max(max,Math.ceil(total/1000)*1000));knob.max=max;knob.value=total;knob.step=rounded?1000:0.01;if(!keepInput)amount.value=draft;error.hidden=valid;amount.setAttribute('aria-invalid',String(!valid));label.textContent=base>0||edited?money(total):'Sin cálculo disponible';host.querySelector('#cmp-adjusted-unit').textContent=unitPrice(base>0||edited?total:null);host.querySelector('#cmp-valuation-variation').textContent=variationLabel();restore.disabled=!edited&&valid;const part=total/max;dial.style.setProperty('--dial-angle',(-135+270*part)+'deg');leds.forEach((led,i)=>led.classList.toggle('lit',i/24<=part));knob.setAttribute('aria-valuetext',money(total));}
     function change(value){const step=rounded?1000:100;total=Math.min(LIMIT,Math.max(0,Math.round(value/step)*step));edited=true;valid=true;draft='';paint();document.dispatchEvent(new CustomEvent('acm:valuation-adjusted'));}
     amount.addEventListener('input',()=>{
       draft=amount.value;

@@ -43,6 +43,20 @@ class ValuationNotesAccessTests(TestCase):
         self.assertEqual(saved['manual_valuation'], 234567.89)
         self.assertEqual(saved['report_notes'], 'Mejoras recientes.\nBuena ubicacion.')
 
+    @patch('acm.components_pdf._static_map', return_value=None)
+    @patch('acm.components_pdf._zona_text', return_value='Zona de prueba')
+    def test_pdf_download_uses_current_adjusted_value_and_justification(self, zone, image):
+        response = components_views.pdf_report(self.request(self.payload(
+            manual_valuation=487038.39, report_notes='Valor revisado por conservacion y mejoras.')))
+        self.assertEqual(response.status_code, 200, response.content[:150])
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        text = _pdf_text(response.content)
+        self.assertIn(b'487,038.39', text)
+        self.assertIn(b'Valor revisado por conservacion y mejoras.', text)
+        saved = ACMPortalAnalysis.objects.get(owner_id='77').snapshot['params']
+        self.assertEqual(saved['manual_valuation'], 487038.39)
+        self.assertEqual(saved['report_notes'], 'Valor revisado por conservacion y mejoras.')
+
     def test_explicit_role_restriction_is_still_respected(self):
         ACMRolePolicy.objects.create(role_id=20, permissions={'adjust_valuation': False, 'report_notes': False}, updated_by='1')
         self.access.permissions, _ = policy_for(self.role)

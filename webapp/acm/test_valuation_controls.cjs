@@ -100,3 +100,57 @@ for(const type of ['Casa','Departamento','Oficina','Terreno']){
 assert.match(api.markup({property_type:'Oficina'},{model:'built',zone_land:{unit:700,count:1,radius:500},new:null}),/700/);
 assert.match(api.markup({property_type:'Departamento'},{model:'built',zone_land:{unit:null,count:0,radius:2000},new:{total:100000}}),/No disponible/);
 console.log('Basic view: independent soil indicator is visible for houses, apartments, offices and land, with and without price-adjustment permission.');
+
+const usd=value=>value.toLocaleString('es-PE',{style:'currency',currency:'USD',maximumFractionDigits:2})+'/m²';
+function mountUnit(params,result){
+  elements.clear();html=api.markup(params,result);
+  el('#cmp-valuation-knob').max='1000000';api.mount();
+}
+sandbox.window.ACMPermissions={adjust_valuation:true,report_notes:true};api.reset();
+mountUnit({property_type:'Casa',land:100,built:200},{model:'components',new:{total:487038.39}});
+assert.equal(el('#cmp-adjusted-unit').textContent,usd(2435.19195));
+assert.ok(html.indexOf('id="cmp-adjusted-value"')<html.indexOf('id="cmp-adjusted-unit"'));
+assert.ok(html.indexOf('id="cmp-adjusted-unit"')<html.indexOf('cmp-valuation-baseline'));
+assert.match(html,/Precio por m² construido/);
+el('#cmp-valuation-knob').value='500000';el('#cmp-valuation-knob').events.input();
+assert.equal(el('#cmp-adjusted-unit').textContent,usd(2500));
+el('#cmp-valuation-knob').events.wheel({preventDefault(){},deltaY:-1,shiftKey:false});
+assert.equal(el('#cmp-adjusted-unit').textContent,usd(2505));
+el('#cmp-valuation-knob').events.keydown({preventDefault(){},key:'ArrowUp'});
+assert.equal(el('#cmp-adjusted-unit').textContent,usd(2505.5));
+el('#cmp-valuation-amount').value='400123.45';el('#cmp-valuation-amount').events.input();
+assert.equal(el('#cmp-adjusted-unit').textContent,usd(2000.61725));
+el('#cmp-round-value').checked=true;el('#cmp-round-value').events.change();
+assert.equal(el('#cmp-adjusted-unit').textContent,usd(2000));
+el('#cmp-restore-value').events.click();
+assert.equal(el('#cmp-adjusted-unit').textContent,usd(2435.19195));
+el('#cmp-valuation-amount').value='0';el('#cmp-valuation-amount').events.input();
+assert.equal(el('#cmp-adjusted-unit').textContent,usd(0));
+el('#cmp-valuation-amount').value='abc';el('#cmp-valuation-amount').events.input();
+assert.equal(api.valid(),false);assert.equal(el('#cmp-adjusted-unit').textContent,usd(0));
+el('#cmp-valuation-amount').value='';el('#cmp-valuation-amount').events.input();
+assert.equal(el('#cmp-adjusted-unit').textContent,usd(2435.19195));
+
+for(const [type,model,basis,expected] of [
+  ['Terreno','land','land',2000],['Casa','land','land',2000],
+  ['Departamento','built','built',1500],['Oficina','built','built',1500]
+]){
+  api.reset();mountUnit({property_type:type,land:150,built:200},{model,new:{total:300000,area_basis:basis}});
+  assert.equal(el('#cmp-adjusted-unit').textContent,usd(expected));
+  assert.match(html,basis==='land'?/Precio por m² de terreno/:/Precio por m² construido/);
+}
+api.reset();mountUnit({property_type:'Casa',built:200,manual_valuation:550000},{model:'components',new:{total:487038.39}});
+assert.equal(el('#cmp-adjusted-unit').textContent,usd(2750));
+mountUnit({property_type:'Casa',built:100},{model:'components',new:{total:487038.39}});
+assert.equal(el('#cmp-adjusted-unit').textContent,usd(5500),'A changed area must refresh the unit price while preserving the adjusted total.');
+api.reset();mountUnit({property_type:'Casa',built:0},{model:'components',new:{total:487038.39}});
+assert.equal(el('#cmp-adjusted-unit').textContent,'No disponible');
+api.reset();mountUnit({property_type:'Oficina',built:100},{model:'built',reference_mode:true,new:null});
+assert.equal(el('#cmp-adjusted-unit').textContent,'No disponible');
+el('#cmp-valuation-amount').value='200000';el('#cmp-valuation-amount').events.input();
+assert.equal(el('#cmp-adjusted-unit').textContent,usd(2000));
+sandbox.window.ACMPermissions.adjust_valuation=false;api.reset();
+const readOnly=api.markup({property_type:'Departamento',built:200},{model:'built',new:{total:300000,area_basis:'built'}});
+assert.match(readOnly,/Precio por m² construido/);assert.ok(readOnly.includes(usd(1500)));
+assert.ok(readOnly.indexOf('Valorización de la propiedad')<readOnly.indexOf('id="cmp-adjusted-unit"'));
+console.log('Property unit price: initial total, knob, wheel, keyboard, typed amount, rounding, reset, area changes, manual values, land-only homes and read-only roles passed.');

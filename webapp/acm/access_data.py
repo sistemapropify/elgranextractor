@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import re
+import time
 import zlib
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -35,7 +36,17 @@ def unseal(token, ttl=1800):
         if not isinstance(data, dict):
             raise ValueError
         return data
-    except (InvalidToken, ValueError, TypeError, zlib.error) as exc:
+    except InvalidToken as exc:
+        # Fernet reports expiration and tampering through the same exception.
+        # Authenticate the timestamp before identifying an expired analysis.
+        try:
+            timestamp = cipher().extract_timestamp(token.encode())
+        except (InvalidToken, ValueError, TypeError, AttributeError):
+            raise signing.BadSignature('ACM snapshot expired or invalid') from exc
+        if ttl is not None and time.time() - timestamp > ttl:
+            raise signing.SignatureExpired('ACM snapshot expired') from exc
+        raise signing.BadSignature('ACM snapshot expired or invalid') from exc
+    except (ValueError, TypeError, zlib.error) as exc:
         raise signing.BadSignature('ACM snapshot expired or invalid') from exc
 
 
