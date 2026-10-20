@@ -98,6 +98,7 @@ urlpatterns = [
         lead_analytics_api.visit_intent_api,
         name='visit_intent_api',
     ),
+    path('api/qualified/', lead_analytics_api.qualified_api, name='qualified_api'),
     path('leads/', views.lead_list, name='lead_list'),
     path('leads/<int:pk>/', views.lead_detail, name='lead_detail'),
     path('analytics/', views.analytics, name='analytics'),

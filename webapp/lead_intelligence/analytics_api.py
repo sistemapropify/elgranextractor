@@ -320,3 +320,139 @@ def visit_intent_api(request):
             "items": items,
         }
     )
+
+
+def get_qualified_leads(date_from, date_to, status="confirmed", agent_id=None, limit=100):
+    """Leads calificados por la IA, enriquecidos con el CRM.
+
+    Gemela de ``get_visit_intent_leads`` sobre ``qualified_status`` (en lugar de
+    ``visit_intent_status``); se mantiene separada para no alterar ese endpoint.
+    """
+    start = datetime.combine(date_from, dt_time.min)
+    end = datetime.combine(date_to, dt_time.max)
+    qs = (
+        LeadConversationAssessment.objects.using("default")
+        .filter(
+            qualified_status=status,
+            analyzed_at__gte=start,
+            analyzed_at__lte=end,
+        )
+        .order_by("-analyzed_at")
+    )
+    # Último assessment por lead (misma versión del motor).
+    by_lead = {}
+    for assessment in qs:
+        by_lead.setdefault(assessment.source_lead_id, assessment)
+    lead_ids = list(by_lead.keys())
+    if not lead_ids:
+        return []
+
+    placeholders = ", ".join(["%s"] * len(lead_ids))
+    with connections["propifai"].cursor() as cursor:
+        cursor.execute(
+            f"""
+            SELECT
+                l.id,
+                COALESCE(l.date_entry, l.created_at) AS entered_at,
+                l.assigned_to_id AS agent_id,
+                c.first_name, c.last_name, c.phone,
+                COALESCE(ls.name, 'Sin estado') AS status_name,
+                COALESCE(
+                    NULLIF(LTRIM(RTRIM(CONCAT(u.first_name, ' ', u.last_name))), ''),
+                    u.username, 'Sin asignar'
+                ) AS agent_name
+            FROM dbo.lead l
+            LEFT JOIN dbo.contact c ON c.id = l.contact_id
+            LEFT JOIN dbo.[user] u ON u.id = l.assigned_to_id
+            LEFT JOIN dbo.lead_status ls ON ls.id = l.lead_status_id
+            WHERE l.id IN ({placeholders})
+            """,
+            lead_ids,
+        )
+        rows = _dict_rows(cursor)
+    row_by_lead = {int(r["id"]): r for r in rows}
+
+    items = []
+    for lead_id in lead_ids:
+        assessment = by_lead[lead_id]
+        row = row_by_lead.get(int(lead_id), {})
+        if (
+            agent_id
+            and row.get("agent_id") is not None
+            and int(row["agent_id"]) != int(agent_id)
+        ):
+            continue
+        evidence = assessment.qualified_evidence or []
+        qualified_at = (
+            evidence[0].get("timestamp")
+            if evidence and evidence[0].get("timestamp")
+            else (
+                assessment.analyzed_at.isoformat()
+                if assessment.analyzed_at
+                else None
+            )
+        )
+        contact = " ".join(
+            part
+            for part in (
+                str(row.get("first_name") or ""),
+                str(row.get("last_name") or ""),
+            )
+            if part.strip()
+        )
+        items.append(
+            {
+                "lead_id": int(lead_id),
+                "contact_name": contact,
+                "phone": str(row.get("phone") or ""),
+                "agent_id": row.get("agent_id"),
+                "agent_name": str(row.get("agent_name") or ""),
+                "status_name": str(row.get("status_name") or ""),
+                "entered_at": row.get("entered_at"),
+                "qualified_status": assessment.qualified_status,
+                "qualified_confidence": float(assessment.qualified_confidence),
+                "qualified_at": qualified_at,
+                "qualified_evidence": evidence,
+                "analyzed_at": (
+                    assessment.analyzed_at.isoformat()
+                    if assessment.analyzed_at
+                    else None
+                ),
+            }
+        )
+    items.sort(key=lambda item: item["qualified_at"] or "", reverse=True)
+    return items[:limit]
+
+
+@analytics_access_required
+@require_GET
+def qualified_api(request):
+    """Leads calificados por la IA (consumo del CRM).
+
+    Params: ``from``/``to`` (periodo, filtra por ``analyzed_at``), ``agent``
+    (id de agente asignado), ``status`` (default ``confirmed``), ``limit``.
+    Auth: header ``X-Analytics-API-Key`` o sesión de gerencia.
+    """
+    date_from, date_to, _ = _parameters(request)
+    status = request.GET.get("status", "confirmed")
+    if status not in {"confirmed", "ambiguous", "not_confirmed"}:
+        status = "confirmed"
+    agent_id = request.GET.get("agent") or None
+    try:
+        limit = int(request.GET.get("limit") or 100)
+    except (TypeError, ValueError):
+        limit = 100
+    limit = max(1, min(limit, 500))
+    items = get_qualified_leads(
+        date_from, date_to, status=status, agent_id=agent_id, limit=limit
+    )
+    return JsonResponse(
+        {
+            "generated_at": timezone.now().isoformat(),
+            "date_from": str(date_from),
+            "date_to": str(date_to),
+            "status": status,
+            "count": len(items),
+            "items": items,
+        }
+    )
