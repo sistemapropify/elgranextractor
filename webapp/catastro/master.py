@@ -25,14 +25,19 @@ def validate_lot(lot_id):
 
 
 def configuration():
-    return {'revision': 3, 'scope': 'radius', 'batch_size': 500,
+    from .master_layers import catalogue
+    references = [{**source, 'geometry_url': '/acm/catastro/fuentes/' + source['id'] + '/radio/'}
+                  for source in catalogue()['sources'] if source.get('transport') == 'master' and source['active']]
+    for source in references:
+        source['placement'] = {k: v for k, v in source['placement'].items() if k != 'blocks'}
+    return {'revision': 5, 'scope': 'radius', 'batch_size': 500,
             'providers': [{'id': 'geollaqta', 'active': True, 'service_base': geo.SERVICE_BASE,
                            'districts': [{'ubigeo': d['ubigeo'], 'name': d['name']}
                                          for d in geo.DISTRICTS.values()],
                            # Retain source metadata for already-open map clients.
                            'boundaries': {'service_base': geo.CATALOG['district_source'].rsplit('/', 1)[0],
                                           'layer': 0, 'code_field': 'ID_DIST'},
-                           'province_ubigeo': geo.CATALOG['province_ubigeo'], 'sector_layer': 13, 'lot_layer': 10}]}
+                           'province_ubigeo': geo.CATALOG['province_ubigeo'], 'sector_layer': 13, 'lot_layer': 10}] + references}
 
 
 def manifest(lot_id):

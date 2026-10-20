@@ -1,0 +1,32 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+{% block title %}Catastro maestro · Prometeo{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-maestro.css' %}?v=1">{% endblock %}
+{% block content %}
+<main class="master-workspace" id="master-workspace">
+  <header class="master-heading">
+    <div><span class="master-eyebrow">CATASTRO</span><h1>Catastro maestro</h1><p>Manzanas y lotes, organizados por distrito y fuente.</p></div>
+    <div class="master-actions"><button id="master-fit" type="button">Centrar distrito</button><button id="master-satellite" type="button" aria-pressed="false">Satélite</button><a href="/catastro/visor-planos/">Visor de planos</a></div>
+  </header>
+  <div class="master-body">
+    <aside class="master-panel" aria-label="Capas y fuentes del catastro maestro">
+      <label class="master-label" for="master-district">Distrito<select id="master-district" disabled><option>Cargando distritos…</option></select></label>
+      <section><h2>Capas</h2>
+        <label class="master-check"><input id="master-manzanas" type="checkbox" checked><span class="master-swatch blocks"></span>Manzanas <strong id="master-count-manzanas">—</strong></label>
+        <label class="master-check"><input id="master-lotes" type="checkbox" checked><span class="master-swatch lots"></span>Lotes <strong id="master-count-lotes">—</strong></label>
+      </section>
+      <section><h2>Fuentes del distrito</h2><div id="master-sources"><p class="master-help">Consultando fuentes…</p></div></section>
+      <section id="master-detail"><h2>Elemento seleccionado</h2><p class="master-help">Selecciona un contorno para ver su fuente y los datos disponibles.</p></section>
+      <p class="master-help master-standard">Formato común: GeoJSON · WGS84. Cada fuente conserva su procedencia y sus datos originales.</p>
+    </aside>
+    <section class="master-map-wrap" aria-label="Mapa catastral"><div id="master-map"></div><div class="master-map-note" id="master-map-note">Cargando el catastro maestro…</div></section>
+  </div>
+  <footer class="master-status" id="master-status" role="status" aria-live="polite">Preparando el mapa…</footer>
+</main>
+{% endblock %}
+{% block extra_js %}
+<script src="{% static 'js/geollaqta-data.js' %}?v=1"></script>
+<script src="{% static 'js/geollaqta-district.js' %}?v=1"></script>
+<script src="{% static 'js/catastro-maestro.js' %}?v=1"></script>
+{% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initCatastroMaster" async defer></script>{% else %}<script>document.getElementById('master-status').textContent='No se ha configurado la clave del mapa.';</script>{% endif %}
+{% endblock %}

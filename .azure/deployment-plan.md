@@ -1,3 +1,47 @@
+# Cayma: shared corrections consumed by production ACM — 2026-10-20
+
+Status: Validated.
+User authorization: asked for every saved plan/block correction to appear in production ACM, then said "hazlo".
+Mode: MODIFY existing Django application. Recipe: existing GitHub Actions App Service pipeline.
+Target: granextractorservice / rg-elgranextractor, Brazil South, subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Public: https://acm.propifai.com/acm/analisis/
+
+## 1. Scope and execution
+Preserve and migrate the latest local Cayma placement (920 adjusted blocks at revision 87 at intake).
+Store each canonical correction revision in existing private R2 with conditional writes and conflict checks.
+Editor and master/ACM read the same authoritative correction. Retain source geometry, null official codes, ACL and CSRF.
+Refresh open ACM geometry on revision change and window focus; never reuse stale corrected footprints.
+Publish the approved Cayma source/editor/ACM integration with the current production baseline, preserving other work.
+No new infrastructure, no database migration, no collector restart/configuration changes.
+
+## 2. Resources and security
+Reuse existing App Service and R2 credentials; no new RBAC, secrets or public bucket access.
+Keep credentials server-side; no local cadastral downloads or caches. Source layers remain application source.
+Shared D:/PROMETEO local preview must run and serve the tested files before deployment.
+
+## 3. Validation plan
+- Cross-instance shared placement read/write, CAS conflicts, failed writes and preserved imported revisions.
+- Same transformed block and lot geometry reaches both master and ACM; original source bytes preserved.
+- Open ACM refreshes only on actual revision changes; request/access failures keep ACL restrictions.
+- Existing cadastral, radius and source-edit test suites; deployment build and template/static checks.
+- Verify exact public revision/static bytes and authenticated geometry/configuration where available.
+- Confirm collector advances after publication; no change to its queue.
+
+## 7. Validation Proof
+Validated by azure-validate on 2026-10-20, America/Lima:
+- 60 isolated cadastral tests passed, including shared CAS, migration, cross-instance reads, preservation, conflicts, failures, lost acknowledgements, existing collector and parallel-worker regressions.
+- 31 ACM tests passed (30 combined before the extra revision-permission case, followed by all four Cayma cases passing).
+- Four Node suites passed: actual edit controls, master geometry, ACM radius regression and actual ACM auto-refresh on changed/shared revision, focus and visibility.
+- Production WSGI import, five affected templates, collectstatic and final workflow YAML passed. External skill-version database bookkeeping disabled only for offline local build validation; no application behavior changed.
+- Real authenticated local ACM HTML, configuration, revision and radius endpoints returned HTTP 200; both changed JS assets matched shared source bytes. Config/radius agreed on revision 97.
+- Real migration imported revision 96 with 967 edited blocks into private R2 and verified exact readback, preserving the local original and complete prior history. Subsequent real editor save produced revision 97 / 972 edited blocks, read successfully by ACM.
+- Azure read confirmed existing Running App Service in Brazil South, expected subscription. No new resources, infrastructure/RBAC or credentials were introduced.
+- Canonical private runtime placement/history excluded from Git/artifacts. CI/CD will validate and compare public exact release assets. Public geometry and ongoing collector state remain mandatory post-deployment checks.
+
+
+
+---
+
 # Properati human response timing - 2026-10-19
 
 Status: Validated. Existing production scraper correction authorized by user.

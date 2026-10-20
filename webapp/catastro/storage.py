@@ -11,6 +11,12 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 class StorageError(RuntimeError):
+    def __init__(self, message, http_status=None):
+        super().__init__(message)
+        self.http_status = http_status
+
+
+class PreconditionFailed(StorageError):
     pass
 
 
@@ -48,7 +54,7 @@ class R2:
         self.host = self.values['R2_ACCOUNT_ID'] + '.r2.cloudflarestorage.com'
         self.opener = build_opener(NoRedirect())
 
-    def request(self, method, key, data=b'', content_type=None):
+    def request(self, method, key, data=b'', content_type=None, *, condition=None):
         if not key.startswith('geollaqta/') or '..' in key.split('/'):
             raise StorageError('Ruta catastral no válida.')
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -60,6 +66,11 @@ class R2:
             headers['content-type'] = content_type
         if method == 'PUT':
             headers['x-amz-meta-sha256'] = digest
+        if condition:
+            name, value = condition
+            if name not in ('if-match', 'if-none-match') or not isinstance(value, str) or '\n' in value or '\r' in value:
+                raise StorageError('Condición de guardado no válida.')
+            headers[name] = value
         signed = ';'.join(sorted(headers))
         canonical_headers = ''.join(k + ':' + headers[k] + '\n' for k in sorted(headers))
         canonical = '\n'.join([method, uri, '', canonical_headers, signed, digest])
@@ -77,7 +88,8 @@ class R2:
             with self.opener.open(req, timeout=self.timeout) as response:
                 return response.read(20_000_001), dict(response.headers)
         except HTTPError as exc:
-            raise StorageError('R2 respondió HTTP ' + str(exc.code) + '.') from None
+            error = PreconditionFailed if exc.code == 412 else StorageError
+            raise error('R2 respondió HTTP ' + str(exc.code) + '.', exc.code) from None
         except (URLError, TimeoutError, OSError):
             raise StorageError('No se pudo conectar con R2; la carga queda pendiente.') from None
 
@@ -105,3 +117,8 @@ class R2:
         if len(data) > 20_000_000:
             raise StorageError('El archivo supera el límite de lectura.')
         return data, headers
+
+    def put_conditional(self, key, data, etag=None):
+        """Atomic replacement shared by all application instances."""
+        return self.request('PUT', key, data, 'application/json',
+                            condition=('if-match', etag) if etag else ('if-none-match', '*'))

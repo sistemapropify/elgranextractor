@@ -4,12 +4,46 @@ from django.http import JsonResponse, HttpResponse, Http404
 from django.views.decorators.http import require_GET
 from .access import required
 from catastro import master
+from catastro.storage import StorageError
 
 
 @require_GET
 @required('cadastral_info')
 def configuration(request):
-    return JsonResponse(master.configuration())
+    try:
+        response = JsonResponse(master.configuration())
+        response['Cache-Control'] = 'private, no-store'
+        return response
+    except StorageError:
+        return JsonResponse({'error': 'No se pudo consultar la versión compartida del plano. Vuelve a consultar.'}, status=503)
+
+
+@require_GET
+@required('cadastral_info')
+def revisions(request):
+    from catastro import master_layers
+    try:
+        response = JsonResponse({'sources': master_layers.revisions()})
+        response['Cache-Control'] = 'private, no-store'
+        return response
+    except StorageError:
+        return JsonResponse({'error': 'No se pudo consultar la versión compartida del plano.'}, status=503)
+
+
+@require_GET
+@required('cadastral_info')
+def reference_geometry(request, source_id):
+    from catastro import master_layers
+    try:
+        response = JsonResponse(master_layers.radius(source_id, request.GET.get('lat', ''),
+            request.GET.get('lng', ''), request.GET.get('radius', '')),
+            json_dumps_params={'separators': (',', ':')})
+        response['Cache-Control'] = 'no-store'
+        return response
+    except StorageError:
+        return JsonResponse({'error': 'No se pudo leer el ajuste compartido. Vuelve a consultar.'}, status=503)
+    except (ValueError, TypeError, OSError):
+        return JsonResponse({'error': 'Fuente, ubicación o radio no válido.'}, status=400)
 
 
 @require_GET

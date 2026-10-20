@@ -133,6 +133,16 @@ jobs:
           source antenv/bin/activate
           python webapp/manage.py test ingestas.tests.test_acm_catalog ingestas.tests.test_property_quality ingestas.tests.test_property_editor_fields acm.test_comparable_features acm.test_reference_fallback --settings=acm.history_test_settings --noinput --verbosity=0
 
+      - name: Validate shared Cayma corrections and ACM refresh
+        run: |
+          source antenv/bin/activate
+          python webapp/manage.py test catastro.test_source_placement catastro.test_block_placement catastro.test_shared_placement catastro.test_master_layers --settings=catastro.test_settings --noinput
+          python webapp/manage.py test acm.test_cayma_geometry --settings=acm.access_test_settings --noinput
+          node webapp/catastro/test_cayma_registration.cjs
+          node webapp/catastro/test_master_geometry.cjs
+          node webapp/acm/test_cayma_master.cjs
+          python -c 'import json,os; from pathlib import Path; Path("webapp/static/js/cayma-master-release.json").write_text(json.dumps({"revision":os.environ["GITHUB_SHA"]}))'
+
       - name: Collect Django static files
         env:
           # Valores dummy para que Django cargue settings sin conexión a BD.
@@ -360,6 +370,11 @@ jobs:
           acm/js/comparison-valuation.js|webapp/acm/static/acm/js/comparison-valuation.js
           acm/js/cadastral-info.js|webapp/acm/static/acm/js/cadastral-info.js
           acm/css/cadastral-info.css|webapp/acm/static/acm/css/cadastral-info.css
+          js/cayma-master-release.json|webapp/static/js/cayma-master-release.json
+          js/cayma-reference.js|webapp/static/js/cayma-reference.js
+          css/cayma-reference.css|webapp/static/css/cayma-reference.css
+          js/catastro-maestro.js|webapp/static/js/catastro-maestro.js
+          css/catastro-maestro.css|webapp/static/css/catastro-maestro.css
           js/catastro-master-data.js|webapp/static/js/catastro-master-data.js
           js/geollaqta-data.js|webapp/static/js/geollaqta-data.js
           js/geollaqta-district.js|webapp/static/js/geollaqta-district.js

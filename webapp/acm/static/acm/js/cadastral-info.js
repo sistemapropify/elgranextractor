@@ -6,18 +6,46 @@
         map.__acmCadastral=true;
         const streetFacade=window.ACMStreetFacade?.create(map);
         const spatial=window.CatastroMasterData,cache=new Map(),layer=new google.maps.Data(),labels=window.GeollaqtaLabels?.create(map,{minZoom:0,lotMinZoom:0});
-        let provider=null,providerPromise=null,result=null,lot=null,target=null,serial=0,controller=null,areaController=null,timer=null,drawnKey=null,drawnCount=0,highlighted=null,detailsId=null,allowed=true,areaLoading=false,areaEpoch=0,detailLoading=false,photoLookup=null;
-        layer.setStyle({clickable:false,fillColor:"#19b9b0",fillOpacity:.06,strokeColor:"#0caaa2",strokeOpacity:.95,strokeWeight:1.6,zIndex:110000});
+        let provider=null,providerPromise=null,result=null,lot=null,target=null,serial=0,controller=null,areaController=null,timer=null,drawnKey=null,drawnCount=0,drawnBlockCount=0,highlighted=null,detailsId=null,allowed=true,areaLoading=false,areaEpoch=0,detailLoading=false,photoLookup=null;
+        let sourceVersions=null,revisionTimer=null,checkingRevision=false;
+        const versions=value=>JSON.stringify(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)));
+        function scheduleRevisionCheck(){
+            if(!revisionTimer&&allowed&&target&&!document.hidden)revisionTimer=setTimeout(checkRevision,5000);
+        }
+        function reloadGeometry(){
+            const closed=card.hidden;
+            ++areaEpoch;areaController?.abort();provider=null;providerPromise=null;result=null;clearMap();cache.clear();
+            if(target)queue(target,true);
+            if(closed)card.hidden=true;
+        }
+        async function checkRevision(){
+            clearTimeout(revisionTimer);revisionTimer=null;
+            if(checkingRevision||!allowed||!target||document.hidden)return;
+            if(sourceVersions===null){scheduleRevisionCheck();return;}
+            checkingRevision=true;
+            try{
+                const value=await api('revisiones/');
+                if(!value.sources||typeof value.sources!=='object')return;
+                const next=versions(value.sources);
+                if(next!==sourceVersions){sourceVersions=next;reloadGeometry();}
+            }catch(_){/* Keep the current view and retry; api still enforces revoked access. */}
+            finally{checkingRevision=false;scheduleRevisionCheck();}
+        }
+        layer.setStyle(feature=>({clickable:false,fillColor:'#19b9b0',fillOpacity:feature.getProperty('MASTER_LAYER')==='manzanas'?0:.06,
+            strokeColor:feature.getProperty('MASTER_LAYER')==='manzanas'?'#008f6c':feature.getProperty('REFERENCE_ONLY')?'#d69822':'#0caaa2',
+            strokeOpacity:.95,strokeWeight:feature.getProperty('MASTER_LAYER')==='manzanas'?2:1.6,zIndex:feature.getProperty('MASTER_LAYER')==='manzanas'?110001:110000}));
         const sides=['frente','derecha','izquierda','fondo'];
         function status(text,error=false){$('status').textContent=text;$('status').hidden=!text;$('status').dataset.error=String(error);}
         function clearFields(){
             if(photoLookup)clearTimeout(photoLookup.timer);photoLookup=null;
             ['code','address','year','floors','units'].forEach(k=>$(k).textContent=k==='code'?'Sin lote seleccionado':'Sin dato');
+            if($('source'))$('source').textContent='Sin dato';
+            if($('adjust'))$('adjust').hidden=true;
             ['land','built',...sides].forEach(k=>$(k).textContent='Sin dato');
             $('photo').hidden=true;$('photo').removeAttribute('src');$('photo-status').hidden=false;$('photo-status').textContent='Sin fachada disponible';
             $('report-label').hidden=true;$('report').replaceChildren();
         }
-        function clearMap(){layer.forEach(f=>layer.remove(f));layer.setMap(null);labels?.setData([],[]);drawnKey=null;drawnCount=0;highlighted=null;}
+        function clearMap(){layer.forEach(f=>layer.remove(f));layer.setMap(null);labels?.setData([],[]);drawnKey=null;drawnCount=0;drawnBlockCount=0;highlighted=null;}
         async function api(path,signal){
             const stop=new AbortController(),abort=()=>stop.abort(),deadline=setTimeout(abort,path.startsWith('lotes/')?30000:25000);
             signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
@@ -37,12 +65,25 @@
             if(!result.complete&&!result.lots.features.length)return;
             if(drawnKey!==result.key){clearMap();drawnKey=result.key;}
             if(drawnCount<result.lots.features.length){layer.addGeoJson({type:'FeatureCollection',features:result.lots.features.slice(drawnCount)});drawnCount=result.lots.features.length;labels?.setData(result.lots.features,[]);}
+            const blocks=result.blocks?.features||[];
+            if(drawnBlockCount<blocks.length){layer.addGeoJson({type:'FeatureCollection',features:blocks.slice(drawnBlockCount)});drawnBlockCount=blocks.length;}
             layer.setMap(map);highlight();
         }
         function select(){
             const selected=result&&target?spatial.selectedLot(result,target):null;
             lot=selected;highlight();if(!lot){if(detailsId){detailsId=null;clearFields();}return;}
-            const p=lot.properties;$('code').textContent=p.ID_LOTE;$('address').textContent=p.COD_SECT+' / '+p.COD_MZNA+' / '+String(p.COD_LOTE??'').padStart(3,'0');
+            const p=lot.properties;
+            if(p.REFERENCE_ONLY){
+                const id=spatial.featureIdentity(lot);
+                if(detailsId!==id){controller?.abort();controller=new AbortController();clearFields();detailsId=id;detailLoading=false;}
+                $('code').textContent='Sin código catastral en la fuente';$('address').textContent='Sin numeración de manzana / lote';
+                if($('source'))$('source').textContent=p.SOURCE_NAME||'Plano municipal de Cayma · 2006';
+                if($('adjust'))$('adjust').hidden=false;
+                $('hint').textContent='Cayma · contorno recuperado del plano de 2006';
+                status('Geometría de referencia; ubicación provisional y numeración pendiente.');$('retry').hidden=true;return;
+            }
+            if($('source'))$('source').textContent='GeoLlaqta · COFOPRI';
+            $('code').textContent=p.ID_LOTE;$('address').textContent=p.COD_SECT+' / '+p.COD_MZNA+' / '+String(p.COD_LOTE??'').padStart(3,'0');
             const year=Number(p.ANIO_CAT);$('year').textContent=Number.isInteger(year)&&year>=1900&&year<=2100?String(year):'Sin dato';
             $('hint').textContent=(p.DISTRICT_NAME||result.district)+' · lote '+p.COD_LOTE;
             if(detailsId!==p.ID_LOTE){detailsId=p.ID_LOTE;['land','built','floors','units',...sides].forEach(k=>$(k).textContent='Cargando…');photo(null,serial);details(serial);}
@@ -90,7 +131,7 @@
             }else status('');
         }
         async function details(stamp,record=''){
-            if(!lot)return;
+            if(!lot||lot.properties.REFERENCE_ONLY)return;
             detailLoading=true;
             const id=lot.properties.ID_LOTE,key=id+':'+record;
             try {
@@ -104,13 +145,18 @@
         }
         function finish(){
             if(!result.total)status('No hay lotes publicados dentro de este radio.');
+            else if(lot?.properties.REFERENCE_ONLY)status('Cayma · plano de 2006 · ajuste guardado '+(lot.properties.PLACEMENT_REVISION??0)+'. Geometría de referencia; numeración pendiente de contraste.');
             else if(!lot)status('El pin no está dentro de un lote.');
             else if($('retry').hidden)status('');
             card.setAttribute('aria-busy',String(detailLoading));
         }
         async function update(center,radius,epoch,signal){
             try{
-                if(!provider){if(!providerPromise)providerPromise=api('configuracion/').then(data=>{provider=spatial.create(data);}).finally(()=>{providerPromise=null;});await providerPromise;}
+                if(!provider){if(!providerPromise)providerPromise=api('configuracion/').then(data=>{
+                    if(epoch!==areaEpoch)return;
+                    sourceVersions=versions(Object.fromEntries(data.providers.filter(p=>p.active&&p.transport==='master').map(p=>[p.id,p.placement?.revision??0])));
+                    provider=spatial.create(data);
+                }).finally(()=>{providerPromise=null;});await providerPromise;}
                 if(epoch!==areaEpoch||!allowed)return;
                 const loaded=await provider.loadRadius(center,radius,{signal,onBatch:(_,data)=>{if(allowed&&epoch===areaEpoch)progress(data);}});
                 if(epoch!==areaEpoch)return;result=loaded;draw();select();finish();
@@ -123,10 +169,10 @@
             if(!allowed)return;
             const location=spatial.point(value);if(!location)return;
             const form=document.getElementById('cmp-form'),radius=Number(form.elements.radius.value),reuse=spatial.covers(result,location,radius);
-            target=location;card.hidden=false;streetFacade?.queue(location);
+            target=location;scheduleRevisionCheck();card.hidden=false;streetFacade?.queue(location);
             if(reuse&&result.complete&&areaLoading){areaController?.abort();clearTimeout(timer);++areaEpoch;areaLoading=false;}
             const selected=reuse?spatial.selectedLot(result,location):null;
-            if(reuse&&!force&&selected&&selected.properties.ID_LOTE===detailsId){lot=selected;highlight();return;}
+            if(reuse&&!force&&selected&&spatial.featureIdentity(selected)===detailsId){lot=selected;highlight();return;}
             ++serial;controller?.abort();controller=new AbortController();detailLoading=false;lot=null;detailsId=null;clearFields();highlight();
             if(reuse&&!force){if(result.complete||areaLoading)$('retry').hidden=true;select();if(result.complete)finish();return;}
             $('retry').hidden=true;
@@ -150,6 +196,12 @@
         $('report').addEventListener('change',()=>{if(!lot)return;const stamp=++serial;controller?.abort();controller=new AbortController();card.setAttribute('aria-busy','true');details(stamp,$('report').value);});
         document.addEventListener('acm:target-location',e=>queue(e.detail));
         document.addEventListener('acm:search-completed',e=>queue(e.detail));
+        window.addEventListener?.('storage',event=>{
+            if(event.key!=='catastro-source-placement'||!target)return;
+            reloadGeometry();
+        });
+        window.addEventListener?.('focus',()=>checkRevision());
+        document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(revisionTimer);revisionTimer=null;}else checkRevision();});
         const form=document.getElementById('cmp-form');
         ['lat','lng','radius'].forEach(k=>form.elements[k].addEventListener('change',()=>queue({lat:form.elements.lat.value,lng:form.elements.lng.value})));
         if(document.getElementById('cmp-role-analysis-data')||document.getElementById('cmp-replication-data'))queue({lat:form.elements.lat.value,lng:form.elements.lng.value});

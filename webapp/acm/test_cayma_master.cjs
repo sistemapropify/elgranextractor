@@ -1,0 +1,50 @@
+const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
+const nodes=new Map(),events={},windowEvents={},requests=[],timers=new Map();let serial=0,remoteRevision=87;
+class Element{constructor(){this.events={};this.hidden=false;this.dataset={};this.attributes={};this.value='';this.textContent='';}addEventListener(k,v){this.events[k]=v;}setAttribute(k,v){this.attributes[k]=v;}removeAttribute(k){delete this.attributes[k];}replaceChildren(){}append(){}}
+const get=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
+get('cmp-form').elements={lat:new Element(),lng:new Element(),radius:new Element()};get('cmp-form').elements.radius.value='500';
+const center={lat:-16.36,lng:-71.545},source='cayma-pud-2006-eu03';
+const geometry={type:'Polygon',coordinates:[[[center.lng-.0001,center.lat-.0001],[center.lng+.0001,center.lat-.0001],[center.lng+.0001,center.lat+.0001],[center.lng-.0001,center.lat+.0001],[center.lng-.0001,center.lat-.0001]]]};
+const make=kind=>({type:'Feature',id:source+':'+kind+':abc',geometry,properties:{ELEMENT_ID:source+':'+kind+':abc',SOURCE_ID:source,ID_DIST:'040103',ID_LOTE:null,COD_LOTE:null,COD_MZNA:null,REFERENCE_ONLY:true,PLACEMENT_REVISION:remoteRevision}});
+const config={providers:[{id:'geollaqta',active:true,service_base:'https://geo.example/service',lot_layer:10,districts:[{ubigeo:'040103',name:'Cayma'}]},
+ {id:source,active:true,transport:'master',bbox:[-71.56,-16.4,-71.52,-16.3],name:'Plano municipal de Cayma · 2006',geometry_url:'/acm/catastro/fuentes/'+source+'/radio/'}]};
+const response=value=>({ok:true,headers:{get:()=> 'application/json'},json:async()=>value});
+const fetcher=async(url,options={})=>{
+ requests.push({url,options});
+ if(url.includes('/configuracion/'))return response({...config,providers:config.providers.map(p=>({...p,placement:{revision:remoteRevision}}))});
+ if(url.includes('/revisiones/'))return response({sources:{[source]:remoteRevision}});
+ if(url.includes('/fuentes/'))return response({source_id:source,complete:true,lots:{features:[make('lote')]},blocks:{features:[make('manzana')]}});
+ if(url.startsWith('https://'))return response({objectIds:[]});
+ throw Error('Reference geometry must never request a COFOPRI document or facade: '+url);
+};
+class Data{constructor(){this.features=[];Data.all.push(this);}setStyle(value){this.style=value;}setMap(map){this.map=map;}forEach(fn){[...this.features].forEach(fn);}remove(f){this.features=this.features.filter(v=>v!==f);}revertStyle(){}overrideStyle(){}getFeatureById(id){return this.features.find(f=>f.getId()===id);}addGeoJson(collection){const fs=collection.features.map(raw=>({raw,getId:()=>raw.id,getProperty:name=>raw.properties[name]}));this.features.push(...fs);return fs;}}Data.all=[];
+const context={window:{addEventListener:(name,fn)=>windowEvents[name]=fn,ACMPermissions:{cadastral_info:true},GeollaqtaLabels:{create:()=>({setData(){}})}},document:{getElementById:id=>id.endsWith('-data')?null:get(id),createElement:()=>new Element(),addEventListener:(name,fn)=>events[name]=fn},google:{maps:{Data}},fetch:fetcher,AbortController,URLSearchParams,setTimeout(fn,ms){const id=++serial;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);}};
+for(const name of ['static/js/geollaqta-data.js','static/js/catastro-master-data.js','acm/static/acm/js/cadastral-info.js'])vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..',name),'utf8'),context);
+const flush=async()=>{for(let i=0;i<100;i++)await Promise.resolve();};
+(async()=>{
+ context.window.ACMCadastral.init({});events['acm:target-location']({detail:center});
+ const [id,timer]=[...timers].find(([,v])=>v.ms===450);timers.delete(id);await timer.fn();await flush();
+ assert.equal(Data.all[0].features.length,2,'Both recovered parcels and block outlines reach the actual ACM layer.');
+ assert.match(get('cmp-cadastral-source').textContent,/Cayma/);
+ assert.match(get('cmp-cadastral-code').textContent,/Sin código/);
+ assert.match(get('cmp-cadastral-address').textContent,/Sin numeración/);
+ assert.match(get('cmp-cadastral-status').textContent,/referencia/);
+ assert.equal(get('cmp-cadastral-land').textContent,'Sin dato');
+ assert.ok(requests.every(r=>!r.url.includes('/catastro/lotes/')));
+ const before=requests.length;events['acm:target-location']({detail:{...center,lat:center.lat+.00001}});await flush();
+ assert.equal(requests.length,before,'Movement inside the loaded footprint reuses reference geometry.');
+ const api=context.window.CatastroMasterData,ambiguous={lots:{features:[make('lote'),{...make('lote'),id:source+':lote:other',properties:{...make('lote').properties,ELEMENT_ID:source+':lote:other'}}]}};
+ assert.equal(api.selectedLot(ambiguous,center),null,'Two missing cadastral codes cannot collapse into one parcel identity.');
+ const published={...make('lote'),id:10,properties:{ID_LOTE:'04012607001001',COD_LOTE:'001'}};
+ assert.equal(api.selectedLot({lots:{features:[make('lote'),published]}},center).properties.ID_LOTE,published.properties.ID_LOTE);
+ const fire=async ms=>{const [id,timer]=[...timers].find(([,v])=>v.ms===ms);timers.delete(id);await timer.fn();await flush();};
+ const geometryRequests=()=>requests.filter(r=>r.url.includes('/fuentes/')).length;
+ const initial=geometryRequests();await fire(5000);assert.equal(geometryRequests(),initial,'Same revision must not reload geometry.');
+ remoteRevision=88;get('cmp-cadastral').hidden=true;await fire(5000);await fire(450);
+ assert.equal(geometryRequests(),initial+1,'A correction on another origin/device invalidates the cached footprint.');
+ assert.equal(Data.all[0].features[0].getProperty('PLACEMENT_REVISION'),88);
+ assert.equal(get('cmp-cadastral').hidden,true,'Automatic refresh must not reopen a closed card.');
+ remoteRevision=89;await windowEvents.focus();await fire(450);assert.equal(Data.all[0].features[0].getProperty('PLACEMENT_REVISION'),89);
+ context.document.hidden=true;events.visibilitychange();assert.equal([...timers.values()].filter(v=>v.ms===5000).length,0);
+ console.log('Cayma ACM: both layers, radius cache, source identity, null numbering and no fabricated COFOPRI document requests verified.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

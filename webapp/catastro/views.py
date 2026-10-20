@@ -27,6 +27,8 @@ def admin_required(view):
             return redirect('/login/?next=/catastro/')
         if not (getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False)):
             return JsonResponse({'error': 'El archivo catastral requiere acceso de administrador.'}, status=403)
+        if os.environ.get('CATASTRO_DISABLE_LOCAL_COLLECTION') == '1' and not request.path.startswith(('/catastro/visor-planos/', '/catastro/api/planos/', '/catastro/maestro/', '/catastro/api/maestro/')):
+            return redirect('https://acm.propifai.com' + request.get_full_path())
         return view(request, *args, **kwargs)
     return wrapped
 

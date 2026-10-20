@@ -24,10 +24,14 @@
         });
     }
     function selectedLot(block, target) {
-        const matches=block.lots.features.filter(f=>contains(f.geometry,target,true));
-        if(!matches.length||new Set(matches.map(f=>f.properties.ID_LOTE)).size!==1)return null;
+        let matches=block.lots.features.filter(f=>contains(f.geometry,target,true));
+        // A published cadastral record takes precedence over reference ink.
+        const published=matches.filter(f=>!f.properties.REFERENCE_ONLY);
+        if(published.length)matches=published;
+        if(!matches.length||new Set(matches.map(featureIdentity)).size!==1)return null;
         return matches.sort((a,b)=>(Number(b.properties.ANIO_CAT)||0)-(Number(a.properties.ANIO_CAT)||0))[0];
     }
+    function featureIdentity(f){return f.properties.ID_LOTE||f.properties.ELEMENT_ID||f.id;}
     const earth=6371008.8,radians=Math.PI/180;
     function distance(a,b){
         const lat=(b.lat-a.lat)*radians,lng=(b.lng-a.lng)*radians;
@@ -63,7 +67,7 @@
         let geometry;try{geometry=window.GeollaqtaData.esriGeometry(raw.geometry,'polygon');}catch(_){return null;}
         return {type:'Feature',id:p.OBJECTID,properties:p,geometry};
     }
-    function create(config,fetcher=fetch){
+    function createGeollaqta(config,fetcher=fetch){
         const provider=config.providers.find(p=>p.id==='geollaqta'&&p.active),cache=new Map(),features=new Map();
         if(!provider)throw Error('No hay una fuente catastral activa y validada.');
         const districts=new Map(provider.districts.map(d=>[code(d.ubigeo,6),d]));
@@ -123,5 +127,68 @@
         }
         return {loadRadius};
     }
-    window.CatastroMasterData={create,point,contains,selectedLot,distance,circle,covers};
+    function create(config,fetcher=fetch){
+        const references=config.providers.filter(p=>p.active&&p.transport==='master');
+        const primary=createGeollaqta(config,fetcher);
+        if(!references.length)return primary;
+        const cache=new Map();
+        function overlaps(source,center,radius){
+            const b=source.bbox;if(!b)return true;
+            const dy=radius/111195,dx=dy/Math.cos(center.lat*Math.PI/180);
+            return center.lng+dx>=b[0]&&center.lng-dx<=b[2]&&center.lat+dy>=b[1]&&center.lat-dy<=b[3];
+        }
+        async function loadRadius(value,radius,{signal,onBatch=()=>{}}={}){
+            const center=point(value);radius=Number(radius);
+            if(!center||!Number.isFinite(radius)||radius<100||radius>2000)throw Error('Selecciona un radio entre 100 y 2000 metros.');
+            if(signal?.aborted){const e=Error('Consulta cancelada');e.name='AbortError';throw e;}
+            const previous=[...cache.values()].reverse().find(e=>e.result.complete&&covers(e.result,center,radius));
+            if(previous){onBatch([],previous.result);return previous.result;}
+            const key=['master',center.lat.toFixed(7),center.lng.toFixed(7),radius].join(':');
+            let entry=cache.get(key);
+            if(!entry){entry={seen:new Set(),blockIds:new Set(),refs:new Map(),geo:null,promise:null,
+                result:{key,center,radius,district:'Lotes del radio',lots:{type:'FeatureCollection',features:[]},blocks:{type:'FeatureCollection',features:[]},total:null,processed:0,complete:false,reference_sources:[]}};cache.set(key,entry);}
+            onBatch([],entry.result);
+            if(entry.promise){try{await entry.promise;}catch(_){}if(signal?.aborted)return entry.result;return loadRadius(center,radius,{signal,onBatch});}
+            function progress(features=[],blocks=[]){
+                const added=[];
+                for(const f of features){const id=featureIdentity(f);if(!entry.seen.has(id)){entry.seen.add(id);entry.result.lots.features.push(f);added.push(f);}}
+                for(const f of blocks)if(!entry.blockIds.has(f.id)){entry.blockIds.add(f.id);entry.result.blocks.features.push(f);}
+                const count=[...entry.refs.values()].reduce((sum,v)=>sum+v.lots.features.length,0);
+                entry.result.total=(entry.geo?.total??0)+count;entry.result.processed=(entry.geo?.processed??0)+count;
+                entry.result.reference_sources=[...entry.refs.values()].map(v=>v.source);
+                onBatch(added,entry.result);
+            }
+            const run=async()=>{
+                const tasks=[primary.loadRadius(center,radius,{signal,onBatch:(features,data)=>{
+                    if(signal?.aborted)return;entry.geo=data;progress(data.lots.features);
+                }})];
+                for(const source of references.filter(s=>overlaps(s,center,radius))){
+                    if(entry.refs.has(source.id))continue;
+                    tasks.push((async()=>{
+                        const query=new URLSearchParams({lat:center.lat,lng:center.lng,radius});
+                        const response=await fetcher(source.geometry_url+'?'+query,{credentials:'same-origin',signal,headers:{Accept:'application/json'}});
+                        if(!response.headers.get('content-type')?.includes('application/json'))throw Error('Inicia sesión para consultar las capas de Cayma.');
+                        const data=await response.json();
+                        if(!response.ok||!data.complete||data.source_id!==source.id||!Array.isArray(data.lots?.features)||!Array.isArray(data.blocks?.features))throw Error(data.error||'La fuente de Cayma se recibió incompleta.');
+                        if(signal?.aborted)return;
+                        for(const [name,kind] of [['lots','lotes'],['blocks','manzanas']])for(const f of data[name].features){
+                            if(f.properties?.SOURCE_ID!==source.id||!String(f.id).startsWith(source.id+':')||!['Polygon','MultiPolygon'].includes(f.geometry?.type))throw Error('Identidad de fuente no válida.');
+                            f.properties={...f.properties,SOURCE_NAME:source.name,MASTER_LAYER:kind};
+                        }
+                        entry.refs.set(source.id,{...data,source:{id:source.id,name:source.name,reference_only:true}});
+                        progress(data.lots.features,data.blocks.features);
+                    })());
+                }
+                const results=await Promise.allSettled(tasks),failure=results.find(r=>r.status==='rejected');
+                if(failure)throw failure.reason;
+                if(signal?.aborted){const e=Error('Consulta cancelada');e.name='AbortError';throw e;}
+                entry.result.complete=true;progress();
+                while(cache.size>3){const oldest=[...cache.keys()].find(k=>k!==key&&!cache.get(k).promise);if(!oldest)break;cache.delete(oldest);}
+                return entry.result;
+            };
+            entry.promise=run().finally(()=>{entry.promise=null;});return entry.promise;
+        }
+        return {loadRadius};
+    }
+    window.CatastroMasterData={create,point,contains,selectedLot,featureIdentity,distance,circle,covers};
 })();

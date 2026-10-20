@@ -1,0 +1,33 @@
+<section class="map-panel" id="panel-cayma-reference" aria-labelledby="cayma-reference-title">
+  <div class="map-panel-header" id="cayma-reference-title">Cayma · plano municipal de 2006</div>
+  <div class="map-panel-body cayma-reference-controls">
+    <label><input id="cayma-ref-visible" type="checkbox"> Mostrar manzanas y lotes del plano</label>
+    <div id="cayma-ref-options" hidden>
+      <p class="map-quality-help">Geometría de referencia del PDF. Cada manzana y sus lotes se ajustan juntos. Las posiciones guardadas se comparten con el Catastro maestro y el ACM.</p>
+      <label><input id="cayma-ref-blocks" type="checkbox" checked> Manzanas <span id="cayma-ref-block-count"></span></label>
+      <label><input id="cayma-ref-lots" type="checkbox" checked> Lotes <span id="cayma-ref-lot-count"></span></label>
+      <div class="geollaqta-controls"><button id="cayma-ref-fit" type="button">Centrar Cayma</button><button id="cayma-ref-edit" type="button" disabled>Ajustar posición</button></div>
+      <div id="cayma-ref-editing" hidden>
+        <label>Ajustar <select id="cayma-ref-mode"><option value="block" selected>Una manzana</option><option value="source">Todo el plano</option></select></label>
+        <p class="map-quality-help" id="cayma-ref-source-help" hidden>Arrastra el pin naranja para mover todo el plano. Las flechas permiten un ajuste fino.</p>
+        <div id="cayma-ref-block-tools">
+          <p class="map-quality-help">Haz clic dentro de una manzana y arrástrala. Usa la rueda sobre el mapa para agrandarla o achicarla, incluso mientras la arrastras. Sus lotes la acompañan. Cambia a «Todo el plano» o cancela para volver a navegar el mapa.</p>
+          <p id="cayma-ref-selection" role="status">Haz clic dentro de una manzana para seleccionarla.</p>
+          <div class="cayma-ref-size">Tamaño: <strong id="cayma-ref-scale">100 %</strong> <button id="cayma-ref-reset-block" type="button" disabled>Restablecer manzana</button></div>
+        </div>
+        <label>Paso de las flechas <select id="cayma-ref-step"><option value="1">1 m</option><option value="5" selected>5 m</option><option value="10">10 m</option><option value="50">50 m</option></select></label>
+        <div class="cayma-ref-arrows" role="group" aria-label="Desplazar la selección">
+          <button type="button" data-cayma-move="0,1" aria-label="Mover al norte">↑</button>
+          <button type="button" data-cayma-move="-1,0" aria-label="Mover al oeste">←</button>
+          <button type="button" data-cayma-move="1,0" aria-label="Mover al este">→</button>
+          <button type="button" data-cayma-move="0,-1" aria-label="Mover al sur">↓</button>
+        </div>
+        <p class="map-quality-help" id="cayma-ref-offset"></p>
+        <div class="geollaqta-controls"><button id="cayma-ref-lock" type="button">Inmovilizar y guardar</button><button id="cayma-ref-cancel" type="button">Cancelar ajuste</button></div>
+        <form id="cayma-ref-csrf">{% csrf_token %}</form>
+      </div>
+      <p id="cayma-ref-position" class="map-quality-help">Posición inmovilizada.</p>
+    </div>
+    <p id="cayma-ref-status" role="status" aria-live="polite">Activa la fuente para verla o ajustar su posición.</p>
+  </div>
+</section>

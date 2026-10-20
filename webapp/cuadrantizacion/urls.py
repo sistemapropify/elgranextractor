@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from . import views
 from .map_layers import map_layers_api
 from . import geollaqta
+from . import reference_views
 
 router = DefaultRouter()
 router.register(r'zonas', views.ZonaValorViewSet, basename='zona')
@@ -11,6 +12,7 @@ router.register(r'estadisticas', views.EstadisticaZonaViewSet, basename='estadis
 router.register(r'historial-precios', views.HistorialPrecioZonaViewSet, basename='historial-precio')
 
 urlpatterns = [
+    path('referencias/<slug:source_id>/<slug:layer_key>/', reference_views.layer, name='master_reference'),
     path('', include(router.urls)),
     
     # Endpoints adicionales

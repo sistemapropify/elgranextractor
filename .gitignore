@@ -140,3 +140,7 @@ webapp/camoufox_session*
 "~$*.xlsx"  
 "outputs/event_export/*.xlsx"  
 "*.ndjson"  
+
+# Private runtime placement lives in R2, outside deployment artifacts.
+webapp/catastro/data/*/placement*.json
+webapp/catastro/data/*/placement*.lock

@@ -1,0 +1,89 @@
+{
+  "id": "cayma-pud-2006-eu03",
+  "name": "Cayma · Plano municipal EU-03 (agosto de 2006)",
+  "district": "Cayma",
+  "ubigeo": "040103",
+  "source_date": "2006-08",
+  "author": "Municipalidad Distrital de Cayma · Equipo PUD/Cayma",
+  "title": "Plan Urbano Distrital de Cayma 2006–2015 · Plano de compatibilidades EU-03",
+  "original_filename": "723398697-cayma-plano-de-zonificacion-y-compatibilidad-vigente-compressed-1.pdf",
+  "sha256": "ac9d3979a7489ef478ab27114ca5dfea4c6f360f213177f07b9e7e7ccb23b135",
+  "source_url": "https://www.scribd.com/document/723398697/cayma-plano-de-zonificacion-y-compatibilidad-vigente-compressed-1",
+  "revision": 1,
+  "status": "reference",
+  "active": true,
+  "reference_only": true,
+  "crs": "EPSG:4326",
+  "source_crs": "EPSG:24879",
+  "georeferencing": {
+    "status": "inferred_reference",
+    "datum_documented": false,
+    "method": "Printed kilometre grid; PSAD56 / UTM 19S inferred by landmark comparison.",
+    "grid": {
+      "pdf_origin": [
+        569.16,
+        328.55
+      ],
+      "utm_origin": [
+        227000,
+        8197000
+      ],
+      "metres_per_point": 2.116670900008467
+    },
+    "accuracy_m": null,
+    "controls": [
+      {
+        "name": "Plaza de Cayma",
+        "lon": -71.54558,
+        "lat": -16.38148,
+        "pdf_point": [
+          1176.21,
+          4802.87
+        ],
+        "reference": "https://www.openstreetmap.org/way/138604601",
+        "check": "PSAD56 places the point inside the plaza outline; WGS84/UTM is displaced."
+      }
+    ]
+  },
+  "schema": "prometeo-cadastral-geometry-v1",
+  "bbox": [
+    -71.5568266,
+    -16.3932835,
+    -71.52244997,
+    -16.30272592
+  ],
+  "layers": {
+    "lotes": {
+      "count": 22405,
+      "kind": "polygon",
+      "origin": "polygonized_pdf_linework"
+    },
+    "manzanas": {
+      "count": 2958,
+      "kind": "polygon",
+      "origin": "union_of_adjoining_recovered_faces"
+    }
+  },
+  "qa": {
+    "closed_faces": 28462,
+    "rejected": {
+      "small_or_sliver": 6046,
+      "large_or_enclosing_face": 11
+    },
+    "cut_edges": 0,
+    "dangling_edges": 6,
+    "invalid_rings": 0,
+    "minimum_face_area_m2": 20,
+    "maximum_face_area_m2": 20000,
+    "complete_inventory": false,
+    "unique_input_segments": 74325,
+    "drawing_paths": 292490
+  },
+  "notes": [
+    "Geometría de referencia de un plano de 2006; no acredita vigencia ni precisión catastral.",
+    "Sin numeración original de manzana o lote. Los identificadores internos no son códigos catastrales.",
+    "Manzanas reconstruidas al unir caras contiguas; contornos y agrupaciones pendientes de contraste.",
+    "Sólo se recuperan caras cerradas; los segmentos abiertos no se convierten en lotes inventados.",
+    "El datum se infiere por ubicación; la precisión no está certificada."
+  ]
+}
