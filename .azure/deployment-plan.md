@@ -1,3 +1,19 @@
+# ACM basic property photos and complete gallery — 2026-10-20
+
+Status: Validated.
+User authorization: requested photos in the basic ACM and all property photos in a gallery; explicitly said "publicalo".
+Mode: MODIFY existing Django App Service using existing GitHub Actions pipeline.
+Target: granextractorservice / rg-elgranextractor, Brazil South, subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Public: https://acm.propifai.com/acm/analisis/
+
+Scope: basic roles see property photos by default, independently of portal name/link permissions. Scoped encrypted gallery tickets read all previously captured photos on demand, using authenticated same-origin image delivery. Cards and detail open a responsive gallery with all thumbnails, navigation and unavailable-image states. Explicit role disable/review restrictions remain configurable. One audited data migration upgrades the previously forced basic-role review flag, preserving disabled photos and other permissions. No new infrastructure, secrets or collector changes.
+
+Validation proof: real shared-local HTTP page and three gallery/card assets returned 200. Real search returned 25 comparables, a 17-photo gallery and two real JPEG HTTP 200 responses. 46 existing access/feature tests and 10 gallery tests passed, including ordering/deduplication, legacy covers, owner/role/revision isolation, denial, review-only policy, parameterized Propify queries and idempotent audited migration. Listing-card Node regression and JS syntax check passed. Repeat relevant tests in release; CI compares the new public assets exactly.
+
+Deployment: latest origin/main integrated; existing production workflow retained. Verify exact release marker, gallery JS/CSS, protected endpoints and App Service health. No local sessions copied to production.
+
+---
+
 # Cayma: shared corrections consumed by production ACM — 2026-10-20
 
 Status: Validated.
@@ -39,6 +55,16 @@ Validated by azure-validate on 2026-10-20, America/Lima:
 - Canonical private runtime placement/history excluded from Git/artifacts. CI/CD will validate and compare public exact release assets. Public geometry and ongoing collector state remain mandatory post-deployment checks.
 
 
+
+Post-deployment verification completed 2026-10-20, America/Lima:
+- GitHub Actions run 39451625782 completed successfully (cad-reader, build, deploy).
+- Public marker returned exact release 575201799a4d1b56f3b9242d503f23106160d17a.
+- All six Cayma/master/ACM JS/CSS assets returned HTTP 200 and matched their committed release bytes.
+- Public ACM login returned HTTP 200; anonymous revision/geometry requests returned HTTP 401; master/analysis routes retained their existing login redirects.
+- Azure's existing private R2 credentials read the same canonical revision 97 / 972 adjusted blocks successfully. Local authenticated ACM configuration and radius responses also consumed revision 97.
+- Authenticated production UI was not inspected in the agent browser, which has no user login session; no authentication guards were relaxed.
+- Existing collector continued reporting fresh progress after the release; no collector job or configuration changes were required.
+Publication: live at https://acm.propifai.com/acm/analisis/ .
 
 ---
 

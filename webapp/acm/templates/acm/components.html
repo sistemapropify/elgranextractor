@@ -4,6 +4,7 @@
 {% block extra_head %}
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=35">
+<link rel="stylesheet" href="{% static 'acm/css/property-gallery.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'acm/css/comparison-valuation.css' %}?v=6">
 <link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
 <link rel="stylesheet" href="{% static 'acm/css/nearby-places.css' %}?v=2">
@@ -277,6 +278,12 @@
   <header class="cmp-detail-header"><div><span>COMPARABLE · ANÁLISIS POR COMPONENTES</span><h2 id="cmp-detail-heading">Detalle de la propiedad</h2></div><button type="button" id="cmp-detail-close" autofocus aria-label="Cerrar detalle">Cerrar <span aria-hidden="true">×</span></button></header>
   <div id="cmp-detail-content"></div>
 </dialog>
+<dialog id="cmp-gallery" class="cmp-detail cmp-gallery" aria-labelledby="cmp-gallery-heading">
+  <header class="cmp-detail-header"><div><span>FOTOS DE LA PROPIEDAD</span><h2 id="cmp-gallery-heading">Galería de fotos</h2></div><button type="button" id="cmp-gallery-close" autofocus>Cerrar <span aria-hidden="true">×</span></button></header>
+  <div class="cmp-gallery-stage"><button type="button" id="cmp-gallery-prev" aria-label="Foto anterior" disabled>‹</button><img id="cmp-gallery-image" alt="Foto de la propiedad" hidden><button type="button" id="cmp-gallery-next" aria-label="Foto siguiente" disabled>›</button></div>
+  <p id="cmp-gallery-status" class="cmp-gallery-status" role="status" aria-live="polite"></p>
+  <div id="cmp-gallery-thumbs" class="cmp-gallery-thumbs" aria-label="Todas las fotos de la propiedad"></div>
+</dialog>
 <dialog id="cmp-calculation" class="cmp-detail cmp-calculation-dialog" aria-labelledby="cmp-calculation-heading">
   <header class="cmp-detail-header"><div><span>VALORACIÓN · OPERACIONES Y COMPARABLES</span><h2 id="cmp-calculation-heading">Cálculo completo del ACM</h2></div><button type="button" id="cmp-calculation-close" autofocus aria-label="Cerrar cálculo">Cerrar <span aria-hidden="true">×</span></button></header>
   <div id="cmp-calculation-explanation"><p>Busca comparables para ver aquí las operaciones con sus valores reales.</p></div>
@@ -286,14 +293,15 @@
 {% block extra_scripts %}
 {{ block.super }}
 {{ acm_permissions|json_script:"acm-access-data" }}
-<script src="{% static 'acm/js/portal-access.js' %}?v=1"></script>
+<script src="{% static 'acm/js/portal-access.js' %}?v=2"></script>
 <script src="{% static 'acm/js/components-presentation.js' %}?v=17"></script>
 <script src="{% static 'acm/js/workspace-layout.js' %}?v=1"></script>
 <script src="{% static 'acm/js/floating-comparison.js' %}?v=8"></script>
 <script src="{% static 'acm/js/comparison-valuation.js' %}?v=9"></script>
 {% if replication %}{{ replication|json_script:"cmp-replication-data" }}{% endif %}
 {% if analysis_resume %}{{ analysis_resume|json_script:"cmp-role-analysis-data" }}{% endif %}
-<script src="{% static 'acm/js/components.js' %}?v=71"></script>
+<script src="{% static 'acm/js/components.js' %}?v=72"></script>
+<script src="{% static 'acm/js/property-gallery.js' %}?v=1"></script>
 {% if acm_permissions.ai %}<script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>{% endif %}
 {% if acm_permissions.pdm_polygons %}
 {{ capas_vectoriales|json_script:"capas-vectoriales-data" }}

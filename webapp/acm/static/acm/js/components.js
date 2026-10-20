@@ -327,8 +327,8 @@
     else html+='<p>No se completó este paso porque faltó un componente válido.</p>';
     host.innerHTML=html;
   }
-  function galleryAction(r){return '';}
-  function photo(r){return r.image?'<img src="'+escape(r.image)+'" loading="lazy" alt="Foto del anuncio">':'<div class="cmp-photo-empty">Sin foto</div>';}
+  function galleryAction(r){return r.gallery_url||r.image?'<button type="button" data-property-gallery="'+escape(r.gallery_url||'')+'" data-gallery-cover="'+escape(r.image||'')+'">Ver todas las fotos</button>':'';}
+  function photo(r){return r.image?'<button type="button" class="cmp-photo-open" data-property-gallery="'+escape(r.gallery_url||'')+'" data-gallery-cover="'+escape(r.image)+'" aria-label="Abrir galería de la propiedad"><img src="'+escape(r.image)+'" loading="lazy" alt="Foto de la propiedad"></button>':'<div class="cmp-photo-empty">Sin foto</div>';}
   function precisionBadge(r){const p=presentation.precision(r);return '<span class="cmp-precision '+p.kind+'">'+escape(p.label)+'</span>';}
   function publicationBadge(r){if(!permissions.metadata)return '';const labels={activa:'Activa',posible_retirada:'Posible retirada',retirada:'Retirada',sin_verificar:'Sin verificar'};const state=labels[r.state]||'Sin verificar';const misses=r.consecutive_absences?' · '+r.consecutive_absences+' ausencia(s)':'';return '<span class="cmp-publication-state state-'+escape(r.state||'sin_verificar')+'">Publicación: '+escape(state+misses)+'</span>';}
   function similarityBlock(r){const overall=r.overall_similarity;if(overall==null)return '';const v=value(r);const weight=v.similarityWeight==null?'':'<span>Peso en cálculo '+decimals(v.similarityWeight)+'%</span>';return '<div class="cmp-similarity cmp-similarity-visible"><strong>Similitud con tu inmueble: '+decimals(overall)+'%</strong><span>Terreno '+decimals(r.land_similarity)+'%</span><span>Construcción '+decimals(r.built_similarity)+'%</span><span>Distancia '+decimals(r.distance_similarity)+'%</span>'+weight+'</div>';}

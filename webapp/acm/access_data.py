@@ -71,6 +71,7 @@ def photo_ticket(request, url):
 
 def project(request, state, result=None, excluded=(), report=False):
     """Keep calculation inputs on the server; emit only permitted property fields."""
+    from .property_gallery import gallery_ticket
     access = request.acm_access
     p = access.permissions
     state = copy.deepcopy(state)
@@ -84,6 +85,7 @@ def project(request, state, result=None, excluded=(), report=False):
         approved = set(ACMPhotoReview.objects.using(database()).filter(
             digest__in=[photo_digest(url) for url in urls], approved=True).values_list('digest', flat=True))
     for index, record in enumerate(records, 1):
+        gallery = gallery_ticket(request, record) if p['photos'] and not report else ''
         record.pop('_operation_title', None)
         record.pop('_operation_title_lower', None)
         if not p['metadata']:
@@ -130,6 +132,8 @@ def project(request, state, result=None, excluded=(), report=False):
                 record['image'] = url  # Builders fetch server-side; source URLs are not exported.
         else:
             record['image'] = ''
+        if gallery:
+            record['gallery_url'] = '/acm/galeria/' + gallery + '/'
         if access.can_configure and not access.previewing and url:
             record['photo_review'] = photo_ticket(request, url)
         if not p['property_data']:

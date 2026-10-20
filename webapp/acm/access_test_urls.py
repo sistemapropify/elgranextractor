@@ -1,6 +1,7 @@
 from django.urls import include, path
 from . import portal_views as portal
 from . import cadastral_views
+from . import property_gallery
 from .components_routes import urlpatterns as components
 patterns = [
     path('catastro/configuracion/', cadastral_views.configuration, name='cadastral_config'),
@@ -19,6 +20,7 @@ patterns = [
     path('pdm/', portal.pdm_query, name='pdm_query'),
     path('capas-mapa/', portal.map_layers, name='map_layers'),
     path('fotos/revisar/', portal.review_photo, name='review_photo'),
+    path('galeria/<str:ticket>/', property_gallery.gallery, name='property_gallery'),
     path('fotos/<str:ticket>/', portal.photo, name='photo'),
 ] + components
 urlpatterns = [path('acm/', include((patterns, 'acm')))]

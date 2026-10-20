@@ -143,6 +143,14 @@ jobs:
           node webapp/acm/test_cayma_master.cjs
           python -c 'import json,os; from pathlib import Path; Path("webapp/static/js/cayma-master-release.json").write_text(json.dumps({"revision":os.environ["GITHUB_SHA"]}))'
 
+      - name: Validate basic ACM photos and full property galleries
+        run: |
+          source antenv/bin/activate
+          python webapp/manage.py test acm.test_access acm.test_property_gallery acm.test_comparable_features --settings=acm.access_test_settings --noinput
+          node --check webapp/acm/static/acm/js/property-gallery.js
+          node webapp/acm/test_listing_card.cjs
+          python -c 'import json,os; from pathlib import Path; Path("webapp/static/js/acm-property-gallery-release.json").write_text(json.dumps({"revision":os.environ["GITHUB_SHA"]}))'
+
       - name: Collect Django static files
         env:
           # Valores dummy para que Django cargue settings sin conexión a BD.
@@ -362,6 +370,11 @@ jobs:
               done <<'CATASTRO_ASSETS'
           js/scraping-verification-release.json|webapp/static/js/scraping-verification-release.json
           acm/css/components.css|webapp/acm/static/acm/css/components.css
+          js/acm-property-gallery-release.json|webapp/static/js/acm-property-gallery-release.json
+          acm/js/components.js|webapp/acm/static/acm/js/components.js
+          acm/js/property-gallery.js|webapp/acm/static/acm/js/property-gallery.js
+          acm/css/property-gallery.css|webapp/acm/static/acm/css/property-gallery.css
+          acm/js/portal-access.js|webapp/acm/static/acm/js/portal-access.js
           acm/js/street-facade.js|webapp/acm/static/acm/js/street-facade.js
           js/street-facade-view.js|webapp/static/js/street-facade-view.js
           js/catastro-dashboard.js|webapp/static/js/catastro-dashboard.js

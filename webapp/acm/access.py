@@ -32,7 +32,7 @@ CATEGORIES = (
         ('property_data', 'Consultar datos de la propiedad', True),
         ('property_pins', 'Mostrar pines de propiedades', True),
         ('photos', 'Mostrar fotografías', True),
-        ('unreviewed_photos', 'Mostrar fotos sin revisión de marcas de origen', False),
+        ('unreviewed_photos', 'Mostrar fotos sin revisión de marcas de origen', True),
     )),
     ('Origen de las publicaciones', (
         ('portal_names', 'Mostrar nombre del portal', False),
@@ -124,9 +124,9 @@ def policy_for(role):
     values = dict(DEFAULTS)
     if policy:
         values.update({key: value for key, value in policy.permissions.items() if key in DEFAULTS and isinstance(value, bool)})
-    # A logo, URL, or unreviewed watermark can identify the source independently.
+    # Portal links and logos remain independent of property photograph access.
     if not values['portal_names']:
-        for key in ('portal_pins', 'publication', 'portal_link', 'unreviewed_photos'):
+        for key in ('portal_pins', 'publication', 'portal_link'):
             values[key] = False
     if not values['property_data']:
         for key in ('property_pins', 'photos', 'unreviewed_photos', 'calculate', 'reports', 'export', 'ai'):

@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from . import portal_views
 from . import cadastral_views
+from . import property_gallery
 from .access import legacy_admin
 from . import outlier_views
 from .components_routes import urlpatterns as component_routes
@@ -26,6 +27,7 @@ urlpatterns = [
     path('pdm/', portal_views.pdm_query, name='pdm_query'),
     path('capas-mapa/', portal_views.map_layers, name='map_layers'),
     path('fotos/revisar/', portal_views.review_photo, name='review_photo'),
+    path('galeria/<str:ticket>/', property_gallery.gallery, name='property_gallery'),
     path('fotos/<str:ticket>/', portal_views.photo, name='photo'),
     path('control/', legacy_admin(ml_control), name='control_datos'),
     path('modelos/', legacy_admin(ml_model_views.dashboard), name='modelos_dashboard'),

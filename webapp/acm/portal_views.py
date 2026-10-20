@@ -194,8 +194,8 @@ def role_policy(request, role_id):
         revision = data['revision']
         if not isinstance(values, dict) or set(values) != set(DEFAULTS) or any(type(v) is not bool for v in values.values()) or type(revision) is not int:
             raise ValueError
-        if not values['portal_names'] and any(values[key] for key in ('portal_pins', 'publication', 'portal_link', 'unreviewed_photos')):
-            return JsonResponse({'error': 'Los logos, enlaces y fotos sin revisar requieren permitir el nombre del portal.'}, status=400)
+        if not values['portal_names'] and any(values[key] for key in ('portal_pins', 'publication', 'portal_link')):
+            return JsonResponse({'error': 'Los logos y enlaces requieren permitir el nombre del portal.'}, status=400)
         if not values['property_data'] and any(values[key] for key in ('property_pins', 'photos', 'calculate')):
             return JsonResponse({'error': 'Pines, fotografías y cálculo requieren habilitar los datos de la propiedad.'}, status=400)
         if values['pdm_card'] and not values['pdm_query']:
@@ -257,7 +257,9 @@ def _photo_url(url):
     parsed = urlsplit(url)
     host = (parsed.hostname or '').lower()
     storage = str(getattr(settings, 'AZURE_ACCOUNT_NAME', 'granextractormedia')) + '.blob.core.windows.net'
-    allowed = {'remax.pe', 'www.remax.pe', 'properati.com.pe', 'www.properati.com.pe', storage}
+    allowed = {'remax.pe', 'www.remax.pe', 'properati.com.pe', 'www.properati.com.pe', storage,
+               'propifymedia01.blob.core.windows.net', 'images.properati.com',
+               'img10.naventcdn.com'}
     allowed.update(getattr(settings, 'ACM_PHOTO_HOSTS', ()))
     if parsed.scheme != 'https' or parsed.username or parsed.password or parsed.port not in (None, 443) or host not in allowed:
         raise ValueError('image host')
@@ -271,8 +273,12 @@ def load_photo_bytes(url):
     """Validated image download shared by browser delivery and PDF embedding."""
     import io
     from PIL import Image
+    from cuadrantizacion.views import _map_image_url
+    storage = str(getattr(settings, 'AZURE_ACCOUNT_NAME', 'granextractormedia')) + '.blob.core.windows.net'
+    if urlsplit(url).hostname == storage:
+        url = _map_image_url(url)
     with requests.get(_photo_url(url), stream=True, timeout=(4, 10), allow_redirects=False) as source:
-        if source.status_code != 200 or source.headers.get('Content-Type', '').split(';')[0] not in ('image/jpeg', 'image/png', 'image/webp'):
+        if source.status_code != 200 or source.headers.get('Content-Type', '').split(';')[0] not in ('image/jpeg', 'image/png', 'image/webp', 'image/gif'):
             raise ValueError('image response')
         content = bytearray()
         for part in source.iter_content(65536):

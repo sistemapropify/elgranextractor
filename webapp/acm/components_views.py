@@ -139,6 +139,7 @@ def clean_link(value):
 def scraped_rows(p):
     from ingestas.models import PropiedadesCompetencia
     from cuadrantizacion.views import _map_image_url
+    from scrapi.photo_gallery import gallery_photos
     lat_delta=p['max_radius']/110000
     lng_delta=lat_delta/max(.01,math.cos(math.radians(p['lat'])))
     query=PropiedadesCompetencia.objects.filter(
@@ -176,6 +177,10 @@ def scraped_rows(p):
         parking = feature_record.building_features['parking']
         floor_label = feature_record.piso_departamento
         lifecycle_state = row['estado_publicacion'] or 'sin_verificar'
+        cover = row['imagen_url']
+        if not cover:
+            photos = gallery_photos(row['datos_crudos'])
+            cover = photos[0]['url'] if photos else None
         yield {'id':f"{row['fuente']}-{row['id']}",'record_id':row['id'],
             'source':row['fuente'],'code':row['id_origen'],
             'title':row['titulo'] or row['id_origen'],'kind':row['tipo_inmueble'],
@@ -198,7 +203,7 @@ def scraped_rows(p):
             'operation':row['tipo_operacion'],'district':row['distrito'],
             '_operation_title':row['original_listing_title'],
             '_operation_title_lower':row['original_listing_title_lower'],
-            'url':clean_link(row['url']),'image':clean_link(_map_image_url(row['imagen_url'])),
+            'url':clean_link(row['url']),'image':clean_link(_map_image_url(cover)),
             'review_excluded':row['id'] in excluded}
 
 

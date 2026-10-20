@@ -61,7 +61,14 @@ class AccessTests(TestCase):
         for key in ('land', 'built', 'price', 'rooms', 'baths'):
             self.assertEqual(state['records'][0].get(key), self.rows[0].get(key))
 
-    def test_basic_unknown_photograph_hidden_until_review(self):
+    def test_basic_photograph_visible_without_origin_permission(self):
+        safe, _, _ = project(self.request(), self.state)
+        self.assertTrue(safe['records'][0]['image'].startswith('/acm/fotos/'))
+        self.assertTrue(safe['records'][0]['gallery_url'].startswith('/acm/galeria/'))
+        self.assertNotIn('remax', safe['records'][0]['image'])
+
+    def test_explicit_review_only_policy_is_respected(self):
+        ACMRolePolicy.objects.create(role_id=20, permissions={'unreviewed_photos': False}, updated_by='1')
         safe, _, _ = project(self.request(), self.state)
         self.assertEqual(safe['records'][0]['image'], '')
         ACMPhotoReview.objects.create(digest=photo_digest(self.rows[0]['image']), approved=True, reviewed_by='1')
