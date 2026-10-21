@@ -1,0 +1,265 @@
+"""Durable D1 composition through a private Worker; all working state stays RAM.
+
+D1 remains authoritative. Optimistic revision guards and idempotent commits
+protect independent app processes. No local database or download cache is used.
+"""
+import json
+import os
+from pathlib import Path
+import uuid
+from urllib.request import Request, build_opener
+from urllib.error import HTTPError, URLError
+
+from .master_store import MasterStore, Conflict, encoded
+from .storage import NoRedirect, StorageError
+
+TABLES = {'meta':('key',),'projects':('id',),'sources':('id',),'versions':('id',),
+          'entities':('id',),'boundary_segments':('id',),'contributions':('id',),'identities':('version_id','layer','source_feature_id'),
+          'selections':('entity_id','field'),'people':('id',),'relationships':('id',),'media':('id',),
+          'registral_acts':('id',),'zones':('id',),'current_attributes':('entity_id',),'journal':('revision',)}
+
+
+def configuration():
+    # App Service receives these as protected application settings. Local
+    # previews keep using the private, out-of-repository secrets file.
+    url=os.environ.get('CATASTRO_MASTER_GATEWAY_URL','')
+    token=os.environ.get('CATASTRO_MASTER_GATEWAY_TOKEN','')
+    if not url or not token:
+        path=Path(os.environ.get('CATASTRO_MASTER_GATEWAY_FILE') or Path.home()/'.codex/secrets/prometeo-master-gateway.env')
+        values=dict(line.strip().split('=',1) for line in path.read_text().splitlines()
+                    if line.strip() and not line.lstrip().startswith('#')) if path.is_file() else {}
+        url=url or values.get('MASTER_GATEWAY_URL','')
+        token=token or values.get('MASTER_TOKEN','')
+    import re
+    if not re.fullmatch(r'https://prometeo-catastro-maestro\.[a-z0-9-]+\.workers\.dev',url):
+        raise StorageError('Configura el Worker privado del Catastro Maestro.')
+    if len(token)<40:
+        raise StorageError('Falta la credencial privada del Catastro Maestro.')
+    return url,token
+
+
+class Gateway:
+    def __init__(self,url=None,token=None):
+        self.url,self.token=(url,token) if url and token else configuration()
+        self.opener=build_opener(NoRedirect())
+
+    def call(self,payload):
+        body=encoded(payload).encode()
+        if len(body)>12*1024*1024:raise ValueError('Divide el cambio en ámbitos menores: supera 12 MB.')
+        request=Request(self.url+'/v1/database',data=body,method='POST',headers={
+            'Content-Type':'application/json','Authorization':'Bearer '+self.token,'User-Agent':'PrometeoCatastro/1.0'})
+        for attempt in range(2):
+            try:
+                with self.opener.open(request,timeout=30) as response:
+                    raw=response.read(24*1024*1024+1)
+                if len(raw)>24*1024*1024:raise StorageError('Divide la consulta: la respuesta supera el límite seguro.')
+                return json.loads(raw)
+            except HTTPError as error:
+                if error.code==409:raise Conflict('El maestro cambió. Actualiza y vuelve a comparar.') from None
+                if error.code==413:raise StorageError('Divide la versión o el ámbito del cambio: excede los límites de la base actual.') from None
+                if error.code not in (429,500,502,503,504) or attempt:
+                    raise StorageError('El Catastro Maestro respondió HTTP '+str(error.code)+'.') from None
+            except (URLError,OSError,TimeoutError):
+                if attempt:raise StorageError('No se pudo confirmar el guardado en D1. Reintenta la misma operación.') from None
+        raise StorageError('No se pudo contactar con D1.')
+
+    def read(self,sql,params=()):
+        return self.call({'action':'read','queries':[{'sql':sql,'params':list(params)}]})['results'][0]
+
+    def read_many(self,queries):
+        return self.call({'action':'read','queries':queries})['results']
+
+    def revision(self):
+        rows=self.read("SELECT value FROM meta WHERE key='revision'")
+        if len(rows)!=1:raise StorageError('El esquema de D1 no está inicializado.')
+        return int(rows[0]['value'])
+
+
+class D1Store(MasterStore):
+    """RAM working copy with a row-level, atomic and revision-guarded D1 commit.
+
+The initial authoring cache is bounded to 64 MB/250k rows; exceeding it fails
+explicitly and requires partitioned authoring. User query results stay bounded.
+This is a correctness limit, never a silent subset of the master database.
+"""
+    def __init__(self,gateway=None,scope='040103'):
+        super().__init__()
+        self.gateway=gateway or Gateway()
+        self.scope=scope
+        self._select_scope(scope)
+        self._dirty=True
+        self.refresh()
+
+    def _select_scope(self,ubigeo):
+        from .master_contract import validate_field
+        validate_field('ubigeo',ubigeo)
+        if ubigeo!=self.scope:self.scope=ubigeo;self._dirty=True
+
+    def _scope_queries(self):
+        entities='SELECT id FROM entities WHERE ubigeo=?'
+        district_versions='SELECT v.id FROM versions v JOIN sources s ON s.id=v.source_id WHERE s.ubigeo=?'
+        people='SELECT person_id FROM relationships WHERE entity_id IN ('+entities+') AND person_id IS NOT NULL'
+        version_scope='id IN ('+district_versions+') OR id IN (SELECT source_version FROM people WHERE id IN ('+people+'))'
+        source_scope='ubigeo=? OR id IN (SELECT source_id FROM versions WHERE '+version_scope+')'
+        predicates={
+            'meta':'1=1',
+            'projects':'ubigeo=? OR id IN (SELECT project_id FROM sources WHERE '+source_scope+')',
+            'sources':source_scope,'versions':version_scope,'entities':'ubigeo=?',
+            'people':'id IN ('+people+')',
+            'contributions':'version_id IN ('+district_versions+')',
+            'identities':'entity_id IN ('+entities+')',
+            'selections':'entity_id IN ('+entities+')',
+            'relationships':'entity_id IN ('+entities+')',
+            'media':'entity_id IN ('+entities+')','boundary_segments':'entity_id IN ('+entities+')',
+            'registral_acts':'entity_id IN ('+entities+')','current_attributes':'entity_id IN ('+entities+')',
+            'zones':'source_version IS NULL OR source_version IN ('+district_versions+')',
+            'journal':"json_extract(details_json,'$.scope_ubigeo')=? OR (json_extract(details_json,'$.scope_ubigeo') IS NULL AND ("
+                      "json_extract(details_json,'$.version_id') IN ("+district_versions+") OR "
+                      "json_extract(details_json,'$.project_id') IN (SELECT id FROM projects WHERE ubigeo=?)))"
+        }
+        return {table:('SELECT * FROM '+table+' WHERE '+predicates[table]+' ORDER BY '+','.join(keys),
+                       [self.scope]*predicates[table].count('?')) for table,keys in TABLES.items()}
+
+    def _rows(self):
+        return {table:[tuple(row) for row in self.db.execute('SELECT * FROM '+table)] for table in TABLES}
+
+    def refresh(self):
+        with self.lock:
+            revision=self.gateway.revision()
+            if not self._dirty and revision==self.revision:return
+            rows={};total=0;size=0
+            queries=self._scope_queries()
+            first_pages=None
+            if hasattr(self.gateway,'read_many'):
+                first_pages=dict(zip(TABLES,self.gateway.read_many([
+                    {'sql':sql+' LIMIT 1000','params':params} for sql,params in queries.values()])))
+            for table,keys in TABLES.items():
+                rows[table]=[];offset=0
+                while True:
+                    page=first_pages[table] if offset==0 and first_pages is not None else self.gateway.read(
+                        queries[table][0]+' LIMIT 1000 OFFSET ?',[*queries[table][1],offset])
+                    total+=len(page);size+=len(encoded(page).encode())
+                    if total>250000 or size>64*1024*1024:
+                        raise StorageError('El ámbito excede el límite de edición en memoria; requiere particionar la carga antes de continuar.')
+                    rows[table].extend(page)
+                    if len(page)<1000:break
+                    offset+=1000
+            if self.gateway.revision()!=revision:
+                raise Conflict('El maestro cambió durante la lectura; actualiza para cargar una revisión coherente.')
+            with self.db:
+                for table in reversed(TABLES):self.db.execute('DELETE FROM '+table)
+                for table in TABLES:
+                    names=[r[1] for r in self.db.execute('PRAGMA table_info('+table+')')]
+                    self.db.executemany('INSERT INTO '+table+' VALUES ('+','.join('?' for _ in names)+')',
+                                        ([row[name] for name in names] for row in rows[table]))
+            self._dirty=False
+            self._journal_state=self._snapshot()
+
+    def _hydrate_people(self,version_id):
+        row=self.db.execute('SELECT payload FROM versions WHERE id=?',(version_id,)).fetchone()
+        if not row:return
+        ids=[]
+        for owner in json.loads(row[0]).get('people',[]):
+            if owner.get('row') is not None and not owner.get('relationship_status') and owner.get('document_type') and owner.get('document_number'):
+                ids.append(str(uuid.uuid5(uuid.NAMESPACE_URL,encoded(['person-document',owner['document_type'],owner['document_number']]))))
+        if not ids:return
+        people='SELECT id FROM people WHERE id IN (SELECT value FROM json_each(?))'
+        versions='SELECT source_version FROM people WHERE id IN ('+people+')'
+        sources='SELECT source_id FROM versions WHERE id IN ('+versions+')'
+        queries={'projects':'SELECT * FROM projects WHERE id IN (SELECT project_id FROM sources WHERE id IN ('+sources+'))',
+                 'sources':'SELECT * FROM sources WHERE id IN ('+sources+')',
+                 'versions':'SELECT * FROM versions WHERE id IN ('+versions+')','people':'SELECT * FROM people WHERE id IN ('+people+')'}
+        with self.db:
+            for table,sql in queries.items():
+                rows=self.gateway.read(sql,[encoded(ids)])
+                columns=[r[1] for r in self.db.execute('PRAGMA table_info('+table+')')]
+                self.db.executemany('INSERT OR IGNORE INTO '+table+' VALUES ('+','.join('?' for _ in columns)+')',
+                                    ([row[key] for key in columns] for row in rows))
+
+    def _mutate(self,method,*args,_incoming_version=None,**kwargs):
+        with self.lock:
+            self.refresh()
+            if _incoming_version:self._hydrate_people(_incoming_version)
+            revision=self.revision;before=self._rows()
+            try:
+                result=method(*args,**kwargs)
+                after=self._rows();changes=[]
+                for table,keys in TABLES.items():
+                    names=[r[1] for r in self.db.execute('PRAGMA table_info('+table+')')]
+                    positions=[names.index(key) for key in keys]
+                    key=lambda row:tuple(row[i] for i in positions)
+                    old={key(row):row for row in before[table]};new={key(row):row for row in after[table]}
+                    upserts=[row for k,row in new.items() if old.get(k)!=row]
+                    deletes=[k for k in old if k not in new]
+                    if upserts or deletes:changes.append({'table':table,'upserts':upserts,'deletes':deletes})
+                if not changes:return result
+                payload={'action':'commit','id':str(uuid.uuid4()),'revision':revision,'changes':changes,'result':result}
+                confirmed=self.gateway.call(payload)
+                return confirmed['result']
+            except Exception:
+                self._dirty=True
+                raise
+
+    def project(self,*args,**kwargs):
+        def update():
+            if self.db.execute('SELECT 1 FROM projects WHERE id=?',(args[0],)).fetchone():return {'unchanged':True}
+            super(D1Store,self).project(*args,**kwargs)
+            return {'revision':self._journal('project','sistema','Registrar proyecto',{'project_id':args[0]})}
+        with self.lock:
+            self._select_scope(args[2]);return self._mutate(update)
+
+    def stage(self,*args,**kwargs):
+        with self.lock:
+            payload=args[0] if args else kwargs.get('payload')
+            if not isinstance(payload,dict) or not isinstance(payload.get('source'),dict):raise ValueError('Indica fuente y versión.')
+            self._select_scope(payload['source'].get('ubigeo'))
+            return self._mutate(super().stage,*args,**kwargs)
+    def apply(self,*args,**kwargs):
+        with self.lock:
+            plan=args[0] if args else kwargs.get('plan')
+            if not isinstance(plan,dict) or not isinstance(plan.get('scope'),dict):raise ValueError('Indica el ámbito del cambio.')
+            self._select_scope(plan['scope'].get('ubigeo'))
+            return self._mutate(super().apply,*args,_incoming_version=plan.get('version_id') if plan.get('mode')!='withdraw_source' else None,**kwargs)
+    def restore(self,revision,*args,**kwargs):
+        with self.lock:
+            rows=self.gateway.read('''SELECT COALESCE(json_extract(j.details_json,'$.scope_ubigeo'),s.ubigeo,p.ubigeo) ubigeo
+                FROM journal j LEFT JOIN versions v ON v.id=json_extract(j.details_json,'$.version_id')
+                LEFT JOIN sources s ON s.id=v.source_id LEFT JOIN projects p ON p.id=json_extract(j.details_json,'$.project_id')
+                WHERE j.revision=?''',[revision])
+            if not rows or not rows[0]['ubigeo']:raise ValueError('Revisión no disponible para este ámbito.')
+            self._select_scope(rows[0]['ubigeo'])
+            return self._mutate(super().restore,revision,*args,**kwargs)
+    def preview(self,*args,**kwargs):
+        with self.lock:
+            plan=args[0] if args else kwargs.get('plan')
+            if not isinstance(plan,dict) or not isinstance(plan.get('scope'),dict):raise ValueError('Indica el ámbito del cambio.')
+            self._select_scope(plan['scope'].get('ubigeo'))
+            self.refresh();return super().preview(*args,**kwargs)
+    def summary(self,ubigeo=None):
+        with self.lock:
+            if ubigeo:self._select_scope(ubigeo)
+            self.refresh();value=super().summary();value['storage']='d1';return value
+    def records(self,*args,**kwargs):
+        query,params=self._records_query(*args,**kwargs)
+        return self.gateway.read(query,params)
+    def collection(self,*args,**kwargs):
+        with self.lock:
+            self._select_scope(args[0] if args else kwargs.get('ubigeo'))
+            self.refresh();return super().collection(*args,**kwargs)
+    def active_districts(self):
+        return [r['ubigeo'] for r in self.gateway.read("""SELECT DISTINCT e.ubigeo FROM entities e
+            JOIN selections s ON s.entity_id=e.id WHERE e.kind IN ('lote','manzana') AND s.field='$geometry'""")]
+    def entity(self,*args):
+        with self.lock:
+            rows=self.gateway.read('SELECT ubigeo FROM entities WHERE id=?',[args[0]])
+            if not rows:raise ValueError('Inmueble no disponible.')
+            self._select_scope(rows[0]['ubigeo']);self.refresh();return super().entity(*args)
+    def medium(self,*args):
+        with self.lock:
+            rows=self.gateway.read('SELECT e.ubigeo FROM media m JOIN entities e ON e.id=m.entity_id WHERE m.id=?',[args[0]])
+            if not rows:raise ValueError('Archivo no disponible.')
+            self._select_scope(rows[0]['ubigeo']);self.refresh();return super().medium(*args)
+
+    def version_payload(self,version_id):
+        rows=self.gateway.read('SELECT payload FROM versions WHERE id=?',[version_id])
+        return json.loads(rows[0]['payload']) if rows else None

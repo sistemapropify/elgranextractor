@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 import tempfile
 import time
+from urllib.error import URLError, HTTPError
+from unittest.mock import Mock
 from unittest.mock import patch
 
 from django.test import SimpleTestCase, Client
@@ -16,7 +18,38 @@ TOKEN = 'private-test-worker-token-with-at-least-32-characters'
 
 
 class ExternalWorkerTests(SimpleTestCase):
+    def test_transport_retry_preserves_same_lease_and_payload(self):
+        control = Control('https://acm.propifai.com', TOKEN)
+        response = Mock()
+        response.headers.get_content_type.return_value = 'application/json'
+        response.read.return_value = b'{"stop":false}'
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        control.opener.open = Mock(side_effect=[URLError('timeout'), response])
+        with patch('catastro.external_worker.time.sleep'):
+            self.assertFalse(control.call('lot', {'lot': 'test'}, 'job', 'lease')['stop'])
+        calls = control.opener.open.call_args_list
+        self.assertEqual(len(calls), 2)
+        self.assertIs(calls[0].args[0], calls[1].args[0])
+
+    def test_claim_and_lease_rejection_are_not_retried(self):
+        control = Control('https://acm.propifai.com', TOKEN)
+        control.opener.open = Mock(side_effect=URLError('timeout'))
+        with self.assertRaises(ControlError):
+            control.call('claim')
+        self.assertEqual(control.opener.open.call_count, 1)
+        control.opener.open = Mock(side_effect=HTTPError('https://acm.propifai.com',409,'lease',{},None))
+        with self.assertRaises(Stopped):
+            control.call('heartbeat',job='job',lease='lease')
+        self.assertEqual(control.opener.open.call_count, 1)
+
     def setUp(self):
+        # These fixtures exercise the transport after operational acceptance;
+        # the new default hold is verified separately in test_master_store.
+        self.pipeline_patch = patch('catastro.master_pipeline.status',return_value={'collection_enabled':True})
+        self.pipeline_patch.start();self.addCleanup(self.pipeline_patch.stop)
+        self.ready_patch = patch('catastro.master_pipeline.require_collection_ready')
+        self.ready_patch.start();self.addCleanup(self.ready_patch.stop)
         self.render_patch = patch('django.template.base.Template._render',lambda template,context:template.nodelist.render(context))
         self.render_patch.start()
         self.server = tempfile.TemporaryDirectory()
@@ -71,6 +104,18 @@ class ExternalWorkerTests(SimpleTestCase):
         self.assertEqual(self.post(job+'/heartbeat',lease='wrong').status_code,409)
         self.assertEqual(self.post(job+'/heartbeat',lease=claim['lease']).status_code,200)
         state=State();self.assertNotIn('lease',state.snapshot()['jobs'][0]);state.close()
+
+    def test_memory_worker_uploads_and_syncs_without_creating_worker_directory(self):
+        job=self.queued();source=FakeSource();cloud=FakeR2()
+        never_created=Path(self.worker.name)/'no-files'
+        result=run_once(self.control(),never_created,source,cloud,memory_only=True)
+        self.assertEqual(result['uploaded'],1)
+        self.assertFalse(never_created.exists())
+        state=State()
+        try:
+            self.assertEqual(state.job(job)['status'],'completed')
+            self.assertEqual(state.lot(LOT)['uploaded'],1)
+        finally:state.close()
 
     def test_real_collector_protocol_uploads_documents_and_syncs_dashboard(self):
         job=self.queued();source=FakeSource();cloud=FakeR2()

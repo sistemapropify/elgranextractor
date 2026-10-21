@@ -4,12 +4,12 @@
 {% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-dashboard.css' %}?v=4">{% endblock %}
 {% block content %}
 <main class="catastro" id="catastro-dashboard">
-  <header class="catastro-heading"><div><p class="eyebrow">GEOLLAQTA · COFOPRI</p><h1>Catastro</h1><p>Reportes, fichas disponibles y fachadas, organizados por distrito y predio.</p></div><a class="btn btn-secondary catastro-button" href="/cuadrantizacion/mapa/?catastro=yanahuara">Abrir mapa</a></header>
+  <header class="catastro-heading"><div><p class="eyebrow">GEOLLAQTA · COFOPRI</p><h1>Catastro</h1><p>Reportes, fichas disponibles y fachadas, organizados por distrito y predio.</p></div><a class="btn btn-secondary catastro-button" href="/catastro/maestro/planos/">Planos y etapas</a><a class="btn btn-secondary catastro-button" href="/catastro/maestro/?ubigeo=040103">Catastro maestro</a><a class="btn btn-secondary catastro-button" href="/cuadrantizacion/mapa/?catastro=yanahuara">Abrir mapa</a></header>
   <div class="catastro-metrics" aria-label="Resumen del archivo">
-    <article><span>Predios archivados en R2</span><strong id="metric-uploaded">0</strong></article>
-    <article><span>Reportes y fichas descargados</span><strong id="metric-reports">0</strong></article>
-    <article><span>Fotografías de fachada</span><strong id="metric-photos">0</strong></article>
-    <article><span>Documentos pendientes</span><strong id="metric-missing">0</strong></article>
+    <article><span>Predios archivados en R2</span><strong id="metric-uploaded">—</strong></article>
+    <article><span>Reportes y fichas descargados</span><strong id="metric-reports">—</strong></article>
+    <article><span>Fotografías de fachada</span><strong id="metric-photos">—</strong></article>
+    <article><span>Documentos pendientes</span><strong id="metric-missing">—</strong></article>
   </div>
   <div class="catastro-controls-layout">
     <section class="catastro-card"><h2>Descargar catastro</h2>
@@ -19,15 +19,15 @@
         <select id="collection-workers" name="workers"><option value="1">1 lote</option><option value="2">2 lotes</option><option value="4">4 lotes</option><option value="6">6 lotes</option><option value="10" selected>10 lotes</option></select>
         <details><summary>Opciones de descarga</summary><label for="lot-id">Un predio específico (opcional)</label><input id="lot-id" inputmode="numeric" maxlength="18" placeholder="Código catastral del lote"><label class="catastro-check"><input type="checkbox" id="retry-missing"> Reintentar documentos pendientes</label></details>
         <p class="catastro-help">Descarga todos los predios publicados del distrito, con todas sus fichas, reportes y fotografías disponibles. Continúa desde los que faltan y conserva lo ya archivado.</p>
-        <div class="catastro-actions"><button class="btn btn-success catastro-button" id="start-collection" type="submit">Descargar distrito completo</button><button class="btn btn-danger catastro-button" id="stop-collection" type="button" hidden>Pausar descarga</button></div>
+        <div class="catastro-actions"><button class="btn btn-success catastro-button" id="start-collection" type="submit" disabled>Descargar distrito completo</button><button class="btn btn-danger catastro-button" id="stop-collection" type="button" hidden>Pausar descarga</button></div>
       </form>
       <p id="collection-message" role="status" aria-live="polite"></p>
       <p id="collector-status" class="catastro-help" role="status"></p>
     </section>
-    <section class="catastro-card"><h2>Almacenamiento privado</h2><span class="catastro-badge" id="storage-status">Comprobando configuración</span><p id="storage-detail">Los documentos y las fotos se archivan en Cloudflare R2.</p><div class="catastro-storage"><strong id="storage-bytes">0 B</strong><span>archivados por este recolector</span></div><p class="catastro-help">Sin límite de cantidad de predios. En producción, los PDF, las fotos y los datos completos quedan en R2. Si COFOPRI no entrega algún documento, queda identificado para reintentar y la descarga continúa con los demás.</p></section>
+    <section class="catastro-card"><h2>Almacenamiento privado</h2><span class="catastro-badge" id="storage-status">Comprobando configuración</span><p id="storage-detail">Los documentos y las fotos se archivan en Cloudflare R2.</p><div class="catastro-storage"><strong id="storage-bytes">—</strong><span>archivados por este recolector</span></div><p class="catastro-help">Sin límite de cantidad de predios. En producción, los PDF, las fotos y los datos completos quedan en R2. Si COFOPRI no entrega algún documento, queda identificado para reintentar y la descarga continúa con los demás.</p></section>
   </div>
-  <section class="catastro-card"><div class="catastro-section-heading"><h2>Últimas descargas</h2><button type="button" class="btn btn-secondary catastro-button small" id="refresh-collection">Actualizar</button></div><div id="jobs-list" class="catastro-jobs"><p>No hay descargas todavía.</p></div></section>
-  <section class="catastro-card"><h2>Predios del archivo</h2><p class="catastro-help">Últimos 50 predios del distrito seleccionado. Abre un predio para revisar sus documentos y fotos.</p><div class="catastro-table-wrap"><table><thead><tr><th>Código del lote</th><th>Estado</th><th>Documentos</th><th>Fachadas</th><th>Pendientes</th><th>Archivo</th></tr></thead><tbody id="lots-list"><tr><td colspan="6">Todavía no hay predios archivados en este distrito.</td></tr></tbody></table></div></section>
+  <section class="catastro-card"><div class="catastro-section-heading"><h2>Últimas descargas</h2><button type="button" class="btn btn-secondary catastro-button small" id="refresh-collection">Actualizar</button></div><div id="jobs-list" class="catastro-jobs"><p>Consultando el historial de descargas…</p></div></section>
+  <section class="catastro-card"><h2>Predios del archivo</h2><p class="catastro-help">Últimos 50 predios del distrito seleccionado. Abre un predio para revisar sus documentos y fotos.</p><div class="catastro-table-wrap"><table><thead><tr><th>Código del lote</th><th>Estado</th><th>Documentos</th><th>Fachadas</th><th>Pendientes</th><th>Archivo</th></tr></thead><tbody id="lots-list"><tr><td colspan="6">Consultando el archivo catastral…</td></tr></tbody></table></div></section>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=5" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=6" defer></script>{% endblock %}

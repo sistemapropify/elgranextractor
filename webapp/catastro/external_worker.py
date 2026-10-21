@@ -1,5 +1,8 @@
 """Outbound-only collector: dashboard controls jobs; originals go directly to R2."""
 import json
+import hashlib
+import re
+import sqlite3
 from pathlib import Path
 import time
 from urllib.error import HTTPError, URLError
@@ -7,7 +10,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, build_opener
 
 from .state import State
-from .storage import NoRedirect
+from .storage import NoRedirect, R2
 from scrapi.geollaqta_scraper import collect, Stopped
 
 
@@ -33,20 +36,53 @@ class Control:
         if lease:
             headers['X-Catastro-Lease'] = lease
         request = Request(self.origin+'/catastro/api/worker/'+path, data=json.dumps(payload or {}).encode(),headers=headers)
-        try:
-            with self.opener.open(request,timeout=25) as response:
-                if response.headers.get_content_type() != 'application/json':
-                    raise ControlError('El dashboard no devolvió una respuesta válida.')
-                return json.loads(response.read(20_000_000))
-        except HTTPError as error:
-            if error.code == 409:
-                raise Stopped('La ejecución se detuvo o fue reemplazada. Avance conservado.') from None
-            raise ControlError('El dashboard respondió HTTP '+str(error.code)+'. Avance local conservado.') from None
-        except (URLError, TimeoutError, OSError, ValueError):
-            raise ControlError('No se pudo comunicar con el dashboard. Avance local conservado.') from None
+        # Leased actions are upserts/readbacks and may safely be repeated.
+        # Claim is not: a lost reply must never claim another job.
+        attempts = 5 if job is not None and action != 'finish' else 1
+        for attempt in range(attempts):
+            try:
+                with self.opener.open(request,timeout=25) as response:
+                    if response.headers.get_content_type() != 'application/json':
+                        raise ControlError('El dashboard no devolvió una respuesta válida.')
+                    return json.loads(response.read(20_000_000))
+            except HTTPError as error:
+                if error.code == 409:
+                    raise Stopped('La ejecución se detuvo o fue reemplazada. Avance conservado.') from None
+                if error.code not in (408,429,500,502,503,504) or attempt == attempts-1:
+                    raise ControlError('El dashboard respondió HTTP '+str(error.code)+'. Los archivos confirmados en R2 se conservan.') from None
+            except (URLError, TimeoutError, OSError, ValueError):
+                if attempt == attempts-1:
+                    raise ControlError('No se pudo comunicar con el dashboard después de reintentar. Los archivos confirmados en R2 se conservan.') from None
+            time.sleep(min(2 ** attempt, 10))
 
 
-def run_once(control, root, source=None, cloud=None):
+def seed_memory_index(state, cloud, key):
+    """Read the retired index from R2 into RAM; no SQLite/temp file is created."""
+    if not re.fullmatch(r'geollaqta/_ledger/local-retired-\d{8}-[a-f0-9]{64}\.sqlite3', key):
+        raise ValueError('Índice remoto no válido.')
+    body, _ = cloud.get(key)
+    if hashlib.sha256(body).hexdigest() != key[-72:-8]:
+        raise ValueError('El índice remoto no coincide con su hash.')
+    # A frozen serialized WAL database has no sidecar. Its in-memory copy uses
+    # the normal journal header; rows/pages and the remote original stay intact.
+    snapshot = bytearray(body)
+    snapshot[18:20] = b'\x01\x01'
+    previous = sqlite3.connect(':memory:')
+    try:
+        previous.deserialize(bytes(snapshot))
+        previous.execute('PRAGMA temp_store=MEMORY')
+        if previous.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
+            raise ValueError('El índice remoto requiere revisión.')
+        for table in ('lots', 'uploads'):
+            columns = [r[1] for r in state.db.execute('PRAGMA table_info('+table+')')]
+            names = ','.join(columns)
+            state.db.executemany('INSERT OR REPLACE INTO '+table+' ('+names+') VALUES ('+','.join('?' for _ in columns)+')',previous.execute('SELECT '+names+' FROM '+table))
+        state.db.commit()
+    finally:
+        previous.close()
+
+
+def run_once(control, root, source=None, cloud=None, memory_only=False, seed_index=None):
     reply = control.call('claim')
     job = reply.get('job')
     if not job:
@@ -54,11 +90,14 @@ def run_once(control, root, source=None, cloud=None):
     job_id, lease = job['id'], reply['lease']
     def api(action, payload=None):
         return control.call(action,payload,job_id,lease)
-    state = State(root)
+    state = State(memory=True) if memory_only else State(root)
     last_heartbeat = 0
     synced = {}
     prepared = False
     try:
+        if memory_only and seed_index:
+            cloud = cloud or R2()
+            seed_memory_index(state, cloud, seed_index)
         after = ''
         while True:
             seed = api('seed',{'after':after})
@@ -109,7 +148,9 @@ def run_once(control, root, source=None, cloud=None):
         flush()  # Recover uploads acknowledged locally before a lost dashboard connection.
         result = collect(job['ubigeo'],job['limit_lots'] or None,lot_id=job['lot_id'],
                          retry_missing=bool(job['retry_missing']),root=root,source=source,r2=cloud,
-                         progress=progress,checkpoint=checkpoint,keep_local=False,workers=job.get('workers', 1))
+                         progress=progress,checkpoint=checkpoint,keep_local=False,
+                         workers=min(job.get('workers', 1),2) if memory_only else job.get('workers', 1),
+                         **({'state':state} if memory_only else {}))
         flush()
         api('finish',{'status':'failed' if result['failed'] else 'completed',
                       'message':f"{result['processed']} lotes procesados; {result['uploaded']} archivados en R2; "

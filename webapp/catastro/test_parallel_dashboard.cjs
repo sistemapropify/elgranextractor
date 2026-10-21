@@ -14,11 +14,12 @@ class Element {
 const elements = new Map();
 const el = id => { if(!elements.has(id))elements.set(id,new Element());return elements.get(id); };
 el('district').value='040117';el('collection-workers').value='10';
+let errorResponse=null;
 let data={totals:{uploaded:0,reports:0,photos:0,missing:0},storage:{configured:true,bucket:'test'},jobs:[],lots:[],r2_bytes:0};
 const calls=[];
 const sandbox={document:{getElementById:el,createElement:()=>new Element(),addEventListener(){},hidden:false},
-  setTimeout:()=>1,clearTimeout(){},console,
-  fetch:async(url,options)=>{calls.push({url,options});return{ok:true,headers:{get:()=> 'application/json'},json:async()=>url.includes('/status/')?data:{job_id:'test-job'}};}};
+  setTimeout:()=>1,clearTimeout(){},console,URL,
+  fetch:async(url,options)=>{calls.push({url,options});return errorResponse||{ok:true,headers:{get:()=> 'application/json'},json:async()=>url.includes('/status/')?data:{job_id:'test-job'}};}};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../static/js/catastro-dashboard.js'),'utf8'),sandbox);
 const settle = () => new Promise(resolve=>setImmediate(resolve));
 (async()=>{
@@ -42,5 +43,15 @@ const settle = () => new Promise(resolve=>setImmediate(resolve));
   el('collection-workers').value='4';
   await el('collection-form').listeners.submit({preventDefault(){}});
   assert.equal(JSON.parse(calls.filter(call=>call.url.endsWith('/start/')).at(-1).options.body).workers,4);
+  errorResponse={status:500,headers:{get:()=> 'text/html'}};
+  await el('refresh-collection').listeners.click();
+  assert.match(el('collection-message').textContent,/Error del servidor \(500\)/);
+  assert.doesNotMatch(el('collection-message').textContent,/Inicia sesión/);
+  errorResponse={status:200,redirected:true,url:'http://127.0.0.1:8000/login/?next=/catastro/',headers:{get:()=> 'text/html'}};
+  await el('refresh-collection').listeners.click();
+  assert.match(el('collection-message').textContent,/Tu sesión venció/);
+  errorResponse=null;
+  await el('refresh-collection').listeners.click();
+  assert.equal(el('collection-message').textContent,'','A successful refresh clears a recovered connection/server error');
   console.log('Collector dashboard: worker selection, active lock, pause and resume passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

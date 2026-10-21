@@ -44,7 +44,7 @@
             const n=visible().filter(c=>c.key===key).reduce((sum,c)=>sum+c.records.length,0);
             el('count-'+key).textContent=fmt(n);
         }
-        el('map-note').textContent=visible().some(c=>c.source.reference_only)
+        el('map-note').textContent=!visible().length?'Sin capas visibles. El plano antiguo de Cayma se conserva como respaldo y puedes activarlo para comparar.':visible().some(c=>c.source.role==='draft')?'Borrador local del maestro · cada campo conserva su fuente y versión.':visible().some(c=>c.source.reference_only)
             ?'Cayma · geometría recuperada del plano de 2006. Ubicación de referencia; numeración pendiente.'
             :'Geometrías publicadas por GeoLlaqta · COFOPRI';
     }
@@ -68,7 +68,8 @@
         values.push(['Código catastral',p.ID_LOTE||p.ID_MZNA||'No disponible'],
             ['Identificador interno',p.ELEMENT_ID||recordId(item.source,item.key,item.feature)]);
         if(p.BLOCK_REF)values.push(['Manzana vinculada (ID interno)',p.BLOCK_REF]);
-        if(item.source.reference_only)values.push(['Estado','Contorno recuperado; pendiente de contraste con otros mapas'],
+        if(item.source.role==='draft')values.push(['Estado','Borrador local; no publicado'],['Versión geométrica',p.GEOMETRY_VERSION_ID||'Sin dato']);
+        else if(item.source.reference_only)values.push(['Estado','Contorno recuperado; pendiente de contraste con otros mapas'],
             ['Fecha del plano','Agosto de 2006'],['Ubicación','PSAD56 / UTM 19S inferido; transformado a WGS84']);
         for(const [label,value] of values){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;dl.append(dt,dd);}
         panel.append(dl);
@@ -155,13 +156,13 @@
         const sources=catalog.sources.filter(s=>s.active&&s.districts.includes(district));
         if(!sources.length){const p=document.createElement('p');p.className='master-help';p.textContent='Todavía no hay fuentes incorporadas para este distrito.';el('sources').append(p);}
         for(const source of sources){
-            if(!enabled.has(source.id))enabled.set(source.id,true);
+            if(!enabled.has(source.id))enabled.set(source.id,source.default_visible!==false);
             const card=document.createElement('article'),label=document.createElement('label'),check=document.createElement('input'),name=document.createElement('span');
             card.className='master-source';label.className='master-check';check.type='checkbox';check.checked=enabled.get(source.id);name.textContent=source.name;label.append(check,name);card.append(label);
             check.addEventListener('change',()=>{enabled.set(source.id,check.checked);refresh(false);});
             if(source.reference_only){
-                const badge=document.createElement('span');badge.className='master-badge';badge.textContent='Referencia · pendiente de contraste';card.append(badge);
-                const p=document.createElement('p');p.className='master-help';p.textContent=fmt(source.layers.manzanas.count)+' contornos de manzana y '+fmt(source.layers.lotes.count)+' de lote recuperados. Sin numeración. Manzanas agrupadas por contigüidad. Ubicación aproximada; datum inferido.';card.append(p);
+                const badge=document.createElement('span');badge.className='master-badge';badge.textContent=source.role==='backup'?'Respaldo · fuera del aporte actual':source.role==='draft'?'Borrador local · sin publicar':'Referencia · pendiente de contraste';card.append(badge);
+                const p=document.createElement('p');p.className='master-help';p.textContent=source.role==='draft'?'Aportes seleccionados por campo y versión; se conservan los datos de origen.':fmt(source.layers.manzanas.count)+' contornos de manzana y '+fmt(source.layers.lotes.count)+' de lote recuperados. Sin numeración. Manzanas agrupadas por contigüidad. Ubicación aproximada; datum inferido.';card.append(p);
             }
             el('sources').append(card);
         }

@@ -86,7 +86,7 @@ def available():
     return bool(converter_path() and importlib.util.find_spec('ezdxf') and importlib.util.find_spec('pyproj'))
 
 
-def start_import(upload):
+def start_import(upload, metadata=None):
     if not upload or Path(upload.name).suffix.lower() != '.dwg':
         raise ValueError('Selecciona un archivo DWG.')
     if upload.size > MAX_UPLOAD:
@@ -98,6 +98,10 @@ def start_import(upload):
         import pyproj
     except ImportError:
         raise RuntimeError('Faltan las bibliotecas de lectura CAD en este servidor.') from None
+    metadata = metadata if isinstance(metadata, dict) else {}
+    ubigeo = str(metadata.get('ubigeo') or '')
+    if ubigeo and not re.fullmatch(r'\d{6}', ubigeo):
+        raise ValueError('El UBIGEO debe tener seis dígitos.')
     root = imports_root()
     root.mkdir(parents=True, exist_ok=True)
     lock = root / 'conversion.lock'
@@ -131,6 +135,8 @@ def start_import(upload):
         filename = str(upload.name).replace('\\', '/').split('/')[-1][:180]
         write_status(folder, id=job_id, filename=filename, bytes=size, sha256=digest.hexdigest(),
                      version=signature.decode('ascii'), status='queued', message='DWG recibido. Preparando lectura de capas.', layers=[])
+        write_status(folder, source_name=str(metadata.get('name') or filename)[:200],
+                     sheet_code=str(metadata.get('sheet_code') or '')[:100], ubigeo=ubigeo)
         kwargs = dict(cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                       stderr=subprocess.DEVNULL, close_fds=True)
         if os.name == 'nt':
@@ -143,6 +149,30 @@ def start_import(upload):
         if lock.is_file() and lock.read_text() == job_id:
             lock.unlink()
         raise
+
+
+def inventory(limit=300):
+    """Return the bounded local DWG inventory; malformed job records are skipped."""
+    root = imports_root()
+    if not root.is_dir():
+        return []
+    rows = []
+    for path in sorted(root.glob('*/estado.json'), key=lambda item: item.stat().st_mtime, reverse=True):
+        if len(rows) >= limit:
+            break
+        try:
+            value = json.loads(path.read_text(encoding='utf8'))
+            if not re.fullmatch(r'[a-f0-9]{32}', str(value.get('id', ''))):
+                continue
+            row = {key: value.get(key) for key in
+                         ('id', 'filename', 'source_name', 'sheet_code', 'ubigeo', 'bytes', 'sha256',
+                          'status', 'message', 'updated', 'entities', 'drawable', 'units', 'cad_version')}
+            row['layer_count'] = len(value.get('layers') or [])
+            row['layers'] = (value.get('layers') or [])[:100]
+            rows.append(row)
+        except (OSError, ValueError, TypeError):
+            continue
+    return rows
 
 
 def read_dxf(folder):

@@ -27,6 +27,8 @@ const mapDiv=new Element(),map={getDiv:()=>mapDiv,getBounds:()=>null,getCenter:(
 function event(kind,x=50,y=50,deltaY=0){const e={pointerId:1,button:0,clientX:x,clientY:y,deltaY,deltaMode:0,preventDefault(){this.prevented=true;},stopImmediatePropagation(){this.stopped=true;}};mapDiv.events[kind](e);return e;}
 (async()=>{
  context.window.CaymaReferenceMap.init(map);await flush();
+ assert.equal(requests.length,0,'Backup is hidden and makes no requests until selected.');
+ el('cayma-ref-visible').checked=true;el('cayma-ref-visible').events.change();await flush();
  assert.equal(el('cayma-ref-edit').disabled,false);assert.equal(markers.length,0);
  assert.equal(el('cayma-ref-edit').textContent,'Reintentar ajuste');
  await el('cayma-ref-edit').events.click();assert.equal(map.options.draggable,false);

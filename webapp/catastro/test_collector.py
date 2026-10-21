@@ -224,7 +224,7 @@ class CollectorTests(unittest.TestCase):
 
     def test_district_job_has_no_record_limit_and_persists_inventory_progress(self):
         from catastro.jobs import start_job, run_job
-        with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'CATASTRO_DATA_DIR':tmp}),patch('catastro.jobs.credentials'):
+        with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'CATASTRO_DATA_DIR':tmp}),patch('catastro.jobs.credentials'),patch('catastro.master_pipeline.require_collection_ready'):
             job_id=start_job('040117',launch=False)
             def collector(ubigeo,limit,**kwargs):
                 self.assertIsNone(limit)

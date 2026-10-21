@@ -3,6 +3,8 @@ import json
 import re
 import os
 import time
+import sqlite3
+import logging
 from functools import wraps
 from pathlib import Path
 
@@ -27,7 +29,7 @@ def admin_required(view):
             return redirect('/login/?next=/catastro/')
         if not (getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False)):
             return JsonResponse({'error': 'El archivo catastral requiere acceso de administrador.'}, status=403)
-        if os.environ.get('CATASTRO_DISABLE_LOCAL_COLLECTION') == '1' and not request.path.startswith(('/catastro/visor-planos/', '/catastro/api/planos/', '/catastro/maestro/', '/catastro/api/maestro/')):
+        if os.environ.get('CATASTRO_DISABLE_LOCAL_COLLECTION') == '1' and not request.path.startswith(('/catastro/visor-planos/', '/catastro/api/planos/', '/catastro/maestro/', '/catastro/api/maestro/', '/catastro/registros/', '/catastro/api/registros/')):
             return redirect('https://acm.propifai.com' + request.get_full_path())
         return view(request, *args, **kwargs)
     return wrapped
@@ -46,18 +48,25 @@ def status(request):
     ubigeo = request.GET.get('ubigeo') or None
     if ubigeo and ubigeo not in DISTRICTS:
         return JsonResponse({'error': 'Distrito no válido.'}, status=400)
-    state = State()
+    state = None
     try:
+        state = State()
         data = state.snapshot(ubigeo)
         presence = state.db.execute('SELECT heartbeat,source_status FROM collector_presence WHERE id=1').fetchone()
         data['collector'] = {'external': os.environ.get('CATASTRO_EXECUTION_MODE') == 'external',
                              'connected': bool(presence and presence[0] > time.time() - 60),
                              'source_status': presence[1] if presence else 'unchecked',
                              'hosted': os.environ.get('CATASTRO_AZURE_WORKER_ENABLED') == '1'}
+        from .master_pipeline import status as pipeline_status
+        data['pipeline'] = pipeline_status()
         for job in data['jobs']:
             job['district_name'] = DISTRICTS.get(job['ubigeo'], {}).get('name', job['ubigeo'])
+    except sqlite3.DatabaseError:
+        logging.getLogger(__name__).exception('Cadastral ledger is unavailable')
+        return JsonResponse({'error': 'No se puede leer la base de seguimiento del catastro. Se requiere recuperar el índice; los documentos archivados se conservan.'}, status=503)
     finally:
-        state.close()
+        if state is not None:
+            state.close()
     try:
         config = credentials()
         data['storage'] = {'configured': True, 'bucket': config['R2_BUCKET']}

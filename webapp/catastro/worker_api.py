@@ -47,6 +47,10 @@ def private_worker(view):
 
 @private_worker
 def claim(request, data):
+    from .master_pipeline import status as pipeline_status
+    if not pipeline_status()['collection_enabled']:
+        return JsonResponse({'job': None, 'pending': False, 'paused': True,
+                             'message': 'Extracción detenida hasta validar el nuevo Catastro Maestro.'})
     source_status = data.get('source_status','available')
     may_claim = data.get('claim',True)
     if source_status not in ('unchecked','available','unavailable') or not isinstance(may_claim,bool):
@@ -86,6 +90,8 @@ def job_action(request, data, job_id, action):
         job = state.job(job_id)
         if not job or job['executor'] != 'external' or job['status'] != 'running' or not job['lease'] or not hmac.compare_digest(job['lease'],request.headers.get('X-Catastro-Lease','')):
             return JsonResponse({'error':'La ejecución ya no pertenece a este recolector.'},status=409)
+        from .master_pipeline import status as pipeline_status
+        held = not pipeline_status()['collection_enabled']
         if action == 'seed':
             after = str(data.get('after',''))
             if after and not re.fullmatch(job['ubigeo']+r'\d{8,12}',after):
@@ -93,7 +99,7 @@ def job_action(request, data, job_id, action):
             rows = [dict(r) for r in state.db.execute('SELECT * FROM lots WHERE ubigeo=? AND lot_id>? AND (? IS NULL OR lot_id=?) ORDER BY lot_id LIMIT 500',
                                                     (job['ubigeo'],after,job['lot_id'],job['lot_id']))]
             state.update_job(job_id)
-            return JsonResponse({'lots':rows,'next_after':rows[-1]['lot_id'] if len(rows)==500 else None,'stop':bool(job['stop'])})
+            return JsonResponse({'lots':rows,'next_after':rows[-1]['lot_id'] if len(rows)==500 else None,'stop':bool(job['stop']) or held})
         if action not in ('heartbeat','progress','lot','finish'):
             return JsonResponse({'error':'Acción no válida.'},status=404)
         values = {}
@@ -131,6 +137,18 @@ def job_action(request, data, job_id, action):
             values['message'] = 'Detención solicitada; conservando el avance.'
         state.db.execute('UPDATE collector_presence SET heartbeat=? WHERE id=1',(time.time(),))
         state.update_job(job_id,**values)
-        return JsonResponse({'stop':bool(job['stop'])})
+        if action=='lot' and row['uploaded'] and not held:
+            from . import source_manager
+            if source_manager.durable():
+                from .master_indexing import stage_archived_lot
+                from .storage import StorageError
+                from .master_store import Conflict
+                try:
+                    stage_archived_lot(job['ubigeo'],lot,source_manager.store())
+                except (StorageError,Conflict,ValueError):
+                    # The immutable R2 archive is acknowledged on retry; it is
+                    # never downloaded again from COFOPRI just to retry indexing.
+                    return JsonResponse({'error':'Originales conservados en R2; indexación D1 pendiente de reintento.','stop':False},status=503)
+        return JsonResponse({'stop':bool(job['stop']) or held})
     finally:
         state.close()

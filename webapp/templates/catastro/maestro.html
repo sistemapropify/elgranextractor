@@ -6,7 +6,7 @@
 <main class="master-workspace" id="master-workspace">
   <header class="master-heading">
     <div><span class="master-eyebrow">CATASTRO</span><h1>Catastro maestro</h1><p>Manzanas y lotes, organizados por distrito y fuente.</p></div>
-    <div class="master-actions"><button id="master-fit" type="button">Centrar distrito</button><button id="master-satellite" type="button" aria-pressed="false">Satélite</button><a href="/catastro/visor-planos/">Visor de planos</a></div>
+    <div class="master-actions"><button id="master-fit" type="button">Centrar distrito</button><button id="master-satellite" type="button" aria-pressed="false">Satélite</button><a href="/catastro/maestro/fuentes/">Fuentes y versiones</a><a href="/catastro/visor-planos/">Visor de planos</a></div>
   </header>
   <div class="master-body">
     <aside class="master-panel" aria-label="Capas y fuentes del catastro maestro">
@@ -27,6 +27,6 @@
 {% block extra_js %}
 <script src="{% static 'js/geollaqta-data.js' %}?v=1"></script>
 <script src="{% static 'js/geollaqta-district.js' %}?v=1"></script>
-<script src="{% static 'js/catastro-maestro.js' %}?v=1"></script>
+<script src="{% static 'js/catastro-maestro.js' %}?v=2"></script>
 {% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initCatastroMaster" async defer></script>{% else %}<script>document.getElementById('master-status').textContent='No se ha configurado la clave del mapa.';</script>{% endif %}
 {% endblock %}

@@ -1,0 +1,54 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+{% block title %}Fuentes y versiones · Catastro Maestro{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-fuentes.css' %}?v=2">{% endblock %}
+{% block content %}
+<main class="sources-workspace" id="sources-workspace">
+  <header class="sources-heading"><div><span class="sources-eyebrow">CATASTRO MAESTRO</span><h1>Fuentes y versiones</h1><p>Ensamblar planos, comparar aportes y sustituir sólo lo necesario.</p></div><nav><a href="/catastro/maestro/planos/">Dashboard de planos</a> · <a href="/catastro/maestro/?ubigeo=040103">Volver al mapa</a></nav></header>
+  <div class="sources-notice">{% if master_durable %}<strong>Catastro Maestro conectado a D1.</strong> Las versiones se conservan en Cloudflare y los PDF originales en R2. La nueva extracción de COFOPRI permanece bloqueada.{% else %}<strong>Borrador local en memoria.</strong> Se conserva mientras este servidor esté abierto. Los PDF originales y los datos de producción no se modifican. COFOPRI permanece detenido.{% endif %}</div>
+  <p id="sources-status" role="status" aria-live="polite">Consultando el borrador…</p>
+  <form id="sources-scope-form" class="sources-query"><label>Distrito de trabajo (UBIGEO)<input id="sources-workspace-ubigeo" value="040103" required pattern="[0-9]{6}"></label><button type="submit">Abrir distrito</button></form>
+  <div class="sources-stats" id="sources-stats"></div>
+  <div class="sources-grid">
+    <section class="sources-card"><h2>Registrar una lámina PDF</h2><p>Comienza con el original. Sus capas y posición se revisan antes de aportar geometrías al maestro.</p>
+      <form id="sources-pdf-form">{% csrf_token %}
+        <label>Nombre de la fuente<input name="name" required maxlength="200" placeholder="Cayma · sector 32"></label>
+        <div class="sources-pair"><label>Identificador de fuente<input name="source_id" required pattern="[a-zA-Z0-9][a-zA-Z0-9_.:-]*" placeholder="cayma-sector-32"></label><label>Código de lámina<input name="sheet_code" required placeholder="Sector 32"></label></div>
+        <div class="sources-pair"><label>UBIGEO<input name="ubigeo" required pattern="[0-9]{6}" value="040103"></label><label>Proyecto<select name="project_id" id="sources-project"></select></label></div>
+        <div class="sources-pair"><label>Etiqueta de versión<input name="label" required value="Versión 1"></label><label>Fecha del plano, si consta<input name="source_date" type="month"></label></div>
+        <label>Archivo original<input name="document" type="file" accept="application/pdf,.pdf" required></label>
+        <p class="sources-help">Hasta 12 MB. El PDF se inspecciona en memoria. {% if master_durable %}Su original se archiva en R2 y su versión en D1; registrar no activa sus geometrías.{% else %}Conserva tu archivo original. Este registro todavía no lo archiva en la nube ni determina sus coordenadas.{% endif %}</p>
+        <button type="submit">Inspeccionar y registrar PDF</button>
+      </form>
+      <details><summary>Incorporar un aporte ya normalizado</summary><p class="sources-help">Para aportes preparados con el contrato del maestro: fuente, versión, elementos, campos y procedencia. Registrar no activa sus datos.</p><label>Aporte normalizado<input id="sources-normalized" type="file" accept="application/json,.json"></label><button id="sources-import" type="button">Registrar versión candidata</button></details>
+    </section>
+    <section class="sources-card"><h2>Fuentes del proyecto</h2><p>El plano antiguo se conserva como respaldo. Cada PDF nuevo mantiene sus propias versiones.</p><div id="sources-list"></div><div id="sources-inspection" aria-live="polite"></div></section>
+    <section class="sources-card sources-wide" id="calibration-workspace"><h2>Calibrar la posición de un PDF</h2>
+      <p>Relaciona puntos reconocibles del plano con coordenadas documentadas. Se requieren al menos cuatro puntos de ajuste y dos de comprobación independiente. El resultado queda pendiente de revisión.</p>
+      <form id="calibration-form">
+        <div class="sources-triple"><label>PDF de referencia<select id="calibration-version" required></select></label><label>Página<input id="calibration-page" type="number" min="1" step="1" value="1" required></label><div><button id="calibration-load" type="button" data-calibration-button>Cargar página</button></div></div>
+        <div class="sources-pair"><label>EPSG de las coordenadas de control<input id="calibration-crs" placeholder="EPSG:… según la fuente de control" pattern="EPSG:[0-9]{4,6}" required></label><label>Error máximo admitido para este trabajo, m<input id="calibration-tolerance" type="number" min="0.000001" step="any" required></label></div>
+        <p class="sources-help">Las coordenadas se ingresan en Este y Norte, en un sistema proyectado en metros. El EPSG y la tolerancia requieren una fuente y un criterio de revisión; no se deducen de la escala impresa. Haz clic en la página para añadir un punto o introdúcelo manualmente.</p>
+        <p id="calibration-page-info"></p><div class="calibration-page"><img id="calibration-image" alt="Página del PDF para seleccionar puntos de control" hidden></div>
+        <div class="sources-table-wrap"><table><thead><tr><th>Punto</th><th>Función</th><th>X en PDF</th><th>Y en PDF</th><th>Este, m</th><th>Norte, m</th><th>Fuente / fecha / referencia del punto</th><th>Acción</th></tr></thead><tbody id="calibration-points"></tbody></table></div>
+        <div class="sources-buttons"><button id="calibration-add" type="button" data-calibration-button>Añadir punto manual</button><button type="submit" data-calibration-button>Calcular errores</button><button id="calibration-save" type="button" disabled data-calibration-button>Guardar propuesta pendiente</button></div>
+      </form>
+      <p id="calibration-status" role="status" aria-live="polite">Faltan puntos de control documentados. No se ha calculado una posición.</p><div id="calibration-report"></div>
+    </section>
+    <section class="sources-card sources-wide"><h2>Preparar una sustitución</h2>
+      <form id="sources-change-form">
+        <div class="sources-triple"><label>Operación<select id="sources-mode"><option value="fill">Completar campos vacíos / añadir elementos</option><option value="replace_fields">Sustituir campos elegidos</option><option value="replace_scope">Sustituir el aporte de una capa en el ámbito</option><option value="withdraw_source">Retirar el aporte de una fuente</option></select></label><label>Versión entrante<select id="sources-version"></select></label><label>Fuente a retirar<select id="sources-withdraw-source"></select></label></div>
+        <div class="sources-triple"><label>UBIGEO del cambio<input id="sources-ubigeo" value="040103" required pattern="[0-9]{6}"></label><label>Capa<select id="sources-kind"><option value="lote">Lotes</option><option value="manzana">Manzanas</option><option value="edificio">Edificios</option><option value="unidad">Unidades</option><option value="establecimiento">Establecimientos</option><option value="registro_documental">Registros documentales</option></select></label><label>Sector, opcional<input id="sources-sector" placeholder="Código exacto del sector"></label></div>
+        <details><summary>Delimitar inmuebles y relacionar identidades entre fuentes</summary><label>Identificadores del maestro, uno por línea<textarea id="sources-entities" rows="3" placeholder="Vacío: toda la capa del distrito o sector elegido"></textarea></label><p class="sources-help">Relaciona sólo elementos que hayas comprobado. Para cambiar campos de otra fuente se necesita la correspondencia con el inmueble existente.</p><div id="sources-mapping"></div><button type="button" id="sources-add-mapping" class="secondary">Añadir correspondencia</button></details>
+        <details open><summary>Campos afectados</summary><p class="sources-help">Para completar o sustituir toda una capa, sin marcar campos se consideran todos los aportes. Para sustituir campos, elige expresamente cuáles. Un dato ausente nunca borra por sí solo un valor existente.</p><div id="sources-fields" class="sources-fields"></div></details>
+        <label>Motivo del cambio<input id="sources-reason" required maxlength="1000" placeholder="Qué mejora esta fuente y qué parte se sustituye"></label>
+        <div class="sources-buttons"><button type="submit">Comparar antes de aplicar</button><button type="button" id="sources-apply" disabled>{% if master_durable %}Aplicar al maestro en D1{% else %}Aplicar al borrador local{% endif %}</button></div>
+      </form>
+      <div id="sources-comparison" aria-live="polite"><p>La comparación mostrará los campos y geometrías afectados antes de cambiar el borrador.</p></div>
+    </section>
+    <section class="sources-card sources-wide"><h2>Registro consultable del borrador</h2><form id="sources-query" class="sources-query"><label>País (código)<input name="country_code" placeholder="PE" maxlength="2"></label><label>Departamento<input name="department"></label><label>Provincia<input name="province"></label><label>Distrito<input name="district"></label><label>UBIGEO<input name="ubigeo" value="040103"></label><label>Código postal<input name="postal_code" pattern="[0-9]{5}"></label><label>Urbanización<input name="urbanization"></label><label>Sector<input name="sector"></label><label>Manzana<input name="block"></label><label>Lote<input name="lot"></label><label>Partida registral<input name="registry_entry_number"></label><label>DNI / documento del titular<input name="owner_document_number"></label><label>Área de terreno mínima, m²<input name="min_land_area" type="number" min="0" step="any"></label><label>Área de terreno máxima, m²<input name="max_land_area" type="number" min="0" step="any"></label><label>Actividad<select name="business_category" id="sources-business"><option value="">Todas</option></select></label><button>Consultar</button></form><div id="sources-records" class="sources-table-wrap"></div><div id="sources-geometry" class="sources-geometry"></div></section>
+    <section class="sources-card sources-wide"><h2>Historial y reversión</h2><p>Revertir restaura la selección de aportes de esa revisión. Conserva las versiones, identidades y relaciones.</p><label>Motivo de reversión<input id="sources-restore-reason" maxlength="1000" placeholder="Indica por qué quieres recuperar una revisión"></label><div id="sources-history"></div></section>
+  </div>
+</main>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/catastro-calibracion.js' %}?v=1"></script><script src="{% static 'js/catastro-fuentes.js' %}?v=2"></script>{% endblock %}

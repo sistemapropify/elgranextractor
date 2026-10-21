@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sector 32 · Revisión de capas vectoriales</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f6;color:#1e293b;font:14px/1.45 system-ui}aside{position:fixed;inset:0 auto 0 0;width:350px;padding:22px;overflow:auto;background:#fff;border-right:1px solid #d7e1ea}main{margin-left:350px;height:100vh}h1{font-size:24px;margin:0 0 8px}h2{font-size:16px;margin:22px 0 8px}p{color:#526477}label{display:flex;align-items:center;gap:8px;margin:9px 0;cursor:pointer}button,input,select{font:inherit}button{border:1px solid #c4d0db;border-radius:6px;background:#f8fafc;padding:7px 10px;cursor:pointer}button:hover{background:#e2edf5}input[type=search],select{width:100%;padding:9px;border:1px solid #c4d0db;border-radius:6px}input[type=checkbox]{accent-color:#087c68}.notice{background:#fff3d4;border:1px solid #ead08a;border-radius:8px;padding:10px;font-size:12px}.buttons,.links{display:flex;gap:8px;flex-wrap:wrap}a{color:#175a93}.links a{font-size:13px}svg{display:block;width:100%;height:100%;background:#fff;touch-action:none;cursor:grab}svg:active{cursor:grabbing}#hits path{fill:transparent;stroke:none;pointer-events:all;cursor:pointer}#hits path:hover{fill:#0284c72b}#hits path.selected{fill:#f59e0b50;stroke:#d97706;stroke-width:2}#sides{fill:none;stroke-width:2;pointer-events:none}#corners{fill:#e99a0055;fill-rule:evenodd;stroke:#db8700;stroke-width:1.5;pointer-events:none}#annotation-focus{fill:#ef444422;stroke:#ef4444;stroke-width:1.2;pointer-events:none}#detail table{width:100%;font-size:12px;border-collapse:collapse}td,th{text-align:left;vertical-align:top;padding:7px 3px;border-bottom:1px solid #dce4eb}dl{display:grid;grid-template-columns:1fr 1.3fr;gap:8px;font-size:13px}dt{color:#526477}dd{margin:0;overflow-wrap:anywhere}.caption{font-size:12px;color:#64748b}.summary{font-size:12px;border-bottom:1px solid #dce4eb;padding-bottom:12px}:focus-visible{outline:2px solid #167eb9;outline-offset:3px}@media(max-width:700px){aside{width:260px;padding:14px}main{margin-left:260px}h1{font-size:20px}}
+</style>
+<aside>
+<h1>Sector 32 · Cayma</h1>
+<div class="notice">Vectores del PDF original. Lecturas, asociaciones y orientación son propuestas para cotejar. Posición geográfica pendiente.</div>
+<p class="summary" id="summary"></p>
+<div class="buttons"><button id="fit">Ver todo</button><button id="zoom-in" aria-label="Acercar plano">＋</button><button id="zoom-out" aria-label="Alejar plano">−</button><button id="example">Localizar cota 26.01</button></div>
+<p class="caption">Rueda para acercar, arrastra para recorrer. Selecciona un contorno para ver sus datos.</p>
+<h2>Capas originales</h2>
+__CONTROLS__
+<h2>Capas propuestas</h2>
+<label><input type="checkbox" data-layer="sides">Frente · fondo · izquierda · derecha</label>
+<label><input type="checkbox" data-layer="corners">Esquinas con indicios de dos calles distintas</label>
+<p class="caption">Frente: verde. Fondo: rojo. Izquierda: azul. Derecha: violeta. Frentes múltiples: amarillo. Izquierda y derecha se miran desde la calle hacia el inmueble.</p>
+<h2>Buscar contorno</h2><input id="search" type="search" placeholder="Lote, código o rótulo de manzana" aria-label="Buscar lote o manzana"><select id="selection" size="5" aria-label="Contornos encontrados"></select>
+<section id="detail"><h2>Selecciona un contorno</h2><p>Los campos sin evidencia suficiente quedan pendientes. Un espacio vacío no se clasifica como parque.</p></section>
+<h2>Archivos</h2><div class="links"><a href="sector32_capas.dxf">DXF con capas</a><a href="lotes.csv">Tabla de lotes</a><a href="lados.csv">Tabla de lados</a><a href="manzanas.csv">Tabla de manzanas</a><a href="anotaciones.csv">Lecturas y cotas</a><a href="sector32.capas.json">Datos completos</a><a href="esquinas_propuestas.svg">Esquinas SVG</a></div>
+<p class="caption">Las cotas son longitudes anotadas, separadas de aranceles. No se convierten en áreas. Los contornos usan puntos del PDF; no son coordenadas del terreno. Las curvas del DXF se aproximan mediante segmentos; los SVG conservan las curvas originales.</p>
+</aside>
+<main>__SVG__<g id="corners" style="display:none">__CORNERS__</g><g id="hits" fill-rule="evenodd">__AREAS__</g><g id="sides" style="display:none">__SIDES__</g><g id="annotation-focus"></g></svg></main>
+<script>
+'use strict';
+const data=__DATA__,svg=document.querySelector('svg'),initial=svg.getAttribute('viewBox').split(' ').map(Number),ns='http://www.w3.org/2000/svg';
+let view=[...initial],drag=null,skip=false;
+const show=()=>svg.setAttribute('viewBox',view.join(' '));
+const text=(tag,value)=>{const e=document.createElement(tag);e.textContent=value??'Pendiente';return e;};
+const bool=v=>v==null?'Pendiente':v?'Sí · propuesta':'No · propuesta';
+function zoom(factor){const w=view[2]*factor;if(w<20||w>initial[2]*4)return;view=[view[0]+(view[2]-w)/2,view[1]+(view[3]-view[3]*factor)/2,w,view[3]*factor];show();}
+document.getElementById('fit').onclick=()=>{view=[...initial];show();};
+document.getElementById('zoom-in').onclick=()=>zoom(.7);document.getElementById('zoom-out').onclick=()=>zoom(1.4);
+document.querySelectorAll('[data-layer]').forEach(c=>c.addEventListener('change',()=>document.getElementById(c.dataset.layer).style.display=c.checked?'':'none'));
+svg.addEventListener('wheel',e=>{e.preventDefault();const q=new DOMPoint(e.clientX,e.clientY).matrixTransform(svg.getScreenCTM().inverse()),z=e.deltaY<0?.83:1.2;if(view[2]*z<20||view[2]*z>initial[2]*4)return;view=[q.x-(q.x-view[0])*z,q.y-(q.y-view[1])*z,view[2]*z,view[3]*z];show();},{passive:false});
+svg.addEventListener('pointerdown',e=>{if(e.button!==0)return;drag={x:e.clientX,y:e.clientY,moved:false};skip=false;svg.setPointerCapture(e.pointerId);});
+svg.addEventListener('pointermove',e=>{if(!drag)return;const matrix=svg.getScreenCTM().inverse(),a=new DOMPoint(drag.x,drag.y).matrixTransform(matrix),b=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix);if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>3)drag.moved=true;view[0]-=b.x-a.x;view[1]-=b.y-a.y;drag.x=e.clientX;drag.y=e.clientY;show();});
+svg.addEventListener('pointerup',()=>{skip=drag?.moved;drag=null;});svg.addEventListener('pointercancel',()=>{drag=null;});
+function select(id,focus=false){
+    const r=data.lots[id];if(!r)return;
+    document.querySelectorAll('#hits .selected').forEach(p=>p.classList.remove('selected'));
+    const path=document.querySelector('[data-record="'+id+'"]');path.classList.add('selected');
+    if(focus){const b=path.getBBox(),w=Math.max(b.width*2.8,100),h=Math.max(b.height*2.8,100);view=[b.x+b.width/2-w/2,b.y+b.height/2-h/2,w,h];show();}
+    const d=document.getElementById('detail');d.replaceChildren(text('h2',id),text('p','Contorno recuperado · pendiente de validación como lote.'));
+    const dl=document.createElement('dl');for(const [label,value] of [['Código de manzana',r.codigo_manzana_propuesto],['Rótulo de manzana',r.numero_manzana_propuesto],['Número de lote',r.numero_lote_propuesto],['Es esquina',bool(r.es_esquina)],['Es pasante',bool(r.es_pasante)],['Frente a parque',bool(r.frente_parque)],['Calles propuestas',(r.calles_propuestas||[]).join(' · ')||null]])dl.append(text('dt',label),text('dd',value));d.append(dl);
+    const table=document.createElement('table'),head=document.createElement('tr');['Lado','Papel propuesto','Cota anotada'].forEach(v=>head.append(text('th',v)));table.append(head);
+    for(const side of data.sides.filter(s=>s.lote_ref===id)){const row=document.createElement('tr');[side.id.split('-').pop(),side.tipo_lado,side.longitud_lado_propuesta].forEach(v=>row.append(text('td',v)));table.append(row);}d.append(table,text('p','Las cotas provienen de lecturas OCR del dibujo y requieren cotejo visual. Pueden faltar medidas. Esquina y frente principal no se fuerzan en casos ambiguos.'));
+}
+document.getElementById('hits').addEventListener('click',e=>{if(!skip&&e.target.dataset.record)select(e.target.dataset.record);});
+function list(){const query=document.getElementById('search').value.trim().toUpperCase(),box=document.getElementById('selection');box.replaceChildren();for(const r of Object.values(data.lots)){const label=[r.id_tecnico,'Mz '+(r.codigo_manzana_propuesto||'?'),r.numero_manzana_propuesto?'rótulo '+r.numero_manzana_propuesto:'','Lote '+(r.numero_lote_propuesto||'?')].join(' · ');if(query&&!label.toUpperCase().includes(query))continue;const o=text('option',label);o.value=r.id_tecnico;box.append(o);}}
+document.getElementById('search').addEventListener('input',list);document.getElementById('selection').addEventListener('change',e=>select(e.target.value,true));list();
+document.getElementById('summary').textContent=Object.keys(data.lots).length+' contornos candidatos · '+data.summary.numbered+' con número de lote propuesto · '+data.summary.corners+' esquinas propuestas · '+data.summary.lengths+' lados con cota asociada.';
+document.getElementById('example').onclick=()=>{const label=data.dimensions.find(d=>d.valor_numerico_propuesto===26.01);if(!label)return;const [x,y]=label.posicion_pdf;view=[x-100,y-85,200,170];show();const box=document.getElementById('annotation-focus');box.replaceChildren();const rect=document.createElementNS(ns,'rect');rect.setAttribute('x',label.bbox_pdf[0]-2);rect.setAttribute('y',label.bbox_pdf[1]-2);rect.setAttribute('width',label.bbox_pdf[2]-label.bbox_pdf[0]+4);rect.setAttribute('height',label.bbox_pdf[3]-label.bbox_pdf[1]+4);box.append(rect);const side=data.sides.find(s=>s.cota_refs.includes(label.id));if(side)select(side.lote_ref);else document.getElementById('detail').replaceChildren(text('h2','Cota 26.01'),text('p','Lectura del plano localizada; asociación al lado pendiente.'));};
+</script></html>

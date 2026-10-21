@@ -45,6 +45,15 @@ class DashboardTests(TestCase):
         self.assertContains(response,'value="10" selected')
         self.assertContains(response,'Pausar descarga')
 
+    def test_broken_ledger_is_a_server_error_not_an_authentication_error(self):
+        import sqlite3
+        self.client.force_login(self.admin)
+        with patch('catastro.views.State', side_effect=sqlite3.DatabaseError('database disk image is malformed')):
+            response = self.client.get('/catastro/api/status/')
+        self.assertEqual(response.status_code, 503)
+        self.assertIn('base de seguimiento', response.json()['error'])
+        self.assertNotIn('Inicia sesión', response.json()['error'])
+
     def test_post_requires_csrf_and_does_not_allow_get_to_launch(self):
         self.client.force_login(self.admin)
         self.assertEqual(self.client.get('/catastro/api/start/').status_code,405)

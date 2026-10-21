@@ -41,12 +41,22 @@ def viewer(request):
 @admin_required
 def upload(request):
     try:
-        job_id = cad_reader.start_import(request.FILES.get('file'))
+        job_id = cad_reader.start_import(request.FILES.get('file'), {
+            'name': request.POST.get('name'), 'sheet_code': request.POST.get('sheet_code'),
+            'ubigeo': request.POST.get('ubigeo')})
         return JsonResponse({'id': job_id}, status=202)
     except (ValueError, RuntimeError) as error:
         return JsonResponse({'error': str(error)}, status=400)
     except OSError:
         return JsonResponse({'error': 'No se pudo guardar el DWG o iniciar su lectura. Revisa el almacenamiento del servidor.'}, status=503)
+
+
+@require_GET
+@admin_required
+def inventory(request):
+    response = JsonResponse({'dwg': cad_reader.inventory()})
+    response['Cache-Control'] = 'private, no-store'
+    return response
 
 
 @require_GET

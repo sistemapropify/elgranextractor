@@ -14,12 +14,23 @@ def data_dir():
 
 
 class State:
-    def __init__(self, root=None):
-        self.root = Path(root or data_dir())
-        self.root.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(self.root / 'estado.sqlite3', timeout=20)
+    def __init__(self, root=None, memory=False):
+        if memory:
+            from .memory_files import MemoryPath
+            self.root = MemoryPath()
+            database = ':memory:'
+        else:
+            self.root = Path(root or data_dir())
+            self.root.mkdir(parents=True, exist_ok=True)
+            configured_db = os.environ.get('CATASTRO_STATE_DB') if root is None else None
+            database = Path(configured_db).expanduser() if configured_db else self.root / 'estado.sqlite3'
+            if configured_db and not database.is_file() and (self.root / 'estado.sqlite3').is_file():
+                raise RuntimeError('El índice configurado necesita migración; el seguimiento anterior se conserva.')
+            database.parent.mkdir(parents=True, exist_ok=True)
+        self.db = sqlite3.connect(database, timeout=20)
         self.db.row_factory = sqlite3.Row
-        self.db.execute('PRAGMA journal_mode=WAL')
+        self.db.execute('PRAGMA journal_mode=' + ('MEMORY' if memory else 'WAL'))
+        if memory:self.db.execute('PRAGMA temp_store=MEMORY')
         self.db.executescript('''
             CREATE TABLE IF NOT EXISTS lots (
                 lot_id TEXT PRIMARY KEY, ubigeo TEXT NOT NULL, object_id INTEGER,

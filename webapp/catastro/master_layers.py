@@ -17,6 +17,35 @@ SOURCES = {'cayma-pud-2006-eu03': DATA / 'cayma-pud-2006-eu03'}
 SCHEMA = 'prometeo-cadastral-geometry-v1'
 
 
+def _draft_metadata(source_id):
+    import re
+    from . import source_manager
+    if not source_manager.enabled() or not re.fullmatch(r'borrador-[0-9]{6}', source_id):
+        raise ValueError('Fuente no disponible.')
+    district = source_id[-6:]
+    store = source_manager.store()
+    with store.lock:
+        return _draft_metadata_locked(source_id, district, store)
+
+
+def _draft_metadata_locked(source_id, district, store):
+    collections = {key: store.collection(district, kind) for key,kind in [('lotes','lote'),('manzanas','manzana')]}
+    points = []
+    for collection in collections.values():
+        for f in collection['features']:
+            parts = [f['geometry']['coordinates']] if f['geometry']['type']=='Polygon' else f['geometry']['coordinates']
+            points.extend(p for part in parts for ring in part for p in ring)
+    if not points:
+        raise ValueError('El borrador todavía no tiene geometrías activas en este distrito.')
+    bounds = [min(p[0] for p in points),min(p[1] for p in points),max(p[0] for p in points),max(p[1] for p in points)]
+    return {'id':source_id,'name':'Maestro · borrador local','ubigeo':district,'districts':[district],
+            'active':True,'default_visible':True,'contributes':True,'reference_only':True,
+            'role':'draft','status':'local_draft','transport':'master','crs':'EPSG:4326',
+            'bbox':bounds,'original_bbox':bounds,'revision':store.revision,
+            'placement':{'revision':store.revision,'east_m':0.,'north_m':0.,'locked':True},
+            'layers':{key:{'count':len(data['features']),'kind':'polygon'} for key,data in collections.items()}}
+
+
 @lru_cache(maxsize=4)
 def _read(path, modified):
     return json.loads(Path(path).read_text(encoding='utf8'))
@@ -27,6 +56,8 @@ def read(path):
 
 
 def source_metadata(source_id):
+    if source_id.startswith('borrador-'):
+        return _draft_metadata(source_id)
     folder = SOURCES[source_id]
     meta = read(folder/'metadata.json')
     placement = {key: value for key, value in source_placement.read(folder).items()
@@ -49,8 +80,16 @@ def source_metadata(source_id):
 
 
 def revisions():
-    return {source_id: source_placement.read(folder)['revision'] for source_id, folder in SOURCES.items()
-            if (folder/'metadata.json').is_file() and read(folder/'metadata.json').get('active')}
+    value = {source_id: source_placement.read(folder)['revision'] for source_id, folder in SOURCES.items()
+            if (folder/'metadata.json').is_file() and read(folder/'metadata.json').get('active')
+            and read(folder/'metadata.json').get('contributes', True)}
+    from . import source_manager
+    if source_manager.enabled():
+        store = source_manager.store()
+        with store.lock:
+            for district in store.active_districts():
+                value['borrador-'+district] = store.revision
+    return value
 
 
 @lru_cache(maxsize=4)
@@ -89,6 +128,12 @@ def catalogue():
         if (folder/'metadata.json').is_file():
             sources.append({**source_metadata(source_id), 'transport': 'master',
                             'districts': [read(folder/'metadata.json')['ubigeo']]})
+    from . import source_manager
+    if source_manager.enabled():
+        store = source_manager.store()
+        with store.lock:
+            for district in store.active_districts():
+                sources.append(_draft_metadata('borrador-'+district))
     districts = [{**d} for d in geo.DISTRICTS.values()]
     for district in districts:
         district['sources'] = [s['id'] for s in sources if district['ubigeo'] in s['districts']]
@@ -124,7 +169,44 @@ def intersects(geometry, bounds):
             and max(p[1] for p in points) >= bounds[1])
 
 
+def public_draft_layer(value):
+    """Map permission does not grant the administrative documentary record."""
+    allowed = {'ID_DIST','COD_SECT','COD_MZNA','COD_LOTE','ELEMENT_ID','SOURCE_ID',
+               'SOURCE_NAME','MASTER_LAYER','REFERENCE_ONLY','GEOMETRY_VERSION_ID','BLOCK_REF'}
+    return {**value, 'features':[{'type':'Feature','id':feature['id'],'geometry':feature['geometry'],
+             'properties':{k:v for k,v in feature.get('properties',{}).items() if k in allowed}}
+             for feature in value['features']]}
+
+
 def layer(source_id, key, district, bounds=None, *, original=False, metadata=None):
+    if source_id.startswith('borrador-'):
+        from . import source_manager
+        if not source_manager.enabled():
+            raise ValueError('Fuente no disponible.')
+        with source_manager.store().lock:
+            return _layer(source_id, key, district, bounds, original=original, metadata=metadata)
+    return _layer(source_id, key, district, bounds, original=original, metadata=metadata)
+
+
+def _layer(source_id, key, district, bounds=None, *, original=False, metadata=None):
+    if source_id.startswith('borrador-'):
+        if key not in ('lotes','manzanas') or district != source_id[-6:] or original:
+            raise ValueError('Fuente, capa o distrito no válido.')
+        from . import source_manager
+        meta = metadata if metadata is not None else _draft_metadata(source_id)
+        data = source_manager.store().collection(district, 'lote' if key=='lotes' else 'manzana')
+        features = []
+        aliases = {'ubigeo':'ID_DIST','sector':'COD_SECT','block':'COD_MZNA','lot':'COD_LOTE'}
+        for feature in data['features']:
+            if bounds and not intersects(feature['geometry'],bounds):
+                continue
+            attrs = {**feature['properties'], 'ELEMENT_ID':feature['id'], 'SOURCE_ID':source_id,
+                     'REFERENCE_ONLY':True, 'GEOMETRY_VERSION_ID':feature['provenance'].get('$geometry',{}).get('version_id')}
+            attrs.update({target:attrs.get(source) for source,target in aliases.items()})
+            features.append({**feature,'id':source_id+':'+feature['id'],'properties':attrs})
+        return {**data,'features':features,'total':len(features),'source_total':len(data['features']),
+                'complete':True,'reference_only':True,'bbox':meta['bbox'],'original_bbox':meta['bbox'],
+                'original':False,'placement':meta['placement'],'schema':SCHEMA}
     if source_id not in SOURCES or key not in ('lotes', 'manzanas'):
         raise ValueError('Fuente o capa no disponible.')
     folder = SOURCES[source_id]
@@ -147,12 +229,22 @@ def layer(source_id, key, district, bounds=None, *, original=False, metadata=Non
 
 
 def radius(source_id, lat, lng, metres):
+    if source_id.startswith('borrador-'):
+        from . import source_manager
+        if not source_manager.enabled():
+            raise ValueError('Fuente no disponible.')
+        with source_manager.store().lock:
+            return _radius(source_id, lat, lng, metres)
+    return _radius(source_id, lat, lng, metres)
+
+
+def _radius(source_id, lat, lng, metres):
     """Whole polygons intersecting a small circle; no GIS runtime is needed."""
     lat, lng, metres = float(lat), float(lng), float(metres)
     if (not all(math.isfinite(v) for v in (lat, lng, metres))
             or not -85 <= lat <= 85 or not -180 <= lng <= 180 or not 100 <= metres <= 2000):
         raise ValueError('Ubicación o radio no válido.')
-    if source_id not in SOURCES:
+    if source_id not in SOURCES and not source_id.startswith('borrador-'):
         raise ValueError('Fuente no disponible.')
     meta = source_metadata(source_id)
     sy = 6371008.8 * math.pi/180

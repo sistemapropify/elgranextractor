@@ -4,7 +4,7 @@
   if (!root) return;
   const el = id => document.getElementById(id);
   const labels = {queued:'Preparando',running:'Descargando',completed:'Descarga terminada',failed:'Requiere revisión',stopped:'Detenida',interrupted:'Interrumpida',complete:'Completo',partial:'Documentos pendientes'};
-  let active = null, configured = false, timer = null, busy = false, generation = 0;
+  let active = null, configured = false, timer = null, busy = false, generation = 0, refreshFailed = false;
   const node = (tag, text) => { const n = document.createElement(tag); n.textContent = text; return n; };
   const bytes = value => value >= 1e9 ? (value / 1e9).toFixed(2) + ' GB' : value >= 1e6 ? (value / 1e6).toFixed(2) + ' MB' : value >= 1e3 ? (value / 1e3).toFixed(1) + ' KB' : value + ' B';
   async function api(url, data) {
@@ -15,7 +15,11 @@
       options.body = JSON.stringify(data);
     }
     const response = await fetch('/catastro/api/' + url, options);
-    if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('Inicia sesión para administrar el catastro.');
+    if (!response.headers.get('content-type')?.includes('application/json')) {
+      if (response.status === 401 || (response.redirected && /\/login\/?/.test(new URL(response.url).pathname))) throw new Error('Tu sesión venció. Inicia sesión para administrar el catastro.');
+      if (response.status === 403) throw new Error('Tu cuenta no tiene permiso para administrar el catastro.');
+      throw new Error('No se pudo consultar el archivo catastral. Error del servidor (' + response.status + '). El avance no se ha borrado; vuelve a intentarlo.');
+    }
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'No se pudo completar la solicitud.');
     return result;
@@ -67,8 +71,8 @@
   }
   async function refresh() {
     clearTimeout(timer); const current=++generation;
-    try { const data=await api('status/?ubigeo=' + encodeURIComponent(el('district').value));if(current!==generation)return;render(data); if(active)timer=setTimeout(refresh,5000); }
-    catch(error) { message(error.message,true); }
+    try { const data=await api('status/?ubigeo=' + encodeURIComponent(el('district').value));if(current!==generation)return;render(data); if(refreshFailed)message('');refreshFailed=false;if(active)timer=setTimeout(refresh,5000); }
+    catch(error) { if(current!==generation)return;refreshFailed=true;message(error.message,true);if(!document.hidden)timer=setTimeout(refresh,10000); }
   }
   el('collection-form').addEventListener('submit',async event => {
     event.preventDefault(); if(busy || active || !configured)return;busy=true;el('start-collection').disabled=true;el('collection-workers').disabled=true;

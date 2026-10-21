@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict');
+const {paths}=require('../static/js/catastro-fuentes.js');
+assert.deepEqual(paths({features:[]}),[]);
+const data={features:[{id:'stable-id',geometry:{type:'Polygon',coordinates:[[[0,0],[.01,0],[.01,.01],[0,.01],[0,0]],[[.002,.002],[.002,.003],[.003,.003],[.002,.002]]]}}]};
+const before=JSON.stringify(data),result=paths(data);
+assert.equal(result[0].id,'stable-id');
+assert.equal((result[0].d.match(/Z/g)||[]).length,2,'Holes remain separate closed paths.');
+assert.equal(JSON.stringify(data),before,'Drawing does not alter original coordinates.');
+assert.ok(!result[0].d.includes('NaN'));
+console.log('Master source geometry: empty state, stable identity, holes and immutable coordinates passed.');
