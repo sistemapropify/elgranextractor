@@ -349,14 +349,15 @@ def _archive_lot(feature, ubigeo, state, source, r2, upload, keep_local, checkpo
 
 def collect(ubigeo, max_lotes=None, lot_id=None, retry_missing=False, upload=True,
             root=None, r2=None, source=None, progress=None, checkpoint=lambda: None,
-            budget=DEFAULT_BUDGET, keep_local=None, workers=None):
+            budget=DEFAULT_BUDGET, keep_local=None, workers=None, state=None):
     validate(ubigeo, max_lotes, lot_id)
     check_pdf_runtime()
     workers = worker_count(workers)
     # A legacy byte-capped pilot keeps its exact sequential budget accounting.
     if budget is not None:
         workers = 1
-    state = State(root)
+    owns_state = state is None
+    state = state or State(root)
     source = source or Source(checkpoint)
     gate = RequestGate(interval=source.delay) if isinstance(source, Source) else None
     if gate:
@@ -517,4 +518,5 @@ def collect(ubigeo, max_lotes=None, lot_id=None, retry_missing=False, upload=Tru
             summary['stop_reason'] = 'finished' if summary['complete'] else 'pending_documents' if not summary['remaining_objects'] else 'batch_limit'
         return summary
     finally:
-        state.close()
+        if owns_state:
+            state.close()
