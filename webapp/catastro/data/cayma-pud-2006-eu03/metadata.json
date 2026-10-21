@@ -13,6 +13,9 @@
   "status": "reference",
   "active": true,
   "reference_only": true,
+  "default_visible": false,
+  "contributes": false,
+  "role": "backup",
   "crs": "EPSG:4326",
   "source_crs": "EPSG:24879",
   "georeferencing": {
