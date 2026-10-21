@@ -97,7 +97,10 @@ class DashboardTests(TestCase):
 
     def test_selected_parallelism_is_persisted_and_out_of_range_requests_do_not_launch(self):
         self.client.force_login(self.admin)
-        with patch('catastro.jobs.credentials'), patch('catastro.jobs.subprocess.Popen') as spawn:
+        # This test is about worker-count persistence, not re-enabling COFOPRI.
+        # Keep the explicit collection hold in place and bypass it only here.
+        with patch('catastro.master_pipeline.require_collection_ready'), \
+             patch('catastro.jobs.credentials'), patch('catastro.jobs.subprocess.Popen') as spawn:
             spawn.return_value.pid = 123
             response = self.client.post('/catastro/api/start/', data=json.dumps({'ubigeo':'040117','workers':4}), content_type='application/json')
             self.assertEqual(response.status_code, 202)
