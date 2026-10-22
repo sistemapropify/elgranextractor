@@ -51,7 +51,7 @@ class ValuationNotesAccessTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content[:150])
         self.assertEqual(response['Content-Type'], 'application/pdf')
         text = _pdf_text(response.content)
-        self.assertIn(b'487,038.39', text)
+        self.assertIn(b'487,038', text)
         self.assertIn(b'Valor revisado por conservacion y mejoras.', text)
         saved = ACMPortalAnalysis.objects.get(owner_id='77').snapshot['params']
         self.assertEqual(saved['manual_valuation'], 487038.39)
@@ -106,7 +106,7 @@ class ValuationNotesReportTests(SimpleTestCase):
         self.assertIn('Justificación u observaciones', html)
         self.assertIn('Observacion &lt;b&gt;especial&lt;/b&gt; &amp; acceso.', html)
         self.assertNotIn('ajustado en la tarjeta', html)
-        self.assertIn('234,567.89', html)
+        self.assertIn('234,568', html)
 
     def test_empty_notes_do_not_create_empty_report_sections(self):
         from .components_html import build_acm_html

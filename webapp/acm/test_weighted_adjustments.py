@@ -51,7 +51,7 @@ class WeightedAdjustmentTests(SimpleTestCase):
         doc=Document(BytesIO(build_acm_docx(p,rows,r,fetch_images=False)))
         text=' '.join(p.text for p in doc.paragraphs)+' '.join(c.text for t in doc.tables for row in t.rows for c in row.cells)
         self.assertIn('VALOR COMERCIAL',text)
-        self.assertIn('212,956.52',text)
+        self.assertIn('212,957',text)
         self.assertNotIn('Ajuste terreno',text)
         self.assertNotIn('Las demás casas quedan como referencia',text)
 

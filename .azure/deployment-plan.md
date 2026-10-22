@@ -14,6 +14,7 @@ No other shared-checkout work is included. The additive D1 plan annotation migra
 ## Validation Proof - 2026-10-22 America/Lima
 - `catastro.test_master_layers`, `test_raster_overlays`, `test_master_model`, `test_master_store`, `test_master_d1`, `test_planos` and `test_views`: 78 tests passed; Django system check clean.
 - `acm.test_cadastral`, `test_client_report`, `test_report_selection`, `test_reference_fallback` and `test_components.ComponentsEngineTests`: 89 tests passed; Django system check clean.
+- The first CI run correctly rejected three legacy report assertions that still expected decimal amounts. Their expected PDF, Word and HTML values were updated to the new integer format; the exact 124-test workflow regression suite then passed.
 - JavaScript checks passed for plan geometry, eleven stage descriptions and exclusive file stages, native Google vectors, Cayma sector adjustment, ACM cadastre loading/refresh, raster assets and the private D1 worker.
 - Offline collectstatic collected 134 assets; all nine changed Catastro/ACM assets matched their source bytes.
 - Python AST parse passed for 12 changed runtime modules; workflow YAML and Sector 32 GeoJSON parsed successfully.
