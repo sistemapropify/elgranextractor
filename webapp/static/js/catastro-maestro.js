@@ -23,7 +23,8 @@
         const polygons=geometry.type==='Polygon'?[geometry.coordinates]:geometry.coordinates;
         const rings=polygons.flat().map(ring=>ring.map(world));
         const points=rings.flat(),xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
-        return {feature,source,key,rings,bbox:[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]};
+        const path=rings.map(ring=>ring.map((p,i)=>(i?'L':'M')+p[0]+' '+p[1]).join('')+'Z').join('');
+        return {feature,source,key,rings,path,bbox:[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]};
     }
     // IDs are qualified by source. A PDF geometry ID never becomes ID_LOTE.
     const recordId=(source,key,feature)=>source.id+':'+key+':'+feature.id;
@@ -32,9 +33,12 @@
     const el=id=>document.getElementById('master-'+id);
     if(!el('workspace'))return;
     const fmt=n=>n.toLocaleString('es-PE');
-    let map,overlay,catalog,district,controller,selected=null;
+    let map,vectorLayer,catalog,district,controller,selected=null,selectedFeature=null;
+    let cataloguePromise=null;
     const collections=new Map(),enabled=new Map(),pending=new Map();
+    const dataFeatures=new Map();
     const layerOn={manzanas:true,lotes:true};
+    const caymaRequested=()=>new URL(location.href).searchParams.get('cayma')==='1';
     const status=(text,error=false)=>{el('status').textContent=text;el('status').dataset.error=String(error);};
     function visible() {
         return [...collections.values()].filter(c=>c.district===district&&enabled.get(c.source.id)&&layerOn[c.key]);
@@ -74,39 +78,54 @@
         for(const [label,value] of values){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;dl.append(dt,dd);}
         panel.append(dl);
     }
+    function selectFeature(item,feature) {
+        if(selectedFeature&&selectedFeature!==feature)vectorLayer.revertStyle(selectedFeature);
+        selected=item;selectedFeature=feature;
+        if(feature)vectorLayer.overrideStyle(feature,{
+            visible:true,fillColor:'#ffff55',fillOpacity:.2,strokeColor:'#ffffff',
+            strokeOpacity:1,strokeWeight:3,clickable:true
+        });
+        if(item)detail(item);
+    }
     function selectAt(point) {
         const target=world(point),matches=[];
         visible().forEach(c=>c.records.forEach(r=>{
             if(target[0]>=r.bbox[0]&&target[0]<=r.bbox[2]&&target[1]>=r.bbox[1]&&target[1]<=r.bbox[3]&&contains(r.feature.geometry,point))matches.push(r);
         }));
         matches.sort((a,b)=>(a.key==='lotes'?0:1)-(b.key==='lotes'?0:1));
-        selected=matches[0]||null;if(selected)detail(selected);overlay?.draw();
+        const item=matches[0]||null;
+        selectFeature(item,item?dataFeatures.get(recordId(item.source,item.key,item.feature)):null);
     }
-    function makeOverlay() {
-        class Vectors extends google.maps.OverlayView {
-            onAdd(){this.canvas=document.createElement('canvas');this.canvas.style.cssText='position:absolute;pointer-events:none';this.canvas.setAttribute('aria-hidden','true');this.getPanes().overlayLayer.append(this.canvas);}
-            draw(){
-                if(!this.canvas||!map.getBounds())return;
-                const size=map.getDiv(),ratio=Math.min(devicePixelRatio||1,2),w=size.clientWidth,h=size.clientHeight;
-                this.canvas.width=w*ratio;this.canvas.height=h*ratio;this.canvas.style.width=w+'px';this.canvas.style.height=h+'px';
-                const nw=new google.maps.LatLng(map.getBounds().getNorthEast().lat(),map.getBounds().getSouthWest().lng());
-                const origin=this.getProjection().fromLatLngToDivPixel(nw),base=world([nw.lng(),nw.lat()]),scale=2**map.getZoom();
-                this.canvas.style.left=origin.x+'px';this.canvas.style.top=origin.y+'px';
-                const ctx=this.canvas.getContext('2d');ctx.scale(ratio,ratio);
-                const trace=r=>r.rings.forEach(ring=>{ring.forEach((p,i)=>{const x=(p[0]-base[0])*scale,y=(p[1]-base[1])*scale;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.closePath();});
-                for(const key of ['manzanas','lotes']){
-                    ctx.beginPath();
-                    visible().filter(c=>c.key===key).forEach(c=>c.records.forEach(r=>{
-                        if((r.bbox[2]-base[0])*scale<0||(r.bbox[0]-base[0])*scale>w||(r.bbox[3]-base[1])*scale<0||(r.bbox[1]-base[1])*scale>h)return;
-                        trace(r);
-                    }));
-                    ctx.strokeStyle=key==='manzanas'?'#06d7af':'#efb140';ctx.lineWidth=key==='manzanas'?1.7:.8;ctx.globalAlpha=key==='manzanas'?.95:.8;ctx.stroke();
-                }
-                if(selected&&enabled.get(selected.source.id)&&layerOn[selected.key]){ctx.beginPath();trace(selected);ctx.globalAlpha=1;ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.fillStyle='#ffff552b';ctx.fill('evenodd');ctx.stroke();}
-            }
-            onRemove(){this.canvas?.remove();}
-        }
-        overlay=new Vectors();overlay.setMap(map);
+
+    function vectorStyle(feature) {
+        const key=feature.getProperty('MASTER_LAYER');
+        const sourceId=feature.getProperty('SOURCE_ID');
+        return {
+            visible:Boolean(feature.getProperty('DISTRICT')===district&&layerOn[key]&&enabled.get(sourceId)!==false),
+            clickable:false,fillOpacity:0,
+            strokeColor:key==='manzanas'?'#06d7af':'#efb140',
+            strokeOpacity:key==='manzanas'?.95:.8,
+            strokeWeight:key==='manzanas'?1.7:.8,
+            zIndex:key==='manzanas'?1:2,
+        };
+    }
+    function makeVectorLayer() {
+        vectorLayer=new google.maps.Data({map});
+        vectorLayer.setStyle(vectorStyle);
+    }
+    function addVectorFeatures(collection) {
+        const features=collection.records.map(item=>{
+            const masterId=recordId(item.source,item.key,item.feature);
+            return {type:'Feature',properties:{MASTER_ID:masterId,MASTER_LAYER:item.key,
+                SOURCE_ID:item.source.id,DISTRICT:collection.district},
+                // Data layers stay intact across districts; the style hides
+                // features that do not belong to the active district.
+                geometry:item.feature.geometry};
+        });
+        const added=vectorLayer.addGeoJson({type:'FeatureCollection',features},
+            {idPropertyName:'MASTER_ID'});
+        added.forEach(feature=>dataFeatures.set(feature.getProperty('MASTER_ID'),feature));
+        vectorLayer.setStyle(vectorStyle);
     }
     async function json(url,signal) {
         const response=await fetch(url,{credentials:'same-origin',signal,headers:{Accept:'application/json'}});
@@ -133,23 +152,39 @@
                     }});
                     else result=await json('/catastro/api/maestro/fuentes/'+encodeURIComponent(source.id)+'/'+key+'/?ubigeo='+current,signal);
                     if(signal.aborted)return;
-                    collections.set(id,{source,key,district:current,records:result.features.map(f=>record(f,source,key)).filter(Boolean)});
+                    const collection={source,key,district:current,records:result.features.map(f=>record(f,source,key)).filter(Boolean)};
+                    collections.set(id,collection);
+                    if(vectorLayer)addVectorFeatures(collection);
                 })().finally(()=>pending.delete(id));pending.set(id,task);
             }
             await task;if(signal.aborted||district!==current)return;
-            counts();overlay?.draw();
+            counts();
         }
     }
     async function refresh(fitAfter=false) {
         controller?.abort();controller=new AbortController();const signal=controller.signal;
-        selected=null;counts();overlay?.draw();
+        if(selectedFeature)vectorLayer?.revertStyle(selectedFeature);
+        selected=null;selectedFeature=null;vectorLayer?.setStyle(vectorStyle);counts();
         const sources=catalog.sources.filter(s=>s.active&&s.districts.includes(district)&&enabled.get(s.id));
         status(sources.length?'Cargando las capas del distrito…':'Activa una fuente para ver sus capas.');
         try{
             await Promise.all(sources.map(s=>loadSource(s,signal)));if(signal.aborted)return;
-            counts();overlay?.draw();if(fitAfter)fit();
-            if(sources.length)status('Capas listas · '+catalog.districts.find(d=>d.ubigeo===district).name+' · '+(sources.some(s=>s.reference_only)?'Fuente de referencia; lista para completar con otros mapas.':'Fuente GeoLlaqta · COFOPRI.'));
+            counts();if(fitAfter)fit();
+            if(sources.length)status((map?'Capas listas · ':'Fuentes y capas cargadas; Google Maps aún no está disponible · ')+catalog.districts.find(d=>d.ubigeo===district).name+' · '+(sources.some(s=>s.reference_only)?'Fuente de referencia; lista para completar con otros mapas.':'Fuente GeoLlaqta · COFOPRI.'));
         }catch(error){if(error.name!=='AbortError'&&!signal.aborted)status(error.message,true);}
+    }
+    function showCaymaReference(updateUrl=true) {
+        if(!catalog||!el('district'))return;
+        enabled.set('cayma-pud-2006-eu03',true);
+        el('district').value='040103';
+        if(updateUrl){
+            const url=new URL(location.href);
+            url.searchParams.set('ubigeo','040103');
+            url.searchParams.set('cayma','1');
+            history.replaceState(null,'',url);
+        }
+        changeDistrict(true);
+        status('Cayma · plano municipal de 2006 · referencia temporal sin validar.');
     }
     function sourcesPanel() {
         el('sources').replaceChildren();
@@ -168,22 +203,63 @@
         }
         counts();
     }
-    function changeDistrict() {
+    function changeDistrict(fitAfter=true) {
         district=el('district').value;selected=null;
         el('detail').replaceChildren();const h=document.createElement('h2'),p=document.createElement('p');h.textContent='Elemento seleccionado';p.className='master-help';p.textContent='Selecciona un contorno para ver su fuente y los datos disponibles.';el('detail').append(h,p);
-        const url=new URL(location.href);url.searchParams.set('ubigeo',district);history.replaceState(null,'',url);sourcesPanel();refresh(true);
+        const url=new URL(location.href);url.searchParams.set('ubigeo',district);history.replaceState(null,'',url);sourcesPanel();refresh(fitAfter);
+        window.dispatchEvent(new CustomEvent('catastro-master-district',{detail:{ubigeo:district}}));
+    }
+    function showCatalogueError(error) {
+        const panel=el('sources');panel.replaceChildren();
+        const message=document.createElement('p');message.className='master-help';message.dataset.error='true';
+        message.textContent=error?.message||'No se pudieron consultar las fuentes del Catastro Maestro.';
+        const retry=document.createElement('button');retry.type='button';retry.textContent='Reintentar fuentes';
+        retry.addEventListener('click',()=>{cataloguePromise=null;prepareCatalogue();});
+        panel.append(message,retry);status(message.textContent,true);
+    }
+    function prepareCatalogue() {
+        if(cataloguePromise)return cataloguePromise;
+        cataloguePromise=(async()=>{
+            status('Cargando distritos y fuentes del Catastro Maestro…');
+            catalog=await json('/catastro/api/maestro/catalogo/');
+            const districtSelect=el('district');districtSelect.replaceChildren();
+            for(const d of catalog.districts){const option=document.createElement('option');option.value=d.ubigeo;option.textContent=d.name+(d.sources.length?'':' · sin fuentes');districtSelect.append(option);}
+            const requested=new URL(location.href).searchParams.get('ubigeo');
+            const fallback=catalog.districts.find(d=>d.published_lots>0&&d.sources.length)||catalog.districts.find(d=>d.sources.length);
+            districtSelect.value=catalog.districts.some(d=>d.ubigeo===requested)?requested:
+                (caymaRequested()?'040103':(fallback?.ubigeo||'040103'));
+            districtSelect.disabled=false;
+            if(!districtSelect.dataset.ready){districtSelect.addEventListener('change',()=>changeDistrict(true));districtSelect.dataset.ready='true';}
+            if(caymaRequested())enabled.set('cayma-pud-2006-eu03',true);
+            changeDistrict(false);
+            return catalog;
+        })().catch(error=>{cataloguePromise=null;showCatalogueError(error);throw error;});
+        return cataloguePromise;
     }
     window.initCatastroMaster=async()=>{
+        if(map)return fit();
         map=new google.maps.Map(el('map'),{center:{lat:-16.36,lng:-71.545},zoom:14,mapTypeControl:false,streetViewControl:false,fullscreenControl:true,clickableIcons:false});
-        makeOverlay();map.addListener('click',event=>selectAt([event.latLng.lng(),event.latLng.lat()]));
+        makeVectorLayer();
+        for(const collection of collections.values())addVectorFeatures(collection);
+        window.CatastroMasterMap={getMap:()=>map};
+        window.dispatchEvent(new CustomEvent('catastro-master-ready',{detail:{map}}));
+        map.addListener('click',event=>selectAt([event.latLng.lng(),event.latLng.lat()]));
         el('fit').addEventListener('click',fit);
         el('satellite').addEventListener('click',()=>{const value=map.getMapTypeId()!=='satellite';map.setMapTypeId(value?'satellite':'roadmap');el('satellite').setAttribute('aria-pressed',String(value));});
-        for(const key of ['manzanas','lotes'])el(key).addEventListener('change',()=>{layerOn[key]=el(key).checked;selected=null;counts();overlay.draw();});
+        for(const key of ['manzanas','lotes'])el(key).addEventListener('change',()=>{
+            layerOn[key]=el(key).checked;
+            if(selectedFeature){vectorLayer.revertStyle(selectedFeature);selected=null;selectedFeature=null;}
+            counts();vectorLayer.setStyle(vectorStyle);
+        });
         try{
-            catalog=await json('/catastro/api/maestro/catalogo/');el('district').replaceChildren();
-            for(const d of catalog.districts){const option=document.createElement('option');option.value=d.ubigeo;option.textContent=d.name+(d.sources.length?'':' · sin fuentes');el('district').append(option);}
-            const requested=new URL(location.href).searchParams.get('ubigeo');el('district').value=catalog.districts.some(d=>d.ubigeo===requested)?requested:'040103';el('district').disabled=false;
-            el('district').addEventListener('change',changeDistrict);changeDistrict();
-        }catch(error){status(error.message,true);}
+            await prepareCatalogue();fit();
+        }catch(_){/* The catalogue already renders its own retry state. */}
     };
+    const startCatalogue=()=>prepareCatalogue().catch(()=>{});
+    el('cayma-preview')?.addEventListener('click',()=>{
+        if(catalog)showCaymaReference(true);
+        else prepareCatalogue().then(()=>showCaymaReference(true)).catch(()=>{});
+    });
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',startCatalogue,{once:true});
+    else startCatalogue();
 })();

@@ -1,3 +1,29 @@
+# Catastro Maestro and ACM production release - 2026-10-22
+
+Status: Validated
+Recipe: existing serialized GitHub Actions App Service pipeline.
+Authorization: the user explicitly requested publication of all Catastro Maestro and ACM changes and improvements.
+Base: origin/main 932f1bd3.
+Target: existing granextractorservice / rg-elgranextractor, Brazil South, subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Public: https://acm.propifai.com/catastro/maestro/
+
+## Scope
+Publish the eleven-stage plan dashboard with titles, dated notes, thumbnails, document lists and stage progress; Geollaqta data as a source consumed by the master; the SQL data model for joining plan codes to stable entity UUIDs; Cayma 2006 plus provisional Sector 32 with the old plan clipped where Sector 32 applies; the drone/satellite raster shared by Catastro and ACM; integer-only ACM values; PDM use-zone tables in PDF, Word and HTML reports; and the global Catastro navigation links.
+No other shared-checkout work is included. The additive D1 plan annotation migration is applied before deployment. Existing App Service and Azure credentials remain unchanged.
+
+## Validation Proof - 2026-10-22 America/Lima
+- `catastro.test_master_layers`, `test_raster_overlays`, `test_master_model`, `test_master_store`, `test_master_d1`, `test_planos` and `test_views`: 78 tests passed; Django system check clean.
+- `acm.test_cadastral`, `test_client_report`, `test_report_selection`, `test_reference_fallback` and `test_components.ComponentsEngineTests`: 89 tests passed; Django system check clean.
+- JavaScript checks passed for plan geometry, eleven stage descriptions and exclusive file stages, native Google vectors, Cayma sector adjustment, ACM cadastre loading/refresh, raster assets and the private D1 worker.
+- Offline collectstatic collected 134 assets; all nine changed Catastro/ACM assets matched their source bytes.
+- Python AST parse passed for 12 changed runtime modules; workflow YAML and Sector 32 GeoJSON parsed successfully.
+- D1 migration `007_plan_annotations.sql` applied remotely; `plan_workspace` and `plan_notes` were verified in database `prometeo-catastro-maestro`.
+- Worker `prometeo-catastro-maestro` deployed successfully as version `c250f774-17b5-4bc2-b9fd-5836252daea4`; public health reports configured.
+- Azure read confirms the existing App Service is Running in Brazil South with `CATASTRO_MASTER_STORAGE=d1` and `CATASTRO_MASTER_ENABLED=1`.
+- Final CI/CD, public revision and production endpoint checks remain mandatory before reporting the release live.
+
+---
+
 # ACM house land-only and adopted report unit - 2026-10-20
 
 Status: Validated

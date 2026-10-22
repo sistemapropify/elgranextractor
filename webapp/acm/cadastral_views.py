@@ -4,6 +4,7 @@ from django.http import JsonResponse, HttpResponse, Http404
 from django.views.decorators.http import require_GET
 from .access import required
 from catastro import master
+from catastro import raster_overlays, source_manager
 from catastro.storage import StorageError
 
 
@@ -16,6 +17,44 @@ def configuration(request):
         return response
     except StorageError:
         return JsonResponse({'error': 'No se pudo consultar la versión compartida del plano. Vuelve a consultar.'}, status=503)
+
+
+@require_GET
+@required('cadastral_info')
+def raster_catalog(request):
+    """ACM authentication adapter over the single Catastro Maestro catalog."""
+    try:
+        if not (source_manager.enabled() or source_manager.durable()):
+            return JsonResponse({'overlays': [], 'revision': 0})
+        store = source_manager.store()
+        overlays = raster_overlays.list_all_overlays(store)
+        for item in overlays:
+            item['image_url'] = ('/acm/catastro/raster/' + item['id'] +
+                                 '/imagen/?ubigeo=' + item['ubigeo'])
+        response = JsonResponse({'overlays': overlays, 'revision': store.revision},
+                                json_dumps_params={'ensure_ascii': False})
+        response['Cache-Control'] = 'private, no-store'
+        return response
+    except StorageError:
+        return JsonResponse({'error': 'No se pudo consultar el mosaico satelital.'}, status=503)
+
+
+@require_GET
+@required('cadastral_info')
+def raster_image(request, overlay_id):
+    try:
+        if not (source_manager.enabled() or source_manager.durable()):
+            raise ValueError('La capa satelital no está disponible.')
+        body, content_type = raster_overlays.image_body(
+            source_manager.store(), overlay_id, request.GET.get('ubigeo', ''))
+        response = HttpResponse(body, content_type=content_type)
+        response['Cache-Control'] = 'private, max-age=3600'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+    except StorageError:
+        return JsonResponse({'error': 'No se pudo recuperar la imagen satelital.'}, status=503)
+    except (ValueError, TypeError, KeyError):
+        raise Http404
 
 
 @require_GET
@@ -35,8 +74,11 @@ def revisions(request):
 def reference_geometry(request, source_id):
     from catastro import master_layers
     try:
-        response = JsonResponse(master_layers.radius(source_id, request.GET.get('lat', ''),
-            request.GET.get('lng', ''), request.GET.get('radius', '')),
+        value = master_layers.radius(source_id, request.GET.get('lat', ''),
+            request.GET.get('lng', ''), request.GET.get('radius', ''))
+        if source_id.startswith('borrador-'):
+            value = {**value, **{key:master_layers.public_draft_layer(value[key]) for key in ('lots','blocks')}}
+        response = JsonResponse(value,
             json_dumps_params={'separators': (',', ':')})
         response['Cache-Control'] = 'no-store'
         return response

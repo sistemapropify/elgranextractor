@@ -10,7 +10,7 @@
   const unselected=new Set();
   let pulseMarkers=[],pulseTimer=null;
   const money=(n,digits=0)=>n==null?'—':new Intl.NumberFormat('es-PE',{style:'currency',currency:'USD',maximumFractionDigits:digits}).format(n);
-  const decimals=n=>n==null?'Sin informar':new Intl.NumberFormat('es-PE',{maximumFractionDigits:2}).format(n);
+  const decimals=n=>n==null?'Sin informar':new Intl.NumberFormat('es-PE',{maximumFractionDigits:0}).format(n);
   const age=n=>n==null||!Number.isFinite(Number(n))||Number(n)<0?'Sin informar':Number(n)===0?'Estreno':decimals(n)+(Number(n)===1?' año':' años');
   const formatDate=value=>{if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?String(value):date.toLocaleString('es-PE',{dateStyle:'short',timeStyle:'short'});};
   const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -168,6 +168,7 @@
   }
   window.initComponentMap=()=>{
     const p=input();map=new google.maps.Map($('cmp-map'),{center:restoredViewport?{lat:restoredViewport.lat,lng:restoredViewport.lng}:{lat:p.lat,lng:p.lng},zoom:restoredViewport?.zoom??15,mapTypeControl:false,streetViewControl:!!permissions.street_view,gestureHandling:'greedy'});map.addListener('click',e=>setLocation(e.latLng.lat(),e.latLng.lng()));
+    if(window.CatastroRasterMap)window.CatastroRasterMap.init(map,{catalogUrl:'/acm/catastro/raster/'});
     const auto=new google.maps.places.Autocomplete($('cmp-address'),{fields:['geometry','formatted_address'],componentRestrictions:{country:'pe'}});
     auto.addListener('place_changed',()=>{const place=auto.getPlace();if(place.geometry){setLocation(place.geometry.location.lat(),place.geometry.location.lng());map.setZoom(16);}});
     const gestureObserver=new MutationObserver(hideGoogleGestureHint);gestureObserver.observe($('cmp-map'),{childList:true,subtree:true,characterData:true});hideGoogleGestureHint();
@@ -467,7 +468,7 @@
     catch(error){if(seq===sequence){clearResult('No se pudo actualizar el cálculo con referencias. Reintenta la búsqueda.');$('cmp-status').textContent=error.message;}}
   });
   document.addEventListener('acm:report-notes-changed',()=>{updateReportButtons();$('cmp-save').textContent='Guardar en historial';});
-  document.addEventListener('acm:valuation-adjusted',()=>{const total=(permissions.adjust_valuation?window.ACMComparisonValuation?.value():null)??result?.new?.total;const displayed=$('cmp-new').querySelector('.cmp-total');if(displayed&&total!=null)displayed.textContent=money(total,2);updateReportButtons();$('cmp-save').textContent='Guardar en historial';});
+  document.addEventListener('acm:valuation-adjusted',()=>{const total=(permissions.adjust_valuation?window.ACMComparisonValuation?.value():null)??result?.new?.total;const displayed=$('cmp-new').querySelector('.cmp-total');if(displayed&&total!=null)displayed.textContent=money(total);updateReportButtons();$('cmp-save').textContent='Guardar en historial';});
   function renderSimple(){
     const host=$('cmp-simple');host.hidden=!aiExplanation;
     $('cmp-ai-title').textContent=aiProposal?'Propuesta de la IA · pendiente de aplicar':'Explicación del resultado';

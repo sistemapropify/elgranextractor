@@ -3,6 +3,60 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from statistics import mean
 import time
+import re
+
+PDM_PARAMETER_FIELDS = (
+    ('densidad', 'Densidad'),
+    ('lote_minimo', 'Lote mínimo'),
+    ('frente_minimo', 'Frente mínimo'),
+    ('altura', 'Altura'),
+    ('coeficiente', 'Coeficiente'),
+    ('area_libre', 'Área libre'),
+    ('retiros', 'Retiros'),
+    ('alineamiento', 'Alineamiento'),
+    ('estacionamiento', 'Estacionamiento'),
+)
+
+
+def pdm_zone(params):
+    """Resolve the PDM use zone and its normative parameter table."""
+    try:
+        from cuadrantizacion.zonificacion import clasificar_punto
+        zone = clasificar_punto(params.get('lat'), params.get('lng'))
+    except Exception:
+        return None
+    if not zone:
+        return None
+    parameters = zone.get('parametros') if isinstance(zone.get('parametros'), dict) else {}
+    blocks = parameters.get('bloques')
+    if not isinstance(blocks, list) or not blocks:
+        ignored = {'bloques', 'usos_compatibles', 'notas'}
+        blocks = [{key: value for key, value in parameters.items() if key not in ignored}]
+    blocks = [block for block in blocks if isinstance(block, dict)]
+    typologies = [str(block.get('tipologia') or 'Parámetros') for block in blocks]
+    def display(value):
+        return re.sub(r'(?<=\d)\.00\b', '', str(value))
+    rows = []
+    for key, label in PDM_PARAMETER_FIELDS:
+        values = [block.get(key) for block in blocks]
+        if any(value not in (None, '') for value in values):
+            rows.append({'label': label,
+                         'values': ['Sin informar' if value in (None, '') else display(value)
+                                    for value in values]})
+    return {
+        'codigo': zone.get('codigo') or '',
+        'nombre': zone.get('uso') or '',
+        'categoria': zone.get('categoria') or '',
+        'color': zone.get('color') or '',
+        'property_type': params.get('property_type') or '',
+        'confidence': zone.get('confianza') or '',
+        'approximate': bool(zone.get('aproximado')),
+        'distance_edge': zone.get('distancia_borde_m'),
+        'typologies': typologies,
+        'rows': rows,
+        'compatible_uses': parameters.get('usos_compatibles') or '',
+        'notes': parameters.get('notas') if isinstance(parameters.get('notas'), list) else [],
+    }
 
 
 def author_name(user):
@@ -68,7 +122,8 @@ def prepare_report(params, records, result, excluded=(), generated_at=None, user
                 map=map_image, croquis=croquis, chart=chart, average=average,
                 address=address, author=author_name(user), date=generated_at, summary=summary,
                 values=report_values(params, result) if result.get('new') else None,
-                notes=params.get('report_notes', ''), logo=media._logo_bytes())
+                notes=params.get('report_notes', ''), logo=media._logo_bytes(),
+                pdm=pdm_zone(params))
 
 
 def age(value):

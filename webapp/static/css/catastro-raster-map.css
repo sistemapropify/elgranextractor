@@ -1,0 +1,2 @@
+.catastro-raster-map-patch{position:absolute;transform-origin:50% 50%;pointer-events:none;box-shadow:none}
+.catastro-raster-map-patch img{display:block;width:100%;height:100%;object-fit:fill;pointer-events:none;user-select:none;-webkit-user-drag:none}

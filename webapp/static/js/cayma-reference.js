@@ -189,7 +189,9 @@
                 await load(false);message('Posiciones guardadas e inmovilizadas. Se aplican también al ACM.');
             }catch(error){message(error.message+' El ajuste sigue en pantalla.',true);}finally{saving=false;marker?.setDraggable(true);$('lock').disabled=false;$('cancel').disabled=false;$('mode').disabled=false;offset();}
         });
-        const district=document.getElementById('geollaqta-district');district?.addEventListener('change',()=>{if(district.value!=='040103')show(false,false);});
+        const district=document.getElementById('geollaqta-district');district?.addEventListener('change',()=>{if(district.value!=='040103')show(false);});
+        // The old plan is an explicit comparison layer, never automatic coverage.
+        show(false);
     }
     window.CaymaReferenceMap={init};
 })();

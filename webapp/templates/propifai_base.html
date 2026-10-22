@@ -603,7 +603,8 @@
                     <div class="submenu-items">
                         <a href="/catastro/" class="submenu-item {% if request.path == '/catastro/' %}active{% endif %}"><span>Dashboard catastral</span></a>
                         <a href="/catastro/maestro/" class="submenu-item {% if request.path == '/catastro/maestro/' %}active{% endif %}"><span>Catastro maestro</span></a>
-                        <a href="/catastro/maestro/planos/" class="submenu-item {% if request.path == '/catastro/maestro/planos/' %}active{% endif %}"><span>Planos y etapas</span></a>
+                        <a href="/catastro/maestro/planos/" class="submenu-item {% if '/catastro/maestro/planos/' in request.path %}active{% endif %}"><span>Planos y etapas</span></a>
+                        <a href="/catastro/maestro/fuentes/" class="submenu-item {% if '/catastro/maestro/fuentes/' in request.path %}active{% endif %}"><span>Fuentes y versiones</span></a>
                         <a href="/catastro/visor-planos/" class="submenu-item {% if '/catastro/visor-planos/' in request.path %}active{% endif %}"><span>Visor de planos</span></a>
                         <a href="/cuadrantizacion/mapa/?catastro=yanahuara" class="submenu-item"><span>Mapa en Cuadrantización</span></a>
                     </div>

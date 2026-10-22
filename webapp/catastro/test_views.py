@@ -44,6 +44,20 @@ class DashboardTests(TestCase):
         self.assertContains(response,'id="collection-workers"')
         self.assertContains(response,'value="10" selected')
         self.assertContains(response,'Pausar descarga')
+        self.assertContains(response,'/catastro/maestro/planos/')
+        self.assertContains(response,'Planos y etapas')
+        self.assertContains(response,'/catastro/maestro/fuentes/')
+        self.assertContains(response,'Fuentes y versiones')
+
+    def test_master_map_exposes_the_sql_model_and_lot_join(self):
+        self.client.force_login(self.admin)
+        response = self.client.get('/catastro/maestro/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="master-model-open"')
+        self.assertContains(response, 'Cómo se une un lote del plano con toda su información')
+        self.assertContains(response, 'identities i')
+        self.assertContains(response, 'entities e ON e.id = i.entity_id')
+        self.assertContains(response, 'catastro-master-model.js')
 
     def test_broken_ledger_is_a_server_error_not_an_authentication_error(self):
         import sqlite3

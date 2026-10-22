@@ -10,7 +10,7 @@
         let sourceVersions=null,revisionTimer=null,checkingRevision=false;
         const versions=value=>JSON.stringify(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)));
         function scheduleRevisionCheck(){
-            if(!revisionTimer&&allowed&&target&&!document.hidden)revisionTimer=setTimeout(checkRevision,5000);
+            if(!revisionTimer&&allowed&&target&&!document.hidden)revisionTimer=setTimeout(checkRevision,15000);
         }
         function reloadGeometry(){
             const closed=card.hidden;
@@ -20,7 +20,8 @@
         }
         async function checkRevision(){
             clearTimeout(revisionTimer);revisionTimer=null;
-            if(checkingRevision||!allowed||!target||document.hidden)return;
+            if(checkingRevision||!allowed||!target||document.hidden||areaLoading
+                ||(result&&!result.complete))return;
             if(sourceVersions===null){scheduleRevisionCheck();return;}
             checkingRevision=true;
             try{

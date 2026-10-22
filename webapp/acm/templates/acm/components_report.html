@@ -36,6 +36,25 @@
     {% if property_type != 'Terreno' %}<div><dt>Antigüedad</dt><dd>{{ age }}</dd></div>{% endif %}
     <div><dt>Coordenadas</dt><dd>{{ lat }}, {{ lng }}</dd></div>
   </dl>
+  {% if pdm %}
+  <section aria-label="Zona de uso PDM">
+    <h2>Zona de uso PDM</h2>
+    <p><strong>{{ pdm.codigo }} · {{ pdm.nombre }}</strong></p>
+    <dl>
+      <div><dt>Categoría</dt><dd>{{ pdm.categoria }}</dd></div>
+      <div><dt>Uso analizado</dt><dd>{{ pdm.property_type }}</dd></div>
+      <div><dt>Confianza</dt><dd>{{ pdm.confidence }}{% if pdm.approximate %} · límite aproximado{% endif %}</dd></div>
+      {% if pdm.compatible_uses %}<div><dt>Usos compatibles</dt><dd>{{ pdm.compatible_uses }}</dd></div>{% endif %}
+    </dl>
+    {% if pdm.rows %}
+    <div class="table-scroll"><table>
+      <thead><tr><th>Parámetro</th>{% for typology in pdm.typologies %}<th>{{ typology }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for item in pdm.rows %}<tr><td><strong>{{ item.label }}</strong></td>{% for value in item.values %}<td>{{ value }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+    {% for note in pdm.notes %}<p class="muted">{{ note }}</p>{% endfor %}
+  </section>
+  {% endif %}
   <h2>Comparables incluidos en el informe · {{ rows|length }}</h2>
   <div class="table-scroll"><table>
     <thead><tr><th>Propiedad</th><th>Ubicación</th><th>Precio anunciado</th><th>Terreno</th><th>Construcción</th><th>Distancia</th>{% if show_publication %}<th>Publicación</th>{% endif %}</tr></thead>

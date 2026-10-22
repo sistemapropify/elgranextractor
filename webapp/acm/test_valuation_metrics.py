@@ -80,4 +80,4 @@ class ValuationMetricsTests(TestCase):
         self.assertContains(response, 'Valor ACM calculado')
         self.assertContains(response, 'Valor del agente')
         self.assertContains(response, 'Variación absoluta media')
-        self.assertRegex(response.content.decode(), r'\+10[.,]00%')
+        self.assertRegex(response.content.decode(), r'\+10%')

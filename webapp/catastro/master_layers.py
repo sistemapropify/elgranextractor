@@ -13,8 +13,57 @@ from cuadrantizacion import geollaqta as geo
 from . import source_placement
 
 DATA = Path(__file__).with_name('data')
-SOURCES = {'cayma-pud-2006-eu03': DATA / 'cayma-pud-2006-eu03'}
+SOURCES = {
+    'cayma-pud-2006-eu03': DATA / 'cayma-pud-2006-eu03',
+    'cayma-sector-32-provisional': DATA / 'cayma-sector-32-provisional',
+}
+CAYMA_2006 = 'cayma-pud-2006-eu03'
+SECTOR32 = 'cayma-sector-32-provisional'
 SCHEMA = 'prometeo-cadastral-geometry-v1'
+
+
+@lru_cache(maxsize=1)
+def _sector32_mask(modified):
+    from shapely.geometry import shape
+    from shapely.ops import unary_union
+    folder = SOURCES[SECTOR32]
+    polygons = []
+    for name, buffer_m in (('manzanas.geojson', 14), ('lotes.geojson', 2)):
+        data = read(folder / name)
+        for feature in data['features']:
+            geometry = shape(feature['geometry'])
+            if not geometry.is_empty:
+                # Degrees are converted locally; approximately 1 degree = 111 km.
+                polygons.append(geometry.buffer(buffer_m / 111000))
+    return unary_union(polygons) if polygons else None
+
+
+def _without_sector32(feature):
+    """Subtract Sector 32 priority coverage from the 2006 backup geometry."""
+    from shapely.geometry import GeometryCollection, MultiPolygon, Polygon, mapping, shape
+    from shapely.ops import unary_union
+    folder = SOURCES[SECTOR32]
+    modified = max((folder / 'lotes.geojson').stat().st_mtime_ns,
+                   (folder / 'manzanas.geojson').stat().st_mtime_ns)
+    mask = _sector32_mask(modified)
+    if mask is None:
+        return feature
+    geometry = shape(feature['geometry'])
+    if not geometry.intersects(mask):
+        return feature
+    remaining = geometry.difference(mask)
+    if isinstance(remaining, GeometryCollection):
+        remaining = unary_union([
+            part for part in remaining.geoms
+            if isinstance(part, (Polygon, MultiPolygon)) and not part.is_empty
+        ])
+    if not isinstance(remaining, (Polygon, MultiPolygon)) or remaining.area <= 1e-16:
+        return None
+    if not remaining.is_valid:
+        remaining = remaining.buffer(0)
+    if remaining.is_empty or not isinstance(remaining, (Polygon, MultiPolygon)):
+        return None
+    return {**feature, 'geometry': mapping(remaining)}
 
 
 def _draft_metadata(source_id):
@@ -60,8 +109,13 @@ def source_metadata(source_id):
         return _draft_metadata(source_id)
     folder = SOURCES[source_id]
     meta = read(folder/'metadata.json')
-    placement = {key: value for key, value in source_placement.read(folder).items()
-                 if key in ('revision', 'east_m', 'north_m', 'blocks', 'locked', 'updated_at')}
+    if source_id == SECTOR32:
+        # The provisional PDF was already georeferenced as immutable GeoJSON.
+        placement = {'revision': 0, 'east_m': 0., 'north_m': 0.,
+                     'blocks': {}, 'locked': True}
+    else:
+        placement = {key: value for key, value in source_placement.read(folder).items()
+                     if key in ('revision', 'east_m', 'north_m', 'blocks', 'locked', 'updated_at')}
     dx, dy = source_placement.degrees(placement, (meta['bbox'][1]+meta['bbox'][3])/2)
     bounds = [meta['bbox'][0]+dx, meta['bbox'][1]+dy, meta['bbox'][2]+dx, meta['bbox'][3]+dy]
     # Include moved/scaled blocks so radius providers cannot discard their new location.
@@ -80,9 +134,18 @@ def source_metadata(source_id):
 
 
 def revisions():
-    value = {source_id: source_placement.read(folder)['revision'] for source_id, folder in SOURCES.items()
-            if (folder/'metadata.json').is_file() and read(folder/'metadata.json').get('active')
-            and read(folder/'metadata.json').get('contributes', True)}
+    value = {}
+    for source_id, folder in SOURCES.items():
+        metadata_path = folder / 'metadata.json'
+        if not metadata_path.is_file():
+            continue
+        metadata = read(metadata_path)
+        if not metadata.get('active'):
+            continue
+        if source_id == SECTOR32:
+            value[source_id] = 0
+        else:
+            value[source_id] = source_placement.read(folder)['revision']
     from . import source_manager
     if source_manager.enabled():
         store = source_manager.store()
@@ -221,6 +284,9 @@ def _layer(source_id, key, district, bounds=None, *, original=False, metadata=No
     features = value['features']
     if bounds:
         features = [f for f in features if intersects(f['geometry'], bounds)]
+    if source_id == CAYMA_2006:
+        features = [filtered for feature in features
+                    if (filtered := _without_sector32(feature)) is not None]
     return {**value, 'features': features, 'total': len(features),
             'source_total': len(value['features']), 'complete': True,
             'reference_only': meta['reference_only'], 'crs': meta['crs'],

@@ -12,6 +12,7 @@ from .client_report import prepare_report, author_name
 from .components_engine import calculate, candidates
 from .components_pdf import build_acm_pdf
 from .components_report import build_acm_docx
+from .components_html import build_acm_html
 from .test_components import params, sample, _pdf_text
 
 
@@ -42,7 +43,7 @@ class ClientReportTests(SimpleTestCase):
         pdf = _pdf_text(build_acm_pdf(self.p, self.rows, self.result, fetch_images=False)).decode('latin1')
         word = self.word_text(build_acm_docx(self.p, self.rows, self.result, fetch_images=False))
         for text in (pdf, word):
-            for amount in ('245,700.00', '234,000.00', '222,300.00'):
+            for amount in ('245,700', '234,000', '222,300'):
                 self.assertIn(amount, text)
             self.assertLess(text.index('VALOR DE SALIDA AL MERCADO'), text.index('VALOR COMERCIAL'))
             self.assertNotIn('Nuevo precio', text)
@@ -117,3 +118,36 @@ class ClientReportTests(SimpleTestCase):
         self.assertEqual(len(data['groups']), 1)
         self.assertTrue(all(row['kind'] == 'Casa' for row in data['rows']))
         self.assertLessEqual(len(data['rows']), 5)
+
+    def test_pdm_use_zone_and_parameter_tables_are_in_pdf_word_and_html(self):
+        pdm = {
+            'codigo': 'RDA-2',
+            'nombre': 'Residencial densidad alta tipo 2',
+            'categoria': 'Residencial',
+            'color': '#d6882d',
+            'property_type': 'Casa',
+            'confidence': 'alta',
+            'approximate': False,
+            'distance_edge': 20,
+            'typologies': ['Multifamiliar'],
+            'rows': [
+                {'label': 'Densidad', 'values': ['De 2251 a 2800 hab/ha']},
+                {'label': 'Lote mínimo', 'values': ['600.00 m2']},
+                {'label': 'Altura', 'values': ['10 pisos']},
+            ],
+            'compatible_uses': 'CZ, CM, E-1, H1, H2, ZR',
+            'notes': ['Ficha normativa PDM.'],
+        }
+        with patch('acm.client_report.pdm_zone', return_value=pdm), \
+             patch('acm.components_html.pdm_zone', return_value=pdm):
+            pdf = _pdf_text(build_acm_pdf(
+                self.p, self.rows, self.result, fetch_images=False))
+            word = self.word_text(build_acm_docx(
+                self.p, self.rows, self.result, fetch_images=False))
+            html = build_acm_html(self.p, self.rows, self.result)
+        for text in (pdf.decode('latin1'), word, html):
+            for value in ('Zona de uso PDM', 'RDA-2', 'Densidad',
+                          'Usos compatibles'):
+                self.assertIn(value, text)
+        for text in (word, html):
+            self.assertIn('Lote mínimo', text)

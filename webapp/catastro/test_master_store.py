@@ -344,7 +344,9 @@ class MasterVersionTests(SimpleTestCase):
             self.assertEqual(radius['lots']['total'],1)
             config=master.configuration()
             self.assertIn('borrador-040103',[p['id'] for p in config['providers']])
-            self.assertNotIn('cayma-pud-2006-eu03',[p['id'] for p in config['providers']])
+            reference_ids=[p['id'] for p in config['providers'] if p.get('reference_only')]
+            self.assertIn('cayma-pud-2006-eu03',reference_ids)
+            self.assertIn('cayma-sector-32-provisional',reference_ids)
 
     def test_documentary_links_are_appended_to_the_correct_unit_with_multiple_holders(self):
         value=candidate(kind='unidad')

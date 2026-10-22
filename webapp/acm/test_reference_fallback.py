@@ -130,7 +130,7 @@ class ReferenceFallbackTests(SimpleTestCase):
         html = build_acm_html(p, rows, result)
         self.assertIn('Mediana del precio por m² de las referencias', html)
         self.assertIn('Estado de conservación revisado.', html)
-        self.assertIn('USD 150,000.00', html)
+        self.assertIn('USD 150,000', html)
         self.assertEqual(report_unit_price(p, result), 1500)
 
     def test_pdf_and_word_include_reference_evidence_and_justification(self):
@@ -147,7 +147,7 @@ class ReferenceFallbackTests(SimpleTestCase):
         with patch('acm.components_pdf._static_map', return_value=None):
             pdf = _pdf_text(build_acm_pdf(p, rows, result, fetch_images=False))
         self.assertIn(b'REFERENCIAS EN VENTA', pdf)
-        self.assertIn(b'150,000.00', pdf)
+        self.assertIn(b'150,000', pdf)
         self.assertIn(b'Conservacion revisada.', pdf)
         with zipfile.ZipFile(io.BytesIO(build_acm_docx(p, rows, result, fetch_images=False))) as archive:
             word = archive.read('word/document.xml').decode()

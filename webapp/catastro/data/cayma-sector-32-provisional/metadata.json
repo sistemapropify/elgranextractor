@@ -1,0 +1,99 @@
+{
+  "id": "cayma-sector-32-provisional",
+  "name": "Cayma · sector 32 provisional",
+  "district": "Cayma",
+  "ubigeo": "040103",
+  "source_date": "2026-10-21",
+  "revision": 1,
+  "status": "provisional_reference",
+  "active": true,
+  "role": "reference",
+  "default_visible": true,
+  "contributes": false,
+  "reference_only": true,
+  "crs": "EPSG:4326",
+  "source_crs": "LOCAL_PDF_DISPLAY_POINTS",
+  "georeferencing": {
+    "id": "sector32-referencia-provisional",
+    "source_file": "SECTOR 32 ARANCELARIO-SECTOR 32 1-1.pdf",
+    "source_sha256": "289b8fcf581938ce1f84c134587abacdcc7d86ba5fa6f549f203c040c52bbdbb",
+    "page": 1,
+    "scale_printed": "1:1250",
+    "source_crs": "LOCAL_PDF_DISPLAY_POINTS",
+    "output_crs": "EPSG:4326",
+    "status": "provisional_reference_only",
+    "activation_allowed": false,
+    "migration_or_d1_write": false,
+    "model": "2D similarity fit in local tangent plane; all three controls used in least squares fit",
+    "scale_m_per_pdf_point": 0.4417291342518,
+    "rotation_degrees": 2.2285258218401505,
+    "control_points": [
+      {
+        "id": "P1",
+        "name": "Mariscal Benavides–Tronchadero",
+        "latitude": -16.385396,
+        "longitude": -71.544653,
+        "pdf_xy_approx": [
+          1160.0,
+          946.0
+        ],
+        "fit_residual_m": 6.39
+      },
+      {
+        "id": "P2",
+        "name": "Los Manzanos–av. Cayma",
+        "latitude": -16.385216,
+        "longitude": -71.546379,
+        "pdf_xy_approx": [
+          724.0,
+          864.0
+        ],
+        "fit_residual_m": 7.02
+      },
+      {
+        "id": "P3",
+        "name": "Melgar–av. Cayma",
+        "latitude": -16.382268,
+        "longitude": -71.545576,
+        "pdf_xy_approx": [
+          950.0,
+          150.0
+        ],
+        "fit_residual_m": 3.78
+      }
+    ],
+    "control_xy_method": "manual visual identification of the named road crossings; PDF carries a printed UTM/WGS84 note but no usable coordinate grid/transform metadata on this page",
+    "limitations": [
+      "PDF intersection positions were selected visually and are approximate.",
+      "Three controls do not provide an independent validation point.",
+      "Residuals combine control placement uncertainty and transform fit; they are not a survey accuracy estimate.",
+      "Lote outlines and labels remain unvalidated proposals from the original vector extraction."
+    ],
+    "counts": {
+      "lots": 438,
+      "blocks": 11,
+      "controls": 3
+    },
+    "geojson_sha256": "603966710cb7d3b450bc3d88d3d75ce36a3900e64b3dd8de1e937a99a8d4da34"
+  },
+  "bbox": [
+    -71.548846268,
+    -16.389995957,
+    -71.543786344,
+    -16.382040166
+  ],
+  "layers": {
+    "lotes": {
+      "count": 438,
+      "kind": "polygon"
+    },
+    "manzanas": {
+      "count": 11,
+      "kind": "polygon"
+    }
+  },
+  "notes": [
+    "Fuente provisional del sector 32; sustituye al plano de 2006 sólo dentro de su cobertura.",
+    "Numeración y topología requieren validación."
+  ]
+}

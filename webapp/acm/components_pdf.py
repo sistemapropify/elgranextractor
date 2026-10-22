@@ -56,13 +56,13 @@ def _clean(text, fallback=''):
 def _money(value):
     if value is None:
         return 'Sin dato'
-    return f'$ {float(value):,.2f}'
+    return f'$ {float(value):,.0f}'
 
 
 def _number(value, decimals=0, suffix=''):
     if value is None:
         return 'Sin informar'
-    return f'{float(value):,.{decimals}f}{suffix}'
+    return f'{float(value):,.0f}{suffix}'
 
 
 def _fecha_larga(value):
@@ -375,6 +375,32 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     detail=[para('Ubicación','label'),para(data['address']),Spacer(1,7),para('Tipo de propiedad','label'),para(params.get('property_type','Casa'),'bold')]
     hero=table([[detail,facts]],[240,279])
     story.append(hero)
+    pdm = data.get('pdm')
+    if pdm:
+        story.append(para('Zona de uso PDM','section'))
+        zone_summary = (
+            f"{pdm['codigo']} · {pdm['nombre']} · {pdm['categoria']} · "
+            f"Uso analizado: {pdm['property_type']}"
+        )
+        story.append(para(zone_summary,'bold'))
+        if pdm['rows']:
+            pdm_rows = [[para('Parámetros normativos · ' +
+                              ' / '.join(pdm['typologies']),'label')]]
+            for item in pdm['rows']:
+                values = ' · '.join(
+                    f"{pdm['typologies'][index]}: {value}"
+                    for index, value in enumerate(item['values']))
+                pdm_rows.append([para(f"{item['label']}: {values}",'small')])
+            pdm_table = table(pdm_rows,[width],padding=3)
+            pdm_table.setStyle(TableStyle([
+                ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e6f5f5')),
+                ('GRID',(0,0),(-1,-1),.35,colors.HexColor('#cfdfdf')),
+            ]))
+            story.append(pdm_table)
+        if pdm['compatible_uses']:
+            story.append(para('Usos compatibles: '+pdm['compatible_uses'],'small'))
+        for note in pdm['notes']:
+            story.append(para(note,'label'))
     story.append(para('Ubicación de las propiedades','section'))
     map_content=[photo(data['map'],245,142,'Mapa no disponible'),para('P  Propiedad sujeto  ·  Números: propiedades seleccionadas','label')]
     if data['croquis']:map_content.append(para('Croquis referencial de distancias; no representa un mapa de calles.','label'))

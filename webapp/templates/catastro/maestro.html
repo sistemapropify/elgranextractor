@@ -1,12 +1,12 @@
 {% extends 'propifai_base.html' %}
 {% load static %}
 {% block title %}Catastro maestro · Prometeo{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-maestro.css' %}?v=1">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-maestro.css' %}?v=5">{% endblock %}
 {% block content %}
 <main class="master-workspace" id="master-workspace">
   <header class="master-heading">
     <div><span class="master-eyebrow">CATASTRO</span><h1>Catastro maestro</h1><p>Manzanas y lotes, organizados por distrito y fuente.</p></div>
-    <div class="master-actions"><button id="master-fit" type="button">Centrar distrito</button><button id="master-satellite" type="button" aria-pressed="false">Satélite</button><a href="/catastro/maestro/fuentes/">Fuentes y versiones</a><a href="/catastro/visor-planos/">Visor de planos</a></div>
+    <div class="master-actions"><button id="master-fit" type="button">Centrar distrito</button><button id="master-satellite" type="button" aria-pressed="false">Satélite</button><button id="master-cayma-preview" type="button">Ver Cayma temporal</button><button id="master-model-open" type="button">Modelo SQL</button><a href="/catastro/maestro/fuentes/">Fuentes y versiones</a><a href="/catastro/visor-planos/">Visor de planos</a></div>
   </header>
   <div class="master-body">
     <aside class="master-panel" aria-label="Capas y fuentes del catastro maestro">
@@ -16,6 +16,48 @@
         <label class="master-check"><input id="master-lotes" type="checkbox" checked><span class="master-swatch lots"></span>Lotes <strong id="master-count-lotes">—</strong></label>
       </section>
       <section><h2>Fuentes del distrito</h2><div id="master-sources"><p class="master-help">Consultando fuentes…</p></div></section>
+      <section id="master-raster-section">
+        <h2>Mosaico satelital propio</h2>
+        <p class="master-help">Las fotos de dron sustituyen el satélite de Google únicamente dentro de su huella. Fuera de ella se mantiene Google Maps.</p>
+        <form id="master-raster-upload" enctype="multipart/form-data">
+          <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+          <label class="master-raster-field">Nombre del parche<input name="name" maxlength="200" placeholder="Dron · Yanahuara · 22/10/2026" required></label>
+          <label class="master-raster-file">Fotografía para el mosaico<input name="image" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required></label>
+          <button type="submit">Incorporar al satélite</button>
+          <p id="master-raster-status" class="master-help" role="status" aria-live="polite"></p>
+        </form>
+        <div id="master-raster-list" class="master-raster-list"><p class="master-help">Inicia sesión y carga una fotografía para verla como capa.</p></div>
+        <div id="master-raster-editor" class="master-raster-editor" hidden>
+          <div class="master-raster-editor-head"><strong id="master-raster-active-name"></strong></div>
+          <p class="master-help" id="master-raster-edit-help">La imagen queda bloqueada al mouse. Modifica únicamente estos valores y pulsa «Fijar parche satelital».</p>
+          <div class="master-raster-controls" aria-label="Comandos del parche satelital">
+            <span>Tamaño</span>
+            <div class="master-raster-pair">
+              <button type="button" id="master-raster-scale-down">A − achicar</button>
+              <button type="button" id="master-raster-scale-up">A + agrandar</button>
+            </div>
+            <span>Mover 1 metro</span>
+            <div class="master-raster-pad">
+              <button type="button" id="master-raster-move-up" aria-label="Mover al norte">↑</button>
+              <button type="button" id="master-raster-move-left" aria-label="Mover al oeste">←</button>
+              <button type="button" id="master-raster-move-down" aria-label="Mover al sur">↓</button>
+              <button type="button" id="master-raster-move-right" aria-label="Mover al este">→</button>
+            </div>
+            <span>Rotación 1°</span>
+            <div class="master-raster-pair">
+              <button type="button" id="master-raster-rotate-left">↺ girar izquierda</button>
+              <button type="button" id="master-raster-rotate-right">↻ girar derecha</button>
+            </div>
+          </div>
+          <label>Latitud del centro<input id="master-raster-lat" type="number" min="-90" max="90" step="0.000000001"></label>
+          <label>Longitud del centro<input id="master-raster-lng" type="number" min="-180" max="180" step="0.000000001"></label>
+          <label>Ancho (m)<input id="master-raster-width" type="number" min="5" max="10000" step="0.1"></label>
+          <label>Alto (m)<input id="master-raster-height" type="number" min="5" max="10000" step="0.1"></label>
+          <label>Rotación (°)<input id="master-raster-rotation" type="number" min="-360" max="360" step="0.1"></label>
+          <label>Opacidad (%)<input id="master-raster-opacity" type="number" min="5" max="100" step="1"></label>
+          <div class="master-raster-editor-actions"><button type="button" id="master-raster-save">Fijar parche satelital</button><button type="button" id="master-raster-cancel">Descartar ajuste</button></div>
+        </div>
+      </section>
       <section id="master-detail"><h2>Elemento seleccionado</h2><p class="master-help">Selecciona un contorno para ver su fuente y los datos disponibles.</p></section>
       <p class="master-help master-standard">Formato común: GeoJSON · WGS84. Cada fuente conserva su procedencia y sus datos originales.</p>
     </aside>
@@ -23,10 +65,70 @@
   </div>
   <footer class="master-status" id="master-status" role="status" aria-live="polite">Preparando el mapa…</footer>
 </main>
+
+<dialog class="master-model-dialog" id="master-data-model" aria-labelledby="master-model-title">
+  <header class="master-model-head">
+    <div>
+      <span class="master-eyebrow">MODELO DE DATOS · D1</span>
+      <h2 id="master-model-title">Cómo se une un lote del plano con toda su información</h2>
+      <p>El ID impreso en el plano no es el identificador maestro. Primero se resuelve a <code>{{ data_model.identity }}</code>; todas las demás tablas usan ese UUID.</p>
+    </div>
+    <button type="button" class="master-model-close" id="master-model-close" aria-label="Cerrar modelo SQL">Cerrar</button>
+  </header>
+  <div class="master-model-body">
+    <section class="master-model-intro" aria-label="Ruta de unión del lote">
+      <article><span>01 · Original</span><strong>versions</strong><small>Fuente, PDF/DWG, SHA-256 y versión</small></article>
+      <i aria-hidden="true">→</i>
+      <article><span>02 · Código de plano</span><strong>identities</strong><small>source_feature_id + layer</small></article>
+      <i aria-hidden="true">→</i>
+      <article class="master-model-key"><span>03 · Identidad maestra</span><strong>entities.id</strong><small>UUID estable e interno</small></article>
+      <i aria-hidden="true">→</i>
+      <article><span>04 · Información</span><strong>7 relaciones</strong><small>Campos, personas, documentos y fotos</small></article>
+    </section>
+
+    <section>
+      <div class="master-model-section-head">
+        <div><h3>Consulta canónica del lote</h3><p>Devuelve el UUID, el código del plano, la ficha actual, la geometría activa, titulares, identificadores externos y medios. El parámetro <code>?</code> recibe el código del lote en la fuente.</p></div>
+        <button type="button" id="master-model-copy" data-copy-target="master-model-query">Copiar SQL</button>
+      </div>
+      <pre class="master-model-code" id="master-model-query"><code>{{ data_model.lot_query }}</code></pre>
+      <p class="master-model-output" id="master-model-copy-status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section>
+      <h3>Claves de unión</h3>
+      <div class="master-model-relations">
+        {% for relation in data_model.relations %}
+        <article><code>{{ relation.left }}</code><b>{{ relation.operator }}</b><code>{{ relation.right }}</code><span>{{ relation.meaning }}</span></article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section>
+      <h3>Tablas del Catastro Maestro</h3>
+      <div class="master-model-groups">
+        {% for group in data_model.groups %}
+        <article>
+          <header><h4>{{ group.name }}</h4><p>{{ group.purpose }}</p></header>
+          {% for table in group.tables %}
+          <div class="master-model-table">
+            <code>{{ table.name }}</code>
+            <span>{{ table.role }}</span>
+            <small>Clave: {{ table.key }}</small>
+          </div>
+          {% endfor %}
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</dialog>
 {% endblock %}
 {% block extra_js %}
 <script src="{% static 'js/geollaqta-data.js' %}?v=1"></script>
 <script src="{% static 'js/geollaqta-district.js' %}?v=1"></script>
-<script src="{% static 'js/catastro-maestro.js' %}?v=2"></script>
+<script src="{% static 'js/catastro-maestro.js' %}?v=11"></script>
+<script src="{% static 'js/catastro-master-model.js' %}?v=1"></script>
+<script src="{% static 'js/catastro-raster-layers.js' %}?v=16"></script>
 {% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initCatastroMaster" async defer></script>{% else %}<script>document.getElementById('master-status').textContent='No se ha configurado la clave del mapa.';</script>{% endif %}
 {% endblock %}

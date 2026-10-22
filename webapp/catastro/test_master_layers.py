@@ -17,7 +17,7 @@ class MasterGeometryTests(SimpleTestCase):
         data = master_layers.catalogue()
         cayma = next(d for d in data['districts'] if d['ubigeo'] == '040103')
         self.assertEqual(cayma['published_lots'], 0)
-        self.assertEqual(cayma['sources'], ['cayma-pud-2006-eu03'])
+        self.assertEqual(cayma['sources'], ['cayma-pud-2006-eu03', 'cayma-sector-32-provisional'])
         source = next(s for s in data['sources'] if s['id'] == cayma['sources'][0])
         self.assertTrue(source['reference_only'])
         self.assertFalse(source['default_visible'])
@@ -26,6 +26,19 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertFalse(source['georeferencing']['datum_documented'])
         self.assertFalse(source['qa']['complete_inventory'])
         self.assertEqual(source['crs'], 'EPSG:4326')
+
+    def test_sector32_priority_clips_the_2006_backup_without_overlap(self):
+        from shapely.geometry import shape
+        old = master_layers.layer('cayma-pud-2006-eu03', 'lotes', '040103')
+        sector = master_layers.layer('cayma-sector-32-provisional', 'lotes', '040103')
+        modified = max(
+            (master_layers.SOURCES[master_layers.SECTOR32] / name).stat().st_mtime_ns
+            for name in ('lotes.geojson', 'manzanas.geojson'))
+        mask = master_layers._sector32_mask(modified)
+        self.assertEqual(len(sector['features']), 438)
+        self.assertLess(len(old['features']), 22405)
+        self.assertTrue(all(shape(feature['geometry']).intersection(mask).area < 1e-14
+                            for feature in old['features']))
 
     def test_reference_ids_are_unique_and_never_become_cadastral_codes(self):
         source = 'cayma-pud-2006-eu03'
@@ -43,10 +56,26 @@ class MasterGeometryTests(SimpleTestCase):
             self.assertIsNone(f['properties']['ANIO_CAT'])
             self.assertIn(f['properties']['BLOCK_REF'], block_ids)
             self.assertEqual(f['properties']['ID_DIST'], '040103')
-            for ring in f['geometry']['coordinates']:
-                self.assertEqual(ring[0], ring[-1])
-                self.assertGreaterEqual(len(ring), 4)
-                self.assertTrue(all(-71.6 < p[0] < -71.5 and -16.4 < p[1] < -16.29 for p in ring))
+            polygons = ([f['geometry']['coordinates']]
+                        if f['geometry']['type'] == 'Polygon'
+                        else f['geometry']['coordinates'])
+            for rings in polygons:
+                for ring in rings:
+                    self.assertEqual(ring[0], ring[-1])
+                    self.assertGreaterEqual(len(ring), 4)
+                    self.assertTrue(all(-71.6 < p[0] < -71.5 and -16.4 < p[1] < -16.29
+                                        for p in ring))
+
+    def test_reference_revisions_match_the_shared_acm_provider_snapshot(self):
+        from . import master
+        revisions = master_layers.revisions()
+        providers = {item['id']: item['placement']['revision']
+                     for item in master.configuration()['providers']
+                     if item.get('transport') == 'master'}
+        self.assertEqual(revisions['cayma-pud-2006-eu03'],
+                         providers['cayma-pud-2006-eu03'])
+        self.assertEqual(revisions['cayma-sector-32-provisional'],
+                         providers['cayma-sector-32-provisional'])
 
     def test_invalid_source_district_and_bbox_are_rejected(self):
         for args in [('../secret', 'lotes', '040103'), ('cayma-pud-2006-eu03', '../metadata', '040103'),
@@ -85,5 +114,7 @@ class MasterGeometryTests(SimpleTestCase):
         html = response.content.decode()
         self.assertIn('id="master-manzanas"', html)
         self.assertIn('id="master-lotes"', html)
+        self.assertIn('id="master-cayma-preview"', html)
+        self.assertIn('Ver Cayma temporal', html)
         self.assertNotIn('collection-form', html)
         self.assertIn('catastro-maestro.js', html)

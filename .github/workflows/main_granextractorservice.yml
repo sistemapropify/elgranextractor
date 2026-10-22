@@ -162,9 +162,13 @@ jobs:
       - name: Validate Catastro Master catalog review, vectors and D1 transport
         run: |
           source antenv/bin/activate
-          python webapp/manage.py test catastro.test_master_store catastro.test_master_d1 --settings=catastro.test_settings --noinput
+          python webapp/manage.py test catastro.test_master_store catastro.test_master_d1 catastro.test_master_model catastro.test_raster_overlays --settings=catastro.test_settings --noinput
           node --check webapp/static/js/catastro-fuentes.js
+          node --check webapp/static/js/catastro-master-model.js
+          node --check webapp/static/js/catastro-raster-layers.js
+          node --check webapp/static/js/catastro-raster-map.js
           node webapp/catastro/test_planos_dashboard.cjs
+          node webapp/catastro/test_master_overlay.cjs
           node --check cloudflare/catastro-maestro/worker.mjs
           node cloudflare/catastro-maestro/test-worker.mjs
 
@@ -446,6 +450,12 @@ jobs:
           css/cayma-reference.css|webapp/static/css/cayma-reference.css
           js/catastro-maestro.js|webapp/static/js/catastro-maestro.js
           css/catastro-maestro.css|webapp/static/css/catastro-maestro.css
+          js/catastro-master-model.js|webapp/static/js/catastro-master-model.js
+          js/catastro-raster-layers.js|webapp/static/js/catastro-raster-layers.js
+          js/catastro-raster-map.js|webapp/static/js/catastro-raster-map.js
+          css/catastro-raster-map.css|webapp/static/css/catastro-raster-map.css
+          js/catastro-planos-dashboard.js|webapp/static/js/catastro-planos-dashboard.js
+          css/catastro-planos-dashboard.css|webapp/static/css/catastro-planos-dashboard.css
           js/catastro-master-data.js|webapp/static/js/catastro-master-data.js
           js/catastro-fuentes.js|webapp/static/js/catastro-fuentes.js
           css/catastro-fuentes.css|webapp/static/css/catastro-fuentes.css

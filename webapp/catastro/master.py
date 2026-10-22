@@ -28,7 +28,8 @@ def configuration():
     from .master_layers import catalogue
     references = [{**source, 'geometry_url': '/acm/catastro/fuentes/' + source['id'] + '/radio/'}
                   for source in catalogue()['sources'] if source.get('transport') == 'master' and source['active']
-                  and source.get('contributes', True)]
+                  and (source.get('contributes', True) or source.get('id') in
+                       ('cayma-pud-2006-eu03', 'cayma-sector-32-provisional'))]
     for source in references:
         source['placement'] = {k: v for k, v in source['placement'].items() if k != 'blocks'}
     return {'revision': 5, 'scope': 'radius', 'batch_size': 500,

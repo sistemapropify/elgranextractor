@@ -5,14 +5,15 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from .report_selection import report_records, report_total, report_values
+from .client_report import pdm_zone
 
 
 def _number(value, suffix=''):
-    return 'Sin informar' if value is None else f'{float(value):,.2f}{suffix}'
+    return 'Sin informar' if value is None else f'{float(value):,.0f}{suffix}'
 
 
 def _money(value):
-    return 'Sin informar' if value is None else f'USD {float(value):,.2f}'
+    return 'Sin informar' if value is None else f'USD {float(value):,.0f}'
 
 
 def _link(value):
@@ -84,4 +85,5 @@ def build_acm_html(params, records, result, excluded=(), generated_at=None):
         'report_notes': params.get('report_notes', ''),
         'messages': result.get('messages', []),
         'show_publication': params.get('_acm_permissions', {}).get('publication', True),
+        'pdm': pdm_zone(params),
     })

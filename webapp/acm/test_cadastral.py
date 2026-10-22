@@ -74,6 +74,42 @@ class CadastralAccessTests(SimpleTestCase):
         config=json.loads(response.content)
         self.assertEqual(config['scope'],'radius')
         self.assertNotIn('max_lots',config)
+        cayma=next(item for item in config['providers']
+                   if item['id']=='cayma-pud-2006-eu03')
+        self.assertTrue(cayma['reference_only'])
+        self.assertFalse(cayma['contributes'])
+        sector=next(item for item in config['providers']
+                    if item['id']=='cayma-sector-32-provisional')
+        self.assertTrue(sector['reference_only'])
+        self.assertFalse(sector['contributes'])
+
+    @patch('acm.cadastral_views.source_manager.store')
+    @patch('acm.cadastral_views.source_manager.durable', return_value=True)
+    @patch('acm.cadastral_views.source_manager.enabled', return_value=False)
+    @patch('acm.cadastral_views.raster_overlays.list_all_overlays')
+    def test_basic_role_receives_the_same_master_raster_catalog(
+            self, overlays, enabled, durable, store):
+        overlays.return_value = [{'id': 'drone-raster-a', 'ubigeo': '040126',
+                                  'name': 'Dron Yanahuara'}]
+        store.return_value = SimpleNamespace(revision=9)
+        response = cadastral_views.raster_catalog(self.request())
+        self.assertEqual(response.status_code, 200)
+        import json
+        item = json.loads(response.content)['overlays'][0]
+        self.assertEqual(item['image_url'],
+                         '/acm/catastro/raster/drone-raster-a/imagen/?ubigeo=040126')
+
+    @patch('acm.cadastral_views.source_manager.store')
+    @patch('acm.cadastral_views.source_manager.enabled', return_value=True)
+    @patch('acm.cadastral_views.raster_overlays.image_body', return_value=(b'\xff\xd8test','image/jpeg'))
+    def test_basic_role_can_read_the_master_raster_image(self, body, enabled, store):
+        store.return_value = object()
+        request = self.request()
+        request.GET = {'ubigeo': '040126'}
+        response = cadastral_views.raster_image(request, 'drone-raster-a')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'image/jpeg')
+        self.assertEqual(response.content, b'\xff\xd8test')
 
     def test_invalid_lot_is_rejected_before_storage_access(self):
         with patch('catastro.master.manifest') as read:

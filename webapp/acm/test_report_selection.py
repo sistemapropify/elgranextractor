@@ -20,9 +20,9 @@ class ReportSelectionTests(SimpleTestCase):
         result=calculate(rows,p)
         p.update(report_ids=[selected['id']],manual_valuation=234000)
         html=build_acm_html(p,rows,result)
-        self.assertIn('USD 234,000.00',html)
-        self.assertIn('USD 245,700.00',html)
-        self.assertIn('USD 222,300.00',html)
+        self.assertIn('USD 234,000',html)
+        self.assertIn('USD 245,700',html)
+        self.assertIn('USD 222,300',html)
         self.assertIn('Casa seleccionada &lt;script&gt;',html)
         self.assertNotIn('<script>',html)
         self.assertNotIn('javascript:',html)
@@ -37,7 +37,7 @@ class ReportSelectionTests(SimpleTestCase):
             p['report_ids']=['only']
             html=build_acm_html(p,rows,result)
             self.assertIn('Mediana del precio por m²',html)
-            self.assertIn(f"{p[area]:,.2f} m²",html)
+            self.assertIn(f"{p[area]:,.0f} m²",html)
             self.assertIn('Ver anuncio',build_acm_html(p,[{**rows[0],'url':'https://example.com/propiedad'}],result))
 
     def test_only_checked_records_and_manual_total_are_reported(self):
@@ -62,9 +62,9 @@ class ReportSelectionTests(SimpleTestCase):
         self.assertNotIn(b'EXPECTATIVA CLIENTE',text)
         self.assertNotIn(b'92,479.83',text)
         self.assertNotIn(b'PRECIO DE VENTA SUGERIDO',text)
-        self.assertIn(b'115,500.00',text)
-        self.assertIn(b'110,000.00',text)
-        self.assertIn(b'104,500.00',text)
+        self.assertIn(b'115,500',text)
+        self.assertIn(b'110,000',text)
+        self.assertIn(b'104,500',text)
         self.assertLess(text.index(b'VALOR DE SALIDA AL MERCADO'),text.index(b'VALOR COMERCIAL'))
         self.assertLess(text.index(b'VALOR COMERCIAL'),text.index(b'VALOR DE REALIZACI'))
         p.pop('manual_valuation')
@@ -96,12 +96,12 @@ class ReportSelectionTests(SimpleTestCase):
                 self.assertEqual(data['values']['commercial'], expected_total)
                 self.assertEqual(data['average'] * p['land'], expected_total)
                 pdf = _pdf_text(build_acm_pdf(inputs, rows, result, fetch_images=False))
-                self.assertIn(f'{expected_unit:,.2f}'.encode(), pdf)
-                self.assertIn(f'{expected_total:,.2f}'.encode(), pdf)
+                self.assertIn(f'{expected_unit:,.0f}'.encode(), pdf)
+                self.assertIn(f'{expected_total:,.0f}'.encode(), pdf)
                 doc = Document(io.BytesIO(build_acm_docx(inputs, rows, result, fetch_images=False)))
                 text = '\n'.join(cell.text for table in doc.tables for row in table.rows for cell in row.cells)
-                self.assertIn(f'{expected_unit:,.2f}', text)
-                self.assertIn(f'{expected_total:,.2f}', text)
+                self.assertIn(f'{expected_unit:,.0f}', text)
+                self.assertIn(f'{expected_total:,.0f}', text)
                 self.assertNotIn('Nuevo precio', text)
 
     def test_pdf_heading_and_chart_use_final_value_per_m2_without_adjustment_labels(self):
@@ -113,7 +113,7 @@ class ReportSelectionTests(SimpleTestCase):
         self.assertAlmostEqual(chart.call_args.args[2],110000/90)
         text=_pdf_text(pdf)
         self.assertIn(b'PRECIO PROMEDIO DE VENTA POR M2',text)
-        self.assertIn(b'1,222.22',text)
+        self.assertIn(b'1,222',text)
         self.assertNotIn(b'Nuevo precio',text)
         self.assertNotIn(b'manualmente',text)
 
@@ -191,7 +191,7 @@ class SelectedReportEndpointTests(SimpleTestCase):
         self.assertEqual(response['Content-Type'],'text/html; charset=utf-8')
         self.assertIn('attachment',response['Content-Disposition'])
         self.assertEqual(response['X-ACM-History-Code'],'ACM-html-test')
-        self.assertIn(b'USD 234,000.00',response.content)
+        self.assertIn(b'USD 234,000',response.content)
         self.assertEqual(persist.call_args.args[1]['report_ids'],[sample()[0]['id']])
         for payload,status in [({'token':snapshot['token'],'report_ids':[]},422),
                                ({'token':snapshot['token'],'report_ids':['foreign']},400),
