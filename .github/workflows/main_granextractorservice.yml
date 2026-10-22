@@ -359,10 +359,17 @@ jobs:
           http_status() {
             local output_file="$1"
             local url="$2"
-            local status
-            status=$(curl -sS -o "$output_file" -w "%{http_code}" \
-              --connect-timeout 5 --max-time 10 "$url" 2>/dev/null) || true
-            echo "${status:-000}"
+            local status attempt
+            for attempt in 1 2 3; do
+              status=$(curl -sS -o "$output_file" -w "%{http_code}" \
+                --connect-timeout 5 --max-time 10 "$url" 2>/dev/null) || true
+              if [ "${status:-000}" != "000" ]; then
+                echo "$status"
+                return
+              fi
+              sleep 2
+            done
+            echo "000"
           }
 
           for i in {1..45}; do
@@ -401,7 +408,7 @@ jobs:
               while IFS='|' read -r asset source; do
                 ASSET_STATUS=$(http_status /tmp/cadastral-asset "https://acm.propifai.com/static/$asset?revision=${GITHUB_SHA}")
                 if [ "$ASSET_STATUS" != "200" ] || ! cmp -s /tmp/cadastral-asset "$source"; then
-                  echo "Release asset pending: $asset ($ASSET_STATUS)"
+                  echo "Release asset pending: $asset ($ASSET_STATUS) for ${GITHUB_SHA}"
                   EXTRA_STATIC_OK=0
                   break
                 fi

@@ -50,3 +50,4 @@ pdf2image>=1.17.0
 
 # Catastro DWG reader (native converter is installed separately).
 -r requirements-cad.txt
+shapely==2.2.0
