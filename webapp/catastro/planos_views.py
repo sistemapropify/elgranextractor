@@ -1,14 +1,18 @@
 """Map workspace for reviewing georeferenced plans without altering the archive."""
 import json
+import hashlib
+from pathlib import Path
 from django.conf import settings
+from django.core.cache import cache
 from django.shortcuts import render
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 from map_config import google_maps_api_key
 
 from .views import admin_required
-from . import cad_reader, plan_adjustments
+from . import cad_reader, plan_adjustments, source_manager
+from .storage import R2, StorageError
 
 
 @require_GET
@@ -56,6 +60,62 @@ def upload(request):
 def inventory(request):
     response = JsonResponse({'dwg': cad_reader.inventory()})
     response['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@require_GET
+@admin_required
+def geollaqta_inventory(request):
+    ubigeo = request.GET.get('ubigeo', '040126').strip()
+    if len(ubigeo) != 6 or not ubigeo.isdigit():
+        return JsonResponse({'error': 'UBIGEO no válido.'}, status=400)
+    catalog_file = Path(__file__).resolve().parents[1] / 'cuadrantizacion' / 'geollaqta_districts.json'
+    catalog = json.loads(catalog_file.read_text(encoding='utf8'))
+    district = next((item for item in catalog.get('districts', [])
+                     if item.get('ubigeo') == ubigeo), None)
+    response = JsonResponse({
+        'ubigeo': ubigeo,
+        'district': district.get('name') if district else None,
+        'expected_lots': district.get('published_lots') if district else None,
+        'catalog_checked_at': catalog.get('checked_at'),
+        'archive_prefix': 'geollaqta/' + ubigeo + '/',
+        'map_url': ('/cuadrantizacion/mapa/?catastro=' + district['slug'])
+                   if district and district.get('slug') else '/cuadrantizacion/mapa/',
+        'catalog_url': '/catastro/maestro/fuentes/#sources-catalog-query',
+    })
+    response['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@require_GET
+@admin_required
+def source_thumbnail(request, version_id):
+    payload = source_manager.version_payload(version_id)
+    if not payload:
+        return JsonResponse({'error': 'Versión de datos no disponible.'}, status=404)
+    media = payload.get('media') or []
+    image = next((item for item in media
+                  if isinstance(item, dict)
+                  and item.get('kind') in ('facade_image', 'interior_image', 'photo', 'image')
+                  and isinstance(item.get('object_key'), str)), None)
+    if not image:
+        return JsonResponse({'error': 'El lote no tiene fotografía archivada.'}, status=404)
+    key = image['object_key']
+    if not key.startswith('geollaqta/') or '..' in key.split('/'):
+        return JsonResponse({'error': 'Ruta de fotografía no válida.'}, status=404)
+    try:
+        body, _ = R2().get(key)
+    except StorageError as error:
+        return JsonResponse({'error': str(error)}, status=503)
+    if image.get('sha256') and hashlib.sha256(body).hexdigest() != image['sha256']:
+        return JsonResponse({'error': 'La fotografía no coincide con su huella.'}, status=409)
+    mime = ('image/jpeg' if body.startswith(b'\xff\xd8\xff') else
+            'image/png' if body.startswith(b'\x89PNG\r\n\x1a\n') else None)
+    if not mime:
+        return JsonResponse({'error': 'Formato de fotografía no disponible.'}, status=415)
+    response = HttpResponse(body, content_type=mime)
+    response['Cache-Control'] = 'private, max-age=300'
+    response['X-Content-Type-Options'] = 'nosniff'
     return response
 
 

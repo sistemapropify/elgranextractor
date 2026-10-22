@@ -91,16 +91,16 @@ class DurableMasterTests(TestCase):
         payload=candidate()
         self.store.stage(payload,0,'admin')
         self.store.update_plan_title(
-            'source-version:v1','source-version','v1','040103',
+            'source:old','source','v1','040103',
             'Título persistente',1,'admin')
         self.store.add_plan_note(
-            'source-version:v1','source-version','v1','040103',
+            'source:old','source','v1','040103',
             'Nota persistente',2,'admin')
         restored=D1Store(self.gateway)
-        annotation=restored.plan_annotations(['source-version:v1'])['source-version:v1']
+        annotation=restored.plan_annotations(['source:old'])['source:old']
         self.assertEqual(annotation['display_title'],'Título persistente')
         self.assertEqual(annotation['note_count'],1)
-        self.assertEqual(restored.plan_notes_for('source-version:v1')[0]['note'],
+        self.assertEqual(restored.plan_notes_for('source:old')[0]['note'],
                          'Nota persistente')
     def test_another_process_invalidates_preview(self):
         self.store.stage(candidate(),0,'admin');other=D1Store(self.gateway)

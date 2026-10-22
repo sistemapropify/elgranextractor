@@ -269,14 +269,14 @@ This is a correctness limit, never a silent subset of the master database.
             dtype=values[1] if len(values)>1 else kwargs.get('document_type')
             version=values[2] if len(values)>2 else kwargs.get('source_version')
             scope=values[3] if len(values)>3 else kwargs.get('scope_ubigeo')
-            self._select_plan_scope(version if dtype=='source-version' else None,scope)
+            self._select_plan_scope(version if dtype in ('source','source-version') else None,scope)
             return self._mutate(super().update_plan_title,*args,**kwargs)
     def add_plan_note(self,*args,**kwargs):
         with self.lock:
             dtype=args[1] if len(args)>1 else kwargs.get('document_type')
             version=args[2] if len(args)>2 else kwargs.get('source_version')
             scope=args[3] if len(args)>3 else kwargs.get('scope_ubigeo')
-            self._select_plan_scope(version if dtype=='source-version' else None,scope)
+            self._select_plan_scope(version if dtype in ('source','source-version') else None,scope)
             return self._mutate(super().add_plan_note,*args,**kwargs)
     def plan_annotations(self,document_keys):
         keys=list(dict.fromkeys(str(key) for key in document_keys if key))

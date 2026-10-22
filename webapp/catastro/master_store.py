@@ -235,22 +235,24 @@ class MasterStore:
             return result
 
     def _plan_identity(self, document_key, document_type, source_version, scope_ubigeo):
-        if document_type not in ('source-version', 'dwg'):
+        if document_type not in ('source', 'source-version', 'dwg'):
             raise ValueError('Tipo de documento de plano no válido.')
         if not isinstance(document_key, str) or not re.fullmatch(
-                r'(?:source-version|dwg):[A-Za-z0-9][A-Za-z0-9_.:%-]{0,300}', document_key):
+                r'(?:source|source-version|dwg):[A-Za-z0-9][A-Za-z0-9_.:%-]{0,300}', document_key):
             raise ValueError('Identificador de plano no válido.')
         if not document_key.startswith(document_type + ':'):
             raise ValueError('El identificador no corresponde al tipo de plano.')
         ubigeo = contract.validate_field('ubigeo', scope_ubigeo)
-        if document_type == 'source-version':
+        if document_type in ('source', 'source-version'):
             source_version = identifier(source_version, 'Versión del plano')
-            if document_key != 'source-version:' + source_version:
-                raise ValueError('La versión no corresponde al identificador del plano.')
-            row = self.db.execute('''SELECT s.ubigeo FROM versions v
+            row = self.db.execute('''SELECT s.ubigeo,s.id FROM versions v
                 JOIN sources s ON s.id=v.source_id WHERE v.id=?''', (source_version,)).fetchone()
             if not row:
                 raise ValueError('La versión del plano no existe en este ámbito.')
+            if document_type == 'source-version' and document_key != 'source-version:' + source_version:
+                raise ValueError('La versión no corresponde al identificador del plano.')
+            if document_type == 'source' and document_key != 'source:' + row[1]:
+                raise ValueError('La fuente no corresponde al identificador del plano.')
             if row[0] != ubigeo:
                 raise ValueError('La versión del plano pertenece a otro distrito.')
         else:

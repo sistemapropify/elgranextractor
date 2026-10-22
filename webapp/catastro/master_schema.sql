@@ -249,7 +249,7 @@ CREATE INDEX catalog_review_recent
  ON catalog_review_events(revision DESC);
 CREATE TABLE plan_workspace (
  document_key TEXT PRIMARY KEY,
- document_type TEXT NOT NULL CHECK(document_type IN ('source-version','dwg')),
+ document_type TEXT NOT NULL CHECK(document_type IN ('source','source-version','dwg')),
  source_version TEXT REFERENCES versions(id), scope_ubigeo TEXT NOT NULL,
  display_title TEXT, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL,
  revision INTEGER NOT NULL CHECK(revision>0)

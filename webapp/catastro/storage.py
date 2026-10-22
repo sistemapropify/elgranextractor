@@ -122,3 +122,62 @@ class R2:
         """Atomic replacement shared by all application instances."""
         return self.request('PUT', key, data, 'application/json',
                             condition=('if-match', etag) if etag else ('if-none-match', '*'))
+
+    def list_prefixes(self, prefix, delimiter='/', max_pages=25):
+        """List logical folders without reading every archived object."""
+        if not prefix.startswith('geollaqta/') or '..' in prefix.split('/'):
+            raise StorageError('Prefijo catastral no válido.')
+        if not isinstance(delimiter, str) or delimiter not in ('/', ''):
+            raise StorageError('Delimitador no válido.')
+        if type(max_pages) is not int or not 1 <= max_pages <= 100:
+            raise StorageError('Límite de páginas no válido.')
+        import xml.etree.ElementTree as ET
+        from urllib.parse import quote_plus
+        folders, token, pages = [], None, 0
+        while pages < max_pages:
+            pages += 1
+            now = datetime.datetime.now(datetime.timezone.utc)
+            stamp, day = now.strftime('%Y%m%dT%H%M%SZ'), now.strftime('%Y%m%d')
+            query_values = {'list-type': '2', 'prefix': prefix, 'max-keys': '1000'}
+            if delimiter:
+                query_values['delimiter'] = delimiter
+            if token:
+                query_values['continuation-token'] = token
+            query = '&'.join(quote_plus(k) + '=' + quote_plus(v)
+                             for k, v in sorted(query_values.items()))
+            payload = hashlib.sha256(b'').hexdigest()
+            headers = {'host': self.host, 'x-amz-date': stamp, 'x-amz-content-sha256': payload}
+            signed = ';'.join(sorted(headers))
+            canonical_headers = ''.join(k + ':' + headers[k] + '\n' for k in sorted(headers))
+            canonical = '\n'.join(['GET', '/' + self.bucket, query, canonical_headers,
+                                   signed, payload])
+            scope = day + '/auto/s3/aws4_request'
+            to_sign = '\n'.join(['AWS4-HMAC-SHA256', stamp, scope,
+                                 hashlib.sha256(canonical.encode()).hexdigest()])
+            secret = ('AWS4' + self.values['R2_SECRET_ACCESS_KEY']).encode()
+            for part in (day, 'auto', 's3', 'aws4_request'):
+                secret = hmac.new(secret, part.encode(), hashlib.sha256).digest()
+            signature = hmac.new(secret, to_sign.encode(), hashlib.sha256).hexdigest()
+            headers['Authorization'] = ('AWS4-HMAC-SHA256 Credential=' +
+                self.values['R2_ACCESS_KEY_ID'] + '/' + scope +
+                ', SignedHeaders=' + signed + ', Signature=' + signature)
+            req = Request('https://' + self.host + '/' + self.bucket + '?' + query,
+                          method='GET', headers=headers)
+            try:
+                with self.opener.open(req, timeout=self.timeout) as response:
+                    body = response.read(20_000_001)
+            except HTTPError as exc:
+                raise StorageError('R2 respondió HTTP ' + str(exc.code) + '.', exc.code) from None
+            except (URLError, TimeoutError, OSError):
+                raise StorageError('No se pudo listar el archivo catastral en R2.') from None
+            root = ET.fromstring(body)
+            namespace = {'s': 'http://s3.amazonaws.com/doc/2006-03-01/'}
+            folders.extend(element.findtext('s:Prefix', default='', namespaces=namespace)
+                           for element in root.findall('s:CommonPrefixes', namespace))
+            truncated = root.findtext('s:IsTruncated', default='false',
+                                      namespaces=namespace).lower() == 'true'
+            token = root.findtext('s:NextContinuationToken', default=None,
+                                  namespaces=namespace)
+            if not truncated or not token:
+                return {'prefixes': folders, 'truncated': False, 'pages': pages}
+        return {'prefixes': folders, 'truncated': True, 'pages': pages}

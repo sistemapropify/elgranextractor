@@ -250,6 +250,10 @@ class MasterVersionTests(SimpleTestCase):
         self.store.add_plan_note(
             notes_only,'dwg',None,'040103','Sólo nota por ahora',self.store.revision,'reviewer')
         self.assertEqual(self.store.plan_annotations([notes_only])[notes_only]['note_count'],1)
+        self.store.update_plan_title(
+            'source:old','source','v1','040103','Título estable por fuente',self.store.revision,'reviewer')
+        self.assertEqual(self.store.plan_annotations(['source:old'])['source:old']['display_title'],
+                         'Título estable por fuente')
 
     def test_full_replacement_preserves_documents_people_and_retired_identity(self):
         eid,_ = self.base()
@@ -465,22 +469,22 @@ class SourceWorkspaceTests(SimpleTestCase):
         self.assertEqual(source_manager_views.workspace(
             self.request({'action':'stage','payload':candidate(),'revision':0})).status_code,200)
         response=source_manager_views.workspace(self.request({
-            'action':'plan_title','document_key':'source-version:v1',
-            'document_type':'source-version','source_version':'v1',
+            'action':'plan_title','document_key':'source:old',
+            'document_type':'source','source_version':'v1',
             'scope_ubigeo':'040103','title':'Plano del sector 32','revision':1}))
         self.assertEqual(response.status_code,200)
         response=source_manager_views.workspace(self.request({
-            'action':'plan_note','document_key':'source-version:v1',
-            'document_type':'source-version','source_version':'v1',
+            'action':'plan_note','document_key':'source:old',
+            'document_type':'source','source_version':'v1',
             'scope_ubigeo':'040103','note':'Revisar numeración de lote.','revision':2}))
         self.assertEqual(response.status_code,200)
         request=RequestFactory().get('/catastro/api/maestro/composicion/',
-            {'view':'plan_annotations','keys':'source-version:v1'})
+            {'view':'plan_annotations','keys':'source:old'})
         request.current_user=self.request().current_user
         value=json.loads(source_manager_views.workspace(request).content)
-        self.assertEqual(value['annotations']['source-version:v1']['display_title'],
+        self.assertEqual(value['annotations']['source:old']['display_title'],
                          'Plano del sector 32')
-        self.assertEqual(value['annotations']['source-version:v1']['note_count'],1)
+        self.assertEqual(value['annotations']['source:old']['note_count'],1)
 
     def test_pdf_inspection_keeps_bytes_in_ram_and_never_activates_geometry(self):
         import fitz

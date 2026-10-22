@@ -2,7 +2,7 @@
 -- map documents. This does not alter immutable source payloads.
 CREATE TABLE plan_workspace (
  document_key TEXT PRIMARY KEY,
- document_type TEXT NOT NULL CHECK(document_type IN ('source-version','dwg')),
+ document_type TEXT NOT NULL CHECK(document_type IN ('source','source-version','dwg')),
  source_version TEXT REFERENCES versions(id),
  scope_ubigeo TEXT NOT NULL,
  display_title TEXT,

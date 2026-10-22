@@ -1,6 +1,7 @@
 """Administrative source/version authoring, available only in the local preview."""
 import json
 import io
+from pathlib import Path
 
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
@@ -36,9 +37,18 @@ def viewer(request):
 def plans_dashboard(request):
     if not source_manager.enabled():
         return unavailable()
+    catalog_path = Path(__file__).resolve().parents[1] / 'cuadrantizacion' / 'geollaqta_districts.json'
+    catalog = json.loads(catalog_path.read_text(encoding='utf8'))
+    selected_data_ubigeo = request.GET.get('data_ubigeo', catalog.get('default_district', '040126'))
+    geollaqta_districts = catalog.get('districts', [])
+    geollaqta_data = next((item for item in geollaqta_districts
+                           if item.get('ubigeo') == selected_data_ubigeo), geollaqta_districts[0])
+    geollaqta_data = {**geollaqta_data, 'catalog_checked_at': catalog.get('checked_at')}
     response = render(request, 'catastro/planos_dashboard.html', {
         'master_durable': source_manager.durable(),
         'dwg_available': cad_reader.available(),
+        'geollaqta_districts': geollaqta_districts,
+        'geollaqta_data': geollaqta_data,
     })
     response['Cache-Control'] = 'private, no-store'
     return response
@@ -58,7 +68,7 @@ def plans_portfolio(request):
             GROUP BY p.id ORDER BY p.ubigeo,p.name LIMIT 1000'''
         file_sql = '''SELECT s.id AS source_id,s.name AS source_name,s.ubigeo,s.sheet_code,s.role,
             p.name AS project_name,p.expected_sheets,v.id AS version_id,v.label,v.source_date,v.crs,
-            v.georeferencing,v.original_name,v.digest,
+            v.georeferencing,v.original_name,v.digest,v.created_at,v.original_sha256,
             count(DISTINCT c.layer||':'||c.source_feature_id) AS elements,
             json_extract(v.payload,'$.version.vector_review') AS vector_review,
             json_extract(v.payload,'$.version.vector_artifacts') AS vector_artifacts,

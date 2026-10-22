@@ -18,7 +18,7 @@ def revision():
 
 def _key(value):
     if not isinstance(value, str) or not re.fullmatch(
-            r'(?:source-version|dwg):[A-Za-z0-9][A-Za-z0-9_.:%-]{0,300}', value):
+            r'(?:source|source-version|dwg):[A-Za-z0-9][A-Za-z0-9_.:%-]{0,300}', value):
         raise ValueError('Identificador de plano no válido.')
     return value
 
