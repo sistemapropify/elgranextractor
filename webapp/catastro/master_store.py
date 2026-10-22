@@ -208,8 +208,11 @@ class MasterStore:
                 oid = str(uuid.uuid5(uuid.NAMESPACE_URL, encoded([vid, kind, fid, key])))
                 self.db.execute('INSERT INTO contributions VALUES (?,?,?,?,?,?,?)',
                                 (oid, vid, fid, kind, key, encoded(val), encoded(evidence)))
+            from . import master_catalog
+            catalog_count = master_catalog.stage(self.db, vid, district, version.get('source_date'), value)
             revision = self._journal('stage', actor, 'Versión candidata; sin aplicar al maestro.', {'version_id': vid})
-            return {'revision': revision, 'version_id': vid, 'observations': len(observations)}
+            return {'revision': revision, 'version_id': vid, 'observations': len(observations),
+                    'catalog_records': catalog_count}
 
     def _resolve(self, row, plan):
         key = row['layer'] + ':' + row['source_feature_id']
@@ -431,6 +434,8 @@ class MasterStore:
                 self.db.execute('INSERT OR IGNORE INTO registral_acts VALUES (?,?,?,?,?,?,?,?,?)',
                     (uid(version_id,'registral-act',index),eid,item['kind'],item.get('registry_office'),
                      item.get('registry_number'),item.get('registry_seat'),item.get('observed_at'),version_id,encoded(item)))
+        from . import master_catalog
+        master_catalog.link(self.db, version_id)
 
     def _project(self, entity_ids):
         for eid in entity_ids:
@@ -482,6 +487,12 @@ class MasterStore:
                     'projects': projects, 'sources': sources, 'fields': contract.fields(),
                     'business_categories': contract.BUSINESS_CATEGORIES,
                     'active_entities': self.db.execute("SELECT count(*) FROM selections WHERE field='$geometry'").fetchone()[0],
+                    'catalog_counts': {table: self.db.execute('SELECT count(*) FROM '+table).fetchone()[0]
+                        for table in ('attribute_definitions','administrative_areas','addresses',
+                                      'property_observations','external_identifiers',
+                                      'listings','listing_observations','transactions','organizations',
+                                      'activities','visits','developments','development_lots',
+                                      'development_stages','environment_features','coverage_records')},
                     'history': [dict(r) for r in self.db.execute('''SELECT revision,operation,actor,created_at,reason
                         FROM journal ORDER BY revision DESC LIMIT 100''')]}
 
@@ -547,10 +558,12 @@ class MasterStore:
             evidence={r['field']:{'version_id':r['version_id'],'evidence':json.loads(r['evidence_json'])}
                 for r in self.db.execute('''SELECT s.field,c.version_id,c.evidence_json FROM selections s
                     JOIN contributions c ON c.id=s.contribution_id WHERE s.entity_id=?''',(entity_id,))}
+            from . import master_catalog
             return {'entity':dict(entity),'attributes':dict(attributes) if attributes else {},'owners':owners,
                     'media':media,'relationships':related,'provenance':evidence,
                     'boundary_segments':[dict(r) for r in self.db.execute('SELECT * FROM boundary_segments WHERE entity_id=?',(entity_id,))],
-                    'registral_acts':[dict(r) for r in self.db.execute('SELECT * FROM registral_acts WHERE entity_id=?',(entity_id,))]}
+                    'registral_acts':[dict(r) for r in self.db.execute('SELECT * FROM registral_acts WHERE entity_id=?',(entity_id,))],
+                    'catalog': master_catalog.for_entity(self.db, entity_id)}
 
     def medium(self, media_id):
         identifier(media_id)

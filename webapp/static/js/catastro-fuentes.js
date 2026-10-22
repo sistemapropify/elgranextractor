@@ -40,6 +40,18 @@
         for(const [value,label] of [[state.active_entities,'Geometrías activas en este borrador'],[state.revision,'Revisión del borrador']]){
             const card=node('div',null,'sources-stat');card.append(node('strong',value),node('span',label));$('stats').append(card);
         }
+        const catalogCounts=state.catalog_counts||{};
+        $('catalog-counts').textContent='Catálogo incremental · '+[
+            ['Identificadores',catalogCounts.external_identifiers],
+            ['Direcciones',catalogCounts.addresses],
+            ['Observaciones',catalogCounts.property_observations],
+            ['Anuncios',catalogCounts.listings],
+            ['Operaciones',catalogCounts.transactions],
+            ['Actividades',catalogCounts.activities],
+            ['Visitas',catalogCounts.visits],
+            ['Proyectos',catalogCounts.developments],
+            ['Cobertura',catalogCounts.coverage_records],
+        ].map(([label,value])=>label+': '+(value||0)).join(' · ');
         const selected=$('version').value,withdraw=$('withdraw-source').value;
         $('list').replaceChildren();$('version').replaceChildren(node('option','Selecciona una versión'));$('version').firstChild.value='';
         $('withdraw-source').replaceChildren(node('option','Selecciona una fuente'));$('withdraw-source').firstChild.value='';
@@ -154,7 +166,49 @@
         }
         if(data.registral_acts?.length){box.append(node('h4','Antecedentes registrales documentados'));
             for(const act of data.registral_acts)box.append(node('p',act.kind+' · '+(act.registry_number||'Sin partida consignada')+' · '+(act.observed_at||'Sin fecha consignada')+' · '+act.source_version));}
+        const catalog=data.catalog||{};
+        if(catalog.addresses?.length){box.append(node('h4','Direcciones documentadas'));
+            for(const item of catalog.addresses)box.append(node('p',(item.address_type||'Dirección')+' · '+(item.full_address||[item.street_type,item.street_name,item.municipal_number].filter(Boolean).join(' ')||'Sin texto de dirección')+' · '+(item.precision||'Precisión sin dato')+' · '+item.status+' · '+item.source_version));}
+        if(catalog.identifiers?.length){box.append(node('h4','Identificadores externos'));
+            for(const item of catalog.identifiers)box.append(node('p',item.scheme+' · '+item.value+' · '+item.status+' · '+(item.observed_at||'Sin fecha')+' · '+item.source_version));}
+        if(catalog.observations?.length){box.append(node('h4','Atributos y observaciones adicionales'));
+            for(const item of catalog.observations)box.append(node('p',(item.namespace||'general')+' / '+item.field_name+' · '+String(item.value)+(item.unit?' '+item.unit:'')+' · '+item.status+' · '+item.source_version));}
+        if(catalog.listings?.length){box.append(node('h4','Publicaciones de mercado'));
+            for(const item of catalog.listings){
+                const p=node('p',item.portal+' · '+item.external_id+' · '+(item.operation||'Operación sin dato')+' · '+(item.price==null?'Precio sin dato':item.price+' '+(item.currency||''))+' · '+item.status+' · '+(item.last_seen||'Sin fecha'));
+                if(item.url){const link=node('a',' Abrir anuncio');link.href=item.url;link.target='_blank';link.rel='noopener';p.append(link);}box.append(p);
+            }
+            for(const item of catalog.listing_history||[])box.append(node('p','Historial · '+(item.observed_at||'Sin fecha')+' · '+(item.price==null?'Precio sin dato':item.price+' '+(item.currency||''))+' · '+item.status));
+        }
+        if(catalog.transactions?.length){box.append(node('h4','Operaciones documentadas'));
+            for(const item of catalog.transactions)box.append(node('p',item.transaction_type+' · '+(item.amount==null?'Monto sin dato':item.amount+' '+(item.currency||''))+' · '+(item.transaction_date||'Fecha sin dato')+' · '+item.source_version));}
+        if(catalog.activities?.length){box.append(node('h4','Actividades y establecimientos'));
+            for(const item of catalog.activities)box.append(node('p',(item.activity_name||item.category||'Actividad sin nombre')+' · '+(item.category||'Sin categoría')+' · '+(item.ciiu_code?('CIIU '+(item.ciiu_version||'')+' '+item.ciiu_code):'CIIU sin dato')+' · '+(item.organization_name||'Organización sin dato')+' · '+item.source_version));}
+        if(catalog.visits?.length){box.append(node('h4','Visitas y observaciones'));
+            for(const item of catalog.visits)box.append(node('p',(item.visited_at||'Sin fecha')+' · '+(item.summary||'Sin resumen')+' · '+(item.observer||'Observador no consignado')+' · '+item.source_version));}
+        if(catalog.development_links?.length){box.append(node('h4','Proyectos inmobiliarios relacionados'));
+            for(const item of catalog.development_links)box.append(node('p',item.name+' · '+item.status+' · '+(item.role||'Relación sin clasificar')+' · '+item.source_version));}
         for(const relation of data.relationships){const button=node('button','Abrir inmueble relacionado · '+relation.kind,'secondary');button.type='button';button.addEventListener('click',()=>mutate(()=>showEntity(relation.related_entity_id)));box.append(button);}
+    }
+    async function queryCatalog(){
+        const params=new URLSearchParams({view:'catalog'});
+        for(const [key,value] of new FormData($('catalog-query')))if(String(value).trim())params.set(key,String(value).trim());
+        const data=await api(null,'?'+params);const wrap=$('catalog-results');wrap.replaceChildren();
+        $('catalog-status').textContent=data.items.length+' registros candidatos. No se activó ningún dato.';
+        if(!data.items.length){wrap.append(node('p','No hay registros de catálogo para estos filtros.'));return;}
+        const table=node('table'),head=node('tr');
+        ['Tipo','Etiqueta','Detalle','Entidad','Fecha','Valor','Estado','Fuente','Acción'].forEach(label=>head.append(node('th',label)));table.append(head);
+        const labels={listing:'Anuncio',identifier:'Identificador',observation:'Observación',transaction:'Operación',activity:'Actividad',coverage:'Cobertura'};
+        for(const item of data.items){
+            const row=node('tr');[labels[item.kind]||item.kind,item.label||'',item.detail||'',item.entity_id||'Sin vínculo',item.observed_at||'Sin fecha',
+                item.amount==null?'':String(item.amount)+(item.currency?' '+item.currency:''),item.status||'',item.source_version||'']
+                .forEach(value=>row.append(node('td',value)));
+            const cell=node('td');
+            if(item.entity_id){const button=node('button','Abrir ficha','secondary');button.type='button';button.addEventListener('click',()=>mutate(()=>showEntity(item.entity_id)));cell.append(button);}
+            row.append(cell);table.append(row);
+        }
+        wrap.append(table);
+        if(data.items.length===1000)wrap.append(node('p','Se muestran hasta 1.000 registros; afina los filtros.'));
     }
     $('change-form').addEventListener('input',invalidate);$('change-form').addEventListener('change',()=>{invalidate();modeChanged();});
     $('add-mapping').addEventListener('click',()=>{const row=node('div',null,'sources-mapping-row'),from=node('input'),to=node('input'),remove=node('button','Quitar','secondary');from.placeholder='Origen: lote:identificador-en-la-fuente';to.placeholder='Identificador del inmueble maestro';from.setAttribute('aria-label','Tipo e identificador de origen');to.setAttribute('aria-label','Identificador maestro');remove.type='button';remove.addEventListener('click',()=>{row.remove();invalidate();});row.append(from,to,remove);$('mapping').append(row);invalidate();});
@@ -167,6 +221,7 @@
         const value=await api({action:'apply',...comparison});invalidate();await refresh();await queryRecords();status(value.unchanged?'El aporte no cambia los valores actuales.':state.storage==='d1'?'Cambio confirmado en D1.':'Cambio aplicado únicamente al borrador local.');
     }));
     $('query').addEventListener('submit',event=>{event.preventDefault();mutate(queryRecords);});
+    $('catalog-query').addEventListener('submit',event=>{event.preventDefault();mutate(queryCatalog);});
     $('scope-form').addEventListener('submit',event=>{event.preventDefault();mutate(async()=>{
         const district=$('workspace-ubigeo').value.trim();$('ubigeo').value=district;$('query').elements.ubigeo.value=district;
         $('pdf-form').elements.ubigeo.value=district;invalidate();await refresh();await queryRecords();status('Distrito abierto. Se conservan los datos de los otros ámbitos.');

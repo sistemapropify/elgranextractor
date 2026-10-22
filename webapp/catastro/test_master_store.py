@@ -8,7 +8,7 @@ from django.test import RequestFactory, SimpleTestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from .master_store import MasterStore, Conflict
-from . import master_contract, master_ingest, master_pipeline, source_manager_views
+from . import master_catalog, master_contract, master_ingest, master_pipeline, source_manager_views
 
 
 def candidate(source='old', version='v1', *, verified=True, fields=None, kind='lote', fid='a'):
@@ -108,6 +108,61 @@ class MasterVersionTests(SimpleTestCase):
             self.store.preview(self.plan('v2','replace_fields',['land_area']))
         self.apply(self.plan('v2'))
         self.assertEqual(len(self.store.records()),2)
+
+    def test_incremental_catalog_links_market_records_actors_and_coverage_to_entity(self):
+        payload = candidate(fields={'sector':'32'})
+        payload.update({
+            'attribute_definitions': [{'id':'material','label':'Material','value_type':'text','scope':'edificio'}],
+            'administrative_areas': [
+                {'id':'pe','kind':'country','code':'PE','code_scheme':'ISO-3166-1','name':'Perú'},
+                {'id':'arequipa','parent_id':'pe','kind':'department','code':'04','code_scheme':'UBIGEO',
+                 'name':'Arequipa'}],
+            'addresses': [{'target_ref':'lote:a','address_type':'principal',
+                           'full_address':'Dirección sintética 123','precision':'municipal'}],
+            'observations': [{'target_ref':'lote:a','namespace':'construccion','field_name':'material',
+                              'value_type':'text','value':'Ladrillo','status':'candidate'}],
+            'identifiers': [{'target_ref':'lote:a','scheme':'referencia_catastral','value':'REF-001',
+                             'status':'candidate'}],
+            'organizations': [{'id':'agency','name':'Inmobiliaria prueba','organization_type':'inmobiliaria',
+                               'document_type':'RUC','document_number':'20123456789'}],
+            'listings': [{'id':'listing-a','target_ref':'lote:a','portal':'demo','external_id':'42',
+                          'operation':'venta','price':250000,'currency':'USD','status':'active'}],
+            'listing_observations': [{'listing_id':'listing-a','price':250000,'currency':'USD',
+                                      'operation':'venta','status':'observed'}],
+            'transactions': [{'target_ref':'lote:a','transaction_type':'venta','amount':240000,
+                              'currency':'USD','transaction_date':'2026-01-10'}],
+            'activities': [{'target_ref':'lote:a','organization_id':'agency','category':'inmobiliaria',
+                            'activity_name':'Oficina inmobiliaria'}],
+            'visits': [{'target_ref':'lote:a','visited_at':'2026-02-01','observer':'revisor',
+                        'summary':'Visita sintética'}],
+            'developments': [{'id':'development','name':'Proyecto prueba','developer_id':'agency',
+                              'status':'announced'}],
+            'development_lots': [{'development_id':'development','target_ref':'lote:a','role':'sujeto'}],
+            'development_stages': [{'development_id':'development','name':'Cimentación',
+                                    'status':'observed','progress':0.25,'observed_at':'2026-02-01'}],
+            'environment_features': [{'kind':'parque','name':'Parque prueba','geometry':
+                                      {'type':'Point','coordinates':[-71.55,-16.36]}}],
+            'coverage_records': [{'dataset':'planos','complete':False,'record_count':1}],
+        })
+        self.stage(payload)
+        self.apply(self.plan())
+        entity_id = self.store.records()[0]['entity_id']
+        catalog = self.store.entity(entity_id)['catalog']
+        self.assertEqual(catalog['observations'][0]['value'],'Ladrillo')
+        self.assertEqual(catalog['addresses'][0]['full_address'],'Dirección sintética 123')
+        self.assertEqual(catalog['identifiers'][0]['value'],'REF-001')
+        self.assertEqual(catalog['listings'][0]['external_id'],'42')
+        self.assertEqual(catalog['visits'][0]['summary'],'Visita sintética')
+        self.assertEqual(len(catalog['development_links']),1)
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM activities WHERE organization_id=?',
+                                               ('agency',)).fetchone()[0],1)
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM listing_observations').fetchone()[0],1)
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM development_stages').fetchone()[0],1)
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM coverage_records').fetchone()[0],1)
+        self.assertEqual(self.store.db.execute('SELECT parent_id FROM administrative_areas WHERE id=?',
+                                               ('arequipa',)).fetchone()[0],'pe')
+        self.assertIn('42', master_catalog.search(self.store.db, {'kind':'listings','portal':'demo'})[0]['label'])
+        self.assertEqual(master_catalog.search(self.store.db, {'kind':'coverage','dataset':'planos'})[0]['amount'],1)
 
     def test_full_replacement_preserves_documents_people_and_retired_identity(self):
         eid,_ = self.base()

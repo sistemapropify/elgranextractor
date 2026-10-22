@@ -16,7 +16,14 @@ from .storage import NoRedirect, StorageError
 TABLES = {'meta':('key',),'projects':('id',),'sources':('id',),'versions':('id',),
           'entities':('id',),'boundary_segments':('id',),'contributions':('id',),'identities':('version_id','layer','source_feature_id'),
           'selections':('entity_id','field'),'people':('id',),'relationships':('id',),'media':('id',),
-          'registral_acts':('id',),'zones':('id',),'current_attributes':('entity_id',),'journal':('revision',)}
+          'registral_acts':('id',),'zones':('id',),'attribute_definitions':('id',),
+          'administrative_areas':('id',),'addresses':('id',),
+          'property_observations':('id',),'external_identifiers':('id',),'listings':('id',),
+          'listing_observations':('id',),'transactions':('id',),'organizations':('id',),
+          'activities':('id',),'visits':('id',),'developments':('id',),
+          'development_lots':('id',),'development_stages':('id',),
+          'environment_features':('id',),'coverage_records':('id',),
+          'current_attributes':('entity_id',),'journal':('revision',)}
 
 
 def configuration():
@@ -111,7 +118,24 @@ This is a correctness limit, never a silent subset of the master database.
             'selections':'entity_id IN ('+entities+')',
             'relationships':'entity_id IN ('+entities+')',
             'media':'entity_id IN ('+entities+')','boundary_segments':'entity_id IN ('+entities+')',
-            'registral_acts':'entity_id IN ('+entities+')','current_attributes':'entity_id IN ('+entities+')',
+            'registral_acts':'entity_id IN ('+entities+')',
+            'attribute_definitions':'source_version IS NULL OR source_version IN ('+district_versions+')',
+            'administrative_areas':'source_version IS NULL OR source_version IN ('+district_versions+')',
+            'addresses':'entity_id IN ('+entities+') OR source_version IN ('+district_versions+')',
+            'property_observations':'entity_id IN ('+entities+') OR source_version IN ('+district_versions+')',
+            'external_identifiers':'entity_id IN ('+entities+') OR source_version IN ('+district_versions+')',
+            'listings':'entity_id IN ('+entities+') OR source_version IN ('+district_versions+')',
+            'listing_observations':'source_version IN ('+district_versions+')',
+            'transactions':'entity_id IN ('+entities+') OR source_version IN ('+district_versions+')',
+            'organizations':'source_version IN ('+district_versions+')',
+            'activities':'entity_id IN ('+entities+') OR source_version IN ('+district_versions+')',
+            'visits':'entity_id IN ('+entities+') OR source_version IN ('+district_versions+')',
+            'developments':'source_version IN ('+district_versions+')',
+            'development_lots':'entity_id IN ('+entities+') OR source_version IN ('+district_versions+')',
+            'development_stages':'source_version IN ('+district_versions+')',
+            'environment_features':'ubigeo=? OR source_version IN ('+district_versions+')',
+            'coverage_records':'ubigeo=? OR source_version IN ('+district_versions+')',
+            'current_attributes':'entity_id IN ('+entities+')',
             'zones':'source_version IS NULL OR source_version IN ('+district_versions+')',
             'journal':"json_extract(details_json,'$.scope_ubigeo')=? OR (json_extract(details_json,'$.scope_ubigeo') IS NULL AND ("
                       "json_extract(details_json,'$.version_id') IN ("+district_versions+") OR "
@@ -131,8 +155,14 @@ This is a correctness limit, never a silent subset of the master database.
             queries=self._scope_queries()
             first_pages=None
             if hasattr(self.gateway,'read_many'):
-                first_pages=dict(zip(TABLES,self.gateway.read_many([
-                    {'sql':sql+' LIMIT 1000','params':params} for sql,params in queries.values()])))
+                first_pages={}
+                names=list(TABLES)
+                for offset in range(0,len(names),20):
+                    batch=names[offset:offset+20]
+                    results=self.gateway.read_many([
+                        {'sql':queries[name][0]+' LIMIT 1000','params':queries[name][1]}
+                        for name in batch])
+                    first_pages.update(zip(batch,results))
             for table,keys in TABLES.items():
                 rows[table]=[];offset=0
                 while True:

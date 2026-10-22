@@ -115,6 +115,11 @@ def workspace(request):
                 value = store.collection(request.GET.get('ubigeo', ''), request.GET.get('kind', 'lote'))
             elif request.GET.get('view') == 'entity':
                 value = store.entity(request.GET.get('id',''))
+            elif request.GET.get('view') == 'catalog':
+                from . import master_catalog
+                value = {'items': master_catalog.search(
+                    store.db, {key: item for key, item in request.GET.items() if key != 'view'}),
+                    'revision': store.revision}
             elif request.GET.get('view') == 'pdf_info':
                 from .master_georeference import page_info
                 body = source_manager.pdf(request.GET.get('id', ''))
