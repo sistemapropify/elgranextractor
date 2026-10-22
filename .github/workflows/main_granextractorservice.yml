@@ -164,6 +164,7 @@ jobs:
           source antenv/bin/activate
           python webapp/manage.py test catastro.test_master_store catastro.test_master_d1 --settings=catastro.test_settings --noinput
           node --check webapp/static/js/catastro-fuentes.js
+          node webapp/catastro/test_planos_dashboard.cjs
           node --check cloudflare/catastro-maestro/worker.mjs
           node cloudflare/catastro-maestro/test-worker.mjs
 

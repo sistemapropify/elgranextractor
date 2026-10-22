@@ -91,3 +91,19 @@ class PlanViewerTests(SimpleTestCase):
         html = viewer(request).content.decode()
         self.assertIn('Google Maps está pendiente de configuración', html)
         self.assertNotIn('maps.googleapis.com/maps/api/js', html)
+
+    def test_plan_dashboard_explains_the_complete_source_pipeline(self):
+        from . import source_manager_views
+        request=RequestFactory().get('/catastro/maestro/planos/')
+        request.current_user=self.request().current_user
+        request.current_user.is_staff=True
+        with patch('catastro.source_manager.enabled',return_value=True), \
+             patch('catastro.source_manager.durable',return_value=True), \
+             patch('catastro.cad_reader.available',return_value=False):
+            response=source_manager_views.plans_dashboard(request)
+        html=response.content.decode()
+        self.assertEqual(response.status_code,200)
+        self.assertIn('Ruta del archivo al Catastro Maestro',html)
+        self.assertIn('Registrar un original no significa vectorizarlo',html)
+        self.assertIn('catastro-planos-dashboard.js?v=2',html)
+        self.assertIn('catastro-planos-dashboard.css?v=3',html)
