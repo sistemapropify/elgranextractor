@@ -105,5 +105,5 @@ class PlanViewerTests(SimpleTestCase):
         self.assertEqual(response.status_code,200)
         self.assertIn('Ruta del archivo al Catastro Maestro',html)
         self.assertIn('Registrar un original no significa vectorizarlo',html)
-        self.assertIn('catastro-planos-dashboard.js?v=2',html)
+        self.assertIn('catastro-planos-dashboard.js?v=3',html)
         self.assertIn('catastro-planos-dashboard.css?v=3',html)
