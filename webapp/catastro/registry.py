@@ -131,7 +131,9 @@ def normalize(manifest):
         raise ValueError('El índice no identifica correctamente el distrito y lote.')
     feature = manifest.get('feature') or {}
     attrs = feature.get('attributes') or {}
-    if attrs.get('ID_LOTE') not in (None, lot_id) or attrs.get('ID_DIST') not in (None, district):
+    geometry_lot = str(attrs.get('ID_LOTE') or '').strip()
+    geometry_district = str(attrs.get('ID_DIST') or '').strip()
+    if geometry_lot not in ('', lot_id) or geometry_district not in ('', district):
         raise ValueError('La geometría no corresponde al lote del índice.')
     artifacts = {a['filename']: a for a in manifest.get('artifacts', []) if a.get('filename')}
     photos = [asset_url(lot_id, name) for name, a in artifacts.items() if a.get('type') == 'facade_image']

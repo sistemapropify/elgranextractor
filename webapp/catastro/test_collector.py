@@ -9,6 +9,7 @@ from unittest.mock import patch
 import fitz
 
 from catastro.pdf_fields import extract_page
+from catastro.registry import normalize
 from catastro.report_fields import extract_report
 from catastro.state import State
 from scrapi.geollaqta_scraper import collect, CollectionError, GalleryLinks, validate, Stopped
@@ -63,6 +64,16 @@ class FakeR2:
 
 
 class CollectorTests(unittest.TestCase):
+    def test_geometry_identity_tolerates_source_whitespace_but_rejects_mismatch(self):
+        manifest = {'lot_id': LOT, 'district_ubigeo': '040117',
+                    'feature': {'attributes': {'ID_LOTE': ' '+LOT+' ', 'ID_DIST': ' 040117 '},
+                                'geometry': {'rings': []}},
+                    'artifacts': [], 'reports': [], 'missing': []}
+        self.assertEqual(normalize(manifest)[0]['lot_id'], LOT)
+        manifest['feature']['attributes']['ID_LOTE'] = '04011713059005'
+        with self.assertRaisesRegex(ValueError, 'geometría no corresponde'):
+            normalize(manifest)
+
     def test_parser_keeps_names_multiple_forms_and_reports(self):
         parser = GalleryLinks('040117')
         parser.feed(HTML.decode())
