@@ -351,6 +351,14 @@ jobs:
             --query appCommandLine -o tsv)
           test "$STARTUP_COMMAND" = "bash startup.sh"
 
+      - name: Restart App Service to load the deployed release
+        if: success()
+        run: |
+          az webapp restart \
+            --resource-group rg-elgranextractor \
+            --name granextractorservice \
+            --output none
+
       - name: Verify deployment
         if: success()
         run: |
