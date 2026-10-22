@@ -107,7 +107,7 @@
     button.setAttribute('aria-label','Ampliar primera página de '+(item.name||item.original_name));
     const image=el('img');image.loading='lazy';image.alt='Miniatura de '+(item.name||item.original_name);
     image.src='/catastro/api/maestro/pdf/'+encodeURIComponent(item.version_id)+'/pagina/?page=1';
-    image.addEventListener('error',()=>{button.hidden=true;});
+    image.addEventListener('error',()=>{button.replaceWith(planPlaceholder(item));});
     button.append(image,el('span','Ver original'));
     button.addEventListener('click',()=>showPlanPreview(item));
     return button;
@@ -117,10 +117,17 @@
     button.setAttribute('aria-label','Ampliar fotografía del '+(item.name||item.lotId));
     const image=el('img');image.loading='lazy';image.alt='Fotografía catastral de '+(item.name||item.lotId);
     image.src='/catastro/api/maestro/planes/'+encodeURIComponent(item.version_id)+'/miniatura/';
-    image.addEventListener('error',()=>{button.hidden=true;});
+    image.addEventListener('error',()=>{button.replaceWith(planPlaceholder(item));});
     button.append(image,el('span','Ver fotografía del lote'));
     button.addEventListener('click',()=>showDataPhoto(item,image.src));
     return button;
+  }
+  function planPlaceholder(item){
+    const box=el('div',null,'plan-thumbnail plan-thumbnail-placeholder');
+    const code=item.kind==='PDF'?'PDF':item.kind==='DWG'?'DWG':item.kind==='Datos'?'JSON':'DOC';
+    box.append(el('span',code,'plan-placeholder-code'),el('b',item.name||item.filename||'Archivo sin título'),
+      el('small','Sin miniatura disponible'));
+    return box;
   }
   function openPlanDocument(item){
     if(item.kind==='PDF'&&item.vector_review&&item.original_available&&/\.pdf$/i.test(String(item.original_name||''))){
@@ -239,7 +246,7 @@
       const follow=group('Seguimiento');
       addButton(follow,'Editar título',()=>editPlanTitle(item));
       const notesButton=addButton(follow,'Notas ('+item.noteCount+')',()=>{
-        const host=groups.closest('.plan-stage-file')||groups.parentElement;
+        const host=groups.closest('.plan-stage-file-content')||groups.parentElement;
         togglePlanNotes(item,host,notesButton);
       });
     }
@@ -337,13 +344,17 @@
       list.append(listTitle);
       if(stageFiles.length)for(const item of stageFiles){
         const row=el('div',null,'plan-stage-file');
+        const visual=el('div',null,'plan-stage-file-visual');
+        const content=el('div',null,'plan-stage-file-content');
         const fileName=el('button',item.kind+' · '+(item.name||item.filename),'plan-stage-file-name');
         fileName.type='button';fileName.title='Abrir '+(item.name||item.filename);
         fileName.addEventListener('click',()=>openPlanDocument(item));
-        row.append(fileName,el('small',item.detail||''));
-        if(item.kind==='PDF'&&item.original_available&&/\.pdf$/i.test(String(item.original_name||'')))row.append(planThumbnail(item));
-        if(item.kind==='Datos'&&item.lotId)row.append(planDataThumbnail(item));
-        row.append(planFileActions(item,scope));
+        content.append(fileName,el('small',item.detail||''));
+        if(item.kind==='PDF'&&item.original_available&&/\.pdf$/i.test(String(item.original_name||'')))visual.append(planThumbnail(item));
+        else if(item.kind==='Datos'&&item.lotId)visual.append(planDataThumbnail(item));
+        else visual.append(planPlaceholder(item));
+        content.append(planFileActions(item,scope));
+        row.append(visual,content);
         list.append(row);
       }else list.append(el('p','Los archivos que ya superaron esta etapa aparecen en su etapa actual.','plan-stage-empty'));
       body.append(list);card.append(body);return card;
