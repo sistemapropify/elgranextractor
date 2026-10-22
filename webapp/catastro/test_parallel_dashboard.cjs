@@ -15,7 +15,7 @@ const elements = new Map();
 const el = id => { if(!elements.has(id))elements.set(id,new Element());return elements.get(id); };
 el('district').value='040117';el('collection-workers').value='10';
 let errorResponse=null;
-let data={totals:{uploaded:0,reports:0,photos:0,missing:0},storage:{configured:true,bucket:'test'},jobs:[],lots:[],r2_bytes:0};
+let data={totals:{uploaded:0,reports:0,photos:0,missing:0},storage:{configured:true,bucket:'test'},pipeline:{collection_enabled:true},jobs:[],lots:[],r2_bytes:0};
 const calls=[];
 const sandbox={document:{getElementById:el,createElement:()=>new Element(),addEventListener(){},hidden:false},
   setTimeout:()=>1,clearTimeout(){},console,URL,
@@ -53,5 +53,10 @@ const settle = () => new Promise(resolve=>setImmediate(resolve));
   errorResponse=null;
   await el('refresh-collection').listeners.click();
   assert.equal(el('collection-message').textContent,'','A successful refresh clears a recovered connection/server error');
+  data.pipeline.collection_enabled=false;
+  await el('refresh-collection').listeners.click();
+  assert.equal(el('start-collection').disabled,true);
+  assert.equal(el('start-collection').textContent,'Descarga detenida');
+  assert.match(el('collector-status').textContent,/Descarga detenida por la validación/);
   console.log('Collector dashboard: worker selection, active lock, pause and resume passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

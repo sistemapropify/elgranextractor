@@ -1,5 +1,6 @@
 from copy import deepcopy
 import json
+import os
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -318,6 +319,11 @@ class SourceWorkspaceTests(SimpleTestCase):
             response=worker_api.claim(request)
             self.assertTrue(json.loads(response.content)['paused'])
             state.assert_not_called()
+
+    def test_operator_switch_can_release_collection_hold(self):
+        with patch.dict(os.environ, {'CATASTRO_MASTER_COLLECTION_ENABLED': '1'}):
+            self.assertTrue(master_pipeline.status()['collection_enabled'])
+            master_pipeline.require_collection_ready()
 
     def test_cofopri_contract_preserves_raw_fields_and_does_not_synthesize_units(self):
         lot='04010332001001'

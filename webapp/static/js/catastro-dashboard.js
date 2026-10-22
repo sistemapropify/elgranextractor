@@ -4,7 +4,7 @@
   if (!root) return;
   const el = id => document.getElementById(id);
   const labels = {queued:'Preparando',running:'Descargando',completed:'Descarga terminada',failed:'Requiere revisión',stopped:'Detenida',interrupted:'Interrumpida',complete:'Completo',partial:'Documentos pendientes'};
-  let active = null, configured = false, timer = null, busy = false, generation = 0, refreshFailed = false;
+  let active = null, configured = false, collectionEnabled = true, timer = null, busy = false, generation = 0, refreshFailed = false;
   const node = (tag, text) => { const n = document.createElement(tag); n.textContent = text; return n; };
   const bytes = value => value >= 1e9 ? (value / 1e9).toFixed(2) + ' GB' : value >= 1e6 ? (value / 1e6).toFixed(2) + ' MB' : value >= 1e3 ? (value / 1e3).toFixed(1) + ' KB' : value + ' B';
   async function api(url, data) {
@@ -28,8 +28,11 @@
   function render(data) {
     for (const key of ['uploaded','reports','photos','missing']) el('metric-' + key).textContent = data.totals[key];
     configured = data.storage.configured;
+    collectionEnabled = data.pipeline?.collection_enabled !== false;
     const collector=data.collector;
-    el('collector-status').textContent = collector?.external ? (collector.connected ? (collector.source_status === 'unavailable' ? 'Recolector activo. COFOPRI no responde; la descarga se reintentará automáticamente.' : 'Recolector conectado.') : 'Recolector sin conexión. Las descargas quedarán en espera hasta que se conecte.') + (collector.hosted ? ' Funciona en Azure con tu computadora apagada.' : ' El equipo recolector debe permanecer encendido y conectado.') : '';
+    el('collector-status').textContent = !collectionEnabled
+      ? 'Descarga detenida por la validación del Catastro Maestro. El avance archivado se conserva.'
+      : collector?.external ? (collector.connected ? (collector.source_status === 'unavailable' ? 'Recolector activo. COFOPRI no responde; la descarga se reintentará automáticamente.' : 'Recolector conectado.') : 'Recolector sin conexión. Las descargas quedarán en espera hasta que se conecte.') + (collector.hosted ? ' Funciona en Azure con tu computadora apagada.' : ' El equipo recolector debe permanecer encendido y conectado.') : '';
     el('storage-status').textContent = configured ? 'R2 configurado · acceso privado' : 'R2 pendiente de configuración';
     el('storage-status').classList.toggle('warn',!configured);
     el('storage-detail').textContent = configured ? 'Bucket: ' + data.storage.bucket + '. Los archivos se guardan por distrito y predio.' : 'Configura las credenciales de R2 en este equipo para iniciar la descarga.';
@@ -37,8 +40,8 @@
     active = data.jobs.find(j => ['queued','running'].includes(j.status)) || null;
     const previous = data.jobs.find(j => j.ubigeo === el('district').value);
     const resumable = previous && ['stopped','interrupted','failed'].includes(previous.status);
-    el('start-collection').textContent = resumable ? 'Reanudar distrito' : 'Descargar distrito completo';
-    el('start-collection').disabled = busy || !configured || !!active;
+    el('start-collection').textContent = !collectionEnabled ? 'Descarga detenida' : resumable ? 'Reanudar distrito' : 'Descargar distrito completo';
+    el('start-collection').disabled = busy || !configured || !!active || !collectionEnabled;
     el('stop-collection').hidden = !active;
     el('stop-collection').disabled = busy || !!active?.stop;
     el('collection-workers').disabled = busy || !!active;
@@ -75,7 +78,7 @@
     catch(error) { if(current!==generation)return;refreshFailed=true;message(error.message,true);if(!document.hidden)timer=setTimeout(refresh,10000); }
   }
   el('collection-form').addEventListener('submit',async event => {
-    event.preventDefault(); if(busy || active || !configured)return;busy=true;el('start-collection').disabled=true;el('collection-workers').disabled=true;
+    event.preventDefault(); if(busy || active || !configured || !collectionEnabled)return;busy=true;el('start-collection').disabled=true;el('collection-workers').disabled=true;
     try { await api('start/',{ubigeo:el('district').value,lot_id:el('lot-id').value.trim() || null,retry_missing:el('retry-missing').checked,workers:Number(el('collection-workers').value)});message('Descarga iniciada: hasta ' + el('collection-workers').value + ' lotes simultáneos. Continúa desde los pendientes. Puedes salir de esta página y volver para revisar el avance.'); }
     catch(error) { message(error.message,true); }
     finally { busy=false;await refresh(); }
