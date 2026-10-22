@@ -403,6 +403,10 @@
       const selectedDataDistrict=document.querySelector('[name="data_ubigeo"]')?.value;
       if($('geollaqta-indexed'))$('geollaqta-indexed').textContent=
         Number(dataVersionCounts[selectedDataDistrict]||0).toLocaleString('es-PE');
+      if($('geollaqta-pending')){
+        const expected=Number(document.querySelector('.plan-geodata-summary .plan-stat strong')?.textContent.replace(/[^0-9]/g,'')||0);
+        $('geollaqta-pending').textContent=Math.max(0,expected-Number(dataVersionCounts[selectedDataDistrict]||0)).toLocaleString('es-PE');
+      }
       let annotations={};
       if(keys.length){
         const result=await masterApi(null,'?'+new URLSearchParams({view:'plan_annotations',keys:keys.join(',')}));
