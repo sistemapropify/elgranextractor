@@ -50,10 +50,10 @@ def main():
                 result = service_once(control,root) if args.wait_source else run_once(control,root)
                 if result:
                     print('Ejecución finalizada; avance comunicado al dashboard.',flush=True)
-            except ControlError:
+            except ControlError as error:
                 if args.once:
                     raise
-                print('Dashboard sin conexión; se conserva el avance y se reintentará.',flush=True)
+                print(str(error)+' Se conserva el avance y se reintentará.',flush=True)
             except RuntimeError as error:
                 print(str(error),file=sys.stderr,flush=True)
                 if args.once:

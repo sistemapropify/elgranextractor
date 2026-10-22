@@ -145,9 +145,12 @@ def job_action(request, data, job_id, action):
                 from .master_store import Conflict
                 try:
                     stage_archived_lot(job['ubigeo'],lot,source_manager.store())
-                except (StorageError,Conflict,ValueError):
+                except Exception as error:
                     # The immutable R2 archive is acknowledged on retry; it is
                     # never downloaded again from COFOPRI just to retry indexing.
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        'No se pudo indexar el lote %s en D1: %s', lot, error, exc_info=True)
                     return JsonResponse({'warning':'Originales conservados en R2; indexación D1 pendiente de reintento.','stop':False})
         return JsonResponse({'stop':bool(job['stop']) or held})
     finally:

@@ -49,10 +49,15 @@ class Control:
                 if error.code == 409:
                     raise Stopped('La ejecución se detuvo o fue reemplazada. Avance conservado.') from None
                 if error.code not in (408,429,500,502,503,504) or attempt == attempts-1:
-                    raise ControlError('El dashboard respondió HTTP '+str(error.code)+'. Los archivos confirmados en R2 se conservan.') from None
+                    detail = error.read(1200).decode('utf-8', errors='replace') if error.code in (500, 503) else ''
+                    detail = re.sub(r'<[^>]+>', ' ', detail)
+                    detail = ' '.join(detail.split())[:300]
+                    raise ControlError('La acción '+action+' del dashboard respondió HTTP '+str(error.code)+
+                                       (': '+detail if detail else '')+
+                                       '. Los archivos confirmados en R2 se conservan.') from None
             except (URLError, TimeoutError, OSError, ValueError):
                 if attempt == attempts-1:
-                    raise ControlError('No se pudo comunicar con el dashboard después de reintentar. Los archivos confirmados en R2 se conservan.') from None
+                    raise ControlError('No se pudo completar la acción '+action+' del dashboard después de reintentar. Los archivos confirmados en R2 se conservan.') from None
             time.sleep(min(2 ** attempt, 10))
 
 
