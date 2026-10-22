@@ -8,6 +8,10 @@ let marcadoresComparables = new Map(); // id -> {marker, data, seleccionado}
 let propiedadesSeleccionadas = new Map(); // id -> data
 let propiedadesEncontradas = []; // Todas las propiedades encontradas en la búsqueda
 const ACM_API_PREFIX = window.ACM_API_PREFIX || '/acm/';
+const ACM_PROPIFY_CENTER = Object.freeze({
+    lat: -16.38553594297145,
+    lng: -71.54766510511159
+});
 
 // URLs de iconos PNG personalizados por fuente
 const ICONO_PRINCIPAL = 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png';
@@ -132,7 +136,7 @@ function inicializarEventos() {
 // Inicializar mapa ACM
 function initACMMap() {
     console.log('initACMMap called');
-    const defaultCenter = { lat: -16.4090, lng: -71.5375 }; // Arequipa, Perú
+    const defaultCenter = ACM_PROPIFY_CENTER; // Propify Inmobiliaria, Arequipa
     acmMap = new google.maps.Map(document.getElementById('acmMap'), {
         center: defaultCenter,
         zoom: 13,
@@ -1089,7 +1093,7 @@ function ajustarVistaMapa() {
     
     // Si no hay nada que ajustar, usar vista por defecto
     if (bounds.isEmpty()) {
-        acmMap.setCenter({ lat: -16.4090, lng: -71.5375 });
+        acmMap.setCenter(ACM_PROPIFY_CENTER);
         acmMap.setZoom(13);
     } else {
         acmMap.fitBounds(bounds, { padding: 50 });

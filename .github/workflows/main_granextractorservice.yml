@@ -104,7 +104,7 @@ jobs:
       - name: Validate ACM reports, facade and portal areas
         run: |
           source antenv/bin/activate
-          python webapp/manage.py test acm.test_client_report acm.test_report_selection acm.test_age_selection acm.test_zone_land acm.test_components.ComponentsEngineTests acm.test_weighted_adjustments acm.test_reference_fallback acm.test_valuation_notes acm.test_cadastral_facade_template --settings=acm.access_test_settings --noinput
+          python webapp/manage.py test acm.test_client_report acm.test_report_selection acm.test_age_selection acm.test_zone_land acm.test_components.ComponentsEngineTests acm.test_components.ComponentsEndpointTests acm.test_weighted_adjustments acm.test_reference_fallback acm.test_valuation_notes acm.test_cadastral_facade_template --settings=acm.access_test_settings --noinput
 
       - name: Validate Catastro parallel collector and views
         run: |
@@ -432,6 +432,7 @@ jobs:
           acm/js/floating-comparison.js|webapp/acm/static/acm/js/floating-comparison.js
           acm/css/history.css|webapp/acm/static/acm/css/history.css
           acm/css/components.css|webapp/acm/static/acm/css/components.css
+          acm/js/acm.js|webapp/acm/static/acm/js/acm.js
           js/acm-property-gallery-release.json|webapp/static/js/acm-property-gallery-release.json
           acm/js/components.js|webapp/acm/static/acm/js/components.js
           acm/js/property-gallery.js|webapp/acm/static/acm/js/property-gallery.js

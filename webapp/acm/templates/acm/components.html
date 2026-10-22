@@ -90,8 +90,8 @@
           <button class="btn-success btn-block" id="cmp-search" type="submit">Buscar y calcular</button>
 
           {% for source in sources %}<input type="hidden" name="source" value="{{ source }}">{% endfor %}
-          <input type="hidden" name="lat" value="-16.3989">
-          <input type="hidden" name="lng" value="-71.535">
+          <input type="hidden" name="lat" value="-16.38553594297145">
+          <input type="hidden" name="lng" value="-71.54766510511159">
           <input type="hidden" name="max_radius" value="2000">
         </form>
         <div id="cmp-search-actions" class="cmp-search-actions" hidden>
@@ -306,7 +306,7 @@
 <script src="{% static 'acm/js/comparison-valuation.js' %}?v=12"></script>
 {% if replication %}{{ replication|json_script:"cmp-replication-data" }}{% endif %}
 {% if analysis_resume %}{{ analysis_resume|json_script:"cmp-role-analysis-data" }}{% endif %}
-<script src="{% static 'acm/js/components.js' %}?v=83"></script>
+<script src="{% static 'acm/js/components.js' %}?v=84"></script>
 <script src="{% static 'acm/js/property-gallery.js' %}?v=2"></script>
 {% if acm_permissions.ai %}<script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>{% endif %}
 {% if acm_permissions.pdm_polygons %}

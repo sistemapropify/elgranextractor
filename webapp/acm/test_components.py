@@ -325,6 +325,10 @@ class ComponentsEndpointTests(SimpleTestCase):
         self.assertContains(response,'Casas comparables')
         self.assertContains(response,'Casas solo referencia')
         self.assertContains(response,'Terrenos para valor del suelo')
+        self.assertContains(response,'name="lat" value="-16.38553594297145"')
+        self.assertContains(response,'name="lng" value="-71.54766510511159"')
+        self.assertNotContains(response,'name="lat" value="-16.3989"')
+        self.assertNotContains(response,'name="lng" value="-71.535"')
         self.assertNotContains(response,'id="scraped-editor"')
         self.assertNotContains(response,'ENTORNO DE PRUEBAS')
 

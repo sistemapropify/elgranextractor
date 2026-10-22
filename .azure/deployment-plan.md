@@ -1,3 +1,25 @@
+# ACM default location - 2026-10-22
+
+Status: Validated
+Recipe: existing serialized GitHub Actions App Service pipeline.
+Authorization: the user requested that the ACM marker default to Propify Inmobiliaria instead of the Plaza de Armas.
+Base: origin/main 4b2be029.
+Target: existing granextractorservice / rg-elgranextractor, Brazil South.
+Public: https://acm.propifai.com/acm/analisis/
+
+## Scope
+Set the initial analysis coordinates and marker to `-16.38553594297145, -71.54766510511159`. Apply the same fallback center to the legacy ACM map, invalidate both JavaScript files, and add a regression assertion that the old Plaza de Armas defaults cannot return.
+No schema, infrastructure, credentials, collector or stored-user-data changes.
+
+## Validation Proof - 2026-10-22 America/Lima
+- `acm.test_components`: 40 tests passed, including the rendered default latitude/longitude and absence of the former defaults.
+- Exact ACM report/page regression suite passed: 124 tests, Django system check clean.
+- `node --check` passed for `acm.js` and `components.js`; age and comparable feature JavaScript suites passed.
+- Workflow YAML parsed successfully and now verifies the changed page test plus public `acm.js` exact bytes.
+- Public revision, assets and protected endpoints remain mandatory after CI/CD completes.
+
+---
+
 # Catastro Maestro and ACM production release - 2026-10-22
 
 Status: Validated
