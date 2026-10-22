@@ -148,7 +148,7 @@ def job_action(request, data, job_id, action):
                 except (StorageError,Conflict,ValueError):
                     # The immutable R2 archive is acknowledged on retry; it is
                     # never downloaded again from COFOPRI just to retry indexing.
-                    return JsonResponse({'error':'Originales conservados en R2; indexación D1 pendiente de reintento.','stop':False},status=503)
+                    return JsonResponse({'warning':'Originales conservados en R2; indexación D1 pendiente de reintento.','stop':False})
         return JsonResponse({'stop':bool(job['stop']) or held})
     finally:
         state.close()

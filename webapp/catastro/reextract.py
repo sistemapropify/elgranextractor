@@ -33,7 +33,7 @@ def reextract(lot_id=None, root=None, r2=None):
             data['extraction_revision'] = 2
             data['extracted_at'] = time.time()
             body = json.dumps(data,ensure_ascii=False,indent=2).encode()
-            snapshot = 'datos-' + hashlib.sha256(body).hexdigest()[:16] + '.json'
+            snapshot = 'datos-' + hashlib.sha256(body).hexdigest() + '.json'
             if DEFAULT_BUDGET is not None and state.upload_bytes() + 2*len(body) > DEFAULT_BUDGET:
                 raise ValueError('La actualización excedería el límite de almacenamiento del recolector.')
             if row['uploaded']:

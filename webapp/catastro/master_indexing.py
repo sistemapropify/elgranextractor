@@ -14,7 +14,16 @@ def stage_archived_lot(ubigeo,lot_id,store,cloud=None):
     prefix='geollaqta/'+ubigeo+'/'+lot_id+'/'
     body,_=cloud.get(prefix+'datos.json')
     digest=hashlib.sha256(body).hexdigest();snapshot=prefix+'datos-'+digest+'.json'
-    immutable,_=cloud.get(snapshot)
+    try:
+        immutable,_=cloud.get(snapshot)
+    except StorageError as error:
+        if error.http_status != 404:
+            raise
+        # Older collector acknowledgements can reference a snapshot that was
+        # never persisted. The hash-addressed bytes still exist as datos.json;
+        # repair the immutable object instead of making COFOPRI redownload it.
+        cloud.put_verified(snapshot,body,'application/json')
+        immutable=body
     if hashlib.sha256(immutable).hexdigest()!=digest:
         raise StorageError('El original inmutable no coincide con el manifiesto confirmado.')
     manifest=json.loads(immutable)

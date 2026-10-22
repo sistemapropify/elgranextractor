@@ -307,7 +307,7 @@ def _archive_lot(feature, ubigeo, state, source, r2, upload, keep_local, checkpo
                 'source_url': gallery_url, 'retrieved_at': time.time(),
                 'feature': feature, 'artifacts': artifacts, 'reports': reports, 'missing': missing}
     atomic_write(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2).encode())
-    snapshot_name = 'datos-' + hashlib.sha256(manifest_path.read_bytes()).hexdigest()[:16] + '.json'
+    snapshot_name = 'datos-' + hashlib.sha256(manifest_path.read_bytes()).hexdigest() + '.json'
     atomic_write(folder / snapshot_name, manifest_path.read_bytes())
     cloud_ok = False
     try:

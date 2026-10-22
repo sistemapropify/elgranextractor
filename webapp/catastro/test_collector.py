@@ -103,7 +103,9 @@ class CollectorTests(unittest.TestCase):
             self.assertTrue(third['complete'])
             self.assertEqual(len(source.gets), get_count + 1)
             self.assertTrue(any('0401172013040001499' in key for key in cloud.objects))
-            self.assertTrue(any('/datos-' in key for key in cloud.objects))
+            manifest_body = (Path(tmp) / '040117' / LOT / 'datos.json').read_bytes()
+            manifest_digest = hashlib.sha256(manifest_body).hexdigest()
+            self.assertIn('geollaqta/040117/' + LOT + '/datos-' + manifest_digest + '.json', cloud.objects)
             for artifact in manifest['artifacts']:
                 stored = cloud.objects['geollaqta/040117/' + LOT + '/' + artifact['filename']][0]
                 self.assertEqual(hashlib.sha256(stored).hexdigest(), artifact['sha256'])

@@ -3,6 +3,7 @@ from unittest import TestCase
 from .master_store import MasterStore
 from .master_ingest import prepare
 from .master_indexing import stage_archived_lot
+from .storage import StorageError
 
 
 class FutureIndexingTests(TestCase):
@@ -18,6 +19,22 @@ class FutureIndexingTests(TestCase):
                 if key.endswith('/datos.json') or key.endswith('datos-'+hashlib.sha256(body).hexdigest()+'.json'):return body,{}
                 raise AssertionError('Se pidió un archivo ajeno al nuevo archivo confirmado.')
         return Cloud()
+    def test_missing_immutable_snapshot_is_rebuilt_from_hashed_manifest(self):
+        body=json.dumps(self.manifest).encode()
+        digest=hashlib.sha256(body).hexdigest()
+        class Cloud:
+            repaired=None
+            def get(self,key):
+                if key.endswith('/datos.json'):return body,{}
+                if key.endswith('datos-'+digest+'.json'):raise StorageError('missing',404)
+                raise AssertionError('Se pidió un archivo ajeno al nuevo archivo confirmado.')
+            def put_verified(self,key,data,mime):
+                self.repaired=(key,data,mime)
+        cloud=Cloud()
+        stage_archived_lot('040103',self.manifest['lot_id'],self.store,cloud)
+        self.assertEqual(cloud.repaired[1],body)
+        self.assertTrue(cloud.repaired[0].endswith('datos-'+digest+'.json'))
+        self.assertEqual(cloud.repaired[2],'application/json')
     def test_roundtrip_embedded_candidate_does_not_change_identity(self):
         before=prepare(self.manifest)
         self.manifest['master_candidate']=before
