@@ -234,6 +234,111 @@ class MasterStore:
             result['revision'] = revision
             return result
 
+    def _plan_identity(self, document_key, document_type, source_version, scope_ubigeo):
+        if document_type not in ('source-version', 'dwg'):
+            raise ValueError('Tipo de documento de plano no válido.')
+        if not isinstance(document_key, str) or not re.fullmatch(
+                r'(?:source-version|dwg):[A-Za-z0-9][A-Za-z0-9_.:%-]{0,300}', document_key):
+            raise ValueError('Identificador de plano no válido.')
+        if not document_key.startswith(document_type + ':'):
+            raise ValueError('El identificador no corresponde al tipo de plano.')
+        ubigeo = contract.validate_field('ubigeo', scope_ubigeo)
+        if document_type == 'source-version':
+            source_version = identifier(source_version, 'Versión del plano')
+            if document_key != 'source-version:' + source_version:
+                raise ValueError('La versión no corresponde al identificador del plano.')
+            row = self.db.execute('''SELECT s.ubigeo FROM versions v
+                JOIN sources s ON s.id=v.source_id WHERE v.id=?''', (source_version,)).fetchone()
+            if not row:
+                raise ValueError('La versión del plano no existe en este ámbito.')
+            if row[0] != ubigeo:
+                raise ValueError('La versión del plano pertenece a otro distrito.')
+        else:
+            if source_version not in (None, ''):
+                raise ValueError('Un DWG local no debe enviar versión D1.')
+            source_version = None
+        return document_key, document_type, source_version, ubigeo
+
+    def update_plan_title(self, document_key, document_type, source_version,
+                          scope_ubigeo, title, expected_revision, actor):
+        if not isinstance(title, str) or not title.strip() or len(title.strip()) > 300:
+            raise ValueError('El título debe tener entre 1 y 300 caracteres.')
+        title = title.strip()
+        with self.lock, self.db:
+            self._expected(expected_revision)
+            key, dtype, vid, ubigeo = self._plan_identity(
+                document_key, document_type, source_version, scope_ubigeo)
+            previous = self.db.execute(
+                'SELECT display_title FROM plan_workspace WHERE document_key=?', (key,)).fetchone()
+            if previous and previous[0] == title:
+                return {'document_key': key, 'display_title': title,
+                        'revision': self.revision, 'unchanged': True}
+            target_revision = self.revision + 1
+            self.db.execute('''INSERT OR REPLACE INTO plan_workspace
+                (document_key,document_type,source_version,scope_ubigeo,display_title,
+                 updated_at,updated_by,revision) VALUES (?,?,?,?,?,?,?,?)''',
+                (key, dtype, vid, ubigeo, title, now(), str(actor)[:160], target_revision))
+            revision = self._journal('plan_title', actor, 'Editar título del plano', {
+                'document_key': key, 'display_title': title,
+                'previous_title': previous[0] if previous else None})
+            if revision != target_revision:
+                raise RuntimeError('La revisión del plano quedó desalineada.')
+            return {'document_key': key, 'display_title': title, 'revision': revision}
+
+    def add_plan_note(self, document_key, document_type, source_version,
+                      scope_ubigeo, note, expected_revision, actor):
+        if not isinstance(note, str) or not note.strip() or len(note.strip()) > 4000:
+            raise ValueError('La nota debe tener entre 1 y 4.000 caracteres.')
+        note = note.strip()
+        with self.lock, self.db:
+            self._expected(expected_revision)
+            key, dtype, vid, ubigeo = self._plan_identity(
+                document_key, document_type, source_version, scope_ubigeo)
+            target_revision = self.revision + 1
+            note_id = str(uuid.uuid4())
+            created_at = now()
+            self.db.execute('''INSERT INTO plan_workspace
+                (document_key,document_type,source_version,scope_ubigeo,display_title,
+                 updated_at,updated_by,revision) VALUES (?,?,?,?,NULL,?,?,?)
+                ON CONFLICT(document_key) DO UPDATE SET
+                  updated_at=excluded.updated_at,updated_by=excluded.updated_by,
+                  revision=excluded.revision''',
+                (key, dtype, vid, ubigeo, created_at, str(actor)[:160], target_revision))
+            self.db.execute('''INSERT INTO plan_notes
+                (id,document_key,scope_ubigeo,note,created_at,actor,revision)
+                VALUES (?,?,?,?,?,?,?)''',
+                (note_id, key, ubigeo, note, created_at, str(actor)[:160], target_revision))
+            revision = self._journal('plan_note', actor, 'Agregar nota al plano', {
+                'document_key': key, 'note_id': note_id})
+            if revision != target_revision:
+                raise RuntimeError('La revisión de la nota quedó desalineada.')
+            return {'document_key': key, 'note_id': note_id, 'note': note,
+                    'created_at': created_at, 'actor': str(actor)[:160],
+                    'revision': revision}
+
+    def plan_annotations(self, document_keys):
+        keys = list(dict.fromkeys(str(key) for key in document_keys if key))
+        if not keys or len(keys) > 200:
+            raise ValueError('Consulta de notas fuera de límite.')
+        placeholders = ','.join('?' for _ in keys)
+        rows = self.db.execute(
+            '''SELECT w.document_key,w.document_type,w.source_version,w.scope_ubigeo,
+                      w.display_title,w.updated_at,w.updated_by,w.revision,
+                      (SELECT count(*) FROM plan_notes n WHERE n.document_key=w.document_key) AS note_count
+               FROM plan_workspace w WHERE w.document_key IN (''' + placeholders + ')', keys)
+        return {row['document_key']: dict(row) for row in rows}
+
+    def plan_notes_for(self, document_key):
+        if not isinstance(document_key, str) or len(document_key) > 320:
+            raise ValueError('Identificador de plano no válido.')
+        rows = []
+        for row in self.db.execute(
+                '''SELECT id,document_key,note,created_at,actor,revision
+                   FROM plan_notes WHERE document_key=? ORDER BY created_at DESC LIMIT 500''',
+                (document_key,)):
+            rows.append(dict(row))
+        return rows
+
     def _resolve(self, row, plan):
         key = row['layer'] + ':' + row['source_feature_id']
         target = plan.get('identity_map', {}).get(key)

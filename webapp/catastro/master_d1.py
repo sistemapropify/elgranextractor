@@ -25,6 +25,7 @@ TABLES = {'meta':('key',),'projects':('id',),'sources':('id',),'versions':('id',
           'environment_features':('id',),'coverage_records':('id',),
           'catalog_review_status':('target_table','target_id'),
           'catalog_review_events':('id',),
+          'plan_workspace':('document_key',),'plan_notes':('id',),
           'current_attributes':('entity_id',),'journal':('revision',)}
 
 
@@ -139,6 +140,7 @@ This is a correctness limit, never a silent subset of the master database.
             'coverage_records':'ubigeo=? OR source_version IN ('+district_versions+')',
             'catalog_review_status':'source_version IN ('+district_versions+')',
             'catalog_review_events':'source_version IN ('+district_versions+')',
+            'plan_workspace':'scope_ubigeo=?', 'plan_notes':'scope_ubigeo=?',
             'current_attributes':'entity_id IN ('+entities+')',
             'zones':'source_version IS NULL OR source_version IN ('+district_versions+')',
             'journal':"json_extract(details_json,'$.scope_ubigeo')=? OR (json_extract(details_json,'$.scope_ubigeo') IS NULL AND ("
@@ -251,6 +253,44 @@ This is a correctness limit, never a silent subset of the master database.
     def review_catalog(self,*args,**kwargs):
         with self.lock:
             return self._mutate(super().review_catalog,*args,**kwargs)
+    def _select_plan_scope(self,source_version,scope_ubigeo):
+        from .master_contract import validate_field
+        if source_version:
+            rows=self.gateway.read('''SELECT s.ubigeo FROM versions v
+                JOIN sources s ON s.id=v.source_id WHERE v.id=?''',[source_version])
+            if not rows:raise ValueError('La versión del plano no existe.')
+            scope_ubigeo=rows[0]['ubigeo']
+        validate_field('ubigeo',scope_ubigeo)
+        self._select_scope(scope_ubigeo)
+    def update_plan_title(self,*args,**kwargs):
+        with self.lock:
+            values=list(args)
+            key=values[0] if values else kwargs.get('document_key')
+            dtype=values[1] if len(values)>1 else kwargs.get('document_type')
+            version=values[2] if len(values)>2 else kwargs.get('source_version')
+            scope=values[3] if len(values)>3 else kwargs.get('scope_ubigeo')
+            self._select_plan_scope(version if dtype=='source-version' else None,scope)
+            return self._mutate(super().update_plan_title,*args,**kwargs)
+    def add_plan_note(self,*args,**kwargs):
+        with self.lock:
+            dtype=args[1] if len(args)>1 else kwargs.get('document_type')
+            version=args[2] if len(args)>2 else kwargs.get('source_version')
+            scope=args[3] if len(args)>3 else kwargs.get('scope_ubigeo')
+            self._select_plan_scope(version if dtype=='source-version' else None,scope)
+            return self._mutate(super().add_plan_note,*args,**kwargs)
+    def plan_annotations(self,document_keys):
+        keys=list(dict.fromkeys(str(key) for key in document_keys if key))
+        if not keys or len(keys)>200:raise ValueError('Consulta de notas fuera de límite.')
+        return {row['document_key']:row for row in self.gateway.read(
+            '''SELECT w.document_key,w.document_type,w.source_version,w.scope_ubigeo,
+                      w.display_title,w.updated_at,w.updated_by,w.revision,
+                      (SELECT count(*) FROM plan_notes n WHERE n.document_key=w.document_key) AS note_count
+               FROM plan_workspace w WHERE w.document_key IN (SELECT value FROM json_each(?))''',
+            [encoded(keys)])}
+    def plan_notes_for(self,document_key):
+        return self.gateway.read('''SELECT id,document_key,note,created_at,actor,revision
+            FROM plan_notes WHERE document_key=? ORDER BY created_at DESC LIMIT 500''',
+            [document_key])
     def apply(self,*args,**kwargs):
         with self.lock:
             plan=args[0] if args else kwargs.get('plan')

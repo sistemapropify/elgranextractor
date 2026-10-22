@@ -8,7 +8,8 @@ export const TABLES = {
   organizations:['id'],activities:['id'],visits:['id'],developments:['id'],
   development_lots:['id'],development_stages:['id'],environment_features:['id'],
   coverage_records:['id'],catalog_review_status:['target_table','target_id'],
-  catalog_review_events:['id'],current_attributes:['entity_id'],journal:['revision']
+  catalog_review_events:['id'],plan_workspace:['document_key'],plan_notes:['id'],
+  current_attributes:['entity_id'],journal:['revision']
 };
 const TABLE_COLUMNS = {
   meta:['key','value'],
@@ -43,6 +44,8 @@ const TABLE_COLUMNS = {
   coverage_records:['id','ubigeo','dataset','source_version','complete','record_count','observed_at','details_json'],
   catalog_review_status:['target_table','target_id','status','revision','reviewed_at','actor','reason','evidence_json','source_version'],
   catalog_review_events:['id','target_table','target_id','status','previous_status','revision','reviewed_at','actor','reason','evidence_json','source_version'],
+  plan_workspace:['document_key','document_type','source_version','scope_ubigeo','display_title','updated_at','updated_by','revision'],
+  plan_notes:['id','document_key','scope_ubigeo','note','created_at','actor','revision'],
   journal:['revision','operation','actor','created_at','reason','details_json','snapshot_json'],
 };
 const reply=(value,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});

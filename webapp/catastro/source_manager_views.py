@@ -139,6 +139,13 @@ def workspace(request):
                 value = {'items': master_catalog.review_history(
                     store.db, request.GET.get('target_table', ''), request.GET.get('target_id', '')),
                     'revision': store.revision}
+            elif request.GET.get('view') == 'plan_annotations':
+                keys = [key for key in request.GET.get('keys', '').split(',') if key]
+                value = {'annotations': store.plan_annotations(keys),
+                         'revision': store.revision}
+            elif request.GET.get('view') == 'plan_notes':
+                value = {'items': store.plan_notes_for(request.GET.get('document_key', '')),
+                         'revision': store.revision}
             elif request.GET.get('view') == 'pdf_info':
                 from .master_georeference import page_info
                 body = source_manager.pdf(request.GET.get('id', ''))
@@ -173,6 +180,16 @@ def workspace(request):
                 value = store.review_catalog(
                     payload.get('target_table'), payload.get('target_id'), payload.get('status'),
                     payload.get('reason'), payload.get('evidence'), payload.get('revision'), author)
+            elif action == 'plan_title':
+                value = store.update_plan_title(
+                    payload.get('document_key'), payload.get('document_type'),
+                    payload.get('source_version'), payload.get('scope_ubigeo'),
+                    payload.get('title'), payload.get('revision'), author)
+            elif action == 'plan_note':
+                value = store.add_plan_note(
+                    payload.get('document_key'), payload.get('document_type'),
+                    payload.get('source_version'), payload.get('scope_ubigeo'),
+                    payload.get('note'), payload.get('revision'), author)
             elif action == 'preview':
                 value = store.preview(payload.get('plan'))
             elif action == 'apply':

@@ -225,6 +225,32 @@ class MasterVersionTests(SimpleTestCase):
         self.assertEqual(self.store.db.execute(
             'SELECT count(*) FROM listing_observations').fetchone()[0],1)
 
+    def test_plan_title_and_dated_notes_do_not_modify_source_version(self):
+        self.stage(candidate())
+        original_payload=self.store.db.execute('SELECT payload FROM versions WHERE id=?',('v1',)).fetchone()[0]
+        title=self.store.update_plan_title(
+            'source-version:v1','source-version','v1','040103',
+            'Sector 32 · numeración de lotes',self.store.revision,'reviewer')
+        self.assertEqual(title['display_title'],'Sector 32 · numeración de lotes')
+        note=self.store.add_plan_note(
+            'source-version:v1','source-version','v1','040103',
+            'La numeración de lotes necesita cotejo con la ficha.',self.store.revision,'reviewer')
+        self.assertTrue(note['created_at'])
+        annotations=self.store.plan_annotations(['source-version:v1'])
+        self.assertEqual(annotations['source-version:v1']['note_count'],1)
+        self.assertEqual(self.store.plan_notes_for('source-version:v1')[0]['actor'],'reviewer')
+        self.assertEqual(self.store.db.execute(
+            'SELECT payload FROM versions WHERE id=?',('v1',)).fetchone()[0],original_payload)
+        dwg='dwg:'+('a'*32)
+        self.store.update_plan_title(
+            dwg,'dwg',None,'040103','Plano DWG de manzanas',self.store.revision,'reviewer')
+        self.assertEqual(self.store.plan_annotations([dwg])[dwg]['display_title'],
+                         'Plano DWG de manzanas')
+        notes_only='dwg:'+('b'*32)
+        self.store.add_plan_note(
+            notes_only,'dwg',None,'040103','Sólo nota por ahora',self.store.revision,'reviewer')
+        self.assertEqual(self.store.plan_annotations([notes_only])[notes_only]['note_count'],1)
+
     def test_full_replacement_preserves_documents_people_and_retired_identity(self):
         eid,_ = self.base()
         self.store.db.execute("INSERT INTO people VALUES ('p','Titular de prueba','DNI','00000001','v1')")
@@ -434,6 +460,27 @@ class SourceWorkspaceTests(SimpleTestCase):
         response=source_manager_views.workspace(request)
         self.assertEqual(response.status_code,200)
         self.assertEqual(len(json.loads(response.content)['features']),1)
+
+    def test_api_edits_plan_title_and_adds_dated_notes(self):
+        self.assertEqual(source_manager_views.workspace(
+            self.request({'action':'stage','payload':candidate(),'revision':0})).status_code,200)
+        response=source_manager_views.workspace(self.request({
+            'action':'plan_title','document_key':'source-version:v1',
+            'document_type':'source-version','source_version':'v1',
+            'scope_ubigeo':'040103','title':'Plano del sector 32','revision':1}))
+        self.assertEqual(response.status_code,200)
+        response=source_manager_views.workspace(self.request({
+            'action':'plan_note','document_key':'source-version:v1',
+            'document_type':'source-version','source_version':'v1',
+            'scope_ubigeo':'040103','note':'Revisar numeración de lote.','revision':2}))
+        self.assertEqual(response.status_code,200)
+        request=RequestFactory().get('/catastro/api/maestro/composicion/',
+            {'view':'plan_annotations','keys':'source-version:v1'})
+        request.current_user=self.request().current_user
+        value=json.loads(source_manager_views.workspace(request).content)
+        self.assertEqual(value['annotations']['source-version:v1']['display_title'],
+                         'Plano del sector 32')
+        self.assertEqual(value['annotations']['source-version:v1']['note_count'],1)
 
     def test_pdf_inspection_keeps_bytes_in_ram_and_never_activates_geometry(self):
         import fitz

@@ -120,3 +120,23 @@ focalizadas cubren auditoría, permiso de evidencia para verificar, exclusión d
 capas rechazadas, consulta por bbox, persistencia tras reinicio y transporte
 D1. La aplicación también fue integrada en el checkout local que sirve
 `D:/PROMETEO`.
+
+## Trabajo local de títulos, notas, miniaturas y avance por plano (22/10/2026)
+
+Preparado localmente, sin desplegar Django, Worker ni aplicar la migración
+`007_plan_annotations.sql` a D1:
+
+- Título administrativo editable por versión PDF o documento DWG, separado del
+  nombre del original.
+- Notas append-only con fecha, autor y revisión; agregar una nota no cambia el
+  archivo ni activa datos.
+- Miniatura privada de la primera página del PDF, con ampliación y acceso al
+  original.
+- Barra de once etapas por plano, derivada del mismo contrato que la ruta
+  general; el respaldo queda fuera del conteo.
+- Aviso explícito de aportes parciales: geometría, manzanas y numeración pueden
+  proceder de PDF distintos y activarse por campos revisados.
+
+La interfaz usa caché `v=4`. Las 52 pruebas focalizadas de Python, la prueba de
+once etapas y el transporte D1 simulado pasan. La migración y publicación
+permanecen pendientes de autorización.

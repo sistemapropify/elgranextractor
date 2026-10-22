@@ -38,5 +38,13 @@ const review={action:'commit',id:crypto.randomUUID(),revision:3,result:{revision
 assert.equal((await handle(request(review),env)).status,200);
 assert.equal(sql.prepare('SELECT status FROM catalog_review_status').get().status,'observed');
 assert.equal(sql.prepare('SELECT status FROM catalog_review_events').get().status,'observed');
+const planMeta={action:'commit',id:crypto.randomUUID(),revision:4,result:{revision:5},changes:[
+  {table:'meta',upserts:[['revision','5']],deletes:[]},
+  {table:'plan_workspace',upserts:[['source-version:v1','source-version','v1','040103','Plano principal','2026-10-22T13:00:00Z','admin',5]],deletes:[]},
+  {table:'plan_notes',upserts:[['note-1','source-version:v1','040103','Revisar numeración','2026-10-22T13:01:00Z','admin',5]],deletes:[]},
+  {table:'journal',upserts:[[5,'plan_note','admin','2026-10-22T13:01:00Z','Agregar nota','{}','{}']],deletes:[]}]};
+assert.equal((await handle(request(planMeta),env)).status,200);
+assert.equal(sql.prepare('SELECT display_title FROM plan_workspace').get().display_title,'Plano principal');
+assert.equal(sql.prepare('SELECT note FROM plan_notes').get().note,'Revisar numeración');
 assert.equal((await handle(request({...payload,id:crypto.randomUUID(),changes:[{table:'master_operations',upserts:[],deletes:[]}]}),env)).status,400);
 console.log('Private D1 transport: authentication, restricted reads, atomic rollback, CAS, retries and primary-key deletion passed.');

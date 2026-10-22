@@ -33,15 +33,109 @@
   if(typeof module!=='undefined')module.exports={PIPELINE,pipelineStage,dwgStage};
   if(typeof document==='undefined')return;
   const root=document.getElementById('plan-hub');if(!root)return;
-  const $=id=>document.getElementById(id),status=$('plan-status');let busy=false;
+  const $=id=>document.getElementById(id),status=$('plan-status'),endpoint='/catastro/api/maestro/composicion/';let busy=false,revision=0;
   const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=String(text);if(cls)n.className=cls;return n;};
   function setStatus(text,error=false){status.textContent=text;status.dataset.error=String(error);}
-  function render(portfolio,dwgRows,scope){
+  function csrf(){return $('dwg-form').elements.csrfmiddlewaretoken.value;}
+  async function masterApi(payload=null,query=''){
+    const response=await fetch(endpoint+query,{credentials:'same-origin',cache:'no-store',
+      method:payload?'POST':'GET',headers:{Accept:'application/json',
+        ...(payload?{'Content-Type':'application/json','X-CSRFToken':csrf()}:{})},
+      ...(payload?{body:JSON.stringify(payload)}:{})});
+    if(!response.headers.get('content-type')?.includes('application/json'))
+      throw Error('Inicia sesión para administrar los planos.');
+    const value=await response.json();
+    if(!response.ok)throw Error(value.error||'No se pudo completar la acción.');
+    if(Number.isInteger(value.revision))revision=value.revision;
+    return value;
+  }
+  const dateTime=value=>{if(!value)return 'Sin fecha';const date=new Date(value);
+    return Number.isNaN(date.getTime())?value:new Intl.DateTimeFormat('es-PE',
+      {dateStyle:'short',timeStyle:'short',timeZone:'America/Lima'}).format(date);};
+  function planProgress(item){
+    const box=el('div',null,'plan-item-progress'),head=el('div',null,'plan-progress-head');
+    if(item.stageCode==='backup'){
+      head.append(el('span','Respaldo fuera de la ruta'),el('b','Sin avance'));
+      box.append(head,el('p','No se cuenta como aporte activo ni como etapa pendiente.','plan-progress-note'));
+      return box;
+    }
+    const index=PIPELINE.findIndex(stage=>stage.id===item.stageCode),number=Math.max(1,index+1);
+    head.append(el('span','Etapa '+number+' de '+PIPELINE.length),el('b',item.stage));
+    const track=el('div',null,'plan-progress-track');track.setAttribute('role','img');
+    track.setAttribute('aria-label','Avance: '+number+' de '+PIPELINE.length+' etapas');
+    PIPELINE.forEach((stage,stageIndex)=>{const mark=el('span',null,
+      stageIndex+1<number?'done':stageIndex+1===number?'current':'pending');
+      mark.title=(stageIndex+1)+' · '+stage.label;track.append(mark);});
+    box.append(head,track,el('p','Resultado esperado: '+stageDefinition(item.stageCode).gate,'plan-progress-note'));
+    return box;
+  }
+  function planThumbnail(item){
+    const button=el('button',null,'plan-thumbnail');button.type='button';
+    button.setAttribute('aria-label','Ampliar primera página de '+(item.name||item.original_name));
+    const image=el('img');image.loading='lazy';image.alt='Miniatura de '+(item.name||item.original_name);
+    image.src='/catastro/api/maestro/pdf/'+encodeURIComponent(item.version_id)+'/pagina/?page=1';
+    image.addEventListener('error',()=>{button.hidden=true;});
+    button.append(image,el('span','Ver original'));
+    button.addEventListener('click',()=>showPlanPreview(item));
+    return button;
+  }
+  function showPlanPreview(item){
+    const dialog=el('dialog',null,'plan-preview-dialog'),close=el('button','Cerrar ×','plan-dialog-close');
+    close.type='button';close.addEventListener('click',()=>dialog.close());
+    const image=el('img');image.alt='Original PDF de '+(item.name||item.original_name);
+    image.src='/catastro/api/maestro/pdf/'+encodeURIComponent(item.version_id)+'/pagina/?page=1';
+    const link=el('a','Abrir PDF original');
+    link.href='/catastro/api/maestro/pdf/'+encodeURIComponent(item.version_id)+'/original/';
+    link.target='_blank';link.rel='noopener';
+    dialog.append(close,el('h2',item.name||item.original_name),image,link);
+    dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
+    dialog.addEventListener('close',()=>dialog.remove());
+    document.body.append(dialog);dialog.showModal();
+  }
+  function editPlanTitle(item){
+    const dialog=el('dialog',null,'plan-title-dialog'),form=el('form'),label=el('label','Título del plano');
+    const input=el('input');input.required=true;input.maxLength=300;input.value=item.name||'';
+    label.append(input);
+    const actions=el('div',null,'plan-dialog-actions'),cancel=el('button','Cancelar','secondary'),save=el('button','Guardar título');
+    cancel.type='button';save.type='submit';
+    cancel.addEventListener('click',()=>dialog.close());
+    actions.append(cancel,save);form.append(el('h2','Editar título'),el('p','Este título organiza el plano y no modifica el nombre del archivo original.'),label,actions);
+    form.addEventListener('submit',async event=>{event.preventDefault();save.disabled=true;
+      try{await masterApi({action:'plan_title',document_key:item.documentKey,document_type:item.documentType,
+        source_version:item.documentType==='source-version'?item.version_id:null,
+        scope_ubigeo:item.scopeUbigeo,title:input.value,revision});
+        dialog.close();setStatus('Título del plano actualizado.');await refresh($('plan-filter').elements.ubigeo.value.trim());
+      }catch(error){setStatus(error.message,true);save.disabled=false;}});
+    dialog.addEventListener('close',()=>dialog.remove());dialog.append(form);document.body.append(dialog);dialog.showModal();
+  }
+  async function loadPlanNotes(item,box,button){
+    const data=await masterApi(null,'?'+new URLSearchParams({view:'plan_notes',document_key:item.documentKey}));
+    box.replaceChildren(el('h4','Notas y comentarios'),el('p','Cada nota conserva fecha y autor. No modifica el plano original ni activa datos.','plan-note-help'));
+    if(!data.items.length)box.append(el('p','Este plano todavía no tiene notas.','plan-note-empty'));
+    for(const note of data.items){const entry=el('article',null,'plan-note');entry.append(el('time',dateTime(note.created_at)),el('p',note.note),el('small',note.actor));box.append(entry);}
+    const form=el('form',null,'plan-note-form'),textarea=el('textarea');textarea.rows=3;textarea.maxLength=4000;textarea.required=true;textarea.placeholder='Agregar una observación sobre este plano…';
+    const add=el('button','Agregar nota');add.type='submit';form.append(textarea,add);
+    form.addEventListener('submit',async event=>{event.preventDefault();add.disabled=true;
+      try{await masterApi({action:'plan_note',document_key:item.documentKey,document_type:item.documentType,
+        source_version:item.documentType==='source-version'?item.version_id:null,
+        scope_ubigeo:item.scopeUbigeo,note:textarea.value,revision});
+        item.noteCount+=1;button.textContent='Notas ('+item.noteCount+')';setStatus('Nota agregada al plano con fecha y autor.');await loadPlanNotes(item,box,button);
+      }catch(error){setStatus(error.message,true);add.disabled=false;}});
+    box.append(form);box.dataset.loaded='true';
+  }
+  async function togglePlanNotes(item,card,button){
+    let box=card.querySelector('.plan-notes');
+    if(!box){box=el('section',null,'plan-notes');card.append(box);}
+    if(!box.hidden){box.hidden=true;button.textContent='Notas ('+item.noteCount+')';return;}
+    box.hidden=false;button.textContent='Ocultar notas';
+    if(!box.dataset.loaded){box.replaceChildren(el('p','Consultando notas…'));try{await loadPlanNotes(item,box,button);}catch(error){box.replaceChildren(el('p',error.message,'plan-note-error'));}}
+  }
+  function render(portfolio,dwgRows,scope,annotations={}){
     let files=(portfolio.files||[]).filter(x=>x.version_id);
     let cad=dwgRows||[];
     if(scope){files=files.filter(x=>x.ubigeo===scope);cad=cad.filter(x=>x.ubigeo===scope);}
-    const decorated=files.map(file=>{const stage=pipelineStage(file),definition=stageDefinition(stage);return {...file,kind:'PDF',stageCode:stage,stage:stage==='backup'?'Respaldo':definition.label,detail:stage==='backup'?'Respaldo retenido y excluido de la ruta de activación.':definition.detail};});
-    const dwg=cad.map(file=>{const stage=dwgStage(file),definition=stageDefinition(stage);return {...file,kind:'DWG',name:(file.source_name||file.filename)+' · '+(file.sheet_code||'sin lámina'),stageCode:stage,stage:definition.label,detail:file.status==='completed'?`${file.drawable||0} entidades dibujables · ${file.layer_count??file.layers?.length??0} capas · unidades CAD ${file.units??'sin definir'}`:file.message||'Conversión en proceso'};});
+    const decorated=files.map(file=>{const stage=pipelineStage(file),definition=stageDefinition(stage),documentKey='source-version:'+file.version_id,note=annotations[documentKey]||{};return {...file,kind:'PDF',documentKey,documentType:'source-version',scopeUbigeo:file.ubigeo||'040103',stageCode:stage,stage:stage==='backup'?'Respaldo':definition.label,detail:stage==='backup'?'Respaldo retenido y excluido de la ruta de activación.':definition.detail,name:note.display_title||file.original_name||file.filename,noteCount:Number(note.note_count||0)};});
+    const dwg=cad.map(file=>{const stage=dwgStage(file),definition=stageDefinition(stage),documentKey='dwg:'+file.id,note=annotations[documentKey]||{};return {...file,kind:'DWG',documentKey,documentType:'dwg',scopeUbigeo:file.ubigeo||scope||'040103',name:note.display_title||((file.source_name||file.filename)+' · '+(file.sheet_code||'sin lámina')),stageCode:stage,stage:definition.label,detail:file.status==='completed'?`${file.drawable||0} entidades dibujables · ${file.layer_count??file.layers?.length??0} capas · unidades CAD ${file.units??'sin definir'}`:file.message||'Conversión en proceso',noteCount:Number(note.note_count||0)};});
     const all=[...decorated,...dwg];
     const workflowFiles=all.filter(x=>x.stageCode!=='backup');
     const counts=Object.fromEntries(PIPELINE.map(stage=>[stage.id,stage.id==='intake'?workflowFiles.length:workflowFiles.filter(item=>item.stageCode===stage.id).length]));
@@ -63,13 +157,46 @@
     for(const item of all){const card=el('article',null,'plan-item');card.append(el('span',item.kind+' · '+item.stage,'plan-pill'),el('h3',item.name||item.filename),el('p',item.detail));
       if(item.kind==='PDF'){card.append(el('p',`UBIGEO ${item.ubigeo||'—'} · ${item.sheet_code||'sin lámina'} · ${item.elements||0} atributos preparados · ${item.georeferencing?.status||'posición pendiente'} · ${item.original_name||'nombre original no registrado'}`));if(item.vector_review)card.append(el('p',`${item.vector_review.vector_paths||0} trazos · ${item.vector_review.text_words||0} palabras · ${item.vector_review.coordinate_space||'coordenadas locales'} · ningún lote identificado automáticamente`));}
       else card.append(el('p',`UBIGEO ${item.ubigeo||'sin asignar'} · ${item.filename||''} · SHA256 ${item.sha256||'pendiente'}`));
+      card.append(planProgress(item));
+      if(item.kind==='PDF'&&item.original_available&&/\.pdf$/i.test(String(item.original_name||'')))card.append(planThumbnail(item));
       const actions=el('div',null,'plan-item-actions');
       if(item.kind==='PDF'){const manage=el('a','Administrar fuente');manage.href='/catastro/maestro/fuentes/';actions.append(manage);if(item.original_available){const pdf=el('a','Abrir PDF');pdf.href='/catastro/api/maestro/pdf/'+encodeURIComponent(item.version_id)+'/original/';pdf.target='_blank';pdf.rel='noopener';actions.append(pdf);}if(item.vector_review){const filename=Object.keys(item.vector_artifacts||{}).find(x=>x.endsWith('.geojson'));if(filename){const link=el('a','Descargar GeoJSON');link.href='/catastro/api/maestro/pdf/'+encodeURIComponent(item.version_id)+'/vectores/'+encodeURIComponent(filename);link.download=filename;actions.append(link);}}else if(item.original_available&&item.stageCode==='inspection'){const button=el('button','Vectorizar PDF');button.type='button';button.addEventListener('click',async()=>{button.disabled=true;setStatus('Extrayendo trazos y texto del PDF…');try{const csrf=$('dwg-form').elements.csrfmiddlewaretoken.value;const response=await fetch('/catastro/api/maestro/pdf/'+encodeURIComponent(item.version_id)+'/vectorizar/',{method:'POST',credentials:'same-origin',headers:{'X-CSRFToken':csrf,Accept:'application/json'}});const value=await response.json();if(!response.ok)throw Error(value.error||'Falló la extracción vectorial.');setStatus(value.notice);await refresh(scope);}catch(error){setStatus(error.message,true);button.disabled=false;}});actions.append(button);}const calibrate=el('a','Calibrar posición');calibrate.href='/catastro/maestro/fuentes/#calibration-workspace';actions.append(calibrate);const homologate=el('a','Comparar / homologar');homologate.href='/catastro/maestro/fuentes/#sources-change-form';actions.append(homologate);}
       else{const link=el('a',item.status==='completed'?'Abrir visor CAD':'Ver estado');link.href=item.status==='completed'?'/catastro/visor-planos/?plano='+encodeURIComponent(item.id):'/catastro/api/planos/'+encodeURIComponent(item.id)+'/';link.target=item.status==='completed'?'_blank':'_self';actions.append(link);}
+      const titleButton=el('button','Editar título','secondary');titleButton.type='button';titleButton.addEventListener('click',()=>editPlanTitle(item));actions.prepend(titleButton);
+      const notesButton=el('button','Notas ('+item.noteCount+')','secondary');notesButton.type='button';notesButton.addEventListener('click',()=>togglePlanNotes(item,card,notesButton));actions.append(notesButton);
       card.append(actions);host.append(card);
     }
   }
-  async function refresh(scope){if(busy)return;busy=true;setStatus('Consultando el catálogo de todos los distritos y los DWG locales…');try{const [a,b]=await Promise.all([fetch('/catastro/api/maestro/planos/',{credentials:'same-origin',cache:'no-store'}),fetch('/catastro/api/planos/inventario/',{credentials:'same-origin',cache:'no-store'})]);const portfolio=await a.json(),cad=await b.json();if(!a.ok)throw Error(portfolio.error||'No se pudo consultar el maestro.');if(!b.ok)throw Error(cad.error||'No se pudo consultar el inventario CAD.');render(portfolio,cad.dwg,scope);setStatus((portfolio.truncated?'Catálogo limitado a 5000 versiones. ':'')+'Inventario listo. Los archivos y sus propuestas siguen separados de los lotes aprobados.');}catch(error){setStatus(error.message,true);}finally{busy=false;}}
+  async function refresh(scope){
+    if(busy)return;
+    busy=true;
+    setStatus('Consultando el catálogo de todos los distritos y los DWG locales…');
+    try{
+      const [portfolioResponse,cadResponse]=await Promise.all([
+        fetch('/catastro/api/maestro/planos/',{credentials:'same-origin',cache:'no-store'}),
+        fetch('/catastro/api/planos/inventario/',{credentials:'same-origin',cache:'no-store'}),
+      ]);
+      const portfolio=await portfolioResponse.json(),cad=await cadResponse.json();
+      if(!portfolioResponse.ok)throw Error(portfolio.error||'No se pudo consultar el maestro.');
+      if(!cadResponse.ok)throw Error(cad.error||'No se pudo consultar el inventario CAD.');
+      const keys=[
+        ...(portfolio.files||[]).filter(file=>file.version_id).map(file=>'source-version:'+file.version_id),
+        ...(cad.dwg||[]).filter(file=>file.id).map(file=>'dwg:'+file.id),
+      ];
+      let annotations={};
+      if(keys.length){
+        const result=await masterApi(null,'?'+new URLSearchParams({view:'plan_annotations',keys:keys.join(',')}));
+        annotations=result.annotations||{};
+      }
+      render(portfolio,cad.dwg,scope,annotations);
+      setStatus((portfolio.truncated?'Catálogo limitado a 5000 versiones. ':'')+
+        'Inventario listo. Los archivos y sus propuestas siguen separados de los lotes aprobados.');
+    }catch(error){
+      setStatus(error.message,true);
+    }finally{
+      busy=false;
+    }
+  }
   $('plan-filter').addEventListener('submit',event=>{event.preventDefault();refresh($('plan-filter').elements.ubigeo.value.trim());});$('plan-refresh').addEventListener('click',()=>refresh($('plan-filter').elements.ubigeo.value.trim()));
   $('dwg-form').addEventListener('submit',async event=>{event.preventDefault();if(busy)return;busy=true;const button=event.currentTarget.querySelector('button[type=submit]');button.disabled=true;setStatus('Subiendo DWG e iniciando conversión e inventario…');try{const form=new FormData(event.currentTarget),csrf=form.get('csrfmiddlewaretoken');const response=await fetch('/catastro/api/planos/importar/',{method:'POST',body:form,credentials:'same-origin',headers:{'X-CSRFToken':csrf,Accept:'application/json'}});const value=await response.json();if(!response.ok)throw Error(value.error||'No se pudo registrar el DWG.');setStatus('DWG recibido. La lectura de capas está en proceso.');event.currentTarget.reset();setTimeout(()=>refresh($('plan-filter').elements.ubigeo.value.trim()),1800);}catch(error){setStatus(error.message,true);}finally{busy=false;button.disabled=false;}});
   refresh('');

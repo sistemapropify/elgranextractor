@@ -250,3 +250,23 @@ Admite `kind`, `review_status`, `bbox=oeste,sur,este,norte` y `limit` de hasta
 El historial de una publicación puede llegar en una versión posterior sin
 repetir el anuncio: `listing_observations` acepta `listing_id` del mismo lote o
 la pareja `portal` + `external_id`, que resuelve la publicación ya registrada.
+
+## Aportes parciales por capa y campo
+
+Un plano no necesita contener toda la información de un inmueble. La unidad de
+aporte es la capa o el campo revisado:
+
+- Un PDF puede aportar únicamente polígonos de lotes.
+- Otro PDF del mismo sector puede aportar sólo textos de numeración de manzana
+  o lote, sin sustituir la geometría ya conservada.
+- Un archivo de registros puede aportar direcciones, titulares o áreas.
+
+La selección se realiza al comparar el aporte mediante `fields`. La geometría
+sólo cambia cuando se elige `$geometry` y la versión tiene posición revisada.
+La numeración sólo cambia cuando se eligen `block` o `lot`. La correspondencia
+con la identidad del inmueble debe revisarse en `identity_map`; proximidad o
+coincidencia de nombres no autoriza una fusión.
+
+Cada PDF conserva su propia versión y procedencia. La ficha final puede mostrar
+la geometría de una fuente y la numeración de otra, manteniendo en el historial
+qué versión aportó cada campo.

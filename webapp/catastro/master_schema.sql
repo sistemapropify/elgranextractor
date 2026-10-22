@@ -247,6 +247,21 @@ CREATE INDEX catalog_review_target
  ON catalog_review_events(target_table,target_id,revision);
 CREATE INDEX catalog_review_recent
  ON catalog_review_events(revision DESC);
+CREATE TABLE plan_workspace (
+ document_key TEXT PRIMARY KEY,
+ document_type TEXT NOT NULL CHECK(document_type IN ('source-version','dwg')),
+ source_version TEXT REFERENCES versions(id), scope_ubigeo TEXT NOT NULL,
+ display_title TEXT, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL,
+ revision INTEGER NOT NULL CHECK(revision>0)
+);
+CREATE INDEX plan_workspace_scope ON plan_workspace(scope_ubigeo,document_type);
+CREATE TABLE plan_notes (
+ id TEXT PRIMARY KEY, document_key TEXT NOT NULL, scope_ubigeo TEXT NOT NULL,
+ note TEXT NOT NULL, created_at TEXT NOT NULL, actor TEXT NOT NULL,
+ revision INTEGER NOT NULL CHECK(revision>0)
+);
+CREATE INDEX plan_notes_document ON plan_notes(document_key,created_at);
+CREATE INDEX plan_notes_scope ON plan_notes(scope_ubigeo,created_at);
 CREATE TABLE journal (
  revision INTEGER PRIMARY KEY, operation TEXT NOT NULL, actor TEXT NOT NULL,
  created_at TEXT NOT NULL, reason TEXT NOT NULL, details_json TEXT NOT NULL, snapshot_json TEXT NOT NULL
