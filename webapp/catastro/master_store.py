@@ -214,6 +214,26 @@ class MasterStore:
             return {'revision': revision, 'version_id': vid, 'observations': len(observations),
                     'catalog_records': catalog_count}
 
+    def review_catalog(self, target_table, target_id, status, reason, evidence,
+                       expected_revision, actor):
+        """Record review metadata; the immutable source payload is never changed."""
+        from . import master_catalog
+        with self.lock, self.db:
+            self._expected(expected_revision)
+            next_revision = self.revision + 1
+            result = master_catalog.review(
+                self.db, target_table, target_id, status, reason, evidence, actor, next_revision)
+            if result.get('unchanged'):
+                return result
+            revision = self._journal('catalog_review', actor, reason, {
+                'target_table': target_table, 'target_id': target_id,
+                'status': status, 'previous_status': result['previous_status'],
+                'evidence': evidence})
+            if revision != next_revision:
+                raise RuntimeError('La revisión del catálogo quedó desalineada.')
+            result['revision'] = revision
+            return result
+
     def _resolve(self, row, plan):
         key = row['layer'] + ':' + row['source_feature_id']
         target = plan.get('identity_map', {}).get(key)
@@ -492,7 +512,8 @@ class MasterStore:
                                       'property_observations','external_identifiers',
                                       'listings','listing_observations','transactions','organizations',
                                       'activities','visits','developments','development_lots',
-                                      'development_stages','environment_features','coverage_records')},
+                                      'development_stages','environment_features','coverage_records',
+                                      'catalog_review_status','catalog_review_events')},
                     'history': [dict(r) for r in self.db.execute('''SELECT revision,operation,actor,created_at,reason
                         FROM journal ORDER BY revision DESC LIMIT 100''')]}
 

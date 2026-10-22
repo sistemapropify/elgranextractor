@@ -164,6 +164,67 @@ class MasterVersionTests(SimpleTestCase):
         self.assertIn('42', master_catalog.search(self.store.db, {'kind':'listings','portal':'demo'})[0]['label'])
         self.assertEqual(master_catalog.search(self.store.db, {'kind':'coverage','dataset':'planos'})[0]['amount'],1)
 
+    def test_catalog_review_is_audited_immutable_and_controls_environment_visibility(self):
+        payload = candidate(fields={'sector':'32'})
+        payload.update({
+            'identifiers':[{'target_ref':'lote:a','scheme':'referencia_catastral',
+                            'value':'REF-REVIEW','status':'candidate'}],
+            'environment_features':[
+                {'kind':'via','name':'Vía observada','geometry':
+                 {'type':'LineString','coordinates':[[-71.55,-16.36],[-71.54,-16.35]]}},
+                {'kind':'parque','name':'Parque por verificar','geometry':
+                 {'type':'Point','coordinates':[-71.50,-16.30]}}],
+        })
+        self.stage(payload)
+        identifier_item=master_catalog.search(self.store.db, {'kind':'identifiers'})[0]
+        result=self.store.review_catalog(
+            'external_identifiers',identifier_item['id'],'observed',
+            'Cotejo inicial con la referencia de la ficha',{'document':'ficha'},
+            self.store.revision,'reviewer')
+        self.assertEqual(result['previous_status'],'candidate')
+        self.assertEqual(master_catalog.search(
+            self.store.db, {'kind':'identifiers','review_status':'observed'})[0]['id'],
+            identifier_item['id'])
+        self.assertEqual(self.store.db.execute(
+            "SELECT status FROM external_identifiers WHERE id=?",(identifier_item['id'],)).fetchone()[0],
+            'candidate')
+        with self.assertRaisesRegex(ValueError,'evidencia'):
+            self.store.review_catalog(
+                'external_identifiers',identifier_item['id'],'verified','Sin respaldo',{},
+                self.store.revision,'reviewer')
+        self.store.review_catalog(
+            'external_identifiers',identifier_item['id'],'verified','Documento cotejado',
+            {'document':'ficha','page':1},self.store.revision,'reviewer')
+        history=master_catalog.review_history(self.store.db,'external_identifiers',identifier_item['id'])
+        self.assertEqual([item['status'] for item in history],['verified','observed'])
+        via=master_catalog.search(self.store.db,{'kind':'environment','environment_kind':'via'})[0]
+        self.store.review_catalog(
+            'environment_features',via['id'],'rejected','Ubicación fuera del ámbito',
+            {'reason':'bbox fuera de Arequipa'},self.store.revision,'reviewer')
+        visible=master_catalog.environment_collection(self.store.db,'040103')
+        self.assertEqual([feature['properties']['kind'] for feature in visible['features']],['parque'])
+        rejected=master_catalog.environment_collection(
+            self.store.db,'040103',review_status='rejected')
+        self.assertEqual(rejected['features'][0]['properties']['name'],'Vía observada')
+        clipped=master_catalog.environment_collection(
+            self.store.db,'040103',bbox=(-71.51,-16.31,-71.49,-16.29))
+        self.assertEqual(clipped['features'][0]['properties']['kind'],'parque')
+
+    def test_listing_history_can_reference_a_prior_version_without_repeating_the_listing(self):
+        first=candidate()
+        first['listings']=[{'id':'portal-listing','target_ref':'lote:a','portal':'demo',
+                            'external_id':'ABC-1','operation':'venta','price':200000,
+                            'currency':'USD','status':'active'}]
+        self.stage(first)
+        later=candidate('market','market-v2')
+        later['features']=[]
+        later['listing_observations']=[{'portal':'demo','external_id':'ABC-1',
+            'observed_at':'2026-10-22','price':190000,'currency':'USD',
+            'operation':'venta','status':'observed'}]
+        self.stage(later)
+        self.assertEqual(self.store.db.execute(
+            'SELECT count(*) FROM listing_observations').fetchone()[0],1)
+
     def test_full_replacement_preserves_documents_people_and_retired_identity(self):
         eid,_ = self.base()
         self.store.db.execute("INSERT INTO people VALUES ('p','Titular de prueba','DNI','00000001','v1')")
@@ -330,7 +391,8 @@ class SourceWorkspaceTests(SimpleTestCase):
         with patch('django.template.base.Template._render',lambda template,context:template.nodelist.render(context)):
             response=source_manager_views.viewer(self.request())
         self.assertEqual(response.status_code,200)
-        for marker in ('sources-pdf-form','sources-change-form','sources-history','Fuentes y versiones','Borrador local'):
+        for marker in ('sources-pdf-form','sources-change-form','sources-history',
+                       'sources-import-form','sources-environment-query','Fuentes y versiones','Borrador local'):
             self.assertIn(marker,response.content.decode())
 
     def test_api_rejects_post_without_csrf(self):
@@ -346,6 +408,32 @@ class SourceWorkspaceTests(SimpleTestCase):
         token=json.loads(response.content)['token']
         response=source_manager_views.workspace(self.request({'action':'apply','plan':p,'token':token}));self.assertEqual(response.status_code,200)
         self.assertEqual(source_manager_views.workspace(self.request({'action':'apply','plan':p,'token':token})).status_code,409)
+
+    def test_api_records_catalog_review_and_exposes_private_environment_layer(self):
+        payload=candidate()
+        payload['identifiers']=[{'target_ref':'lote:a','scheme':'referencia_catastral',
+                                 'value':'REF-API','status':'candidate'}]
+        payload['environment_features']=[{'kind':'riesgo','name':'Talud candidato',
+            'geometry':{'type':'Point','coordinates':[-71.55,-16.36]}}]
+        self.assertEqual(source_manager_views.workspace(
+            self.request({'action':'stage','payload':payload,'revision':0})).status_code,200)
+        row=self.store.db.execute('SELECT id FROM external_identifiers').fetchone()
+        response=source_manager_views.workspace(self.request({
+            'action':'catalog_review','target_table':'external_identifiers','target_id':row[0],
+            'status':'confirmed','reason':'Cotejo','evidence':{},'revision':1}))
+        self.assertEqual(response.status_code,400)
+        response=source_manager_views.workspace(self.request({
+            'action':'catalog_review','target_table':'external_identifiers','target_id':row[0],
+            'status':'observed','reason':'Cotejo','evidence':{'document':'ficha'},
+            'revision':1}))
+        self.assertEqual(response.status_code,200)
+        factory=RequestFactory()
+        request=factory.get('/catastro/api/maestro/composicion/',
+                            {'view':'environment','ubigeo':'040103'})
+        request.current_user=self.request().current_user
+        response=source_manager_views.workspace(request)
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(len(json.loads(response.content)['features']),1)
 
     def test_pdf_inspection_keeps_bytes_in_ram_and_never_activates_geometry(self):
         import fitz

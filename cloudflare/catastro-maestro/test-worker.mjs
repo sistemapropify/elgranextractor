@@ -30,5 +30,13 @@ const versionRows={action:'commit',id:crypto.randomUUID(),revision:2,result:{rev
   {table:'versions',upserts:[['v1','source','V1',null,null,'{}','original.pdf','a'.repeat(64),'b'.repeat(64),'2026-10-20','admin','{}']],deletes:[]}]};
 assert.equal((await handle(request(versionRows),env)).status,200);
 assert.equal(sql.prepare('SELECT original_sha256 FROM versions').get().original_sha256,'a'.repeat(64));
+const review={action:'commit',id:crypto.randomUUID(),revision:3,result:{revision:4},changes:[
+  {table:'meta',upserts:[['revision','4']],deletes:[]},
+  {table:'catalog_review_status',upserts:[['external_identifiers','candidate-1','observed',4,'2026-10-22T12:00:00Z','admin','Cotejo','{}','v1']],deletes:[]},
+  {table:'catalog_review_events',upserts:[['event-1','external_identifiers','candidate-1','observed','candidate',4,'2026-10-22T12:00:00Z','admin','Cotejo','{}','v1']],deletes:[]},
+  {table:'journal',upserts:[[4,'catalog_review','admin','2026-10-22T12:00:00Z','Cotejo','{}','{}']],deletes:[]}]};
+assert.equal((await handle(request(review),env)).status,200);
+assert.equal(sql.prepare('SELECT status FROM catalog_review_status').get().status,'observed');
+assert.equal(sql.prepare('SELECT status FROM catalog_review_events').get().status,'observed');
 assert.equal((await handle(request({...payload,id:crypto.randomUUID(),changes:[{table:'master_operations',upserts:[],deletes:[]}]}),env)).status,400);
 console.log('Private D1 transport: authentication, restricted reads, atomic rollback, CAS, retries and primary-key deletion passed.');

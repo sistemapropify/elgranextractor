@@ -117,8 +117,27 @@ def workspace(request):
                 value = store.entity(request.GET.get('id',''))
             elif request.GET.get('view') == 'catalog':
                 from . import master_catalog
+                if hasattr(store, 'refresh'):
+                    store.refresh()
                 value = {'items': master_catalog.search(
                     store.db, {key: item for key, item in request.GET.items() if key != 'view'}),
+                    'revision': store.revision}
+            elif request.GET.get('view') == 'environment':
+                from . import master_catalog
+                if hasattr(store, 'refresh'):
+                    store.refresh()
+                raw_bbox = request.GET.get('bbox', '')
+                bbox = [float(value) for value in raw_bbox.split(',')] if raw_bbox else None
+                value = master_catalog.environment_collection(
+                    store.db, request.GET.get('ubigeo', ''), request.GET.get('kind', ''),
+                    bbox, request.GET.get('review_status') or None,
+                    int(request.GET.get('limit', '2000')))
+            elif request.GET.get('view') == 'review_history':
+                from . import master_catalog
+                if hasattr(store, 'refresh'):
+                    store.refresh()
+                value = {'items': master_catalog.review_history(
+                    store.db, request.GET.get('target_table', ''), request.GET.get('target_id', '')),
                     'revision': store.revision}
             elif request.GET.get('view') == 'pdf_info':
                 from .master_georeference import page_info
@@ -150,6 +169,10 @@ def workspace(request):
             action = payload.get('action')
             if action == 'stage':
                 value = store.stage(payload.get('payload'), payload.get('revision'), author)
+            elif action == 'catalog_review':
+                value = store.review_catalog(
+                    payload.get('target_table'), payload.get('target_id'), payload.get('status'),
+                    payload.get('reason'), payload.get('evidence'), payload.get('revision'), author)
             elif action == 'preview':
                 value = store.preview(payload.get('plan'))
             elif action == 'apply':

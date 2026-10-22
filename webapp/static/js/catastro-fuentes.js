@@ -15,7 +15,36 @@
         return items.map(f=>({id:f.id,d:rings(f).map(ring=>ring.map((p,i)=>(i?'L':'M')+
             ((p[0]*cos-minX)*scale+20).toFixed(2)+','+((-p[1]-minY)*scale+20).toFixed(2)).join(' ')+' Z').join(' ')}));
     }
-    if(typeof module!=='undefined')module.exports={paths};
+    function environmentPaths(collection){
+        const pairs=value=>Array.isArray(value)&&value.length===2&&value.every(v=>typeof v==='number')?[value]:
+            Array.isArray(value)?value.flatMap(pairs):[];
+        const items=(collection.features||[]).filter(f=>f.geometry);
+        const shapePairs=shape=>shape.type==='GeometryCollection'?shape.geometries.flatMap(shapePairs):pairs(shape.coordinates);
+        const points=items.flatMap(f=>shapePairs(f.geometry));
+        if(!points.length)return [];
+        const lat=points.reduce((sum,p)=>sum+p[1],0)/points.length,cos=Math.cos(lat*Math.PI/180);
+        let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+        for(const p of points){const x=p[0]*cos,y=-p[1];minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}
+        const scale=Math.min(900/(maxX-minX||1),260/(maxY-minY||1));
+        const point=p=>((p[0]*cos-minX)*scale+20).toFixed(2)+','+((-p[1]-minY)*scale+20).toFixed(2);
+        const draw=(shape,closed=false)=>{
+            if(!shape)return '';
+            if(shape.type==='Point'){const [x,y]=point(shape.coordinates).split(',');return 'M'+x+','+y+' a2.2,2.2 0 1,0 .1,0';}
+            if(shape.type==='MultiPoint')return shape.coordinates.map(p=>draw({type:'Point',coordinates:p})).join(' ');
+            if(shape.type==='LineString'||shape.type==='MultiLineString'){
+                const lines=shape.type==='LineString'?[shape.coordinates]:shape.coordinates;
+                return lines.map(line=>line.map((p,i)=>(i?'L':'M')+point(p)).join(' ')).join(' ');
+            }
+            if(shape.type==='Polygon'||shape.type==='MultiPolygon'){
+                const polygons=shape.type==='Polygon'?[shape.coordinates]:shape.coordinates;
+                return polygons.flat().map(ring=>ring.map((p,i)=>(i?'L':'M')+point(p)).join(' ')+' Z').join(' ');
+            }
+            if(shape.type==='GeometryCollection')return shape.geometries.map(item=>draw(item,closed)).join(' ');
+            return '';
+        };
+        return items.map(f=>({id:f.id,d:draw(f.geometry),properties:f.properties||{}})).filter(item=>item.d);
+    }
+    if(typeof module!=='undefined')module.exports={paths,environmentPaths};
     if(typeof document==='undefined'||!$('workspace'))return;
     let state=null,comparison=null,busy=false,comparisonSerial=0;
     const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!=null)e.textContent=String(text);if(cls)e.className=cls;return e;};
@@ -51,6 +80,8 @@
             ['Visitas',catalogCounts.visits],
             ['Proyectos',catalogCounts.developments],
             ['Cobertura',catalogCounts.coverage_records],
+            ['Revisiones',catalogCounts.catalog_review_status],
+            ['Eventos de revisión',catalogCounts.catalog_review_events],
         ].map(([label,value])=>label+': '+(value||0)).join(' · ');
         const selected=$('version').value,withdraw=$('withdraw-source').value;
         $('list').replaceChildren();$('version').replaceChildren(node('option','Selecciona una versión'));$('version').firstChild.value='';
@@ -194,21 +225,157 @@
         const params=new URLSearchParams({view:'catalog'});
         for(const [key,value] of new FormData($('catalog-query')))if(String(value).trim())params.set(key,String(value).trim());
         const data=await api(null,'?'+params);const wrap=$('catalog-results');wrap.replaceChildren();
-        $('catalog-status').textContent=data.items.length+' registros candidatos. No se activó ningún dato.';
+        $('catalog-status').textContent=data.items.length+' registros consultados. La revisión no activa ni publica el dato.';
         if(!data.items.length){wrap.append(node('p','No hay registros de catálogo para estos filtros.'));return;}
         const table=node('table'),head=node('tr');
-        ['Tipo','Etiqueta','Detalle','Entidad','Fecha','Valor','Estado','Fuente','Acción'].forEach(label=>head.append(node('th',label)));table.append(head);
-        const labels={listing:'Anuncio',identifier:'Identificador',observation:'Observación',transaction:'Operación',activity:'Actividad',coverage:'Cobertura'};
+        ['Tipo','Etiqueta','Detalle','Entidad','Fecha','Valor','Revisión','Estado de fuente','Fuente','Acción'].forEach(label=>head.append(node('th',label)));table.append(head);
+        const labels={listing:'Anuncio',identifier:'Identificador',observation:'Observación',transaction:'Operación',activity:'Actividad',coverage:'Cobertura',environment:'Capa de entorno'};
+        const reviewLabels={candidate:'Candidato',observed:'Observado',verified:'Verificado',rejected:'Rechazado',superseded:'Sustituido',expired:'Vencido'};
         for(const item of data.items){
             const row=node('tr');[labels[item.kind]||item.kind,item.label||'',item.detail||'',item.entity_id||'Sin vínculo',item.observed_at||'Sin fecha',
-                item.amount==null?'':String(item.amount)+(item.currency?' '+item.currency:''),item.status||'',item.source_version||'']
+                item.amount==null?'':String(item.amount)+(item.currency?' '+item.currency:''),
+                reviewLabels[item.review_status]||item.review_status||'Candidato',item.status||'Sin estado operativo',item.source_version||'']
                 .forEach(value=>row.append(node('td',value)));
             const cell=node('td');
             if(item.entity_id){const button=node('button','Abrir ficha','secondary');button.type='button';button.addEventListener('click',()=>mutate(()=>showEntity(item.entity_id)));cell.append(button);}
+            if(item.target_table){
+                const controls=node('div',null,'sources-review-controls');
+                const select=node('select');select.setAttribute('aria-label','Nuevo estado de revisión');
+                for(const [value,label] of Object.entries(reviewLabels)){
+                    if(value===item.review_status)continue;
+                    const option=node('option',label);option.value=value;select.append(option);
+                }
+                const reason=node('input');reason.placeholder='Motivo y evidencia revisada';reason.maxLength=1000;
+                const save=node('button','Guardar revisión','secondary');save.type='button';
+                save.addEventListener('click',()=>mutate(async()=>{
+                    if(!reason.value.trim())throw Error('Indica el motivo de la revisión.');
+                    await api({action:'catalog_review',target_table:item.target_table,target_id:item.id,
+                        status:select.value,reason:reason.value.trim(),revision:state.revision,
+                        evidence:{method:'revision_administrativa',note:reason.value.trim()}});
+                    invalidate();await refresh();await queryCatalog();
+                    status('Revisión registrada. El original y el estado de la fuente permanecen sin cambios.');
+                }));
+                const history=node('button','Historial','secondary');history.type='button';
+                history.addEventListener('click',()=>mutate(()=>showReviewHistory(item)));
+                controls.append(select,reason,save,history);cell.append(controls);
+            }
             row.append(cell);table.append(row);
         }
         wrap.append(table);
         if(data.items.length===1000)wrap.append(node('p','Se muestran hasta 1.000 registros; afina los filtros.'));
+    }
+    async function showReviewHistory(item){
+        const data=await api(null,'?'+new URLSearchParams({view:'review_history',
+            target_table:item.target_table,target_id:item.id}));
+        let box=document.getElementById('sources-review-history');
+        if(!box){box=node('div');box.id='sources-review-history';$('catalog-results').after(box);}
+        box.replaceChildren(node('h3','Historial de revisión · '+(item.label||item.id)));
+        if(!data.items.length){box.append(node('p','Este registro todavía no tiene decisiones de revisión.'));return;}
+        for(const entry of data.items)box.append(node('p',
+            limaDateTime(entry.reviewed_at)+' · '+(entry.previous_status||'Sin estado')+' → '+entry.status+
+            ' · '+entry.actor+' · '+entry.reason+' · revisión '+entry.revision));
+    }
+    function limaDateTime(value){
+        if(!value)return 'Sin fecha';
+        const date=new Date(value);
+        return Number.isNaN(date.getTime())?value:new Intl.DateTimeFormat('es-PE',
+            {dateStyle:'short',timeStyle:'medium',timeZone:'America/Lima'}).format(date);
+    }
+    async function queryEnvironment(){
+        const params=new URLSearchParams({view:'environment'});
+        for(const [key,value] of new FormData($('environment-query')))if(String(value).trim())params.set(key,String(value).trim());
+        const data=await api(null,'?'+params);const wrap=$('environment-results');wrap.replaceChildren();
+        $('environment-status').textContent=data.features.length+' geometrías · '+
+            (data.truncated?'resultado truncado':'resultado completo')+
+            (data.invalid_geometries?' · '+data.invalid_geometries+' geometrías inválidas omitidas':'');
+        if(!data.features.length){wrap.append(node('p','No hay capas de entorno para estos filtros.'));}
+        else{
+            const table=node('table'),head=node('tr');
+            ['Tipo','Nombre','Estado','Revisado','Fuente'].forEach(label=>head.append(node('th',label)));table.append(head);
+            const reviewLabels={candidate:'Candidato',observed:'Observado',verified:'Verificado',rejected:'Rechazado'};
+            for(const feature of data.features){
+                const properties=feature.properties||{},row=node('tr');
+                [properties.kind||'',properties.name||'Sin nombre',reviewLabels[properties.review_status]||properties.review_status||'',
+                    limaDateTime(properties.reviewed_at),properties.source_version||''].forEach(value=>row.append(node('td',value)));
+                table.append(row);
+            }
+            wrap.append(table);
+        }
+        const map=$('environment-map');map.replaceChildren();
+        const shapes=environmentPaths(data);
+        if(shapes.length){
+            const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');
+            svg.setAttribute('viewBox','0 0 940 300');svg.setAttribute('role','img');
+            svg.setAttribute('aria-label','Capas de entorno candidatas');
+            const colors={candidate:'#93a9b8',observed:'#e2b85f',verified:'#6ce2bd',rejected:'#ff8d7d'};
+            for(const shape of shapes){
+                const path=document.createElementNS(ns,'path');path.setAttribute('d',shape.d);
+                path.setAttribute('stroke',colors[shape.properties.review_status]||colors.candidate);
+                path.setAttribute('fill',(colors[shape.properties.review_status]||colors.candidate)+'22');
+                path.setAttribute('stroke-width','1.2');
+                const title=document.createElementNS(ns,'title');
+                title.textContent=(shape.properties.kind||'Capa')+' · '+(shape.properties.name||shape.id);
+                path.append(title);svg.append(path);
+            }
+            map.append(node('p','Geometrías candidatas en WGS84 · vista esquemática sin mapa base'),svg);
+        }
+    }
+    function importModeChanged(){
+        const mode=$('import-mode').value;
+        $('import-metadata').hidden=mode==='bundle';
+        $('import-kind-field').hidden=mode!=='environment';
+        $('import-section-field').hidden=mode!=='records';
+    }
+    function importMetadata(){
+        const sourceId=$('import-source-id').value.trim(),name=$('import-name').value.trim();
+        const ubigeo=$('import-ubigeo').value.trim(),label=$('import-label').value.trim();
+        if(!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$/.test(sourceId))throw Error('Indica un identificador de fuente válido.');
+        if(!name)throw Error('Indica el nombre de la fuente.');
+        if(!/^[0-9]{6}$/.test(ubigeo))throw Error('El UBIGEO debe tener seis dígitos.');
+        if(!label)throw Error('Indica una etiqueta de versión.');
+        const nonce=globalThis.crypto?.randomUUID?.()||String(Date.now());
+        return {
+            source:{id:sourceId,name,ubigeo},
+            version:{id:sourceId+':'+nonce,label,source_date:$('import-date').value||null,
+                crs:null,georeferencing:{status:'pending',
+                    method:'Importación administrativa; correspondencia y posición pendientes de revisión.'}},
+        };
+    }
+    function buildImportPayload(text,mode){
+        if(mode==='bundle'){
+            const value=JSON.parse(text);
+            if(!value||typeof value!=='object'||Array.isArray(value))throw Error('El paquete debe ser un objeto JSON.');
+            return value;
+        }
+        const value=importMetadata();
+        if(mode==='environment'){
+            const collection=JSON.parse(text);
+            const features=collection?.type==='FeatureCollection'?collection.features:
+                collection?.type==='Feature'?[collection]:null;
+            if(!Array.isArray(features)||features.length>30000)throw Error('El GeoJSON debe tener hasta 30.000 elementos.');
+            const kind=$('import-kind').value.trim();
+            if(!kind)throw Error('Indica el tipo de capa de entorno.');
+            value.version.crs='EPSG:4326';
+            value.features=[];
+            value.environment_features=features.map((feature,index)=>{
+                if(!feature?.geometry||!['Point','MultiPoint','LineString','MultiLineString','Polygon','MultiPolygon','GeometryCollection'].includes(feature.geometry.type))
+                    throw Error('El elemento '+(index+1)+' no tiene una geometría GeoJSON admitida.');
+                const properties=feature.properties&&typeof feature.properties==='object'?feature.properties:{};
+                return {id:String(feature.id??properties.id??('environment-'+index)),kind,
+                    name:String(properties.name||properties.nombre||properties.NOMBRE||properties.NAME||'Sin nombre'),
+                    geometry:feature.geometry,evidence:{properties,imported_at:new Date().toISOString()}};
+            });
+            return value;
+        }
+        const section=$('import-section').value;
+        const rows=text.split(/\r?\n/).filter(line=>line.trim()).map((line,index)=>{
+            try{const row=JSON.parse(line);if(!row||typeof row!=='object'||Array.isArray(row))throw Error();return row;}
+            catch(error){throw Error('La línea '+(index+1)+' no es un objeto JSON válido.');}
+        });
+        if(!rows.length||rows.length>30000)throw Error('El NDJSON debe contener entre 1 y 30.000 registros.');
+        value.features=[];
+        value[section]=rows;
+        return value;
     }
     $('change-form').addEventListener('input',invalidate);$('change-form').addEventListener('change',()=>{invalidate();modeChanged();});
     $('add-mapping').addEventListener('click',()=>{const row=node('div',null,'sources-mapping-row'),from=node('input'),to=node('input'),remove=node('button','Quitar','secondary');from.placeholder='Origen: lote:identificador-en-la-fuente';to.placeholder='Identificador del inmueble maestro';from.setAttribute('aria-label','Tipo e identificador de origen');to.setAttribute('aria-label','Identificador maestro');remove.type='button';remove.addEventListener('click',()=>{row.remove();invalidate();});row.append(from,to,remove);$('mapping').append(row);invalidate();});
@@ -222,6 +389,8 @@
     }));
     $('query').addEventListener('submit',event=>{event.preventDefault();mutate(queryRecords);});
     $('catalog-query').addEventListener('submit',event=>{event.preventDefault();mutate(queryCatalog);});
+    $('environment-query').addEventListener('submit',event=>{event.preventDefault();mutate(queryEnvironment);});
+    $('import-mode').addEventListener('change',importModeChanged);
     $('scope-form').addEventListener('submit',event=>{event.preventDefault();mutate(async()=>{
         const district=$('workspace-ubigeo').value.trim();$('ubigeo').value=district;$('query').elements.ubigeo.value=district;
         $('pdf-form').elements.ubigeo.value=district;invalidate();await refresh();await queryRecords();status('Distrito abierto. Se conservan los datos de los otros ámbitos.');
@@ -234,9 +403,15 @@
         const value=await response.json();if(!response.ok)throw Error(value.error||'No se pudo registrar el PDF.');invalidate();await refresh();
         $('inspection').replaceChildren(node('p',value.inspection.pages+' páginas · '+value.inspection.layers.length+' capas originales'),node('p',value.inspection.layers.join(' · ')));status(value.notice);
     });});
-    $('import').addEventListener('click',()=>mutate(async()=>{
-        const file=$('normalized').files[0];if(!file||file.size>12*1024*1024)throw Error('Selecciona un aporte JSON de hasta 12 MB.');
-        const payload=JSON.parse(await file.text());await api({action:'stage',revision:state.revision,payload});invalidate();await refresh();status('Versión candidata registrada. Sus datos todavía no están activos.');
-    }));
+    $('import-form').addEventListener('submit',event=>{event.preventDefault();mutate(async()=>{
+        const file=$('normalized').files[0];if(!file||file.size>12*1024*1024)throw Error('Selecciona una tanda de hasta 12 MB.');
+        const payload=buildImportPayload(await file.text(),$('import-mode').value);
+        const result=await api({action:'stage',revision:state.revision,payload});
+        invalidate();await refresh();
+        $('catalog-counts').textContent='Tanda registrada · '+(result.catalog_records||0)+
+            ' registros de catálogo · revisión '+result.revision;
+        status('Versión candidata registrada. Sus datos todavía no están activos ni publicados.');
+    });});
+    importModeChanged();
     mutate(async()=>{await refresh();await queryRecords();status('Borrador listo. La extracción de COFOPRI permanece detenida.');});
 })();

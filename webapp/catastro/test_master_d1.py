@@ -71,6 +71,22 @@ class DurableMasterTests(TestCase):
         self.assertEqual(restored.revision,2)
         self.assertEqual(restored.records(),self.store.records())
         self.assertEqual(restored.collection('040103','lote'),self.store.collection('040103','lote'))
+    def test_catalog_review_and_environment_layer_survive_restart(self):
+        payload=candidate()
+        payload['identifiers']=[{'target_ref':'lote:a','scheme':'referencia_catastral',
+                                 'value':'REF-D1','status':'candidate'}]
+        payload['environment_features']=[{'kind':'parque','name':'Parque D1',
+            'geometry':{'type':'Point','coordinates':[-71.55,-16.36]}}]
+        self.store.stage(payload,0,'admin')
+        item=self.store.db.execute('SELECT id FROM external_identifiers').fetchone()
+        self.store.review_catalog('external_identifiers',item[0],'observed','Cotejo D1',
+                                  {'document':'ficha'},1,'admin')
+        restored=D1Store(self.gateway)
+        self.assertEqual(restored.db.execute(
+            'SELECT status FROM catalog_review_status').fetchone()[0],'observed')
+        self.assertEqual(len(restored.db.execute('SELECT * FROM catalog_review_events').fetchall()),1)
+        self.assertEqual(restored.db.execute(
+            'SELECT name FROM environment_features').fetchone()[0],'Parque D1')
     def test_another_process_invalidates_preview(self):
         self.store.stage(candidate(),0,'admin');other=D1Store(self.gateway)
         self.store.stage(candidate(version='v2'),1,'admin')

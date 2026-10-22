@@ -19,6 +19,8 @@ después mediante comparación y selección por campo o ámbito.
 8. Conservar historial y permitir reversión.
 
 La falta de una validación global de Arequipa no bloquea las etapas anteriores.
+La revisión tampoco requiere completar el distrito: se decide por registro y
+queda auditada.
 
 ## Secciones del JSON
 
@@ -195,3 +197,56 @@ ya normalizado**.
 
 El origen y el manifiesto nunca se sobrescriben. Una corrección crea una nueva
 versión.
+
+## Importación progresiva
+
+La pantalla **Fuentes y versiones** ofrece tres entradas:
+
+- **Paquete JSON completo** para el contrato descrito en este documento.
+- **GeoJSON** para una capa de entorno. Admite `Point`, `MultiPoint`,
+  `LineString`, `MultiLineString`, `Polygon`, `MultiPolygon` y
+  `GeometryCollection` en WGS84. Cada elemento necesita geometría y se registra
+  como candidato; el tipo de capa se indica en la pantalla.
+- **NDJSON** para una sola sección. Cada línea debe ser un objeto JSON. El
+  máximo es 30.000 filas y 12 MB por tanda.
+
+Cada carga crea una fuente y versión inmutables. Los datos de una tanda no se
+activan ni se publican automáticamente.
+
+## Revisión auditable
+
+La migración `006_catalog_review.sql` agrega dos estructuras:
+
+- `catalog_review_status` conserva el estado vigente de revisión de cada fila.
+- `catalog_review_events` conserva cada decisión como evento append-only, con
+  autor, motivo, evidencia y revisión del maestro.
+
+Estados admitidos: `candidate`, `observed`, `verified`, `rejected`,
+`superseded` y `expired`. `verified` exige evidencia no vacía. Cambiar el estado
+de revisión no modifica la versión de origen ni activa contribuciones del
+maestro. La API administrativa recibe:
+
+```json
+{
+  "action": "catalog_review",
+  "revision": 12,
+  "target_table": "external_identifiers",
+  "target_id": "identificador-generado",
+  "status": "verified",
+  "reason": "Cotejado con la ficha y su original",
+  "evidence": {
+    "document": "ficha",
+    "page": 1
+  }
+}
+```
+
+Las capas se consultan en
+`/catastro/api/maestro/composicion/?view=environment&ubigeo=040103`.
+Admite `kind`, `review_status`, `bbox=oeste,sur,este,norte` y `limit` de hasta
+5.000. Por defecto excluye geometrías rechazadas. El resultado es una
+`FeatureCollection` privada para usuarios administradores.
+
+El historial de una publicación puede llegar en una versión posterior sin
+repetir el anuncio: `listing_observations` acepta `listing_id` del mismo lote o
+la pareja `portal` + `external_id`, que resuelve la publicación ya registrada.

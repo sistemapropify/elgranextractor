@@ -7,7 +7,8 @@ export const TABLES = {
   external_identifiers:['id'],listings:['id'],listing_observations:['id'],transactions:['id'],
   organizations:['id'],activities:['id'],visits:['id'],developments:['id'],
   development_lots:['id'],development_stages:['id'],environment_features:['id'],
-  coverage_records:['id'],current_attributes:['entity_id'],journal:['revision']
+  coverage_records:['id'],catalog_review_status:['target_table','target_id'],
+  catalog_review_events:['id'],current_attributes:['entity_id'],journal:['revision']
 };
 const TABLE_COLUMNS = {
   meta:['key','value'],
@@ -40,6 +41,8 @@ const TABLE_COLUMNS = {
   development_stages:['id','development_id','name','status','progress','observed_at','source_version','details_json'],
   environment_features:['id','kind','name','ubigeo','geometry_json','source_version','evidence_json'],
   coverage_records:['id','ubigeo','dataset','source_version','complete','record_count','observed_at','details_json'],
+  catalog_review_status:['target_table','target_id','status','revision','reviewed_at','actor','reason','evidence_json','source_version'],
+  catalog_review_events:['id','target_table','target_id','status','previous_status','revision','reviewed_at','actor','reason','evidence_json','source_version'],
   journal:['revision','operation','actor','created_at','reason','details_json','snapshot_json'],
 };
 const reply=(value,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});

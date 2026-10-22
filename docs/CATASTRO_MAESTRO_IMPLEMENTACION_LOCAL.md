@@ -93,3 +93,30 @@ maestro y del transporte D1, y la prueba del Worker, pasan.
 
 La aplicación Django con el nuevo contrato está preparada para el checkout
 local; falta publicarla sin interrumpir la extracción COFOPRI que esté activa.
+
+## Revisión, importación progresiva y capas de entorno (22/10/2026)
+
+Se añadió el tramo operativo que faltaba entre registrar candidatos y activar
+aportes:
+
+- Revisión por registro con estados `candidate`, `observed`, `verified`,
+  `rejected`, `superseded` y `expired`.
+- Estado vigente y eventos append-only con autor, motivo, evidencia y revisión.
+- Historial consultable por registro desde la interfaz administrativa.
+- Exclusión predeterminada de capas rechazadas y consulta GeoJSON privada por
+  UBIGEO, tipo, estado y extensión.
+- Importación desde el contrato completo, GeoJSON de entorno o NDJSON de una
+  sección, con un máximo de 30.000 filas y 12 MB por tanda.
+- Historial de anuncios entre versiones mediante `listing_id` o
+  `portal` + `external_id`.
+
+La migración D1 `006_catalog_review.sql` fue aplicada: la base quedó con 36
+tablas y 0.81 MB, sin filas sintéticas ni cambios a los registros existentes.
+El Worker privado quedó desplegado en la versión
+`a347baa9-2a30-4b98-9bec-04c323c0b968`; tanto la consulta directa como la ruta
+autenticada reconocen las dos tablas nuevas. La revisión no muta el `payload`
+original ni activa geometrías o atributos del maestro. Las 41 pruebas
+focalizadas cubren auditoría, permiso de evidencia para verificar, exclusión de
+capas rechazadas, consulta por bbox, persistencia tras reinicio y transporte
+D1. La aplicación también fue integrada en el checkout local que sirve
+`D:/PROMETEO`.

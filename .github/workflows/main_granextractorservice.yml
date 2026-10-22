@@ -159,6 +159,14 @@ jobs:
           node webapp/acm/test_cayma_master.cjs
           python -c 'import json,os; from pathlib import Path; Path("webapp/static/js/cayma-master-release.json").write_text(json.dumps({"revision":os.environ["GITHUB_SHA"]}))'
 
+      - name: Validate Catastro Master catalog review, vectors and D1 transport
+        run: |
+          source antenv/bin/activate
+          python webapp/manage.py test catastro.test_master_store catastro.test_master_d1 --settings=catastro.test_settings --noinput
+          node --check webapp/static/js/catastro-fuentes.js
+          node --check cloudflare/catastro-maestro/worker.mjs
+          node cloudflare/catastro-maestro/test-worker.mjs
+
       - name: Validate basic ACM photos and full property galleries
         run: |
           source antenv/bin/activate
@@ -423,6 +431,8 @@ jobs:
           js/catastro-maestro.js|webapp/static/js/catastro-maestro.js
           css/catastro-maestro.css|webapp/static/css/catastro-maestro.css
           js/catastro-master-data.js|webapp/static/js/catastro-master-data.js
+          js/catastro-fuentes.js|webapp/static/js/catastro-fuentes.js
+          css/catastro-fuentes.css|webapp/static/css/catastro-fuentes.css
           js/geollaqta-data.js|webapp/static/js/geollaqta-data.js
           js/geollaqta-district.js|webapp/static/js/geollaqta-district.js
           js/geollaqta-labels.js|webapp/static/js/geollaqta-labels.js

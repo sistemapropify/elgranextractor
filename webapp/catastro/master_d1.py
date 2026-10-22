@@ -23,6 +23,8 @@ TABLES = {'meta':('key',),'projects':('id',),'sources':('id',),'versions':('id',
           'activities':('id',),'visits':('id',),'developments':('id',),
           'development_lots':('id',),'development_stages':('id',),
           'environment_features':('id',),'coverage_records':('id',),
+          'catalog_review_status':('target_table','target_id'),
+          'catalog_review_events':('id',),
           'current_attributes':('entity_id',),'journal':('revision',)}
 
 
@@ -135,6 +137,8 @@ This is a correctness limit, never a silent subset of the master database.
             'development_stages':'source_version IN ('+district_versions+')',
             'environment_features':'ubigeo=? OR source_version IN ('+district_versions+')',
             'coverage_records':'ubigeo=? OR source_version IN ('+district_versions+')',
+            'catalog_review_status':'source_version IN ('+district_versions+')',
+            'catalog_review_events':'source_version IN ('+district_versions+')',
             'current_attributes':'entity_id IN ('+entities+')',
             'zones':'source_version IS NULL OR source_version IN ('+district_versions+')',
             'journal':"json_extract(details_json,'$.scope_ubigeo')=? OR (json_extract(details_json,'$.scope_ubigeo') IS NULL AND ("
@@ -244,6 +248,9 @@ This is a correctness limit, never a silent subset of the master database.
             if not isinstance(payload,dict) or not isinstance(payload.get('source'),dict):raise ValueError('Indica fuente y versión.')
             self._select_scope(payload['source'].get('ubigeo'))
             return self._mutate(super().stage,*args,**kwargs)
+    def review_catalog(self,*args,**kwargs):
+        with self.lock:
+            return self._mutate(super().review_catalog,*args,**kwargs)
     def apply(self,*args,**kwargs):
         with self.lock:
             plan=args[0] if args else kwargs.get('plan')
