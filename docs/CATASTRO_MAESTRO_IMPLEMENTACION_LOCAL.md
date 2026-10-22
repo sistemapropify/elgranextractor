@@ -140,3 +140,10 @@ Preparado localmente, sin desplegar Django, Worker ni aplicar la migración
 La interfaz usa caché `v=4`. Las 52 pruebas focalizadas de Python, la prueba de
 once etapas y el transporte D1 simulado pasan. La migración y publicación
 permanecen pendientes de autorización.
+
+Para poder probar la interfaz en el servidor local mientras D1 conserva el
+esquema anterior, títulos y notas usan un respaldo RAM en `plan_workspace.py`.
+Ese respaldo conserva fecha, autor y revisión durante la vida del proceso local,
+pero se pierde al reiniciar el servidor. La versión D1 de las mismas estructuras
+permanece preparada en `master_store.py`, `master_d1.py` y la migración `007` para
+cuando se autorice su activación.

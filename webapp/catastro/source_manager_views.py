@@ -10,7 +10,7 @@ from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.views.decorators.http import require_GET
 
 from .views import admin_required
-from . import source_manager, master_pipeline, cad_reader
+from . import source_manager, master_pipeline, cad_reader, plan_workspace
 from .master_store import Conflict
 from .storage import StorageError
 
@@ -141,11 +141,19 @@ def workspace(request):
                     'revision': store.revision}
             elif request.GET.get('view') == 'plan_annotations':
                 keys = [key for key in request.GET.get('keys', '').split(',') if key]
-                value = {'annotations': store.plan_annotations(keys),
-                         'revision': store.revision}
+                if hasattr(store, 'plan_annotations'):
+                    value = {'annotations': store.plan_annotations(keys),
+                             'revision': store.revision}
+                else:
+                    value = {'annotations': plan_workspace.annotations(keys),
+                             'revision': plan_workspace.revision()}
             elif request.GET.get('view') == 'plan_notes':
-                value = {'items': store.plan_notes_for(request.GET.get('document_key', '')),
-                         'revision': store.revision}
+                if hasattr(store, 'plan_notes_for'):
+                    value = {'items': store.plan_notes_for(request.GET.get('document_key', '')),
+                             'revision': store.revision}
+                else:
+                    value = {'items': plan_workspace.notes_for(request.GET.get('document_key', '')),
+                             'revision': plan_workspace.revision()}
             elif request.GET.get('view') == 'pdf_info':
                 from .master_georeference import page_info
                 body = source_manager.pdf(request.GET.get('id', ''))
@@ -181,15 +189,25 @@ def workspace(request):
                     payload.get('target_table'), payload.get('target_id'), payload.get('status'),
                     payload.get('reason'), payload.get('evidence'), payload.get('revision'), author)
             elif action == 'plan_title':
-                value = store.update_plan_title(
-                    payload.get('document_key'), payload.get('document_type'),
-                    payload.get('source_version'), payload.get('scope_ubigeo'),
-                    payload.get('title'), payload.get('revision'), author)
+                if hasattr(store, 'update_plan_title'):
+                    value = store.update_plan_title(
+                        payload.get('document_key'), payload.get('document_type'),
+                        payload.get('source_version'), payload.get('scope_ubigeo'),
+                        payload.get('title'), payload.get('revision'), author)
+                else:
+                    value = plan_workspace.update_title(
+                        payload.get('document_key'), payload.get('scope_ubigeo'),
+                        payload.get('title'), payload.get('revision'), author)
             elif action == 'plan_note':
-                value = store.add_plan_note(
-                    payload.get('document_key'), payload.get('document_type'),
-                    payload.get('source_version'), payload.get('scope_ubigeo'),
-                    payload.get('note'), payload.get('revision'), author)
+                if hasattr(store, 'add_plan_note'):
+                    value = store.add_plan_note(
+                        payload.get('document_key'), payload.get('document_type'),
+                        payload.get('source_version'), payload.get('scope_ubigeo'),
+                        payload.get('note'), payload.get('revision'), author)
+                else:
+                    value = plan_workspace.add_note(
+                        payload.get('document_key'), payload.get('scope_ubigeo'),
+                        payload.get('note'), payload.get('revision'), author)
             elif action == 'preview':
                 value = store.preview(payload.get('plan'))
             elif action == 'apply':

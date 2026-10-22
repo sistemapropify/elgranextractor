@@ -33,7 +33,7 @@
   if(typeof module!=='undefined')module.exports={PIPELINE,pipelineStage,dwgStage};
   if(typeof document==='undefined')return;
   const root=document.getElementById('plan-hub');if(!root)return;
-  const $=id=>document.getElementById(id),status=$('plan-status'),endpoint='/catastro/api/maestro/composicion/';let busy=false,revision=0;
+  const $=id=>document.getElementById(id),status=$('plan-status'),endpoint='/catastro/api/maestro/composicion/';let busy=false,revision=0,annotationsSupported=false;
   const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=String(text);if(cls)n.className=cls;return n;};
   function setStatus(text,error=false){status.textContent=text;status.dataset.error=String(error);}
   function csrf(){return $('dwg-form').elements.csrfmiddlewaretoken.value;}
@@ -125,8 +125,9 @@
   }
   async function togglePlanNotes(item,card,button){
     let box=card.querySelector('.plan-notes');
-    if(!box){box=el('section',null,'plan-notes');card.append(box);}
-    if(!box.hidden){box.hidden=true;button.textContent='Notas ('+item.noteCount+')';return;}
+    const existed=!!box;
+    if(!box){box=el('section',null,'plan-notes');box.hidden=true;card.append(box);}
+    if(existed&&!box.hidden){box.hidden=true;button.textContent='Notas ('+item.noteCount+')';return;}
     box.hidden=false;button.textContent='Ocultar notas';
     if(!box.dataset.loaded){box.replaceChildren(el('p','Consultando notas…'));try{await loadPlanNotes(item,box,button);}catch(error){box.replaceChildren(el('p',error.message,'plan-note-error'));}}
   }
@@ -138,13 +139,30 @@
     const dwg=cad.map(file=>{const stage=dwgStage(file),definition=stageDefinition(stage),documentKey='dwg:'+file.id,note=annotations[documentKey]||{};return {...file,kind:'DWG',documentKey,documentType:'dwg',scopeUbigeo:file.ubigeo||scope||'040103',name:note.display_title||((file.source_name||file.filename)+' · '+(file.sheet_code||'sin lámina')),stageCode:stage,stage:definition.label,detail:file.status==='completed'?`${file.drawable||0} entidades dibujables · ${file.layer_count??file.layers?.length??0} capas · unidades CAD ${file.units??'sin definir'}`:file.message||'Conversión en proceso',noteCount:Number(note.note_count||0)};});
     const all=[...decorated,...dwg];
     const workflowFiles=all.filter(x=>x.stageCode!=='backup');
-    const counts=Object.fromEntries(PIPELINE.map(stage=>[stage.id,stage.id==='intake'?workflowFiles.length:workflowFiles.filter(item=>item.stageCode===stage.id).length]));
-    counts.original=workflowFiles.filter(item=>item.kind==='DWG'||item.original_available).length;
+    const counts=Object.fromEntries(PIPELINE.map(stage=>[stage.id,workflowFiles.filter(item=>item.stageCode===stage.id).length]));
     const activeRows=portfolio.active_by_district||[];const active=activeRows.filter(x=>!scope||x.ubigeo===scope).reduce((n,x)=>n+Number(x.geometries||0),0);
     const projects=(portfolio.projects||[]).filter(x=>!scope||x.ubigeo===scope);
     $('plan-stats').replaceChildren(...[[all.length,'Planos registrados en el ámbito'],[decorated.length,'Versiones PDF'],[counts.inspection,'Archivos por inspeccionar'],[dwg.length,'DWG locales registrados'],[dwg.filter(x=>x.status==='completed').length,'DWG con capas leídas'],[active,'Geometrías activas del maestro'],[projects.reduce((n,p)=>n+Number(p.expected_sheets||0),0),'Láminas previstas en proyectos']].map(([value,label])=>{const card=el('article',null,'plan-stat');card.append(el('strong',value),el('span',label));return card;}));
     const stages=$('plan-stages'),backups=decorated.filter(x=>x.stageCode==='backup').length;
-    stages.replaceChildren(...PIPELINE.map((stage,index)=>{const value=counts[stage.id]||0,card=el('article',null,'plan-stage'+(value?' has-work':'')+(index<2?' base':'')),countLabel=stage.id==='intake'?`${value} archivos registrados`:stage.id==='original'?`${value} originales disponibles`:`${value} archivos aquí`;card.append(el('span',String(index+1).padStart(2,'0'),'plan-stage-index'),el('small',countLabel,'plan-stage-count'),el('b',stage.label),el('p',stage.description,'plan-stage-description'),el('p',stage.result,'plan-stage-output'),el('p',stage.gate,'plan-stage-gate'));return card;}));
+    stages.replaceChildren(...PIPELINE.map((stage,index)=>{
+      const stageFiles=workflowFiles.filter(item=>item.stageCode===stage.id),value=stageFiles.length;
+      const reached=workflowFiles.filter(item=>PIPELINE.findIndex(definition=>definition.id===item.stageCode)>=index).length;
+      const card=el('details',null,'plan-stage'+(value?' has-work':'')+(index<2?' base':''));
+      card.open=value>0;
+      const summary=el('summary'),heading=el('div',null,'plan-stage-heading');
+      heading.append(el('small',`${value} archivos aquí · ${reached} alcanzaron`, 'plan-stage-count'),el('b',stage.label));
+      summary.append(el('span',String(index+1).padStart(2,'0'),'plan-stage-index'),heading);card.append(summary);
+      const body=el('div',null,'plan-stage-body');
+      body.append(el('p',stage.description,'plan-stage-description'),el('p',stage.result,'plan-stage-output'),el('p',stage.gate,'plan-stage-gate'));
+      const list=el('div',null,'plan-stage-files'),listTitle=el('h4',value?`Archivos en ${stage.label}`:'No hay archivos en esta etapa');
+      list.append(listTitle);
+      if(stageFiles.length)for(const item of stageFiles){
+        const row=el('div',null,'plan-stage-file');
+        row.append(el('b',item.kind+' · '+(item.name||item.filename)),el('small',item.detail||''));
+        list.append(row);
+      }else list.append(el('p','Los archivos que ya superaron esta etapa aparecen en su etapa actual.','plan-stage-empty'));
+      body.append(list);card.append(body);return card;
+    }));
     if(backups)stages.append(el('p',`${backups} respaldo${backups===1?'':'s'} conservado${backups===1?'':'s'} fuera de la ruta. No se presentan como aportes activos ni avanzan por estas etapas.`,'plan-stage-backup'));
     const districtMap=new Map();const district=key=>{if(!districtMap.has(key))districtMap.set(key,{ubigeo:key,pdf:0,pending:0,review:0,verified:0,applied:0,dwg:0,active:0});return districtMap.get(key);};
     for(const f of decorated){const d=district(f.ubigeo||'Sin UBIGEO');d.pdf++;if(f.stageCode==='inspection'||f.stageCode==='extraction')d.pending++;if(f.stageCode==='semantic')d.review++;if(f.georeferencing?.status==='verified')d.verified++;if(f.stageCode==='activation')d.applied++;}
@@ -162,8 +180,8 @@
       const actions=el('div',null,'plan-item-actions');
       if(item.kind==='PDF'){const manage=el('a','Administrar fuente');manage.href='/catastro/maestro/fuentes/';actions.append(manage);if(item.original_available){const pdf=el('a','Abrir PDF');pdf.href='/catastro/api/maestro/pdf/'+encodeURIComponent(item.version_id)+'/original/';pdf.target='_blank';pdf.rel='noopener';actions.append(pdf);}if(item.vector_review){const filename=Object.keys(item.vector_artifacts||{}).find(x=>x.endsWith('.geojson'));if(filename){const link=el('a','Descargar GeoJSON');link.href='/catastro/api/maestro/pdf/'+encodeURIComponent(item.version_id)+'/vectores/'+encodeURIComponent(filename);link.download=filename;actions.append(link);}}else if(item.original_available&&item.stageCode==='inspection'){const button=el('button','Vectorizar PDF');button.type='button';button.addEventListener('click',async()=>{button.disabled=true;setStatus('Extrayendo trazos y texto del PDF…');try{const csrf=$('dwg-form').elements.csrfmiddlewaretoken.value;const response=await fetch('/catastro/api/maestro/pdf/'+encodeURIComponent(item.version_id)+'/vectorizar/',{method:'POST',credentials:'same-origin',headers:{'X-CSRFToken':csrf,Accept:'application/json'}});const value=await response.json();if(!response.ok)throw Error(value.error||'Falló la extracción vectorial.');setStatus(value.notice);await refresh(scope);}catch(error){setStatus(error.message,true);button.disabled=false;}});actions.append(button);}const calibrate=el('a','Calibrar posición');calibrate.href='/catastro/maestro/fuentes/#calibration-workspace';actions.append(calibrate);const homologate=el('a','Comparar / homologar');homologate.href='/catastro/maestro/fuentes/#sources-change-form';actions.append(homologate);}
       else{const link=el('a',item.status==='completed'?'Abrir visor CAD':'Ver estado');link.href=item.status==='completed'?'/catastro/visor-planos/?plano='+encodeURIComponent(item.id):'/catastro/api/planos/'+encodeURIComponent(item.id)+'/';link.target=item.status==='completed'?'_blank':'_self';actions.append(link);}
-      const titleButton=el('button','Editar título','secondary');titleButton.type='button';titleButton.addEventListener('click',()=>editPlanTitle(item));actions.prepend(titleButton);
-      const notesButton=el('button','Notas ('+item.noteCount+')','secondary');notesButton.type='button';notesButton.addEventListener('click',()=>togglePlanNotes(item,card,notesButton));actions.append(notesButton);
+      if(annotationsSupported){const titleButton=el('button','Editar título','secondary');titleButton.type='button';titleButton.addEventListener('click',()=>editPlanTitle(item));actions.prepend(titleButton);
+        const notesButton=el('button','Notas ('+item.noteCount+')','secondary');notesButton.type='button';notesButton.addEventListener('click',()=>togglePlanNotes(item,card,notesButton));actions.append(notesButton);}
       card.append(actions);host.append(card);
     }
   }
@@ -186,7 +204,8 @@
       let annotations={};
       if(keys.length){
         const result=await masterApi(null,'?'+new URLSearchParams({view:'plan_annotations',keys:keys.join(',')}));
-        annotations=result.annotations||{};
+        annotationsSupported=Object.hasOwn(result,'annotations');
+        annotations=annotationsSupported?result.annotations||{}:{};
       }
       render(portfolio,cad.dwg,scope,annotations);
       setStatus((portfolio.truncated?'Catálogo limitado a 5000 versiones. ':'')+
