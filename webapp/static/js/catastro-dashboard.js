@@ -139,7 +139,7 @@
   });
   el('stop-collection').addEventListener('click',async()=>{if(!active || busy)return;busy=true;try{await api('jobs/' + active.id + '/stop/',{});message('Pausa solicitada. Terminarán las solicitudes en curso y el avance quedará guardado. Para continuar, vuelve a iniciar la descarga del mismo distrito.');}catch(error){message(error.message,true);}finally{busy=false;await refresh();}});
   el('district').addEventListener('change',refresh);
-  el('refresh-collection').addEventListener('click',()=>{migrationDistrict=null;refresh();loadMigration();});
+  el('refresh-collection').addEventListener('click',async()=>{migrationDistrict=null;await Promise.all([refresh(),loadMigration()]);});
   el('migrate-master').addEventListener('click',migrateToMaster);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeout(timer);else{refresh();if(migrationPollTimer){clearTimeout(migrationPollTimer);pollMigration();}}});
   refresh();loadMigration();
