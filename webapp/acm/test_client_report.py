@@ -150,9 +150,15 @@ class ClientReportTests(SimpleTestCase):
             for value in ('Zona de uso PDM', 'RDA-2', 'Densidad',
                           'Usos compatibles', 'Multifamiliar'):
                 self.assertIn(value, text)
-            before = 'Valoración y operaciones' if kind == 'html' else 'Resultados'
-            self.assertLess(text.index(before), text.index('Zona de uso PDM'))
-            self.assertLess(text.index('Zona de uso PDM'),
-                            text.index('Justificaci'))
+            self.assertIn('PROPIEDADES COMPARABLES' if kind == 'pdf'
+                          else 'Propiedades comparables', text)
+            self.assertLess(text.index('Justificaci'),
+                            text.index('Zona de uso PDM'))
+            if kind == 'html':
+                self.assertLess(text.index('Valor de salida al mercado'),
+                                text.index('Inmueble a valorar'))
+            else:
+                valuation = text.index('Valorizaci')
+                self.assertLess(valuation, text.index('Ubicaci', valuation))
         for text in (word, html):
             self.assertIn('Lote mínimo', text)

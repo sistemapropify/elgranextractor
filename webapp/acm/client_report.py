@@ -85,7 +85,11 @@ def prepare_report(params, records, result, excluded=(), generated_at=None, user
     primary = rows
     groups = []
     if primary:
-        groups.append(('REFERENCIAS EN VENTA' if reference_mode else 'COMPARABLES EN VENTA', primary))
+        groups.append((
+            'PROPIEDADES COMPARABLES · REFERENCIAS' if reference_mode
+            else 'PROPIEDADES COMPARABLES',
+            primary,
+        ))
     units = [(row, media._unit_price(row)) for row in primary or rows]
     units = [(row, unit) for row, unit in units if unit is not None]
     average = report_unit_price(params, result, mean(v for _, v in units) if units else None)

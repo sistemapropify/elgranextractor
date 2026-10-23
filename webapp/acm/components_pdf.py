@@ -341,6 +341,8 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
         'body': ParagraphStyle('client_body', fontName='Helvetica', fontSize=9, leading=12, textColor=dark),
         'small': ParagraphStyle('client_small', fontName='Helvetica', fontSize=7.3, leading=9.6, textColor=dark),
         'label': ParagraphStyle('client_label', fontName='Helvetica', fontSize=7, leading=9, textColor=muted),
+        'pdm': ParagraphStyle('client_pdm', fontName='Helvetica', fontSize=6.4, leading=7.7, textColor=dark),
+        'pdm_label': ParagraphStyle('client_pdm_label', fontName='Helvetica-Bold', fontSize=6.5, leading=7.8, textColor=dark),
         'bold': ParagraphStyle('client_bold', fontName='Helvetica-Bold', fontSize=10, leading=13, textColor=dark),
         'center': ParagraphStyle('client_center', fontName='Helvetica', fontSize=8, leading=11, textColor=muted, alignment=TA_CENTER),
     }
@@ -375,6 +377,17 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     detail=[para('Ubicación','label'),para(data['address']),Spacer(1,7),para('Tipo de propiedad','label'),para(params.get('property_type','Casa'),'bold')]
     hero=table([[detail,facts]],[240,279])
     story.append(hero)
+    result_blocks=[para('Valorización del inmueble','section')]
+    if data['values']:
+        values=[]
+        for label,key in RESULT_LABELS:
+            values.append([para(label,'label'),para(_money(data['values'][key]),'bold')])
+        values_table=table(values,[168,100],padding=5)
+        values_table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e6f5f5'))]))
+        result_blocks.append(table([[para(data['summary']),values_table]],[245,274]))
+    else:
+        result_blocks.append(para('No se obtuvo una estimación final porque faltaron comparables aptos.'))
+    story.extend(result_blocks)
     story.append(para('Ubicación de las propiedades','section'))
     map_content=[photo(data['map'],245,142,'Mapa no disponible'),para('P  Propiedad sujeto  ·  Números: propiedades seleccionadas','label')]
     if data['croquis']:map_content.append(para('Croquis referencial de distancias; no representa un mapa de calles.','label'))
@@ -402,17 +415,10 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
                 if i:cells.append('');widths.append(8)
                 cells.append(card);widths.append(cell_width)
             story.extend([table([cells],widths),Spacer(1,5)])
-    result_blocks=[para('Resultados','section')]
-    if data['values']:
-        values=[]
-        for label,key in RESULT_LABELS:
-            values.append([para(label,'label'),para(_money(data['values'][key]),'bold')])
-        values_table=table(values,[168,100],padding=5)
-        values_table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e6f5f5'))]))
-        result_blocks.append(table([[para(data['summary']),values_table]],[245,274]))
-    else:
-        result_blocks.append(para('No se obtuvo una estimación final porque faltaron comparables aptos.'))
-    story.extend(result_blocks)
+    if data['notes']:
+        story.append(para('Justificación u observaciones','section'))
+        for line in data['notes'].split('\n'):
+            story.append(para(line) if line else Spacer(1,6))
     pdm = data.get('pdm')
     if pdm:
         story.append(para('Zona de uso PDM','section'))
@@ -420,41 +426,44 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
             f"{pdm['codigo']} · {pdm['nombre']} · {pdm['categoria']} · "
             f"Uso analizado: {pdm['property_type']}", 'bold'))
         if pdm['rows']:
-            story.append(para('Parámetros normativos','label'))
             typologies = pdm['typologies'] or ['Parámetros']
-            label_width = 118
-            value_width = (width - label_width) / max(1, len(typologies))
-            pdm_rows = [[para('Parámetro', 'label'),
-                         *[para(value, 'label') for value in typologies]]]
+            compact = []
             for item in pdm['rows']:
-                values = list(item['values'])
-                values += ['Sin informar'] * (len(typologies) - len(values))
-                pdm_rows.append([para(item['label'], 'small'),
-                                 *[para(value, 'small') for value in values]])
+                text_value = ' · '.join(
+                    f"{typologies[index]}: {value}"
+                    for index, value in enumerate(item['values'])
+                    if index < len(typologies) and value not in (None, '')) or 'Sin informar'
+                compact.append((item['label'], text_value))
+            rows = []
+            for index in range(0, len(compact), 2):
+                pair = compact[index:index + 2]
+                cells = []
+                for label, value in pair:
+                    cells.extend([para(label, 'pdm_label'), para(value, 'pdm')])
+                while len(cells) < 4:
+                    cells.extend(['', ''])
+                rows.append(cells)
             pdm_table = Table(
-                pdm_rows,
-                colWidths=[label_width] + [value_width] * len(typologies),
+                rows,
+                colWidths=[78, 181.5, 78, 181.5],
                 repeatRows=1,
                 hAlign='LEFT',
             )
             pdm_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e6f5f5')),
-                ('GRID', (0, 0), (-1, -1), .35, colors.HexColor('#cfdfdf')),
+                ('GRID', (0, 0), (-1, -1), .3, colors.HexColor('#d7e2e2')),
+                ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f2f8f8')),
+                ('BACKGROUND', (2, 0), (2, -1), colors.HexColor('#f2f8f8')),
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 4),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-                ('TOPPADDING', (0, 0), (-1, -1), 3),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                ('TOPPADDING', (0, 0), (-1, -1), 2.2),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2.2),
             ]))
             story.append(pdm_table)
         if pdm['compatible_uses']:
-            story.append(para('Usos compatibles: ' + pdm['compatible_uses'], 'small'))
+            story.append(para('Usos compatibles: ' + pdm['compatible_uses'], 'label'))
         for note in pdm['notes']:
             story.append(para(note, 'label'))
-    if data['notes']:
-        story.append(para('Justificación u observaciones','section'))
-        for line in data['notes'].split('\n'):
-            story.append(para(line) if line else Spacer(1,6))
     def footer(canvas,doc):
         canvas.saveState();canvas.setFillColor(teal);canvas.rect(0,0,A4[0],9,fill=1,stroke=0)
         canvas.setFont('Helvetica',8);canvas.setFillColor(muted)

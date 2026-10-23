@@ -146,7 +146,8 @@ class ReferenceFallbackTests(SimpleTestCase):
                  report_ids=result['reference_display_ids'])
         with patch('acm.components_pdf._static_map', return_value=None):
             pdf = _pdf_text(build_acm_pdf(p, rows, result, fetch_images=False))
-        self.assertIn(b'REFERENCIAS EN VENTA', pdf)
+        self.assertIn(b'PROPIEDADES COMPARABLES', pdf)
+        self.assertIn(b'REFERENCIAS', pdf)
         self.assertIn(b'150,000', pdf)
         self.assertIn(b'Conservacion revisada.', pdf)
         with zipfile.ZipFile(io.BytesIO(build_acm_docx(p, rows, result, fetch_images=False))) as archive:

@@ -148,6 +148,14 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None, user
     facts=table(right,[1.2,1.28,1.38])
     for cell,(caption,value) in zip(facts.rows[0].cells,[('Área de terreno',_number(params.get('land'),2,' m²') if params.get('land') else 'No aplica'),('Área construida',_number(params.get('built'),2,' m²') if params.get('built') else 'No aplica'),('Antigüedad',age(params.get('age')))]):
         label(cell,caption,first=True);text(cell,value,bold=True,size=9)
+    doc.add_heading('Valorización del inmueble',level=1)
+    results=table(doc,[3.35,3.86]);left,right=results.rows[0].cells
+    summary=text(left,data['summary'],size=9,first=True)
+    summary.paragraph_format.right_indent=Pt(10)
+    if data['values']:
+        for i,(caption,key) in enumerate(RESULT_LABELS):
+            label(right,caption,first=i==0);text(right,_money(data['values'][key]),bold=True,size=11)
+    else:text(right,'No se obtuvo una estimación final porque faltaron comparables aptos.',first=True)
     doc.add_heading('Ubicación de las propiedades',level=1)
     location=table(doc,[3.62,3.59]);left,right=location.rows[0].cells
     image(left,data['map'],3.4,1.95,'Mapa no disponible',first=True)
@@ -170,32 +178,26 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None, user
                 label(cell,'Precio de alquiler mensual' if rental else 'Precio de venta')
                 text(cell,_money(row.get('price')),bold=True,size=8)
                 text(cell,_money(_unit_price(row))+' /m²'+(' al mes' if rental else ''),size=7)
-    doc.add_heading('Resultados',level=1)
-    results=table(doc,[3.35,3.86]);left,right=results.rows[0].cells
-    summary=text(left,data['summary'],size=9,first=True)
-    summary.paragraph_format.right_indent=Pt(10)
-    if data['values']:
-        for i,(caption,key) in enumerate(RESULT_LABELS):
-            label(right,caption,first=i==0);text(right,_money(data['values'][key]),bold=True,size=11)
-    else:text(right,'No se obtuvo una estimación final porque faltaron comparables aptos.',first=True)
+    if data['notes']:
+        doc.add_heading('Justificación u observaciones',level=1)
+        doc.add_paragraph(data['notes'])
     pdm=data.get('pdm')
     if pdm:
         doc.add_heading('Zona de uso PDM',level=1)
         text(doc,f"{pdm['codigo']} · {pdm['nombre']} · {pdm['categoria']} · Uso analizado: {pdm['property_type']}",bold=True,size=9)
         if pdm['rows']:
-            columns=1+len(pdm['typologies']);label_width=1.55;value_width=(width-label_width)/max(1,columns-1)
-            table_pdm=table(doc,[label_width]+[value_width]*(columns-1))
-            for cell,value in zip(table_pdm.rows[0].cells,['Parámetro']+pdm['typologies']):
-                label(cell,value,first=True)
+            typologies=pdm['typologies'] or ['Parámetros'];compact=[]
             for item in pdm['rows']:
-                cells=table_pdm.add_row().cells
-                text(cells[0],item['label'],bold=True,size=7)
-                for cell,value in zip(cells[1:],item['values']):text(cell,value,size=7)
+                value=' · '.join(f"{typologies[index]}: {value}" for index,value in enumerate(item['values']) if index<len(typologies) and value not in (None,'')) or 'Sin informar'
+                compact.append((item['label'],value))
+            table_pdm=table(doc,[1.15,2.59,1.15,2.59])
+            for index in range(0,len(compact),2):
+                pair=compact[index:index+2];cells=table_pdm.rows[0].cells if index==0 else table_pdm.add_row().cells
+                for item_index,(caption,value) in enumerate(pair):
+                    text(cells[item_index*2],caption,bold=True,size=6.5,first=True)
+                    text(cells[item_index*2+1],value,size=6.5,first=True)
         if pdm['compatible_uses']:text(doc,'Usos compatibles: '+pdm['compatible_uses'],size=7)
-        for note in pdm['notes']:text(doc,note,size=7,color='66757A')
-    if data['notes']:
-        doc.add_heading('Justificación u observaciones',level=1)
-        doc.add_paragraph(data['notes'])
+        for note in pdm['notes']:text(doc,note,size=6.5,color='66757A')
     footer=section.footer.paragraphs[0];footer.alignment=WD_ALIGN_PARAGRAPH.CENTER
     footer.add_run('www.propify.pe').font.size=Pt(8)
     # Keep the editable Word body free of portal URLs, internal codes and metadata.
