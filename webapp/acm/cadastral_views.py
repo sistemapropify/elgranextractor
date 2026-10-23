@@ -1,5 +1,6 @@
 """ACM facade for the shared master; enforce the active role on every request."""
 import io
+import json
 from django.http import JsonResponse, HttpResponse, Http404
 from django.views.decorators.http import require_GET
 from .access import required
@@ -59,6 +60,44 @@ def raster_image(request, overlay_id):
 
 @require_GET
 @required('cadastral_info')
+def master_medium(request, media_id):
+    """Serve a verified R2 original linked to a Catastro Maestro entity."""
+    try:
+        if not (source_manager.enabled() or source_manager.durable()):
+            raise ValueError('El archivo del maestro no está disponible.')
+        import hashlib
+        from catastro.master_d1 import Gateway
+        from catastro.storage import R2
+        rows = Gateway().read(
+            'SELECT id,kind,object_key,sha256,observed_at,source_version FROM media WHERE id=?',
+            [media_id])
+        if not rows:
+            raise ValueError('Archivo no disponible.')
+        item = rows[0]
+        key = item['object_key']
+        if not key.startswith('geollaqta/') or '..' in key.split('/'):
+            raise ValueError('Ruta de archivo no válida.')
+        body, _ = R2(timeout=15).get(key)
+        if item.get('sha256') and hashlib.sha256(body).hexdigest() != item['sha256']:
+            raise ValueError('El archivo no coincide con su huella registrada.')
+        mime = ('application/pdf' if body.startswith(b'%PDF-') else
+                'image/jpeg' if body.startswith(b'\xff\xd8\xff') else
+                'image/png' if body.startswith(b'\x89PNG\r\n\x1a\n') else None)
+        if not mime:
+            raise ValueError('Formato de archivo no disponible.')
+        response = HttpResponse(body, content_type=mime)
+        response['Content-Disposition'] = 'inline'
+        response['Cache-Control'] = 'private, max-age=3600'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+    except StorageError:
+        return JsonResponse({'error': 'El archivo del Catastro Maestro no está disponible.'}, status=503)
+    except (ValueError, KeyError):
+        raise Http404
+
+
+@require_GET
+@required('cadastral_info')
 def revisions(request):
     from catastro import master_layers
     try:
@@ -94,7 +133,20 @@ def lot(request, lot_id):
     try:
         master.validate_lot(lot_id)
         from cuadrantizacion.geollaqta import report_response
-        return report_response(lot_id, lot_id[:6], request.GET.get('record_id') or None, report_only=True)
+        record_id = request.GET.get('record_id') or None
+        legacy = report_response(lot_id, lot_id[:6], record_id, report_only=True)
+        try:
+            master_record = master.d1_lot_summary(lot_id, record_id)
+        except (StorageError, ValueError):
+            master_record = None
+        if master_record:
+            base = json.loads(legacy.content) if legacy.status_code == 200 else {}
+            value = master.merge_d1_summary(base, master_record)
+            response = JsonResponse(value, json_dumps_params={'ensure_ascii': False})
+            response['Cache-Control'] = 'private, no-store'
+            response['Vary'] = 'Cookie'
+            return response
+        return legacy
     except ValueError as error:
         return JsonResponse({'error': str(error)}, status=400)
 

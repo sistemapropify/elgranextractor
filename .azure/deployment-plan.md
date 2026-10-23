@@ -1,3 +1,28 @@
+# Yanahuara R2 to D1 master linkage - 2026-10-22
+
+Status: Validated
+Recipe: existing GitHub Actions App Service pipeline plus private Cloudflare D1 Worker.
+Authorization: the user requested that the existing Yanahuara data be linked to Catastro Maestro and exposed through ACM and the lateral Catastro menu.
+Base: origin/main 5740fed1.
+Targets: granextractorservice / rg-elgranextractor; Cloudflare D1 prometeo-catastro-maestro.
+Public: https://acm.propifai.com/catastro/
+
+## Scope
+Make the extraction path explicit in the Catastro dashboard: COFOPRI -> private R2 manifest and originals -> normalized lot -> Cloudflare D1 -> Catastro/ACM. Add a resumable migration control that processes pending R2 manifests in bounded batches.
+Show in Catastro Maestro the stable UUID alias, COFOPRI source code, normalized attributes, GIS source values, owners, media, identifiers and provenance. Let ACM consume the same D1 lot/unit ficha first and fall back to the verified report evidence when a field is absent.
+Keep raw PDFs and photographs in R2; D1 stores normalized lot/unit facts, relationships, evidence and R2 object references.
+
+## Validation Proof - 2026-10-22 America/Lima
+- Confirmed 5,240 archived Yanahuara manifests in R2 and initially 0 linked entities in D1.
+- Fixed Worker commits for `current_attributes`, added its regression test, and deployed the corrected private Worker.
+- Completed an audited pilot cleanup and imported one lot plus a 20-lot batch; D1 reported 21 linked lots and 5,219 pending.
+- Verified a real migrated ficha returned `land_area=5997.42`, `built_area=29`, floors, report ID, PDF and facade links from D1/R2.
+- Catastro suite: 82 tests passed. ACM suite: 55 tests passed.
+- JavaScript syntax and regressions passed for master entity UI, plan dashboard, ACM cadastre, Cayma linkage and Worker D1 transaction behavior.
+- R2 service audit: `AREA_TER` has no positive values in the current Yanahuara source layer; `AREA_CON>0` appears in 7 lots across `PLN-00000111782` and `PLN-00000112139`. The UI labels these values as source values without assuming a validated unit.
+
+---
+
 # ACM default location - 2026-10-22
 
 Status: Validated

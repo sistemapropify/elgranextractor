@@ -86,12 +86,13 @@ export async function handle(request,env){
     const columns={};
     for(const change of data.changes){
       if(!Object.hasOwn(TABLES,change.table)||columns[change.table])throw Error('Tabla no disponible o repetida');
-      const names=TABLE_COLUMNS[change.table];
+      let names=TABLE_COLUMNS[change.table];
       if(names){columns[change.table]=names;}
       else{
         const info=await env.DB.prepare('PRAGMA table_info('+identifier(change.table)+')').all();
         columns[change.table]=info.results.map(r=>r.name);
       }
+      names=columns[change.table];
       if(!Array.isArray(change.upserts)||!Array.isArray(change.deletes))throw Error('Filas no válidas');
       if(change.upserts.some(row=>!Array.isArray(row)||row.length!==names.length)||change.deletes.some(row=>!Array.isArray(row)||row.length!==TABLES[change.table].length))throw Error('Columnas no válidas');
       if(change.upserts.some(row=>new TextEncoder().encode(JSON.stringify(row)).length>1800000))return reply({error:'Una fila supera el límite D1. Divide la versión de origen.'},413);
@@ -122,9 +123,9 @@ export async function handle(request,env){
       // A duplicate operation can have won a concurrent retry.
       const saved=await env.DB.prepare('SELECT digest,result_json FROM master_operations WHERE id=?').bind(data.id).first();
       if(saved&&saved.digest===digest)return reply({result:JSON.parse(saved.result_json),replayed:true});
-      return reply({error:'No se pudo confirmar la transacción. Los cambios no se aplicaron.'},502);
+      return reply({error:'No se pudo confirmar la transacción. Los cambios no se aplicaron: '+String(error?.message||error)},502);
     }
     return reply({result:data.result});
-  }catch(error){return reply({error:'Solicitud no válida'},400);}
+  }catch(error){return reply({error:'Solicitud no válida: '+String(error?.message||error)},400);}
 }
 export default {fetch:handle};

@@ -57,7 +57,7 @@ const gis=()=>requests.filter(r=>r.url.startsWith('https://')).length;
  hold=false;gates.splice(0).forEach(resolve=>resolve());await Promise.all([first,second]);await flush();
  const layer=Data.instances[0];assert.equal(layer.features.length,1201);assert.equal(layer.map,map);assert.ok(layer.drawSizes.some(n=>n>0&&n<1201));assert.equal(get('cmp-cadastral').attributes['aria-busy'],'false');
  assert.equal(requests.filter(r=>r.options.body?.get('returnIdsOnly')).length,1);
- assert.equal(get('cmp-cadastral-code').textContent,'04010407001002');assert.match(get('cmp-cadastral-hint').textContent,/Cerro Colorado/);assert.equal(get('cmp-cadastral-land').textContent,'200');assert.equal(get('cmp-cadastral-built').textContent,'20.5');
+ assert.equal(get('cmp-cadastral-code').textContent,'04010407001002');assert.match(get('cmp-cadastral-hint').textContent,/Cerro Colorado/);assert.equal(get('cmp-cadastral-land').textContent,'200');assert.equal(get('cmp-cadastral-built').textContent,'21');
  assert.equal(get('cmp-cadastral-pdf').hidden,false);
  assert.match(get('cmp-cadastral-pdf').attributes.href,/04010407001002\/reporte\.pdf\?record_id=0401040700100200001$/);
  const beforeCollapse=gis();get('cmp-cadastral-toggle').events.click();

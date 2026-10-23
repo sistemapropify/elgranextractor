@@ -46,5 +46,15 @@ const planMeta={action:'commit',id:crypto.randomUUID(),revision:4,result:{revisi
 assert.equal((await handle(request(planMeta),env)).status,200);
 assert.equal(sql.prepare('SELECT display_title FROM plan_workspace').get().display_title,'Plano principal');
 assert.equal(sql.prepare('SELECT note FROM plan_notes').get().note,'Revisar numeración');
+const currentColumns=sql.prepare('PRAGMA table_info(current_attributes)').all().map(row=>row.name);
+const currentRow=Object.fromEntries(currentColumns.map(name=>[name,null]));
+Object.assign(currentRow,{entity_id:'entity-1',country_code:'PE',ubigeo:'040103',land_area:120});
+const entityCommit={action:'commit',id:crypto.randomUUID(),revision:5,result:{revision:6},changes:[
+  {table:'meta',upserts:[['revision','6']],deletes:[]},
+  {table:'entities',upserts:[['entity-1','lote','PE','040103','2026-10-22T13:02:00Z']],deletes:[]},
+  {table:'current_attributes',upserts:[currentColumns.map(name=>currentRow[name])],deletes:[]},
+  {table:'journal',upserts:[[6,'apply','admin','2026-10-22T13:02:00Z','Activar lote','{}','{}']],deletes:[]}]};
+assert.equal((await handle(request(entityCommit),env)).status,200);
+assert.equal(sql.prepare('SELECT land_area FROM current_attributes').get().land_area,120);
 assert.equal((await handle(request({...payload,id:crypto.randomUUID(),changes:[{table:'master_operations',upserts:[],deletes:[]}]}),env)).status,400);
 console.log('Private D1 transport: authentication, restricted reads, atomic rollback, CAS, retries and primary-key deletion passed.');

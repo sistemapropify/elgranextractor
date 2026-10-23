@@ -9,6 +9,7 @@
         let provider=null,providerPromise=null,result=null,lot=null,target=null,serial=0,controller=null,areaController=null,timer=null,drawnKey=null,drawnCount=0,drawnBlockCount=0,highlighted=null,detailsId=null,allowed=true,areaLoading=false,areaEpoch=0,detailLoading=false,photoLookup=null;
         let sourceVersions=null,revisionTimer=null,checkingRevision=false;
         const versions=value=>JSON.stringify(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)));
+        const metric=value=>{if(value==null||value==='')return 'Sin dato';const number=Number(value);return Number.isFinite(number)?new Intl.NumberFormat('es-PE',{maximumFractionDigits:0}).format(number):String(value);};
         function scheduleRevisionCheck(){
             if(!revisionTimer&&allowed&&target&&!document.hidden)revisionTimer=setTimeout(checkRevision,15000);
         }
@@ -40,13 +41,13 @@
             const link=$('pdf');if(!link)return;
             link.hidden=true;link.removeAttribute('href');
             if(!window.ACMPermissions?.cadastral_pdf||!value?.selected_record_id||value.document_status==='unavailable')return;
-            link.setAttribute('href','/acm/catastro/lotes/'+encodeURIComponent(value.lot_id)+'/reporte.pdf?record_id='+encodeURIComponent(value.selected_record_id));
+            link.setAttribute('href',value.report_pdf_url||('/acm/catastro/lotes/'+encodeURIComponent(value.lot_id)+'/reporte.pdf?record_id='+encodeURIComponent(value.selected_record_id)));
             link.hidden=false;
         }
         function status(text,error=false){$('status').textContent=text;$('status').hidden=!text;$('status').dataset.error=String(error);}
         function clearFields(){
             if(photoLookup)clearTimeout(photoLookup.timer);photoLookup=null;
-            ['code','address','year','floors','units'].forEach(k=>$(k).textContent=k==='code'?'Sin lote seleccionado':'Sin dato');
+            ['code','master-id','address','year','floors','units','land-gis','built-gis','perimeter'].forEach(k=>$(k).textContent=k==='code'?'Sin lote seleccionado':k==='master-id'?'Sin vínculo':'Sin dato');
             if($('source'))$('source').textContent='Sin dato';
             if($('adjust'))$('adjust').hidden=true;
             ['land','built',...sides].forEach(k=>$(k).textContent='Sin dato');
@@ -95,7 +96,7 @@
             $('code').textContent=p.ID_LOTE;$('address').textContent=p.COD_SECT+' / '+p.COD_MZNA+' / '+String(p.COD_LOTE??'').padStart(3,'0');
             const year=Number(p.ANIO_CAT);$('year').textContent=Number.isInteger(year)&&year>=1900&&year<=2100?String(year):'Sin dato';
             $('hint').textContent=(p.DISTRICT_NAME||result.district)+' · lote '+p.COD_LOTE;
-            if(detailsId!==p.ID_LOTE){detailsId=p.ID_LOTE;['land','built','floors','units',...sides].forEach(k=>$(k).textContent='Cargando…');photo(null,serial);details(serial);}
+            if(detailsId!==p.ID_LOTE){detailsId=p.ID_LOTE;['land','built','floors','units','land-gis','built-gis','perimeter',...sides].forEach(k=>$(k).textContent='Cargando…');photo(null,serial);details(serial);}
         }
         function progress(value){
             result=value;draw();select();
@@ -128,17 +129,27 @@
         function metrics(value,stamp){
             pdfLink(value);
             const data=value.metrics||{};
-            $('land').textContent=data.land_area??'Sin dato';$('built').textContent=data.built_area??'Sin dato';
-            $('floors').textContent=data.floors??'Sin dato';$('units').textContent=data.units??'Sin dato';
-            sides.forEach(k=>$(k).textContent=data.boundaries?.[k]??'Sin dato');
+            const gis=value.gis_metrics||{},master=value.master||{};
+            if($('source')&&value.source_label)$('source').textContent=value.source_label;
+            if($('master-id')){
+                const uuid=String(master.entity_id||'').replaceAll('-','');
+                if(uuid){$('master-id').textContent='LOTE-CM-'+uuid.slice(0,12).toUpperCase();$('master-id').title=master.entity_id;}
+                else $('master-id').textContent='Sin vínculo';
+            }
+            $('land').textContent=data.land_area==null&&gis.land_area!=null?'Sin dato documental':metric(data.land_area);
+            $('built').textContent=data.built_area==null&&gis.built_area!=null?'Sin dato documental':metric(data.built_area);
+            $('floors').textContent=metric(data.floors??gis.floors);$('units').textContent=metric(data.units??gis.units);
+            $('land-gis').textContent=metric(gis.land_area);$('built-gis').textContent=metric(gis.built_area);
+            $('perimeter').textContent=metric(data.perimeter);
+            sides.forEach(k=>$(k).textContent=metric(data.boundaries?.[k]));
             $('report').replaceChildren();
             (value.reports||[]).forEach(r=>{const o=document.createElement('option');o.value=r.record_id;o.textContent='Reporte '+(r.form_number||r.record_id);$('report').append(o);});
             $('report').value=value.selected_record_id||'';$('report-label').hidden=(value.reports||[]).length<2;
             photo(value.facade_url,stamp);
             if(value.document_status==='unavailable'){
-                ['land','built','floors','units',...sides].forEach(k=>$(k).textContent='Consulta no disponible');
+                ['land','built','floors','units','land-gis','built-gis','perimeter',...sides].forEach(k=>$(k).textContent='Consulta no disponible');
                 status('No se pudo consultar el documento. Vuelve a intentarlo.',true);$('retry').hidden=false;
-            }else status('');
+            }else status(value.source_label?'Vinculado al Catastro Maestro · datos normalizados con procedencia.':'');
         }
         async function details(stamp,record=''){
             if(!lot||lot.properties.REFERENCE_ONLY)return;
@@ -151,7 +162,7 @@
                 if(value.lot_id!==id)throw Error('La información recibida no corresponde al lote del pin.');
                 if(value.document_status!=='unavailable')cache.set(key,{data:value,until:Date.now()+60000});if(cache.size>30)cache.delete(cache.keys().next().value);
                 metrics(value,stamp);
-            } catch(error){if(stamp===serial&&lot?.properties.ID_LOTE===id){['land','built','floors','units',...sides].forEach(k=>$(k).textContent='Consulta no disponible');status(error.name==='AbortError'?'La consulta tardó demasiado. Vuelve a consultar.':error.message||'No se pudieron consultar los datos catastrales.',true);$('retry').hidden=false;}}
+            } catch(error){if(stamp===serial&&lot?.properties.ID_LOTE===id){['land','built','floors','units','land-gis','built-gis','perimeter',...sides].forEach(k=>$(k).textContent='Consulta no disponible');status(error.name==='AbortError'?'La consulta tardó demasiado. Vuelve a consultar.':error.message||'No se pudieron consultar los datos catastrales.',true);$('retry').hidden=false;}}
             finally {if(stamp===serial){detailLoading=false;card.setAttribute('aria-busy',String(!!result&&!result.complete));}}
         }
         function finish(){

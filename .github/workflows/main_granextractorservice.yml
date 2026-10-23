@@ -162,13 +162,14 @@ jobs:
       - name: Validate Catastro Master catalog review, vectors and D1 transport
         run: |
           source antenv/bin/activate
-          python webapp/manage.py test catastro.test_master_store catastro.test_master_d1 catastro.test_master_model catastro.test_raster_overlays --settings=catastro.test_settings --noinput
+          python webapp/manage.py test catastro.test_master_store catastro.test_master_d1 catastro.test_master_model catastro.test_raster_overlays catastro.test_geollaqta_bulk catastro.test_migration_views --settings=catastro.test_settings --noinput
           node --check webapp/static/js/catastro-fuentes.js
           node --check webapp/static/js/catastro-master-model.js
           node --check webapp/static/js/catastro-raster-layers.js
           node --check webapp/static/js/catastro-raster-map.js
           node webapp/catastro/test_planos_dashboard.cjs
           node webapp/catastro/test_master_overlay.cjs
+          node webapp/catastro/test_master_entity_ui.cjs
           node --check cloudflare/catastro-maestro/worker.mjs
           node cloudflare/catastro-maestro/test-worker.mjs
 
@@ -441,6 +442,7 @@ jobs:
           acm/js/street-facade.js|webapp/acm/static/acm/js/street-facade.js
           js/street-facade-view.js|webapp/static/js/street-facade-view.js
           js/catastro-dashboard.js|webapp/static/js/catastro-dashboard.js
+          css/catastro-dashboard.css|webapp/static/css/catastro-dashboard.css
           css/geollaqta-map.css|webapp/static/css/geollaqta-map.css
           acm/js/components-presentation.js|webapp/acm/static/acm/js/components-presentation.js
           acm/js/comparison-valuation.js|webapp/acm/static/acm/js/comparison-valuation.js

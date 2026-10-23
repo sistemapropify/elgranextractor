@@ -24,6 +24,136 @@ def validate_lot(lot_id):
     return lot_id
 
 
+def d1_lot_summary(lot_id, record_id=None):
+    """Return the linked Catastro Maestro record when D1 is the configured store."""
+    from . import source_manager
+    if not source_manager.durable():
+        return None
+    from .master_d1 import Gateway
+    gateway = Gateway()
+    rows = gateway.read(
+        '''SELECT e.id AS entity_id,e.ubigeo,i.version_id,v.source_id,v.label AS version_label,
+                  a.sector,a.block,a.lot,a.gis_land_area,a.gis_built_area,
+                  a.floors AS lot_floors,a.units AS lot_units,a.address
+           FROM identities i
+           JOIN versions v ON v.id=i.version_id
+           JOIN entities e ON e.id=i.entity_id
+           LEFT JOIN current_attributes a ON a.entity_id=e.id
+           WHERE i.layer='lote' AND i.source_feature_id=?
+             AND v.source_id LIKE 'geollaqta-%'
+           ORDER BY v.created_at DESC LIMIT 1''', [lot_id])
+    if not rows:
+        return None
+    row = rows[0]
+    entity_id = row['entity_id']
+    unit_rows = gateway.read(
+        '''SELECT DISTINCT i.entity_id AS entity_id,i.source_feature_id,i.layer
+           FROM relationships r JOIN identities i ON i.entity_id=r.entity_id
+           WHERE r.related_entity_id=?
+             AND r.kind IN ('unidad_en_lote','documento_de_lote')
+             AND i.layer IN ('unidad','registro_documental')
+           ORDER BY source_feature_id''', [entity_id])
+    choices = [str(item['source_feature_id']) for item in unit_rows]
+    if record_id and record_id not in choices:
+        raise ValueError('El reporte no pertenece al lote vinculado.')
+    selected = record_id or (choices[0] if choices else None)
+    unit = next((item for item in unit_rows
+                 if str(item['source_feature_id']) == selected), None)
+    unit_attributes = gateway.read(
+        '''SELECT * FROM current_attributes WHERE entity_id=?''',
+        [unit['entity_id']]) if unit else []
+    unit_row = unit_attributes[0] if unit_attributes else {}
+    media_entities = [entity_id, *[item['entity_id'] for item in unit_rows]]
+    media = gateway.read(
+        '''SELECT id,kind,object_key,sha256,observed_at,source_version,details_json
+           FROM media WHERE entity_id IN (SELECT value FROM json_each(?))
+           ORDER BY kind,id''', [json.dumps(list(dict.fromkeys(media_entities)))])
+    facade = next((item for item in media
+                   if 'facade' in str(item.get('kind', '')).lower()), None)
+    def media_record(item):
+        try:
+            return json.loads(item.get('details_json') or '{}').get('source_record_id')
+        except (TypeError, ValueError):
+            return None
+    pdf_candidates = [item for item in media
+                      if str(item.get('kind', '')).lower().endswith('pdf')
+                      or 'report' in str(item.get('kind', '')).lower()]
+    pdf = next((item for item in pdf_candidates
+                if media_record(item) == selected), pdf_candidates[0] if pdf_candidates else None)
+    metric = lambda value: None if value is None else str(value)
+    values = {
+        'land_area': metric(unit_row.get('land_area')),
+        'built_area': metric(unit_row.get('built_area')),
+        'floors': metric(unit_row.get('floors') if unit_row.get('floors') is not None
+                         else row.get('lot_floors')),
+        'units': metric(unit_row.get('units') if unit_row.get('units') is not None
+                        else row.get('lot_units')),
+        'perimeter': metric(unit_row.get('perimeter')),
+        'boundaries': {
+            'frente': metric(unit_row.get('front')), 'derecha': metric(unit_row.get('right')),
+            'izquierda': metric(unit_row.get('left')), 'fondo': metric(unit_row.get('back')),
+        },
+    }
+    return {
+        'lot_id': lot_id,
+        'metrics': values,
+        'gis_metrics': {
+            'land_area': metric(row.get('gis_land_area')),
+            'built_area': metric(row.get('gis_built_area')),
+            'floors': metric(row.get('floors')),
+            'units': metric(row.get('units')),
+        },
+        'verified': any(value not in (None, '') for value in values.values()
+                        if not isinstance(value, dict)),
+        'facade_url': '/acm/catastro/medios/' + facade['id'] + '/' if facade else None,
+        'reports': [{'record_id': value, 'form_number': ''} for value in choices],
+        'selected_record_id': selected,
+        'report_pdf_url': ('/acm/catastro/medios/' + pdf['id'] + '/'
+                           if pdf else None),
+        'document_status': 'verified' if values['built_area'] or values['land_area'] else 'available',
+        'source_label': 'Catastro Maestro · D1',
+        'master': {
+            'entity_id': entity_id,
+            'source_version_id': row.get('version_id'),
+            'source_id': row.get('source_id'),
+            'source_feature_id': lot_id,
+            'selected_entity_id': unit.get('entity_id') if unit else entity_id,
+            'location': {'sector': row.get('sector'), 'block': row.get('block'),
+                         'lot': row.get('lot'), 'address': row.get('address')},
+        },
+    }
+
+
+def merge_d1_summary(base, master_record):
+    """Prefer normalized master values while retaining verified source evidence."""
+    if not master_record:
+        return base
+    result = {**(base or {}), **master_record}
+    base_metrics = (base or {}).get('metrics') or {}
+    metrics = dict(master_record.get('metrics') or {})
+    for key, value in metrics.items():
+        if isinstance(value, dict):
+            merged = dict(base_metrics.get(key) or {})
+            merged.update({side: item for side, item in value.items() if item not in (None, '')})
+            metrics[key] = merged
+        elif value in (None, ''):
+            metrics[key] = base_metrics.get(key)
+    result['metrics'] = metrics
+    reports = {}
+    for item in [*((base or {}).get('reports') or []), *(master_record.get('reports') or [])]:
+        previous = reports.get(item['record_id'], {})
+        reports[item['record_id']] = {
+            **previous, **item,
+            'form_number': item.get('form_number') or previous.get('form_number'),
+        }
+    result['reports'] = list(reports.values())
+    result['selected_record_id'] = (master_record.get('selected_record_id') or
+                                    (base or {}).get('selected_record_id'))
+    result['facade_url'] = master_record.get('facade_url') or (base or {}).get('facade_url')
+    result['verified'] = bool((base or {}).get('verified') or master_record.get('verified'))
+    return result
+
+
 def configuration():
     from .master_layers import catalogue
     references = [{**source, 'geometry_url': '/acm/catastro/fuentes/' + source['id'] + '/radio/'}

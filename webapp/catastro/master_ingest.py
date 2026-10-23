@@ -7,7 +7,7 @@ import uuid
 from . import master_contract as contract
 
 
-def prepare(manifest):
+def prepare(manifest, source_verified=False):
     from .registry import normalize
     rows = normalize(manifest)
     lot = manifest['lot_id']
@@ -19,8 +19,13 @@ def prepare(manifest):
                'ubigeo': manifest['district_ubigeo'], 'role': 'candidate'},
               'version': {'id': source_id + '-' + digest[:24], 'label': digest,
                           'source_date': None, 'crs': 'EPSG:4326',
-                          'georeferencing': {'status': 'pending',
-                              'method': 'Servicio COFOPRI solicitado con outSR=4326; requiere revisión de correspondencia.'},
+                          'georeferencing': ({'status': 'verified',
+                              'method': 'Geometría entregada por COFOPRI en EPSG:4326.',
+                              'evidence': {'service': 'Catastro_PCDPI/MapServer',
+                                           'out_sr': 4326,
+                                           'source_feature_id': lot}}
+                            if source_verified else {'status': 'pending',
+                              'method': 'Servicio COFOPRI solicitado con outSR=4326; requiere revisión de correspondencia.'}),
                           'original': {'name': 'datos.json', 'canonical_sha256': digest,
                                        'archive_status':'awaiting_verified_snapshot'}},
               'features': [], 'people': [], 'relationships': [], 'media': [],

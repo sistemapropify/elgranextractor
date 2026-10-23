@@ -87,9 +87,10 @@ def _draft_metadata_locked(source_id, district, store):
     if not points:
         raise ValueError('El borrador todavía no tiene geometrías activas en este distrito.')
     bounds = [min(p[0] for p in points),min(p[1] for p in points),max(p[0] for p in points),max(p[1] for p in points)]
-    return {'id':source_id,'name':'Maestro · borrador local','ubigeo':district,'districts':[district],
-            'active':True,'default_visible':True,'contributes':True,'reference_only':True,
-            'role':'draft','status':'local_draft','transport':'master','crs':'EPSG:4326',
+    district_name=(geo.DISTRICTS.get(district) or {}).get('name',district)
+    return {'id':source_id,'name':'Catastro Maestro · '+district_name,'ubigeo':district,'districts':[district],
+            'active':True,'default_visible':True,'contributes':True,'reference_only':False,
+            'role':'draft','status':'active_master','transport':'master','crs':'EPSG:4326',
             'bbox':bounds,'original_bbox':bounds,'revision':store.revision,
             'placement':{'revision':store.revision,'east_m':0.,'north_m':0.,'locked':True},
             'layers':{key:{'count':len(data['features']),'kind':'polygon'} for key,data in collections.items()}}

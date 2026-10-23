@@ -686,9 +686,16 @@ class MasterStore:
             evidence={r['field']:{'version_id':r['version_id'],'evidence':json.loads(r['evidence_json'])}
                 for r in self.db.execute('''SELECT s.field,c.version_id,c.evidence_json FROM selections s
                     JOIN contributions c ON c.id=s.contribution_id WHERE s.entity_id=?''',(entity_id,))}
+            identity_links=[dict(r) for r in self.db.execute('''SELECT i.version_id,i.layer,i.source_feature_id,
+                v.source_id,v.label AS version_label,s.name AS source_name,
+                v.original_name,v.original_sha256
+                FROM identities i JOIN versions v ON v.id=i.version_id
+                LEFT JOIN sources s ON s.id=v.source_id
+                WHERE i.entity_id=? ORDER BY i.layer,v.created_at DESC''',(entity_id,))]
             from . import master_catalog
             return {'entity':dict(entity),'attributes':dict(attributes) if attributes else {},'owners':owners,
                     'media':media,'relationships':related,'provenance':evidence,
+                    'identity_links':identity_links,
                     'boundary_segments':[dict(r) for r in self.db.execute('SELECT * FROM boundary_segments WHERE entity_id=?',(entity_id,))],
                     'registral_acts':[dict(r) for r in self.db.execute('SELECT * FROM registral_acts WHERE entity_id=?',(entity_id,))],
                     'catalog': master_catalog.for_entity(self.db, entity_id)}

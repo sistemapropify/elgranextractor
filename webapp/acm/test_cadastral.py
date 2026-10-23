@@ -1,6 +1,7 @@
 import copy
 import hashlib
 import io
+import json
 from unittest.mock import patch
 from types import SimpleNamespace
 
@@ -110,6 +111,74 @@ class CadastralAccessTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'image/jpeg')
         self.assertEqual(response.content, b'\xff\xd8test')
+
+    @patch('catastro.source_manager.durable', return_value=True)
+    @patch('catastro.master_d1.Gateway')
+    def test_d1_master_record_exposes_gis_values_and_identity(self, gateway, durable):
+        entity_id = '11111111-2222-4333-8444-555555555555'
+        unit_id = '66666666-7777-4888-9999-aaaaaaaaaaaa'
+        def read(sql, params=()):
+            if 'FROM identities i' in sql and 'JOIN versions' in sql:
+                return [{'entity_id': entity_id, 'ubigeo': LOT[:6],
+                         'version_id': 'v1', 'source_id': 'geollaqta-040126',
+                         'version_label': 'Tanda', 'sector': '02', 'block': '001',
+                         'lot': '001', 'gis_land_area': 118.4,
+                         'gis_built_area': 15.7, 'lot_floors': 2, 'lot_units': 1,
+                         'address': 'Calle de prueba'}]
+            if 'FROM relationships r' in sql:
+                return [{'entity_id': unit_id, 'source_feature_id': RECORD,
+                         'layer': 'unidad'}]
+            if 'FROM current_attributes' in sql:
+                return [{'entity_id': unit_id, 'land_area': 120,
+                         'built_area': 14.33, 'floors': 2, 'units': 1,
+                         'front': 10, 'back': 9, 'left': 8, 'right': 7,
+                         'perimeter': 34}]
+            if 'FROM media' in sql:
+                return [{'id': 'facade-1', 'kind': 'facade_image'},
+                        {'id': 'report-1', 'kind': 'cadastral_report_pdf'}]
+            return []
+        gateway.return_value.read.side_effect = read
+        value = master.d1_lot_summary(LOT)
+        self.assertEqual(value['master']['entity_id'], entity_id)
+        self.assertEqual(value['master']['selected_entity_id'], unit_id)
+        self.assertEqual(value['metrics']['land_area'], '120')
+        self.assertEqual(value['metrics']['built_area'], '14.33')
+        self.assertEqual(value['metrics']['perimeter'], '34')
+        self.assertEqual(value['gis_metrics']['land_area'], '118.4')
+        self.assertEqual(value['reports'][0]['record_id'], RECORD)
+        self.assertEqual(value['facade_url'], '/acm/catastro/medios/facade-1/')
+
+    @patch('acm.cadastral_views.master.d1_lot_summary')
+    @patch('cuadrantizacion.geollaqta.report_response')
+    def test_acm_merges_d1_master_values_with_report_evidence(self, report, d1):
+        from django.http import JsonResponse
+        report.return_value = JsonResponse({
+            'lot_id': LOT, 'metrics': {'land_area': None, 'built_area': '20.5',
+                'floors': None, 'units': None,
+                'boundaries': {'frente': None, 'derecha': None,
+                               'izquierda': None, 'fondo': None}},
+            'reports': [{'record_id': RECORD, 'form_number': '3/5'}],
+            'selected_record_id': RECORD, 'document_status': 'verified',
+            'verified': True, 'facade_url': None,
+        })
+        d1.return_value = {
+            'lot_id': LOT, 'metrics': {'land_area': '99', 'built_area': None,
+                'floors': '2', 'units': '1',
+                'boundaries': {'frente': '10', 'derecha': None,
+                               'izquierda': None, 'fondo': None}},
+            'gis_metrics': {'land_area': '99', 'built_area': '21'},
+            'reports': [{'record_id': RECORD, 'form_number': ''}],
+            'selected_record_id': RECORD, 'document_status': 'verified',
+            'verified': True, 'source_label': 'Catastro Maestro · D1',
+            'master': {'entity_id': '11111111-2222-4333-8444-555555555555'},
+        }
+        response = cadastral_views.lot(self.request(), LOT)
+        value = json.loads(response.content)
+        self.assertEqual(value['metrics']['land_area'], '99')
+        self.assertEqual(value['metrics']['built_area'], '20.5')
+        self.assertEqual(value['gis_metrics']['built_area'], '21')
+        self.assertEqual(value['reports'][0]['form_number'], '3/5')
+        self.assertEqual(value['source_label'], 'Catastro Maestro · D1')
 
     def test_invalid_lot_is_rejected_before_storage_access(self):
         with patch('catastro.master.manifest') as read:

@@ -65,10 +65,15 @@ class Gateway:
                 if len(raw)>24*1024*1024:raise StorageError('Divide la consulta: la respuesta supera el límite seguro.')
                 return json.loads(raw)
             except HTTPError as error:
+                try:
+                    detail=json.loads(error.read(4096) or b'{}').get('error','')
+                except (ValueError, OSError, TypeError):
+                    detail=''
                 if error.code==409:raise Conflict('El maestro cambió. Actualiza y vuelve a comparar.') from None
                 if error.code==413:raise StorageError('Divide la versión o el ámbito del cambio: excede los límites de la base actual.') from None
                 if error.code not in (429,500,502,503,504) or attempt:
-                    raise StorageError('El Catastro Maestro respondió HTTP '+str(error.code)+'.') from None
+                    raise StorageError('El Catastro Maestro respondió HTTP '+str(error.code)+
+                                       (': '+str(detail) if detail else '')+'.') from None
             except (URLError,OSError,TimeoutError):
                 if attempt:raise StorageError('No se pudo confirmar el guardado en D1. Reintenta la misma operación.') from None
         raise StorageError('No se pudo contactar con D1.')

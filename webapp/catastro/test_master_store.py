@@ -364,6 +364,8 @@ class MasterVersionTests(SimpleTestCase):
         self.assertEqual(len(rows),1)
         detail=self.store.entity(rows[0]['entity_id'])
         self.assertEqual(len(detail['owners']),2)
+        self.assertEqual(detail['identity_links'][0]['source_feature_id'],'a')
+        self.assertEqual(detail['identity_links'][0]['layer'],'unidad')
         self.assertTrue(detail['media'][0]['url'].startswith('/catastro/api/maestro/medios/'))
         self.assertEqual(self.store.records({'owner_document_number':'00000003'}),[])
 

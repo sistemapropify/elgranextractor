@@ -401,11 +401,14 @@
       for(const file of (portfolio.files||[]).filter(recordFile))
         dataVersionCounts[file.ubigeo]=(dataVersionCounts[file.ubigeo]||0)+1;
       const selectedDataDistrict=document.querySelector('[name="data_ubigeo"]')?.value;
-      if($('geollaqta-indexed'))$('geollaqta-indexed').textContent=
-        Number(dataVersionCounts[selectedDataDistrict]||0).toLocaleString('es-PE');
-      if($('geollaqta-pending')){
-        const expected=Number(document.querySelector('.plan-geodata-summary .plan-stat strong')?.textContent.replace(/[^0-9]/g,'')||0);
-        $('geollaqta-pending').textContent=Math.max(0,expected-Number(dataVersionCounts[selectedDataDistrict]||0)).toLocaleString('es-PE');
+      if(selectedDataDistrict){
+        try{
+          const migrationResponse=await fetch('/catastro/api/maestro/migracion/?ubigeo='+encodeURIComponent(selectedDataDistrict),{credentials:'same-origin',cache:'no-store'});
+          const migration=await migrationResponse.json();
+          if(!migrationResponse.ok)throw Error(migration.error||'No se pudo consultar la vinculación al maestro.');
+          if($('geollaqta-indexed'))$('geollaqta-indexed').textContent=Number(migration.linked_lots||0).toLocaleString('es-PE');
+          if($('geollaqta-pending'))$('geollaqta-pending').textContent=Number(migration.pending_lots||0).toLocaleString('es-PE');
+        }catch(error){setStatus(error.message,true);}
       }
       let annotations={};
       if(keys.length){

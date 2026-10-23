@@ -18,6 +18,8 @@ urlpatterns = [
     path('catastro/raster/', cadastral_views.raster_catalog, name='cadastral_raster'),
     path('catastro/raster/<str:overlay_id>/imagen/', cadastral_views.raster_image,
          name='cadastral_raster_image'),
+    path('catastro/medios/<str:media_id>/', cadastral_views.master_medium,
+         name='cadastral_master_medium'),
     path('catastro/fuentes/<slug:source_id>/radio/', cadastral_views.reference_geometry, name='cadastral_reference'),
     path('catastro/lotes/<str:lot_id>/', cadastral_views.lot, name='cadastral_lot'),
     path('catastro/lotes/<str:lot_id>/fachada/', cadastral_views.facade, name='cadastral_facade'),

@@ -33,13 +33,19 @@
     const el=id=>document.getElementById('master-'+id);
     if(!el('workspace'))return;
     const fmt=n=>n.toLocaleString('es-PE');
-    let map,vectorLayer,catalog,district,controller,selected=null,selectedFeature=null;
+    let map,vectorLayer,catalog,district,controller,selected=null,selectedFeature=null,detailRequest=0;
     let cataloguePromise=null;
     const collections=new Map(),enabled=new Map(),pending=new Map();
     const dataFeatures=new Map();
     const layerOn={manzanas:true,lotes:true};
     const caymaRequested=()=>new URL(location.href).searchParams.get('cayma')==='1';
     const status=(text,error=false)=>{el('status').textContent=text;el('status').dataset.error=String(error);};
+    const isUuid=value=>/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(String(value||''));
+    const displayEntityId=(kind,id)=>isUuid(id)?((kind==='manzana'?'MANZANA-CM-':'LOTE-CM-')+String(id).replaceAll('-','').slice(0,12).toUpperCase()):null;
+    const valueText=value=>value==null||value===''?'—':typeof value==='boolean'?(value?'Sí':'No'):typeof value==='object'?JSON.stringify(value):String(value);
+    const attributeLabels={
+        country_code:'País',ubigeo:'UBIGEO',postal_code:'Código postal',department:'Departamento',province:'Provincia',district:'Distrito',zone:'Zona',sector:'Sector',urbanization:'Urbanización / habilitación',block:'Manzana',lot:'Lote',building:'Edificación',entrance:'Ingreso',floor:'Piso',unit:'Unidad',address:'Dirección',address_block:'Manzana de dirección',address_lot:'Lote de dirección',street_type:'Tipo de vía',street_name:'Nombre de vía',municipal_number:'Número municipal',condition:'Condición',registry_office:'Oficina registral',registry_entry_type:'Tipo de partida',registry_entry_number:'Partida registral',registry_folios:'Fojas',registry_seat:'Asiento',notary_name:'Notaría',notary_kardex:'Kárdex',deed_date:'Fecha de escritura',property_registration_date:'Inscripción del predio',construction_declaration:'Declaración de fábrica',construction_registration_seat:'Asiento de fábrica',construction_registration_date:'Inscripción de fábrica',cuc:'CUC',cadastral_reference:'Referencia catastral',cadastral_use:'Uso catastral',observed_use:'Uso observado',zoning:'Zonificación',use_category:'Categoría de uso',business_category:'Giro',business_subcategory:'Subgiro',ciiu_code:'CIIU',ciiu_version:'Versión CIIU',commercial_name:'Nombre comercial',land_area:'Área de terreno documental',built_area:'Área construida documental',geometric_land_area:'Área geométrica',gis_land_area:'Área SIG de terreno (valor de fuente)',gis_built_area:'Área SIG construida (valor de fuente)',front:'Frente',back:'Fondo',left:'Izquierda',right:'Derecha',perimeter:'Perímetro',bedrooms:'Dormitorios',bathrooms:'Baños',half_bathrooms:'Medios baños',parking_spaces:'Estacionamientos',floors:'Pisos',units:'Unidades',is_corner:'Esquina',is_through:'Pasaje',faces_park:'Frente a parque'
+    };
     function visible() {
         return [...collections.values()].filter(c=>c.district===district&&enabled.get(c.source.id)&&layerOn[c.key]);
     }
@@ -48,7 +54,7 @@
             const n=visible().filter(c=>c.key===key).reduce((sum,c)=>sum+c.records.length,0);
             el('count-'+key).textContent=fmt(n);
         }
-        el('map-note').textContent=!visible().length?'Sin capas visibles. El plano antiguo de Cayma se conserva como respaldo y puedes activarlo para comparar.':visible().some(c=>c.source.role==='draft')?'Borrador local del maestro · cada campo conserva su fuente y versión.':visible().some(c=>c.source.reference_only)
+        el('map-note').textContent=!visible().length?'Sin capas visibles. El plano antiguo de Cayma se conserva como respaldo y puedes activarlo para comparar.':visible().some(c=>c.source.role==='draft')?'Catastro Maestro · registros vinculados por UUID; cada campo conserva su fuente y versión.':visible().some(c=>c.source.reference_only)
             ?'Cayma · geometría recuperada del plano de 2006. Ubicación de referencia; numeración pendiente.'
             :'Geometrías publicadas por GeoLlaqta · COFOPRI';
     }
@@ -66,17 +72,65 @@
         const panel=el('detail');panel.replaceChildren();
         const h=document.createElement('h2');h.textContent=item.key==='lotes'?'Lote seleccionado':'Manzana seleccionada';panel.append(h);
         const p=item.feature.properties,dl=document.createElement('dl');
+        const entityKind=item.key==='manzanas'?'manzana':'lote';
         const values=[['Distrito',p.DISTRICT_NAME||catalog.districts.find(d=>d.ubigeo===district)?.name],
             ['Fuente',item.source.name],['Manzana',p.COD_MZNA||'Sin numeración en la fuente']];
         if(item.key==='lotes')values.push(['Lote',p.COD_LOTE||'Sin numeración en la fuente']);
         values.push(['Código catastral',p.ID_LOTE||p.ID_MZNA||'No disponible'],
-            ['Identificador interno',p.ELEMENT_ID||recordId(item.source,item.key,item.feature)]);
+            ['ID Maestro',isUuid(p.ELEMENT_ID)?p.ELEMENT_ID:recordId(item.source,item.key,item.feature)]);
+        if(displayEntityId(entityKind,p.ELEMENT_ID))values.push(['Alias de pantalla',displayEntityId(entityKind,p.ELEMENT_ID)]);
         if(p.BLOCK_REF)values.push(['Manzana vinculada (ID interno)',p.BLOCK_REF]);
-        if(item.source.role==='draft')values.push(['Estado','Borrador local; no publicado'],['Versión geométrica',p.GEOMETRY_VERSION_ID||'Sin dato']);
+        if(item.source.role==='draft')values.push(['Vinculación','Consultando identidades del maestro…'],['Versión geométrica',p.GEOMETRY_VERSION_ID||'Sin dato']);
         else if(item.source.reference_only)values.push(['Estado','Contorno recuperado; pendiente de contraste con otros mapas'],
             ['Fecha del plano','Agosto de 2006'],['Ubicación','PSAD56 / UTM 19S inferido; transformado a WGS84']);
         for(const [label,value] of values){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;dl.append(dt,dd);}
         panel.append(dl);
+        const details=document.createElement('div');details.className='master-entity-data';details.setAttribute('aria-live','polite');panel.append(details);
+        if(item.source.role==='draft'&&isUuid(p.ELEMENT_ID))loadEntityDetail(item,p.ELEMENT_ID,details);
+        else if(item.source.role!=='draft')details.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Esta fuente es de referencia. Para ver la ficha completa debe estar vinculada como Registro Maestro de Lote.'}));
+    }
+    function addEntitySection(host,title,content,className='') {
+        const section=document.createElement('section');section.className='master-entity-section '+className;
+        const heading=document.createElement('h3');heading.textContent=title;section.append(heading,content);host.append(section);
+        return section;
+    }
+    function addEntityValues(host,title,values,empty='Sin datos',className='') {
+        const rows=Object.entries(values||{}).filter(([,value])=>value!==null&&value!==undefined&&value!=='');
+        const box=document.createElement('dl');box.className='master-entity-grid';
+        if(!rows.length){const p=document.createElement('p');p.className='master-help';p.textContent=empty;return addEntitySection(host,title,p,className);}
+        rows.forEach(([key,value])=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=attributeLabels[key]||key.replaceAll('_',' ');dd.textContent=valueText(value);box.append(dt,dd);});
+        return addEntitySection(host,title,box,className);
+    }
+    async function loadEntityDetail(item,entityId,host) {
+        const request=++detailRequest;host.replaceChildren(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Cargando ficha maestra, titulares, documentos y procedencia…'}));
+        try{
+            const data=await json('/catastro/api/maestro/composicion/?'+new URLSearchParams({view:'entity',id:entityId}));
+            if(request!==detailRequest)return;host.replaceChildren();
+            const statusBox=document.createElement('p');statusBox.className='master-link-status';
+            statusBox.textContent='Vinculado al Catastro Maestro · '+(data.identity_links?.length||0)+' enlace(s) de identidad';
+            host.append(statusBox);
+            const links=data.identity_links||[];
+            if(links.length){
+                const linked=document.createElement('div');linked.className='master-identity-links';
+                for(const link of links){const row=document.createElement('div');row.append(Object.assign(document.createElement('code'),{textContent:link.source_feature_id}),Object.assign(document.createElement('span'),{textContent:(link.layer||'')+' · '+(link.source_name||link.source_id||'')+' · '+(link.version_label||link.version_id||'')}));linked.append(row);}
+                addEntitySection(host,'Identidad y procedencia',linked);
+            }
+            addEntityValues(host,'Ficha vigente del lote',data.attributes,'Este registro todavía no tiene campos normalizados.');
+            if((data.owners||[]).length){
+                const box=document.createElement('div');box.className='master-entity-list';
+                for(const owner of data.owners){const row=document.createElement('article');row.append(Object.assign(document.createElement('strong'),{textContent:owner.name||'Titular sin nombre'}),Object.assign(document.createElement('small'),{textContent:[owner.document_type,owner.document_number,owner.kind].filter(Boolean).join(' · ')}));box.append(row);}
+                addEntitySection(host,'Titulares y relaciones',box);
+            }
+            if((data.media||[]).length){
+                const box=document.createElement('div');box.className='master-entity-list';
+                for(const media of data.media){const row=document.createElement('article');const link=document.createElement('a');link.href=media.url;link.target='_blank';link.rel='noopener';link.textContent=media.kind||'Archivo';row.append(link,Object.assign(document.createElement('small'),{textContent:[media.observed_at,media.sha256&&('SHA-256 '+media.sha256.slice(0,12)+'…')].filter(Boolean).join(' · ')}));box.append(row);}
+                addEntitySection(host,'Documentos y fotografías',box);
+            }
+            const catalog=data.catalog||{};
+            if((catalog.identifiers||[]).length)addEntityValues(host,'Identificadores externos',Object.fromEntries(catalog.identifiers.map((row,index)=>[(row.scheme+' · '+(row.authority||'sin autoridad'))+(index?' #'+(index+1):''),row.value])),'Sin identificadores externos.');
+            if((catalog.addresses||[]).length){const box=document.createElement('div');box.className='master-entity-list';for(const address of catalog.addresses){const row=document.createElement('article');row.append(Object.assign(document.createElement('strong'),{textContent:address.full_address||'Dirección sin texto'}),Object.assign(document.createElement('small'),{textContent:[address.address_type,address.precision,address.status].filter(Boolean).join(' · ')}));box.append(row);}addEntitySection(host,'Direcciones',box);}
+            addEntityValues(host,'Cobertura del registro',{campos_con_valor:Object.values(data.attributes||{}).filter(value=>value!==null&&value!==undefined&&value!=='').length,relaciones:(data.relationships||[]).length,medios:(data.media||[]).length,evidencias:Object.keys(data.provenance||{}).length},'Sin métricas de cobertura.','master-entity-metrics');
+        }catch(error){if(request===detailRequest){host.replaceChildren(Object.assign(document.createElement('p'),{className:'master-help',textContent:error.message}));host.lastElementChild.dataset.error='true';}}
     }
     function selectFeature(item,feature) {
         if(selectedFeature&&selectedFeature!==feature)vectorLayer.revertStyle(selectedFeature);
@@ -189,15 +243,19 @@
     function sourcesPanel() {
         el('sources').replaceChildren();
         const sources=catalog.sources.filter(s=>s.active&&s.districts.includes(district));
+        const masterAvailable=sources.some(source=>source.role==='draft');
         if(!sources.length){const p=document.createElement('p');p.className='master-help';p.textContent='Todavía no hay fuentes incorporadas para este distrito.';el('sources').append(p);}
         for(const source of sources){
-            if(!enabled.has(source.id))enabled.set(source.id,source.default_visible!==false);
+            if(!enabled.has(source.id))enabled.set(source.id,source.id==='geollaqta'&&masterAvailable?false:source.default_visible!==false);
             const card=document.createElement('article'),label=document.createElement('label'),check=document.createElement('input'),name=document.createElement('span');
             card.className='master-source';label.className='master-check';check.type='checkbox';check.checked=enabled.get(source.id);name.textContent=source.name;label.append(check,name);card.append(label);
             check.addEventListener('change',()=>{enabled.set(source.id,check.checked);refresh(false);});
-            if(source.reference_only){
-                const badge=document.createElement('span');badge.className='master-badge';badge.textContent=source.role==='backup'?'Respaldo · fuera del aporte actual':source.role==='draft'?'Borrador local · sin publicar':'Referencia · pendiente de contraste';card.append(badge);
-                const p=document.createElement('p');p.className='master-help';p.textContent=source.role==='draft'?'Aportes seleccionados por campo y versión; se conservan los datos de origen.':fmt(source.layers.manzanas.count)+' contornos de manzana y '+fmt(source.layers.lotes.count)+' de lote recuperados. Sin numeración. Manzanas agrupadas por contigüidad. Ubicación aproximada; datum inferido.';card.append(p);
+            if(source.role==='draft'){
+                const badge=document.createElement('span');badge.className='master-badge';badge.textContent='Maestro · fuente de verdad';card.append(badge);
+                const p=document.createElement('p');p.className='master-help';p.textContent='Registros vinculados en D1: '+fmt(source.layers.lotes.count)+' lotes y '+fmt(source.layers.manzanas.count)+' manzanas. Cada campo conserva su fuente, versión y evidencia.';card.append(p);
+            }else if(source.reference_only){
+                const badge=document.createElement('span');badge.className='master-badge';badge.textContent=source.role==='backup'?'Respaldo · fuera del aporte actual':'Referencia · pendiente de contraste';card.append(badge);
+                const p=document.createElement('p');p.className='master-help';p.textContent=fmt(source.layers.manzanas.count)+' contornos de manzana y '+fmt(source.layers.lotes.count)+' de lote recuperados. Sin numeración. Manzanas agrupadas por contigüidad. Ubicación aproximada; datum inferido.';card.append(p);
             }
             el('sources').append(card);
         }

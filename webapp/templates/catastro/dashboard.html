@@ -1,7 +1,7 @@
 {% extends 'propifai_base.html' %}
 {% load static %}
 {% block title %}Catastro · Prometeo{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-dashboard.css' %}?v=4">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-dashboard.css' %}?v=5">{% endblock %}
 {% block content %}
 <main class="catastro" id="catastro-dashboard">
   <header class="catastro-heading"><div><p class="eyebrow">GEOLLAQTA · COFOPRI</p><h1>Catastro</h1><p>Reportes, fichas disponibles y fachadas, organizados por distrito y predio.</p></div><a class="btn btn-secondary catastro-button" href="/catastro/maestro/planos/">Planos y etapas</a><a class="btn btn-secondary catastro-button" href="/catastro/maestro/?ubigeo=040103">Catastro maestro</a><a class="btn btn-secondary catastro-button" href="/cuadrantizacion/mapa/?catastro=yanahuara">Abrir mapa</a></header>
@@ -11,6 +11,31 @@
     <article><span>Fotografías de fachada</span><strong id="metric-photos">—</strong></article>
     <article><span>Documentos pendientes</span><strong id="metric-missing">—</strong></article>
   </div>
+  <section class="catastro-card catastro-pipeline" aria-labelledby="master-pipeline-title">
+    <div class="catastro-section-heading">
+      <div><p class="eyebrow">RUTA DEL DATO</p><h2 id="master-pipeline-title">Del extractor COFOPRI al Catastro Maestro</h2></div>
+      <a class="catastro-button btn btn-secondary small" id="master-map-link" href="/catastro/maestro/?ubigeo=040126">Abrir mapa maestro</a>
+    </div>
+    <ol class="catastro-pipeline-steps">
+      <li><span>01</span><strong>Extracción COFOPRI</strong><small>Predio, geometría, fichas, reportes y fachadas.</small></li>
+      <li><span>02</span><strong>Archivo privado R2</strong><small><code>geollaqta/040126/&lt;lote&gt;/datos.json</code> y archivos originales.</small></li>
+      <li><span>03</span><strong>Normalización</strong><small>Registro Maestro de Lote con <code>entities.id</code> inmutable.</small></li>
+      <li><span>04</span><strong>Cloudflare D1</strong><small><code>identities</code>, <code>current_attributes</code>, titulares, medios y procedencia.</small></li>
+      <li><span>05</span><strong>Mapa y ficha</strong><small>El Catastro Maestro y el ACM consultan la misma identidad.</small></li>
+    </ol>
+    <div class="catastro-pipeline-summary" aria-live="polite">
+      <article><span>JSON disponibles en R2</span><strong id="master-source-lots">—</strong></article>
+      <article><span>Lotes vinculados en D1</span><strong id="master-linked-lots">—</strong></article>
+      <article><span>Pendientes de vincular</span><strong id="master-pending-lots">—</strong></article>
+    </div>
+    <progress id="master-migration-progress" value="0" max="1" aria-label="Progreso de vinculación al Catastro Maestro"></progress>
+    <div class="catastro-pipeline-actions">
+      <button class="catastro-button btn btn-success" id="migrate-master" type="button" disabled>Migrar pendientes al Catastro Maestro</button>
+      <a class="catastro-button btn btn-secondary" href="/catastro/maestro/planos/">Ver etapas y calidad</a>
+    </div>
+    <p id="master-migration-status" class="catastro-help" role="status">Consultando la vinculación de Yanahuara…</p>
+    <p class="catastro-help"><strong>Nomenclatura:</strong> el código COFOPRI identifica el registro de origen; el UUID identifica el inmueble en el maestro. En pantalla el UUID se muestra como <code>LOTE-CM-XXXXXXXXXXXX</code>, sin reemplazar el código oficial.</p>
+  </section>
   <div class="catastro-controls-layout">
     <section class="catastro-card"><h2>Descargar catastro</h2>
       <form id="collection-form">{% csrf_token %}
@@ -30,4 +55,4 @@
   <section class="catastro-card"><h2>Predios del archivo</h2><p class="catastro-help">Últimos 50 predios del distrito seleccionado. Abre un predio para revisar sus documentos y fotos.</p><div class="catastro-table-wrap"><table><thead><tr><th>Código del lote</th><th>Estado</th><th>Documentos</th><th>Fachadas</th><th>Pendientes</th><th>Archivo</th></tr></thead><tbody id="lots-list"><tr><td colspan="6">Consultando el archivo catastral…</td></tr></tbody></table></div></section>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=6" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=7" defer></script>{% endblock %}

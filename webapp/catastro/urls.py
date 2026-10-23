@@ -3,6 +3,7 @@ from . import views
 from . import worker_api
 from . import planos_views
 from . import master_views
+from . import migration_views
 from . import registry_views
 from . import source_manager_views
 
@@ -35,6 +36,8 @@ urlpatterns = [
     path('api/maestro/raster/<str:overlay_id>/imagen/', master_views.raster_image,
          name='master_raster_image'),
     path('api/maestro/catalogo/', master_views.catalogue, name='maestro_catalogue'),
+    path('api/maestro/migracion/', migration_views.status, name='master_migration_status'),
+    path('api/maestro/migracion/ejecutar/', migration_views.migrate, name='master_migration_run'),
     path('api/maestro/fuentes/<slug:source_id>/posicion/', master_views.placement, name='maestro_placement'),
     path('api/maestro/fuentes/<slug:source_id>/<slug:layer_key>/', master_views.layer, name='maestro_layer'),
     path('visor-planos/', planos_views.viewer, name='visor_planos'),
