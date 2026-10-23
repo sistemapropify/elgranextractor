@@ -55,6 +55,15 @@ class MigrationRunnerTests(SimpleTestCase):
         self.assertTrue(migration_runner._owns(gateway, '040126', 'owner'))
         self.assertFalse(migration_runner._owns(gateway, '040126', 'other'))
 
+    @patch('catastro.migration_runner._claim',
+           return_value=(True, {'id': 'bounded', 'batch_size': 5}))
+    @patch('catastro.migration_runner.Gateway')
+    @patch('catastro.migration_runner.threading.Thread')
+    def test_start_caps_an_unsafe_batch_before_claim(self, thread, gateway, claim):
+        result = migration_runner.start('040126', 'admin', 50)
+        self.assertTrue(result['started'])
+        self.assertEqual(claim.call_args.args[3], 5)
+
     @patch('catastro.management.commands.catastro_migration_worker.migration_runner._run')
     @patch('catastro.management.commands.catastro_migration_worker.migration_runner._claim',
            return_value=(True, {'id': 'recovered'}))
@@ -67,7 +76,7 @@ class MigrationRunnerTests(SimpleTestCase):
         self.assertTrue(Command._recover_once('040126'))
         claim.assert_called_once()
         run.assert_called_once_with(
-            '040126', 'azure-migration-watchdog', 20, 'recovered')
+            '040126', 'azure-migration-watchdog', 5, 'recovered')
 
     @patch('catastro.management.commands.catastro_migration_worker.migration_runner._run')
     @patch('catastro.management.commands.catastro_migration_worker.migration_runner._claim',
@@ -82,4 +91,4 @@ class MigrationRunnerTests(SimpleTestCase):
         self.assertTrue(Command._recover_once('040126'))
         claim.assert_called_once()
         run.assert_called_once_with(
-            '040126', 'azure-migration-watchdog', 20, 'recovered')
+            '040126', 'azure-migration-watchdog', 5, 'recovered')

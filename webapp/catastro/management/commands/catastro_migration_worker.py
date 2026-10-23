@@ -45,7 +45,10 @@ class Command(BaseCommand):
         )
         if not recoverable:
             return False
-        batch_size = int(current.get('batch_size') or 20)
+        batch_size = min(
+            int(current.get('batch_size') or migration_runner.SAFE_BATCH_SIZE),
+            migration_runner.SAFE_BATCH_SIZE,
+        )
         claimed, value = migration_runner._claim(
             gateway, ubigeo, 'azure-migration-watchdog', batch_size)
         if not claimed:

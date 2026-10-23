@@ -20,6 +20,7 @@ Split the plan inventory's D1 query into bounded source, version, contribution-c
 - Located the stalled Yanahuara lot `04012601011003`: its R2 manifest is 66.4 MB and was rejected by the former 20 MB transport cap. The new 128 MB bounded read normalized it to a 401,777-byte D1 payload without writing to production during validation.
 - Catastro migration tests passed: 13 tests covering bounded large-manifest reads, stale lease recovery, bounded retries, background runner and administrative endpoints.
 - The recovery watchdog also retries the observed legacy 20 MB error, with a maximum of three attempts.
+- Migration batches are capped at five lots so large Geollaqta property sets stay below D1 Free's transaction limit.
 - JavaScript syntax and master migration UI regression passed; `startup.sh` passed `bash -n`.
 - Reproduced the plan inventory failure against D1: the combined file query returned `HTTP 400 D1_ERROR: out of memory: SQLITE_NOMEM`; the replacement queries returned 10 sources, 29 versions and 17 contribution groups.
 - End-to-end `plans_portfolio` read-only validation returned HTTP 200 with 29 files, 1 project and 1 active district.

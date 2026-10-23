@@ -75,7 +75,7 @@
     if(migrationBusy)return;
     migrationBusy=true;const button=el('migrate-master');button.disabled=true;button.textContent='Iniciando migración en Azure…';
     try{
-      const data=await api('maestro/migracion/iniciar/',{ubigeo:el('district').value,batch_size:20});
+      const data=await api('maestro/migracion/iniciar/',{ubigeo:el('district').value,batch_size:5});
       migrationMessage(data.started?'Migración iniciada en Azure. Ya puedes cerrar esta página o apagar la computadora; el servidor continuará.':'La migración ya estaba ejecutándose en segundo plano.');
     }catch(error){migrationMessage(error.message,true);}
     finally{migrationBusy=false;await loadMigration();}

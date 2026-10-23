@@ -22,6 +22,7 @@ assert.match(dashboard, /Migrar al Catastro Maestro/);
 assert.match(dashboard, /apagar la computadora/);
 assert.match(dashboard, /vigilante de Azure/);
 assert.match(dashboard, /status==='stale'/);
+assert.match(dashboard, /batch_size:5/);
 assert.match(dashboard, /pending_lots/);
 
 console.log('Master entity UI: UUID alias, linkage, full lot ficha, sources and resumable R2-to-D1 migration controls verified.');

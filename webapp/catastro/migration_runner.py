@@ -11,6 +11,7 @@ from .storage import R2, StorageError
 
 LEASE_PREFIX = 'migration:geollaqta:'
 LEASE_SECONDS = 300
+SAFE_BATCH_SIZE = 5
 _threads = {}
 _threads_lock = threading.RLock()
 
@@ -105,6 +106,7 @@ def _claim(gateway, ubigeo, actor, batch_size):
 
 def start(ubigeo='040126', actor='sistema-geollaqta', batch_size=20):
     gateway = Gateway()
+    batch_size = max(1, min(int(batch_size), SAFE_BATCH_SIZE))
     claimed, value = _claim(gateway, ubigeo, actor, batch_size)
     if not claimed:
         return {'started': False, 'job': value}
