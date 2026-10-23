@@ -11,6 +11,7 @@ Move valuation immediately after the property facts, keep all three market value
 Require a non-blank justification in the ACM before requesting a PDF. The UI opens a blocking modal when the field is empty; the server independently returns HTTP 422 if an API client bypasses the modal.
 Add a signature block at the end of PDF, Word and HTML reports: signing space, horizontal line, the agent's complete name centered under the line, and "Agente Inmobiliario" below it.
 Allow bounded manifest reads up to 128 MB so large but valid Geollaqta JSON files do not stop the district migration. Add an Azure-side recovery watchdog outside Gunicorn for interrupted leases and expose stale migration state in the dashboard.
+Split the plan inventory's D1 query into bounded source, version, contribution-count and active-geometry queries. The former source/version/contribution join plus JSON extraction exceeded D1 memory and returned `SQLITE_NOMEM`.
 
 ## Validation Proof - 2026-10-23 America/Lima
 - Rendered the adjusted sample PDF and visually verified A4 portrait, one page, valuation at the top, the explicit "Propiedades comparables" section, justification after the cards, the compact PDM final section and the centered full-name signature block.
@@ -20,6 +21,9 @@ Allow bounded manifest reads up to 128 MB so large but valid Geollaqta JSON file
 - Catastro migration tests passed: 13 tests covering bounded large-manifest reads, stale lease recovery, bounded retries, background runner and administrative endpoints.
 - The recovery watchdog also retries the observed legacy 20 MB error, with a maximum of three attempts.
 - JavaScript syntax and master migration UI regression passed; `startup.sh` passed `bash -n`.
+- Reproduced the plan inventory failure against D1: the combined file query returned `HTTP 400 D1_ERROR: out of memory: SQLITE_NOMEM`; the replacement queries returned 10 sources, 29 versions and 17 contribution groups.
+- End-to-end `plans_portfolio` read-only validation returned HTTP 200 with 29 files, 1 project and 1 active district.
+- Catastro plan/master tests passed: 52 tests; JavaScript syntax and master UI regression passed.
 - JavaScript modal and PDF-download suites passed; updated assets are cache-busted.
 
 ---

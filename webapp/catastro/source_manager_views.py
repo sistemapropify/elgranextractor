@@ -66,43 +66,66 @@ def plans_portfolio(request):
             count(DISTINCT s.sheet_code) AS registered_sheets
             FROM projects p LEFT JOIN sources s ON s.project_id=p.id
             GROUP BY p.id ORDER BY p.ubigeo,p.name LIMIT 1000'''
-        file_sql = '''SELECT s.id AS source_id,s.name AS source_name,s.ubigeo,s.sheet_code,s.role,
-            p.name AS project_name,p.expected_sheets,v.id AS version_id,v.label,v.source_date,v.crs,
-            v.georeferencing,v.original_name,v.digest,v.created_at,v.original_sha256,
-            count(DISTINCT c.layer||':'||c.source_feature_id) AS elements,
+        source_sql = '''SELECT s.id AS source_id,s.name AS source_name,s.ubigeo,s.sheet_code,
+            s.role,p.name AS project_name,p.expected_sheets
+            FROM sources s LEFT JOIN projects p ON p.id=s.project_id
+            ORDER BY s.ubigeo,s.name LIMIT 5000'''
+        version_sql = '''SELECT v.id AS version_id,v.source_id AS version_source_id,
+            v.label,v.source_date,v.crs,v.georeferencing,v.original_name,v.digest,
+            v.created_at,v.original_sha256,
             json_extract(v.payload,'$.version.vector_review') AS vector_review,
             json_extract(v.payload,'$.version.vector_artifacts') AS vector_artifacts,
             json_extract(v.payload,'$.version.original.name') AS original_name_payload,
             json_extract(v.payload,'$.version.original.object_key') AS original_object_key
-            FROM sources s LEFT JOIN projects p ON p.id=s.project_id
-            LEFT JOIN versions v ON v.source_id=s.id LEFT JOIN contributions c ON c.version_id=v.id
-            GROUP BY s.id,v.id ORDER BY s.ubigeo,s.name,v.created_at LIMIT 5000'''
+            FROM versions v ORDER BY v.created_at LIMIT 5000'''
+        elements_sql = '''SELECT version_id,
+            count(DISTINCT layer||':'||source_feature_id) AS elements
+            FROM contributions GROUP BY version_id LIMIT 5000'''
         active_sql = '''SELECT ubigeo,count(DISTINCT e.id) AS geometries FROM entities e
             JOIN selections s ON s.entity_id=e.id AND s.field='$geometry'
             WHERE e.kind IN ('lote','manzana') GROUP BY ubigeo LIMIT 1000'''
         if source_manager.durable():
-            projects, rows, active = store.gateway.read_many([
-                {'sql': project_sql, 'params': []}, {'sql': file_sql, 'params': []},
+            projects, sources, versions, elements, active = store.gateway.read_many([
+                {'sql': project_sql, 'params': []}, {'sql': source_sql, 'params': []},
+                {'sql': version_sql, 'params': []}, {'sql': elements_sql, 'params': []},
                 {'sql': active_sql, 'params': []}])
         else:
             with store.lock:
                 projects=[dict(row) for row in store.db.execute(project_sql)]
-                rows=[dict(row) for row in store.db.execute(file_sql)]
+                sources=[dict(row) for row in store.db.execute(source_sql)]
+                versions=[dict(row) for row in store.db.execute(version_sql)]
+                elements=[dict(row) for row in store.db.execute(elements_sql)]
                 active=[dict(row) for row in store.db.execute(active_sql)]
-        import json
+        sources = [dict(row) for row in sources]
+        versions = [dict(row) for row in versions]
+        element_counts = {row['version_id']: int(row.get('elements') or 0)
+                          for row in elements}
+        versions_by_source = {}
+        for version in versions:
+            version = dict(version)
+            version_source_id = version.pop('version_source_id')
+            version['elements'] = element_counts.get(version['version_id'], 0)
+            versions_by_source.setdefault(version_source_id, []).append(version)
         files=[]
-        for row in rows:
-            row=dict(row)
-            for key in ('georeferencing','vector_review','vector_artifacts'):
-                if isinstance(row.get(key),str):
-                    try:row[key]=json.loads(row[key])
-                    except ValueError:row[key]=None
-            row['original_name']=row.pop('original_name_payload',None) or row.get('original_name')
-            row['original_available']=bool(row.pop('original_object_key',None)) or (source_manager.has_pdf(row['version_id']) if row.get('version_id') else False)
-            files.append(row)
+        for source in sources:
+            related = versions_by_source.get(source['source_id'], [{}])
+            for version in related:
+                row = {**source, **version}
+                for key in ('georeferencing','vector_review','vector_artifacts'):
+                    if isinstance(row.get(key),str):
+                        try:row[key]=json.loads(row[key])
+                        except ValueError:row[key]=None
+                row['original_name']=row.pop('original_name_payload',None) or row.get('original_name')
+                row['original_available']=bool(row.pop('original_object_key',None)) or (source_manager.has_pdf(row['version_id']) if row.get('version_id') else False)
+                files.append(row)
+        files.sort(key=lambda row: (
+            str(row.get('ubigeo') or ''), str(row.get('source_name') or ''),
+            str(row.get('created_at') or '')))
+        if len(files) > 5000:
+            files = files[:5000]
         response=JsonResponse({'storage':'d1' if source_manager.durable() else 'memory',
             'projects':projects,'files':files,'active_by_district':active,
-            'truncated':len(rows)>=5000,'pipeline':master_pipeline.status()})
+            'truncated':len(versions)>=5000,'pipeline':master_pipeline.status()})
         response['Cache-Control']='private, no-store'
         return response
     except StorageError as error:
