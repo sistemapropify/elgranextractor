@@ -1,9 +1,11 @@
 import json
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
 from .geollaqta_bulk import backfill, lot_ids, migrate_pending, migration_status
 from .master_store import MasterStore
+from .storage import R2
 
 
 class FakeCloud:
@@ -82,3 +84,13 @@ class GeollaqtaBulkTests(SimpleTestCase):
                           result['pending_lots']), (2, 2, 0))
         self.assertTrue(result['done'])
         self.assertEqual(len(remote.calls), 2)
+
+    def test_manifest_transport_has_a_larger_bounded_read_limit(self):
+        cloud = R2.__new__(R2)
+        with patch.object(R2, 'request', return_value=(b'{}', {})) as request:
+            cloud.get_manifest('geollaqta/040126/04012601011003/datos.json')
+        request.assert_called_once_with(
+            'GET',
+            'geollaqta/040126/04012601011003/datos.json',
+            read_limit=R2.MANIFEST_READ_LIMIT + 1,
+        )

@@ -47,3 +47,17 @@ class MigrationRunnerTests(SimpleTestCase):
                                'expires_at': int(time.time()) + 120})
         self.assertTrue(migration_runner._owns(gateway, '040126', 'owner'))
         self.assertFalse(migration_runner._owns(gateway, '040126', 'other'))
+
+    @patch('catastro.management.commands.catastro_migration_worker.migration_runner._run')
+    @patch('catastro.management.commands.catastro_migration_worker.migration_runner._claim',
+           return_value=(True, {'id': 'recovered'}))
+    @patch('catastro.management.commands.catastro_migration_worker.migration_runner.job',
+           return_value={'status': 'stale', 'batch_size': 20})
+    @patch('catastro.management.commands.catastro_migration_worker.Gateway')
+    def test_watchdog_recovers_a_stale_migration(self, gateway, job, claim, run):
+        from .management.commands.catastro_migration_worker import Command
+
+        self.assertTrue(Command._recover_once('040126'))
+        claim.assert_called_once()
+        run.assert_called_once_with(
+            '040126', 'azure-migration-watchdog', 20, 'recovered')

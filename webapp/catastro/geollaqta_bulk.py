@@ -41,11 +41,16 @@ def lot_ids(ubigeo, cloud=None):
 
 def _manifest(cloud, ubigeo, lot_id):
     prefix = 'geollaqta/' + ubigeo + '/' + lot_id + '/'
-    body, _ = cloud.get(prefix + 'datos.json')
+    get_manifest = getattr(cloud, 'get_manifest', cloud.get)
+    try:
+        body, _ = get_manifest(prefix + 'datos.json')
+    except StorageError as error:
+        raise StorageError('Lote ' + lot_id + ': ' + str(error),
+                           error.http_status) from None
     digest = hashlib.sha256(body).hexdigest()
     snapshot = prefix + 'datos-' + digest + '.json'
     try:
-        stored, _ = cloud.get(snapshot)
+        stored, _ = get_manifest(snapshot)
         if hashlib.sha256(stored).hexdigest() != digest:
             raise StorageError('El respaldo inmutable del lote no coincide.')
     except StorageError as error:

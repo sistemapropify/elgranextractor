@@ -29,7 +29,7 @@
   function migrationMessage(text,error=false){const node=el('master-migration-status');if(!node)return;node.textContent=text;node.classList.toggle('error-message',error);}
   function renderMigration(data){
     const source=Number(data.source_lots||0),linked=Number(data.linked_lots||0),pending=Number(data.pending_lots||0);
-    const job=data.job||{},running=job.status==='running';
+    const job=data.job||{},running=job.status==='running',stale=job.status==='stale';
     el('master-source-lots').textContent=source.toLocaleString('es-PE');
     el('master-linked-lots').textContent=linked.toLocaleString('es-PE');
     el('master-pending-lots').textContent=pending.toLocaleString('es-PE');
@@ -37,13 +37,14 @@
     const button=el('migrate-master');button.disabled=migrationBusy||running||!source||!pending;
     button.textContent=running?'Migrando en segundo plano…':pending?linked?'Continuar vinculación al Maestro':'Migrar al Catastro Maestro':'Todos los lotes están vinculados';
     if(running)migrationMessage('Azure está migrando en segundo plano. Puedes cerrar esta página o apagar tu computadora; el avance queda guardado en D1.',false);
+    else if(stale)migrationMessage('La ejecución anterior se interrumpió. El vigilante de Azure la reanudará automáticamente; también puedes continuarla manualmente.',true);
     else if(job.status==='error')migrationMessage(job.message||'La migración se detuvo. Puedes reanudarla con el botón.',true);
     else if(job.status==='done'&&!pending)migrationMessage('Vinculación completa: '+linked.toLocaleString('es-PE')+' lotes están disponibles en el Catastro Maestro.');
     else if(data.listing_truncated)migrationMessage('El inventario R2 supera el límite de listado; procesa el distrito por bloques antes de continuar.',true);
     else if(!source)migrationMessage('No hay manifiestos JSON archivados para este distrito.',true);
     else if(!pending)migrationMessage('Vinculación completa: '+linked.toLocaleString('es-PE')+' lotes del Catastro Maestro están disponibles en el mapa y en su ficha.');
     else if(!migrationBusy)migrationMessage(linked.toLocaleString('es-PE')+' de '+source.toLocaleString('es-PE')+' lotes vinculados. El origen está en R2 ('+(data.manifest_revision?('extracción v'+data.manifest_revision):'JSON por lote')+') y el destino es D1.');
-    if(running)scheduleMigrationPoll();else{clearTimeout(migrationPollTimer);migrationPollTimer=null;}
+    if(running||stale)scheduleMigrationPoll();else{clearTimeout(migrationPollTimer);migrationPollTimer=null;}
   }
   function scheduleMigrationPoll(){
     clearTimeout(migrationPollTimer);
@@ -54,12 +55,12 @@
     try{
       const data=await api('maestro/migracion/estado/?ubigeo='+encodeURIComponent(el('district').value));
       const job=data.job||{};
-      if(job.status==='running'){
+      if(job.status==='running'||job.status==='stale'){
         if(Number.isFinite(Number(job.linked_lots)))el('master-linked-lots').textContent=Number(job.linked_lots).toLocaleString('es-PE');
         if(Number.isFinite(Number(job.pending_lots)))el('master-pending-lots').textContent=Number(job.pending_lots).toLocaleString('es-PE');
         const progress=el('master-migration-progress');
         if(Number.isFinite(Number(job.linked_lots)))progress.value=Number(job.linked_lots);
-        migrationMessage(job.message||'Azure continúa migrando en segundo plano…');
+        migrationMessage(job.status==='stale'?'Esperando que el vigilante de Azure reanude la migración…':(job.message||'Azure continúa migrando en segundo plano…'),job.status==='stale');
         scheduleMigrationPoll();
       }else await loadMigration();
     }catch(error){migrationMessage(error.message,true);scheduleMigrationPoll();}

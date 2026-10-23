@@ -47,6 +47,9 @@ def credentials(path=None):
 
 
 class R2:
+    DEFAULT_READ_LIMIT = 20_000_000
+    MANIFEST_READ_LIMIT = 128 * 1024 * 1024
+
     def __init__(self, values=None, timeout=30):
         self.values = values or credentials()
         self.timeout = max(1, min(float(timeout), 30))
@@ -54,7 +57,8 @@ class R2:
         self.host = self.values['R2_ACCOUNT_ID'] + '.r2.cloudflarestorage.com'
         self.opener = build_opener(NoRedirect())
 
-    def request(self, method, key, data=b'', content_type=None, *, condition=None):
+    def request(self, method, key, data=b'', content_type=None, *, condition=None,
+                read_limit=None):
         if not key.startswith('geollaqta/') or '..' in key.split('/'):
             raise StorageError('Ruta catastral no válida.')
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -86,7 +90,8 @@ class R2:
                       data=data if method == 'PUT' else None)
         try:
             with self.opener.open(req, timeout=self.timeout) as response:
-                return response.read(20_000_001), dict(response.headers)
+                limit = self.DEFAULT_READ_LIMIT + 1 if read_limit is None else read_limit
+                return response.read(limit), dict(response.headers)
         except HTTPError as exc:
             error = PreconditionFailed if exc.code == 412 else StorageError
             raise error('R2 respondió HTTP ' + str(exc.code) + '.', exc.code) from None
@@ -112,11 +117,18 @@ class R2:
                 or int(headers.get('content-length', -1)) != len(data)):
             raise StorageError('R2 no confirmó la integridad del archivo cargado.')
 
-    def get(self, key):
-        data, headers = self.request('GET', key)
-        if len(data) > 20_000_000:
+    def get(self, key, max_bytes=None):
+        maximum = self.DEFAULT_READ_LIMIT if max_bytes is None else int(max_bytes)
+        if maximum < 1 or maximum > self.MANIFEST_READ_LIMIT:
+            raise StorageError('Límite de lectura de R2 no válido.')
+        data, headers = self.request('GET', key, read_limit=maximum + 1)
+        if len(data) > maximum:
             raise StorageError('El archivo supera el límite de lectura.')
         return data, headers
+
+    def get_manifest(self, key):
+        """Read a validated lot manifest without applying the small-object limit."""
+        return self.get(key, max_bytes=self.MANIFEST_READ_LIMIT)
 
     def put_conditional(self, key, data, etag=None):
         """Atomic replacement shared by all application instances."""

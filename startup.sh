@@ -270,6 +270,21 @@ if [ "${CATASTRO_EXECUTION_MODE:-server}" = "external" ] && [ "${CATASTRO_AZURE_
     ) 2>&1 | python -u "$APP_ROOT/scripts/rotate_stream_log.py" /home/LogFiles/catastro-worker.log &
 fi
 
+# R2 -> D1 migration recovery runs outside Gunicorn so worker recycling and
+# deployments cannot strand a requested Catastro Master migration.
+if [ "${CATASTRO_MIGRATION_WORKER_ENABLED:-1}" = "1" ]; then
+    (
+        set +e
+        cd "$APP_ROOT/webapp"
+        while true; do
+            echo "[$(date -u)] Checking for an interrupted Catastro migration..."
+            python manage.py catastro_migration_worker --ubigeo 040126 --once
+            sleep 15
+        done
+    ) 2>&1 | python -u "$APP_ROOT/scripts/rotate_stream_log.py" /home/LogFiles/catastro-migration.log &
+    echo "  Catastro migration recovery log: /home/LogFiles/catastro-migration.log"
+fi
+
 # ── Start Gunicorn ──
 echo "[6/6] Starting Gunicorn..."
 echo "  Port: ${PORT:-8000}"
