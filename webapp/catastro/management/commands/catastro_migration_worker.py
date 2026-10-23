@@ -32,7 +32,18 @@ class Command(BaseCommand):
     def _recover_once(ubigeo):
         gateway = Gateway()
         current = migration_runner.job(gateway, ubigeo)
-        if current.get('status') != 'stale':
+        status = current.get('status')
+        attempts = int(current.get('attempts', 0))
+        old_size_error = (
+            status == 'error' and
+            str(current.get('message', '')).startswith('El archivo supera el límite de lectura.')
+        )
+        recoverable = (
+            status == 'stale' or
+            (status == 'error' and attempts < 3 and
+             (current.get('retryable') is True or old_size_error))
+        )
+        if not recoverable:
             return False
         batch_size = int(current.get('batch_size') or 20)
         claimed, value = migration_runner._claim(

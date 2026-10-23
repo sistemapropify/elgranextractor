@@ -42,6 +42,13 @@ class MigrationRunnerTests(SimpleTestCase):
         self.assertEqual(value['batch_size'], 20)
         self.assertEqual(len(gateway.calls), 1)
 
+    def test_error_retry_increments_bounded_attempt_counter(self):
+        gateway = FakeGateway({'status': 'error', 'attempts': 1,
+                               'retryable': True, 'batch_size': 20})
+        claimed, value = migration_runner._claim(gateway, '040126', 'admin', 20)
+        self.assertTrue(claimed)
+        self.assertEqual(value['attempts'], 2)
+
     def test_only_the_owner_job_can_continue(self):
         gateway = FakeGateway({'id': 'owner', 'status': 'running',
                                'expires_at': int(time.time()) + 120})
@@ -55,6 +62,21 @@ class MigrationRunnerTests(SimpleTestCase):
            return_value={'status': 'stale', 'batch_size': 20})
     @patch('catastro.management.commands.catastro_migration_worker.Gateway')
     def test_watchdog_recovers_a_stale_migration(self, gateway, job, claim, run):
+        from .management.commands.catastro_migration_worker import Command
+
+        self.assertTrue(Command._recover_once('040126'))
+        claim.assert_called_once()
+        run.assert_called_once_with(
+            '040126', 'azure-migration-watchdog', 20, 'recovered')
+
+    @patch('catastro.management.commands.catastro_migration_worker.migration_runner._run')
+    @patch('catastro.management.commands.catastro_migration_worker.migration_runner._claim',
+           return_value=(True, {'id': 'recovered'}))
+    @patch('catastro.management.commands.catastro_migration_worker.migration_runner.job',
+           return_value={'status': 'error', 'batch_size': 20,
+                         'message': 'El archivo supera el límite de lectura.'})
+    @patch('catastro.management.commands.catastro_migration_worker.Gateway')
+    def test_watchdog_retries_the_observed_legacy_size_error(self, gateway, job, claim, run):
         from .management.commands.catastro_migration_worker import Command
 
         self.assertTrue(Command._recover_once('040126'))

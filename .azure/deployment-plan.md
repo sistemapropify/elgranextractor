@@ -17,7 +17,8 @@ Allow bounded manifest reads up to 128 MB so large but valid Geollaqta JSON file
 - ACM report suite passed: 54 tests, including the comparable-section label in PDF/Word/HTML, PDM order and server-side blank-justification rejection.
 - Focused report regression passed after the signature adjustment: 10 tests.
 - Located the stalled Yanahuara lot `04012601011003`: its R2 manifest is 66.4 MB and was rejected by the former 20 MB transport cap. The new 128 MB bounded read normalized it to a 401,777-byte D1 payload without writing to production during validation.
-- Catastro migration tests passed: 11 tests covering bounded large-manifest reads, stale lease recovery, background runner and administrative endpoints.
+- Catastro migration tests passed: 13 tests covering bounded large-manifest reads, stale lease recovery, bounded retries, background runner and administrative endpoints.
+- The recovery watchdog also retries the observed legacy 20 MB error, with a maximum of three attempts.
 - JavaScript syntax and master migration UI regression passed; `startup.sh` passed `bash -n`.
 - JavaScript modal and PDF-download suites passed; updated assets are cache-busted.
 

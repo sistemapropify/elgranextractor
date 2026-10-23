@@ -77,6 +77,8 @@ def _claim(gateway, ubigeo, actor, batch_size):
             'status': 'running',
             'actor': actor,
             'batch_size': batch_size,
+            'attempts': (int(current.get('attempts', 0)) +
+                         (1 if current.get('status') == 'error' else 0)),
             'started_at': now,
             'processed_lots': 0,
             'linked_lots': int(current.get('linked_lots', 0)),
@@ -152,7 +154,7 @@ def _run(ubigeo, actor, batch_size, job_id):
         try:
             _write_job(gateway, ubigeo, {
                 **current, 'status': 'error', 'processed_lots': total,
-                'message': str(error),
+                'message': str(error), 'retryable': isinstance(error, (StorageError, OSError)),
             })
         except Exception:
             pass
