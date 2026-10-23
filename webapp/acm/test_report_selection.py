@@ -212,7 +212,8 @@ class SelectedReportEndpointTests(SimpleTestCase):
         persist.return_value=(SimpleNamespace(codigo_display='ACM-test'),True)
         snapshot=json.loads(search(self.request(p)).content)
         selected=[snapshot['records'][0]['id']]
-        response=pdf_report(self.request({'token':snapshot['token'],'report_ids':selected,'manual_valuation':234000}))
+        response=pdf_report(self.request({'token':snapshot['token'],'report_ids':selected,
+            'manual_valuation':234000,'report_notes':'Conservación revisada.'}))
         self.assertEqual(response.status_code,200)
         self.assertEqual(build.call_args.args[0]['report_ids'],selected)
         self.assertEqual(build.call_args.args[0]['manual_valuation'],234000)

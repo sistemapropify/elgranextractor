@@ -148,21 +148,6 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None, user
     facts=table(right,[1.2,1.28,1.38])
     for cell,(caption,value) in zip(facts.rows[0].cells,[('Área de terreno',_number(params.get('land'),2,' m²') if params.get('land') else 'No aplica'),('Área construida',_number(params.get('built'),2,' m²') if params.get('built') else 'No aplica'),('Antigüedad',age(params.get('age')))]):
         label(cell,caption,first=True);text(cell,value,bold=True,size=9)
-    pdm=data.get('pdm')
-    if pdm:
-        doc.add_heading('Zona de uso PDM',level=1)
-        text(doc,f"{pdm['codigo']} · {pdm['nombre']} · {pdm['categoria']} · Uso analizado: {pdm['property_type']}",bold=True,size=9)
-        if pdm['rows']:
-            columns=1+len(pdm['typologies']);label_width=1.55;value_width=(width-label_width)/max(1,columns-1)
-            table_pdm=table(doc,[label_width]+[value_width]*(columns-1))
-            for cell,value in zip(table_pdm.rows[0].cells,['Parámetro']+pdm['typologies']):
-                label(cell,value,first=True)
-            for item in pdm['rows']:
-                cells=table_pdm.add_row().cells
-                text(cells[0],item['label'],bold=True,size=7)
-                for cell,value in zip(cells[1:],item['values']):text(cell,value,size=7)
-        if pdm['compatible_uses']:text(doc,'Usos compatibles: '+pdm['compatible_uses'],size=7)
-        for note in pdm['notes']:text(doc,note,size=7,color='66757A')
     doc.add_heading('Ubicación de las propiedades',level=1)
     location=table(doc,[3.62,3.59]);left,right=location.rows[0].cells
     image(left,data['map'],3.4,1.95,'Mapa no disponible',first=True)
@@ -193,6 +178,21 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None, user
         for i,(caption,key) in enumerate(RESULT_LABELS):
             label(right,caption,first=i==0);text(right,_money(data['values'][key]),bold=True,size=11)
     else:text(right,'No se obtuvo una estimación final porque faltaron comparables aptos.',first=True)
+    pdm=data.get('pdm')
+    if pdm:
+        doc.add_heading('Zona de uso PDM',level=1)
+        text(doc,f"{pdm['codigo']} · {pdm['nombre']} · {pdm['categoria']} · Uso analizado: {pdm['property_type']}",bold=True,size=9)
+        if pdm['rows']:
+            columns=1+len(pdm['typologies']);label_width=1.55;value_width=(width-label_width)/max(1,columns-1)
+            table_pdm=table(doc,[label_width]+[value_width]*(columns-1))
+            for cell,value in zip(table_pdm.rows[0].cells,['Parámetro']+pdm['typologies']):
+                label(cell,value,first=True)
+            for item in pdm['rows']:
+                cells=table_pdm.add_row().cells
+                text(cells[0],item['label'],bold=True,size=7)
+                for cell,value in zip(cells[1:],item['values']):text(cell,value,size=7)
+        if pdm['compatible_uses']:text(doc,'Usos compatibles: '+pdm['compatible_uses'],size=7)
+        for note in pdm['notes']:text(doc,note,size=7,color='66757A')
     if data['notes']:
         doc.add_heading('Justificación u observaciones',level=1)
         doc.add_paragraph(data['notes'])

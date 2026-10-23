@@ -1,3 +1,22 @@
+# ACM PDF PDM layout and mandatory justification - 2026-10-23
+
+Status: Validated
+Recipe: existing GitHub Actions App Service pipeline.
+Authorization: the user requested moving the PDM zone to the end of the PDF, correcting table widths, and requiring a written justification before PDF emission.
+Target: existing granextractorservice / rg-elgranextractor.
+Public: https://acm.propifai.com/acm/analisis/
+
+## Scope
+Move PDM after results and before the final justification in PDF, Word and HTML. Render PDM parameters as a properly sized multi-column table instead of a single full-width text column.
+Require a non-blank justification in the ACM before requesting a PDF. The UI opens a blocking modal when the field is empty; the server independently returns HTTP 422 if an API client bypasses the modal.
+
+## Validation Proof - 2026-10-23 America/Lima
+- Rendered the adjusted sample PDF and visually verified A4 portrait, one page, corrected table columns, PDM after results and before justification.
+- ACM report suite passed: 40 tests, including PDM order in PDF/Word/HTML and server-side blank-justification rejection.
+- JavaScript modal and PDF-download suites passed; updated assets are cache-busted.
+
+---
+
 # Yanahuara R2 to D1 master linkage - 2026-10-22
 
 Status: Validated

@@ -413,6 +413,9 @@ def pdf_report(request):
         state,excluded=_signed_selection(request)
         if state['params'].get('report_ids')==[]:
             return JsonResponse({'error':'Marca al menos una propiedad para incluirla en el informe.'},status=422)
+        if (request.acm_access.permissions.get('report_notes')
+                and not str(state['params'].get('report_notes','')).strip()):
+            return JsonResponse({'error':'Escribe la justificación u observaciones antes de emitir el informe PDF.'},status=422)
         result=calculate(state['records'],state['params'],excluded)
         history,_=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
         from .components_pdf import build_acm_pdf

@@ -13,7 +13,7 @@
   function unitMarkup(value){return '<div class="cmp-valuation-unit"><span>Precio por m² '+unitLabel+'</span> <strong id="cmp-adjusted-unit" aria-live="polite">'+unitPrice(value)+'</strong></div>';}
   function observations(){
     if(window.ACMPermissions?.report_notes===false)return '';
-    return '<div class="cmp-valuation-notes"><label for="cmp-report-notes">Justificación u observaciones</label><textarea id="cmp-report-notes" rows="2" maxlength="10000" placeholder="Justifica el valor o añade una observación para el reporte.">'+escape(notes)+'</textarea></div>';
+    return '<div class="cmp-valuation-notes"><label for="cmp-report-notes">Justificación u observaciones <span aria-hidden="true">*</span></label><textarea id="cmp-report-notes" rows="2" maxlength="10000" placeholder="Obligatoria para emitir el informe PDF." aria-required="true">'+escape(notes)+'</textarea></div>';
   }
   function amountInput(){
     return '<div class="cmp-valuation-entry"><label for="cmp-valuation-amount">Escribe el valor ajustado</label><input id="cmp-valuation-amount" type="text" inputmode="decimal" autocomplete="off" value="'+escape(draft)+'" aria-describedby="cmp-valuation-error" aria-label="Escribe el valor ajustado en dólares"><small id="cmp-valuation-error" role="alert" hidden>Ingresa un monto válido, con hasta dos decimales.</small></div>';
@@ -94,5 +94,10 @@
     round.addEventListener('change',()=>{rounded=round.checked;change(total);});
     restore.addEventListener('click',()=>{total=base;edited=false;rounded=false;valid=true;draft='';round.checked=false;paint();document.dispatchEvent(new CustomEvent('acm:valuation-adjusted'));});
   }
-  window.ACMComparisonValuation={markup,mount,reset,value:()=>edited?total:null,notes:()=>notes,valid:()=>valid};
+  function setNotes(value){
+    notes=String(value||'').slice(0,10000);notesTouched=true;
+    const field=document.getElementById('cmp-report-notes');if(field)field.value=notes;
+    document.dispatchEvent(new CustomEvent('acm:report-notes-changed'));
+  }
+  window.ACMComparisonValuation={markup,mount,reset,setNotes,value:()=>edited?total:null,notes:()=>notes,valid:()=>valid};
 })();

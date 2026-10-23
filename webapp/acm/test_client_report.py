@@ -145,9 +145,14 @@ class ClientReportTests(SimpleTestCase):
             word = self.word_text(build_acm_docx(
                 self.p, self.rows, self.result, fetch_images=False))
             html = build_acm_html(self.p, self.rows, self.result)
-        for text in (pdf.decode('latin1'), word, html):
+        outputs = (('pdf', pdf.decode('latin1')), ('word', word), ('html', html))
+        for kind, text in outputs:
             for value in ('Zona de uso PDM', 'RDA-2', 'Densidad',
-                          'Usos compatibles'):
+                          'Usos compatibles', 'Multifamiliar'):
                 self.assertIn(value, text)
+            before = 'Valoración y operaciones' if kind == 'html' else 'Resultados'
+            self.assertLess(text.index(before), text.index('Zona de uso PDM'))
+            self.assertLess(text.index('Zona de uso PDM'),
+                            text.index('Justificaci'))
         for text in (word, html):
             self.assertIn('Lote mínimo', text)

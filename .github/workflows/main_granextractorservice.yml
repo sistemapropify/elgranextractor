@@ -86,6 +86,7 @@ jobs:
           node webapp/acm/static/acm/js/components-presentation.test.cjs
           node webapp/acm/test_comparable_features.cjs
           node webapp/acm/test_valuation_controls.cjs
+          node webapp/acm/test_report_notes_required.cjs
           node webapp/acm/test_age_controls.cjs
           node webapp/acm/test_street_facade.cjs
           source antenv/bin/activate

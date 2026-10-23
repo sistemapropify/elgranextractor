@@ -5,7 +5,7 @@
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'acm/css/components.css' %}?v=36">
 <link rel="stylesheet" href="{% static 'acm/css/property-gallery.css' %}?v=2">
-<link rel="stylesheet" href="{% static 'acm/css/comparison-valuation.css' %}?v=8">
+<link rel="stylesheet" href="{% static 'acm/css/comparison-valuation.css' %}?v=9">
 <link rel="stylesheet" href="{% static 'acm/css/map-card-docking.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'css/capa-raster-overlay.css' %}">
 <link rel="stylesheet" href="{% static 'css/catastro-raster-map.css' %}?v=1">
@@ -293,6 +293,18 @@
   <header class="cmp-detail-header"><div><span>VALORACIÓN · OPERACIONES Y COMPARABLES</span><h2 id="cmp-calculation-heading">Cálculo completo del ACM</h2></div><button type="button" id="cmp-calculation-close" autofocus aria-label="Cerrar cálculo">Cerrar <span aria-hidden="true">×</span></button></header>
   <div id="cmp-calculation-explanation"><p>Busca comparables para ver aquí las operaciones con sus valores reales.</p></div>
 </dialog>
+<dialog id="cmp-notes-required" class="cmp-detail cmp-required-notes-dialog" aria-labelledby="cmp-required-notes-heading">
+  <form id="cmp-required-notes-form">
+    <header class="cmp-detail-header"><div><span>INFORME PDF</span><h2 id="cmp-required-notes-heading">Justificación obligatoria</h2></div><button id="cmp-required-notes-cancel" type="button" aria-label="Cerrar justificación">Cerrar <span aria-hidden="true">×</span></button></header>
+    <div class="cmp-required-notes-body">
+      <p>Antes de emitir el PDF, explica qué sustenta el valor: conservación, ubicación, mejoras, condiciones relevantes o limitaciones del análisis.</p>
+      <label for="cmp-required-notes">Justificación u observaciones</label>
+      <textarea id="cmp-required-notes" rows="6" maxlength="10000" required placeholder="Ej.: Se revisó la fachada y el estado de conservación; la ubicación y las áreas usadas corresponden al inmueble analizado."></textarea>
+      <p id="cmp-required-notes-error" role="alert" hidden>Escribe una justificación antes de emitir el PDF.</p>
+      <div class="cmp-required-notes-actions"><button id="cmp-required-notes-save" type="submit">Guardar y emitir PDF</button></div>
+    </div>
+  </form>
+</dialog>
 
 {% endblock %}
 {% block extra_scripts %}
@@ -303,10 +315,10 @@
 <script src="{% static 'acm/js/workspace-layout.js' %}?v=1"></script>
 <script src="{% static 'acm/js/map-card-docking.js' %}?v=1"></script>
 <script src="{% static 'acm/js/floating-comparison.js' %}?v=9"></script>
-<script src="{% static 'acm/js/comparison-valuation.js' %}?v=12"></script>
+<script src="{% static 'acm/js/comparison-valuation.js' %}?v=13"></script>
 {% if replication %}{{ replication|json_script:"cmp-replication-data" }}{% endif %}
 {% if analysis_resume %}{{ analysis_resume|json_script:"cmp-role-analysis-data" }}{% endif %}
-<script src="{% static 'acm/js/components.js' %}?v=84"></script>
+<script src="{% static 'acm/js/components.js' %}?v=85"></script>
 <script src="{% static 'acm/js/property-gallery.js' %}?v=2"></script>
 {% if acm_permissions.ai %}<script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>{% endif %}
 {% if acm_permissions.pdm_polygons %}

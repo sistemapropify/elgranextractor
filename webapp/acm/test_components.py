@@ -419,7 +419,8 @@ class ComponentsPdfReportTests(SimpleTestCase):
         persist.return_value=(SimpleNamespace(codigo_display='ACM1234567'),True)
         load.return_value=(candidates(sample(),params()),[])
         data=json.loads(search(self.request(params())).content)
-        response=pdf_report(self.request({'token':data['token'],'excluded':['a']}))
+        response=pdf_report(self.request({'token':data['token'],'excluded':['a'],
+            'report_notes':'Conservación y ubicación verificadas.'}))
         self.assertEqual(response.status_code,200)
         self.assertEqual(response.content,b'%PDF-pdf-report')
         self.assertEqual(response['Content-Type'],'application/pdf')

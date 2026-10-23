@@ -57,6 +57,11 @@ class ValuationNotesAccessTests(TestCase):
         self.assertEqual(saved['manual_valuation'], 487038.39)
         self.assertEqual(saved['report_notes'], 'Valor revisado por conservacion y mejoras.')
 
+    def test_pdf_requires_a_non_blank_justification(self):
+        response = components_views.pdf_report(self.request(self.payload(report_notes='')))
+        self.assertEqual(response.status_code, 422)
+        self.assertIn('justificación u observaciones', json.loads(response.content)['error'].lower())
+
     def test_explicit_role_restriction_is_still_respected(self):
         ACMRolePolicy.objects.create(role_id=20, permissions={'adjust_valuation': False, 'report_notes': False}, updated_by='1')
         self.access.permissions, _ = policy_for(self.role)

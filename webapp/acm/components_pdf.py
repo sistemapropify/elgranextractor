@@ -375,32 +375,6 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     detail=[para('Ubicación','label'),para(data['address']),Spacer(1,7),para('Tipo de propiedad','label'),para(params.get('property_type','Casa'),'bold')]
     hero=table([[detail,facts]],[240,279])
     story.append(hero)
-    pdm = data.get('pdm')
-    if pdm:
-        story.append(para('Zona de uso PDM','section'))
-        zone_summary = (
-            f"{pdm['codigo']} · {pdm['nombre']} · {pdm['categoria']} · "
-            f"Uso analizado: {pdm['property_type']}"
-        )
-        story.append(para(zone_summary,'bold'))
-        if pdm['rows']:
-            pdm_rows = [[para('Parámetros normativos · ' +
-                              ' / '.join(pdm['typologies']),'label')]]
-            for item in pdm['rows']:
-                values = ' · '.join(
-                    f"{pdm['typologies'][index]}: {value}"
-                    for index, value in enumerate(item['values']))
-                pdm_rows.append([para(f"{item['label']}: {values}",'small')])
-            pdm_table = table(pdm_rows,[width],padding=3)
-            pdm_table.setStyle(TableStyle([
-                ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e6f5f5')),
-                ('GRID',(0,0),(-1,-1),.35,colors.HexColor('#cfdfdf')),
-            ]))
-            story.append(pdm_table)
-        if pdm['compatible_uses']:
-            story.append(para('Usos compatibles: '+pdm['compatible_uses'],'small'))
-        for note in pdm['notes']:
-            story.append(para(note,'label'))
     story.append(para('Ubicación de las propiedades','section'))
     map_content=[photo(data['map'],245,142,'Mapa no disponible'),para('P  Propiedad sujeto  ·  Números: propiedades seleccionadas','label')]
     if data['croquis']:map_content.append(para('Croquis referencial de distancias; no representa un mapa de calles.','label'))
@@ -439,6 +413,44 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
     else:
         result_blocks.append(para('No se obtuvo una estimación final porque faltaron comparables aptos.'))
     story.extend(result_blocks)
+    pdm = data.get('pdm')
+    if pdm:
+        story.append(para('Zona de uso PDM','section'))
+        story.append(para(
+            f"{pdm['codigo']} · {pdm['nombre']} · {pdm['categoria']} · "
+            f"Uso analizado: {pdm['property_type']}", 'bold'))
+        if pdm['rows']:
+            story.append(para('Parámetros normativos','label'))
+            typologies = pdm['typologies'] or ['Parámetros']
+            label_width = 118
+            value_width = (width - label_width) / max(1, len(typologies))
+            pdm_rows = [[para('Parámetro', 'label'),
+                         *[para(value, 'label') for value in typologies]]]
+            for item in pdm['rows']:
+                values = list(item['values'])
+                values += ['Sin informar'] * (len(typologies) - len(values))
+                pdm_rows.append([para(item['label'], 'small'),
+                                 *[para(value, 'small') for value in values]])
+            pdm_table = Table(
+                pdm_rows,
+                colWidths=[label_width] + [value_width] * len(typologies),
+                repeatRows=1,
+                hAlign='LEFT',
+            )
+            pdm_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e6f5f5')),
+                ('GRID', (0, 0), (-1, -1), .35, colors.HexColor('#cfdfdf')),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ]))
+            story.append(pdm_table)
+        if pdm['compatible_uses']:
+            story.append(para('Usos compatibles: ' + pdm['compatible_uses'], 'small'))
+        for note in pdm['notes']:
+            story.append(para(note, 'label'))
     if data['notes']:
         story.append(para('Justificación u observaciones','section'))
         for line in data['notes'].split('\n'):

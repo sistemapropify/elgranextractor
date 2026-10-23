@@ -5,6 +5,7 @@
   let snapshot=null, result=null, excluded=new Set(), tab='Casa', map=null, pin=null, circles=[], markers=[], sequence=0, controller=null, detailId=null, selectedMapId=null;
   let aiController=null, aiExplanation=null, aiProposal=null;
   let reportDownloading=false, restoredViewport=null;
+  let pendingPdfDownload=null;
   let locationLocked=false, searching=false;
   const locatedIds=new Set();
   const unselected=new Set();
@@ -601,6 +602,14 @@
     catch(error){$('cmp-status').textContent=error.message;button.disabled=false;}
   });
   function reportStatus(message){const host=$('cmp-report-status');if(host){host.textContent=message;host.hidden=!message;}}
+  function currentReportNotes(){return String(window.ACMComparisonValuation?.notes()||'').trim();}
+  function withRequiredPdfNotes(callback){
+    if(permissions.report_notes===false||currentReportNotes()){callback();return;}
+    pendingPdfDownload=callback;
+    const dialog=$('notes-required'),note=$('required-notes'),error=$('required-notes-error');
+    if(!dialog||!note){callback();return;}
+    note.value='';error.hidden=true;dialog.showModal();setTimeout(()=>note.focus(),0);
+  }
   async function downloadReport(url,extension,label){
     if(!snapshot||!result?.new||reportDownloading||window.ACMComparisonValuation?.valid()===false||!comparisonRows().some(row=>!unselected.has(row.id)))return;reportDownloading=true;updateReportButtons();let downloaded=false;$('cmp-status').textContent='Generando informe '+label+' con las operaciones del análisis…';reportStatus('Generando informe '+label+'…');
     try{const response=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:JSON.stringify(selection())});
@@ -609,7 +618,7 @@
     }catch(error){$('cmp-status').textContent=error.message;reportStatus(error.message);}finally{reportDownloading=false;updateReportButtons();if(downloaded)$('cmp-save').disabled=true;}
   }
   $('cmp-word').addEventListener('click',()=>downloadReport(form.dataset.reportUrl,'.docx','Word'));
-  $('cmp-pdf').addEventListener('click',()=>downloadReport(form.dataset.pdfUrl,'.pdf','PDF'));
+  $('cmp-pdf').addEventListener('click',()=>withRequiredPdfNotes(()=>downloadReport(form.dataset.pdfUrl,'.pdf','PDF')));
   $('cmp-html').addEventListener('click',()=>downloadReport(form.dataset.htmlUrl,'.html','HTML'));
   $('cmp-comparison-report').addEventListener('click',()=>setReportMenu($('cmp-comparison-downloads').hidden));
   $('cmp-comparison-report').addEventListener('keydown',event=>{
@@ -628,7 +637,24 @@
   $('cmp-comparison-downloads').addEventListener('click',event=>{
     const button=event.target.closest('[data-report-format]');if(!button)return;
     const formats={pdf:[form.dataset.pdfUrl,'.pdf','PDF'],word:[form.dataset.reportUrl,'.docx','Word'],html:[form.dataset.htmlUrl,'.html','HTML']};
-    const format=formats[button.dataset.reportFormat];if(format)downloadReport(...format);
+    const format=formats[button.dataset.reportFormat];if(!format)return;
+    if(button.dataset.reportFormat==='pdf')withRequiredPdfNotes(()=>downloadReport(...format));
+    else downloadReport(...format);
+  });
+  $('required-notes-form').addEventListener('submit',event=>{
+    event.preventDefault();
+    const note=$('required-notes'),error=$('required-notes-error'),value=note.value.trim();
+    if(!value){error.hidden=false;note.setAttribute('aria-invalid','true');note.focus();return;}
+    error.hidden=true;note.removeAttribute('aria-invalid');
+    window.ACMComparisonValuation?.setNotes(value);
+    $('notes-required').close();
+    const action=pendingPdfDownload;pendingPdfDownload=null;
+    if(action)action();
+  });
+  $('required-notes-cancel').addEventListener('click',()=>{pendingPdfDownload=null;$('notes-required').close();});
+  $('notes-required').addEventListener('cancel',()=>{pendingPdfDownload=null;});
+  $('required-notes').addEventListener('input',()=>{
+    if($('required-notes').value.trim()){$('required-notes-error').hidden=true;$('required-notes').removeAttribute('aria-invalid');}
   });
   configureType();
   const replicationNode=$('cmp-replication-data');
