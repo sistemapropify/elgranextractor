@@ -17,7 +17,8 @@ Keep raw PDFs and photographs in R2; D1 stores normalized lot/unit facts, relati
 - Fixed Worker commits for `current_attributes`, added its regression test, and deployed the corrected private Worker.
 - Completed an audited pilot cleanup and imported one lot plus a 20-lot batch; D1 reported 21 linked lots and 5,219 pending.
 - Verified a real migrated ficha returned `land_area=5997.42`, `built_area=29`, floors, report ID, PDF and facade links from D1/R2.
-- Catastro suite: 82 tests passed. ACM suite: 55 tests passed.
+- Added an Azure-side resumable worker with a five-minute D1 lease; closing the browser or turning off the user's computer does not stop an active migration.
+- Catastro suite: 69 focused tests passed after the background-worker change; earlier complete Catastro run passed 82 tests. ACM suite: 31 focused cadastral tests passed; broader ACM run passed 55 tests.
 - JavaScript syntax and regressions passed for master entity UI, plan dashboard, ACM cadastre, Cayma linkage and Worker D1 transaction behavior.
 - R2 service audit: `AREA_TER` has no positive values in the current Yanahuara source layer; `AREA_CON>0` appears in 7 lots across `PLN-00000111782` and `PLN-00000112139`. The UI labels these values as source values without assuming a validated unit.
 

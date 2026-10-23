@@ -162,7 +162,7 @@ jobs:
       - name: Validate Catastro Master catalog review, vectors and D1 transport
         run: |
           source antenv/bin/activate
-          python webapp/manage.py test catastro.test_master_store catastro.test_master_d1 catastro.test_master_model catastro.test_raster_overlays catastro.test_geollaqta_bulk catastro.test_migration_views --settings=catastro.test_settings --noinput
+          python webapp/manage.py test catastro.test_master_store catastro.test_master_d1 catastro.test_master_model catastro.test_raster_overlays catastro.test_geollaqta_bulk catastro.test_migration_views catastro.test_migration_runner --settings=catastro.test_settings --noinput
           node --check webapp/static/js/catastro-fuentes.js
           node --check webapp/static/js/catastro-master-model.js
           node --check webapp/static/js/catastro-raster-layers.js

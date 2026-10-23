@@ -5,7 +5,7 @@
   const el = id => document.getElementById(id);
   const labels = {queued:'Preparando',running:'Descargando',completed:'Descarga terminada',failed:'Requiere revisión',stopped:'Detenida',interrupted:'Interrumpida',complete:'Completo',partial:'Documentos pendientes'};
   let active = null, configured = false, collectionEnabled = true, timer = null, busy = false, generation = 0, refreshFailed = false;
-  let migrationBusy = false, migrationDistrict = null;
+  let migrationBusy = false, migrationDistrict = null, migrationPollTimer = null;
   const node = (tag, text) => { const n = document.createElement(tag); n.textContent = text; return n; };
   const bytes = value => value >= 1e9 ? (value / 1e9).toFixed(2) + ' GB' : value >= 1e6 ? (value / 1e6).toFixed(2) + ' MB' : value >= 1e3 ? (value / 1e3).toFixed(1) + ' KB' : value + ' B';
   async function api(url, data) {
@@ -29,16 +29,40 @@
   function migrationMessage(text,error=false){const node=el('master-migration-status');if(!node)return;node.textContent=text;node.classList.toggle('error-message',error);}
   function renderMigration(data){
     const source=Number(data.source_lots||0),linked=Number(data.linked_lots||0),pending=Number(data.pending_lots||0);
+    const job=data.job||{},running=job.status==='running';
     el('master-source-lots').textContent=source.toLocaleString('es-PE');
     el('master-linked-lots').textContent=linked.toLocaleString('es-PE');
     el('master-pending-lots').textContent=pending.toLocaleString('es-PE');
     const progress=el('master-migration-progress');progress.max=Math.max(1,source);progress.value=Math.min(source,linked);
-    const button=el('migrate-master');button.disabled=migrationBusy||!source||!pending;
-    button.textContent=pending?linked?'Continuar vinculación al Maestro':'Migrar al Catastro Maestro':'Todos los lotes están vinculados';
-    if(data.listing_truncated)migrationMessage('El inventario R2 supera el límite de listado; procesa el distrito por bloques antes de continuar.',true);
+    const button=el('migrate-master');button.disabled=migrationBusy||running||!source||!pending;
+    button.textContent=running?'Migrando en segundo plano…':pending?linked?'Continuar vinculación al Maestro':'Migrar al Catastro Maestro':'Todos los lotes están vinculados';
+    if(running)migrationMessage('Azure está migrando en segundo plano. Puedes cerrar esta página o apagar tu computadora; el avance queda guardado en D1.',false);
+    else if(job.status==='error')migrationMessage(job.message||'La migración se detuvo. Puedes reanudarla con el botón.',true);
+    else if(job.status==='done'&&!pending)migrationMessage('Vinculación completa: '+linked.toLocaleString('es-PE')+' lotes están disponibles en el Catastro Maestro.');
+    else if(data.listing_truncated)migrationMessage('El inventario R2 supera el límite de listado; procesa el distrito por bloques antes de continuar.',true);
     else if(!source)migrationMessage('No hay manifiestos JSON archivados para este distrito.',true);
     else if(!pending)migrationMessage('Vinculación completa: '+linked.toLocaleString('es-PE')+' lotes del Catastro Maestro están disponibles en el mapa y en su ficha.');
     else if(!migrationBusy)migrationMessage(linked.toLocaleString('es-PE')+' de '+source.toLocaleString('es-PE')+' lotes vinculados. El origen está en R2 ('+(data.manifest_revision?('extracción v'+data.manifest_revision):'JSON por lote')+') y el destino es D1.');
+    if(running)scheduleMigrationPoll();else{clearTimeout(migrationPollTimer);migrationPollTimer=null;}
+  }
+  function scheduleMigrationPoll(){
+    clearTimeout(migrationPollTimer);
+    migrationPollTimer=setTimeout(pollMigration,4000);
+  }
+  async function pollMigration(){
+    if(document.hidden){scheduleMigrationPoll();return;}
+    try{
+      const data=await api('maestro/migracion/estado/?ubigeo='+encodeURIComponent(el('district').value));
+      const job=data.job||{};
+      if(job.status==='running'){
+        if(Number.isFinite(Number(job.linked_lots)))el('master-linked-lots').textContent=Number(job.linked_lots).toLocaleString('es-PE');
+        if(Number.isFinite(Number(job.pending_lots)))el('master-pending-lots').textContent=Number(job.pending_lots).toLocaleString('es-PE');
+        const progress=el('master-migration-progress');
+        if(Number.isFinite(Number(job.linked_lots)))progress.value=Number(job.linked_lots);
+        migrationMessage(job.message||'Azure continúa migrando en segundo plano…');
+        scheduleMigrationPoll();
+      }else await loadMigration();
+    }catch(error){migrationMessage(error.message,true);scheduleMigrationPoll();}
   }
   async function loadMigration(){
     const district=el('district')?.value;if(!district)return;
@@ -48,19 +72,12 @@
   }
   async function migrateToMaster(){
     if(migrationBusy)return;
-    migrationBusy=true;const button=el('migrate-master');button.disabled=true;button.textContent='Vinculando lotes…';
+    migrationBusy=true;const button=el('migrate-master');button.disabled=true;button.textContent='Iniciando migración en Azure…';
     try{
-      let data;
-      do{
-        data=await api('maestro/migracion/ejecutar/',{ubigeo:el('district').value,limit:20});
-        renderMigration(data);
-        if(data.processed_lots)migrationMessage('Tanda completada: '+data.processed_lots+' lotes vinculados. Quedan '+Number(data.pending_lots||0).toLocaleString('es-PE')+'.');
-        if(!data.done&&!data.processed_lots)throw new Error('La migración no pudo avanzar. Revisa el primer manifiesto pendiente.');
-      }while(!data.done);
-      migrationMessage('Migración terminada. '+Number(data.linked_lots||0).toLocaleString('es-PE')+' lotes ya están vinculados en el Catastro Maestro; abre el mapa para revisar sus fichas.');
-      await refresh();
+      const data=await api('maestro/migracion/iniciar/',{ubigeo:el('district').value,batch_size:20});
+      migrationMessage(data.started?'Migración iniciada en Azure. Ya puedes cerrar esta página o apagar la computadora; el servidor continuará.':'La migración ya estaba ejecutándose en segundo plano.');
     }catch(error){migrationMessage(error.message,true);}
-    finally{migrationBusy=false;button.disabled=false;await loadMigration();}
+    finally{migrationBusy=false;await loadMigration();}
   }
   function render(data) {
     for (const key of ['uploaded','reports','photos','missing']) el('metric-' + key).textContent = data.totals[key];
@@ -122,8 +139,8 @@
   });
   el('stop-collection').addEventListener('click',async()=>{if(!active || busy)return;busy=true;try{await api('jobs/' + active.id + '/stop/',{});message('Pausa solicitada. Terminarán las solicitudes en curso y el avance quedará guardado. Para continuar, vuelve a iniciar la descarga del mismo distrito.');}catch(error){message(error.message,true);}finally{busy=false;await refresh();}});
   el('district').addEventListener('change',refresh);
-  el('refresh-collection').addEventListener('click',()=>{migrationDistrict=null;refresh();});
+  el('refresh-collection').addEventListener('click',()=>{migrationDistrict=null;refresh();loadMigration();});
   el('migrate-master').addEventListener('click',migrateToMaster);
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeout(timer);else refresh();});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeout(timer);else{refresh();if(migrationPollTimer){clearTimeout(migrationPollTimer);pollMigration();}}});
   refresh();loadMigration();
 })();
