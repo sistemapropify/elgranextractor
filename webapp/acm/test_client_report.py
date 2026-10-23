@@ -32,10 +32,14 @@ class ClientReportTests(SimpleTestCase):
         self.assertEqual(author_name(self.user), 'María Alejandra López Gómez')
         pdf = _pdf_text(build_acm_pdf(self.p, self.rows, self.result, user=self.user, fetch_images=False))
         word = self.word_text(build_acm_docx(self.p, self.rows, self.result, user=self.user, fetch_images=False))
+        html = build_acm_html(self.p, self.rows, self.result, user=self.user)
         self.assertIn(b'Preparado por:', pdf)
         self.assertIn(b'Alejandra', pdf)
         self.assertIn('María Alejandra López Gómez', word)
-        for text in (pdf.decode('latin1'), word):
+        for text in (word, html):
+            self.assertIn('María Alejandra López Gómez', text)
+        for text in (pdf.decode('latin1'), word, html):
+            self.assertIn('Agente Inmobiliario', text)
             self.assertNotIn('cuenta-interna', text)
             self.assertNotIn('Erika Palacios', text)
 
@@ -154,6 +158,8 @@ class ClientReportTests(SimpleTestCase):
                           else 'Propiedades comparables', text)
             self.assertLess(text.index('Justificaci'),
                             text.index('Zona de uso PDM'))
+            self.assertLess(text.index('Zona de uso PDM'),
+                            text.index('Agente Inmobiliario'))
             if kind == 'html':
                 self.assertLess(text.index('Valor de salida al mercado'),
                                 text.index('Inmueble a valorar'))

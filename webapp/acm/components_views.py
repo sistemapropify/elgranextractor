@@ -448,7 +448,10 @@ def html_report(request):
             return JsonResponse({'error':'Primero completa un cálculo ACM.'},status=422)
         from .components_html import build_acm_html
         safe,visible_result,visible_excluded=project(request,state,result,excluded,report=True)
-        content=build_acm_html(safe['params'],safe['records'],visible_result,visible_excluded)
+        content=build_acm_html(
+            safe['params'], safe['records'], visible_result, visible_excluded,
+            user=session_user(request),
+        )
         history,_=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
         response=HttpResponse(content,content_type='text/html; charset=utf-8')
         response['Content-Disposition']='attachment; filename="informe-acm.html"'

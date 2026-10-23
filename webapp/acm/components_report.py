@@ -198,6 +198,24 @@ def build_acm_docx(params, records, result, excluded=(), generated_at=None, user
                     text(cells[item_index*2+1],value,size=6.5,first=True)
         if pdm['compatible_uses']:text(doc,'Usos compatibles: '+pdm['compatible_uses'],size=7)
         for note in pdm['notes']:text(doc,note,size=6.5,color='66757A')
+    signature_space=doc.add_paragraph()
+    signature_space.paragraph_format.left_indent=Inches(3.35)
+    signature_space.paragraph_format.space_before=Pt(24)
+    signature_space.paragraph_format.space_after=Pt(5)
+    signature_border=OxmlElement('w:pBdr')
+    signature_bottom=OxmlElement('w:bottom')
+    signature_bottom.set(qn('w:val'),'single')
+    signature_bottom.set(qn('w:sz'),'6')
+    signature_bottom.set(qn('w:space'),'1')
+    signature_bottom.set(qn('w:color'),'334155')
+    signature_border.append(signature_bottom)
+    signature_space._p.get_or_add_pPr().append(signature_border)
+    signature_name=text(doc,data['author'],bold=True,size=10)
+    signature_name.paragraph_format.left_indent=Inches(3.35)
+    signature_name.alignment=WD_ALIGN_PARAGRAPH.CENTER
+    signature_role=text(doc,'Agente Inmobiliario',size=8,color='66757A')
+    signature_role.paragraph_format.left_indent=Inches(3.35)
+    signature_role.alignment=WD_ALIGN_PARAGRAPH.CENTER
     footer=section.footer.paragraphs[0];footer.alignment=WD_ALIGN_PARAGRAPH.CENTER
     footer.add_run('www.propify.pe').font.size=Pt(8)
     # Keep the editable Word body free of portal URLs, internal codes and metadata.

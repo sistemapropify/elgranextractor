@@ -344,6 +344,8 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
         'pdm': ParagraphStyle('client_pdm', fontName='Helvetica', fontSize=6.4, leading=7.7, textColor=dark),
         'pdm_label': ParagraphStyle('client_pdm_label', fontName='Helvetica-Bold', fontSize=6.5, leading=7.8, textColor=dark),
         'bold': ParagraphStyle('client_bold', fontName='Helvetica-Bold', fontSize=10, leading=13, textColor=dark),
+        'signature': ParagraphStyle('client_signature', fontName='Helvetica-Bold', fontSize=10, leading=13, textColor=dark, alignment=TA_CENTER),
+        'signature_role': ParagraphStyle('client_signature_role', fontName='Helvetica', fontSize=7, leading=9, textColor=muted, alignment=TA_CENTER),
         'center': ParagraphStyle('client_center', fontName='Helvetica', fontSize=8, leading=11, textColor=muted, alignment=TA_CENTER),
     }
     def para(text, style='body'):
@@ -464,6 +466,21 @@ def build_acm_pdf(params, records, result, excluded=(), generated_at=None,
             story.append(para('Usos compatibles: ' + pdm['compatible_uses'], 'label'))
         for note in pdm['notes']:
             story.append(para(note, 'label'))
+    signature = Table(
+        [[Spacer(1, 28)], [para(data['author'], 'signature')], [para('Agente Inmobiliario', 'signature_role')]],
+        colWidths=[250],
+        hAlign='RIGHT',
+    )
+    signature.setStyle(TableStyle([
+        ('LINEABOVE', (0, 1), (-1, 1), .8, muted),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    story.extend([Spacer(1, 8), signature])
     def footer(canvas,doc):
         canvas.saveState();canvas.setFillColor(teal);canvas.rect(0,0,A4[0],9,fill=1,stroke=0)
         canvas.setFont('Helvetica',8);canvas.setFillColor(muted)

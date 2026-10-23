@@ -14,6 +14,9 @@
     dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}dt{font-size:13px;color:#6b7280}dd{margin:0;font-weight:bold}
     .table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:10px;border:1px solid #d9e5e5;text-align:left}th{background:#eaf4f4}td{vertical-align:top}
     a{color:#047d7d}.operation{padding:14px;border-left:3px solid #279896;background:#f3f8f8;margin:12px 0;break-inside:avoid}.operation p{margin:6px 0}
+    .signature{width:min(360px,100%);margin:42px 0 18px auto;text-align:center;break-inside:avoid}
+    .signature-space{height:52px}.signature-line{border-top:1px solid #334155;margin-bottom:7px}
+    .signature strong{display:block;font-size:14px}.signature p{margin:2px 0 0;color:#4b5563;font-size:13px}
     footer{border-top:1px solid #d9e5e5;margin-top:28px;padding-top:16px}
     @media(max-width:600px){main{margin:0;padding:18px;border-radius:0}dl{grid-template-columns:1fr 1fr}h1{font-size:23px}}
     @media print{@page{size:A4 landscape;margin:15mm}body{background:white}main{margin:0;padding:0;max-width:none}.table-scroll{overflow:visible}.value{break-inside:avoid}a{color:inherit}h2{break-after:avoid}}
@@ -65,6 +68,12 @@
   </section>
   {% endif %}
   {% if messages %}<h2>Observaciones del análisis</h2><ul>{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}
+  <section class="signature" aria-label="Firma del agente">
+    <div class="signature-space"></div>
+    <div class="signature-line"></div>
+    <strong>{{ agent_name }}</strong>
+    <p>Agente Inmobiliario</p>
+  </section>
   <footer class="muted">Estimación de precios de oferta, no de ventas cerradas. El valor de salida al mercado es el valor comercial +5%; el valor de realización inmediata es el valor comercial −5%. Puedes abrir este archivo en un navegador o imprimirlo.</footer>
 </main>
 </body>

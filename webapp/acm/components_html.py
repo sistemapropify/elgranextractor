@@ -5,7 +5,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from .report_selection import report_records, report_total, report_values
-from .client_report import pdm_zone
+from .client_report import author_name, pdm_zone
 
 
 def _number(value, suffix=''):
@@ -22,7 +22,7 @@ def _link(value):
     return value if parsed.scheme in ('http', 'https') and parsed.netloc else ''
 
 
-def build_acm_html(params, records, result, excluded=(), generated_at=None):
+def build_acm_html(params, records, result, excluded=(), generated_at=None, user=None):
     selected = report_records(params, records, excluded)
     details = {detail['id']: detail for detail in result['breakdown']}
     rows = []
@@ -86,4 +86,5 @@ def build_acm_html(params, records, result, excluded=(), generated_at=None):
         'messages': result.get('messages', []),
         'show_publication': params.get('_acm_permissions', {}).get('publication', True),
         'pdm': pdm_zone(params),
+        'agent_name': author_name(user),
     })

@@ -9,10 +9,12 @@ Public: https://acm.propifai.com/acm/analisis/
 ## Scope
 Move valuation immediately after the property facts, keep all three market values visible before secondary sections, label the five-card section "Propiedades comparables" in PDF, Word and HTML, and place PDM as the final section after the required justification. Render PDM parameters as a compact four-column grid (two parameter/value pairs per row) instead of a half-page table.
 Require a non-blank justification in the ACM before requesting a PDF. The UI opens a blocking modal when the field is empty; the server independently returns HTTP 422 if an API client bypasses the modal.
+Add a signature block at the end of PDF, Word and HTML reports: signing space, horizontal line, the agent's complete name centered under the line, and "Agente Inmobiliario" below it.
 
 ## Validation Proof - 2026-10-23 America/Lima
-- Rendered the adjusted sample PDF and visually verified A4 portrait, one page, valuation at the top, the explicit "Propiedades comparables" section, justification after the cards and the compact PDM final section.
+- Rendered the adjusted sample PDF and visually verified A4 portrait, one page, valuation at the top, the explicit "Propiedades comparables" section, justification after the cards, the compact PDM final section and the centered full-name signature block.
 - ACM report suite passed: 54 tests, including the comparable-section label in PDF/Word/HTML, PDM order and server-side blank-justification rejection.
+- Focused report regression passed after the signature adjustment: 10 tests.
 - JavaScript modal and PDF-download suites passed; updated assets are cache-busted.
 
 ---
