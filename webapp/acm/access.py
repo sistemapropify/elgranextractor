@@ -114,8 +114,10 @@ class ACMAccess:
 
     @property
     def can_view_all_history(self):
+        if self.user.is_superuser:
+            return True
         manager = self.own_role['name'].strip().casefold() == 'gerente general'
-        if not self.permissions.get('history') or not (self.user.is_superuser or manager):
+        if not self.permissions.get('history') or not manager:
             return False
         return not self.previewing or self.role['name'].strip().casefold() == 'gerente general'
 
@@ -171,6 +173,8 @@ def get_access(request):
     if selected.get('owner') == user.pk and (user.is_superuser or own['name'].strip().casefold() in PREVIEW_ROLES):
         role = next((r for r in role_catalog() if r['id'] == selected.get('role_id')), own)
     permissions, revision = policy_for(role)
+    if user.is_superuser:
+        permissions['history'] = True
     access = ACMAccess(user, own, role, permissions, revision, selected.get('nonce', '') if selected.get('owner') == user.pk else '')
     request.acm_access = access
     request.acm_identity = user

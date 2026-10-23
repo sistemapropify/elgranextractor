@@ -67,8 +67,15 @@ class HistoryVisibilityTests(TestCase):
     def test_preview_cannot_elevate_global_scope_and_basic_preview_is_personal(self):
         self.assertFalse(self.access(role=8, own=7).can_view_all_history)
         self.assertFalse(self.access(role=20, own=8).can_view_all_history)
-        self.assertFalse(self.access(role=20, own=7, superuser=True).can_view_all_history)
+        self.assertTrue(self.access(role=20, own=7, superuser=True).can_view_all_history)
         self.assertTrue(self.access(role=8, own=7, superuser=True).can_view_all_history)
+
+    def test_superadmin_keeps_global_history_while_previewing_an_agent_role(self):
+        request = self.request(self.access(role=20, own=7, superuser=True))
+        self.assertEqual(visible_history(request).count(), 2)
+        response = portal_views.history(request)
+        self.assertContains(response, 'Todos los ACM')
+        self.assertContains(response, 'joyzlis')
 
     def test_explicit_history_and_report_restrictions_still_apply(self):
         access = self.access(role=8)
