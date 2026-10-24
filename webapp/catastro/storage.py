@@ -48,7 +48,7 @@ def credentials(path=None):
 
 class R2:
     DEFAULT_READ_LIMIT = 20_000_000
-    MANIFEST_READ_LIMIT = 128 * 1024 * 1024
+    MANIFEST_READ_LIMIT = 256 * 1024 * 1024
 
     def __init__(self, values=None, timeout=30):
         self.values = values or credentials()

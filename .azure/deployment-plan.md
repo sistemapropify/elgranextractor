@@ -11,6 +11,7 @@ Move valuation immediately after the property facts, keep all three market value
 Require a non-blank justification in the ACM before requesting a PDF. The UI opens a blocking modal when the field is empty; the server independently returns HTTP 422 if an API client bypasses the modal.
 Add a signature block at the end of PDF, Word and HTML reports: signing space, horizontal line, the agent's complete name centered under the line, and "Agente Inmobiliario" below it.
 Allow bounded manifest reads up to 128 MB so large but valid Geollaqta JSON files do not stop the district migration. Add an Azure-side recovery watchdog outside Gunicorn for interrupted leases and expose stale migration state in the dashboard.
+Raise the bounded manifest ceiling to 256 MB for lot `04012602082010` (141 MB) and download each manifest in a batch sequentially to avoid concurrent memory spikes on the B2 App Service.
 Split the plan inventory's D1 query into bounded source, version, contribution-count and active-geometry queries. The former source/version/contribution join plus JSON extraction exceeded D1 memory and returned `SQLITE_NOMEM`.
 Keep global ACM history access for verified superadministrators even while they preview a lower role, and force the history capability on for that verified identity.
 
@@ -19,6 +20,7 @@ Keep global ACM history access for verified superadministrators even while they 
 - ACM report suite passed: 54 tests, including the comparable-section label in PDF/Word/HTML, PDM order and server-side blank-justification rejection.
 - Focused report regression passed after the signature adjustment: 10 tests.
 - Located the stalled Yanahuara lot `04012601011003`: its R2 manifest is 66.4 MB and was rejected by the former 20 MB transport cap. The new 128 MB bounded read normalized it to a 401,777-byte D1 payload without writing to production during validation.
+- Located the next stalled lot `04012602082010`: its R2 manifest is 141,242,411 bytes. The B2 instance has 3.5 GB RAM; the new bounded read allows 256 MB and uses one manifest at a time.
 - Catastro migration tests passed: 13 tests covering bounded large-manifest reads, stale lease recovery, bounded retries, background runner and administrative endpoints.
 - The recovery watchdog also retries the observed legacy 20 MB error, with a maximum of three attempts.
 - Migration batches are capped at five lots so large Geollaqta property sets stay below D1 Free's transaction limit.

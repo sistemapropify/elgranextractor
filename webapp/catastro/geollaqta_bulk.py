@@ -156,7 +156,9 @@ def _activate_payload(store, payload, ubigeo, actor):
 
 
 def stage_batch(store, cloud, ubigeo, selected, actor='sistema-geollaqta', activate=True):
-    with ThreadPoolExecutor(max_workers=min(6, len(selected))) as pool:
+    # Large manifests can reach hundreds of MB. Download them one at a time so
+    # memory usage stays bounded even when the batch contains several big files.
+    with ThreadPoolExecutor(max_workers=1) as pool:
         manifests = list(pool.map(lambda lot_id: _manifest(cloud, ubigeo, lot_id),
                                   selected))
     payload = merge_batch(ubigeo, manifests)
