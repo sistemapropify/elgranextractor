@@ -1,10 +1,18 @@
 import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from .geollaqta_bulk import backfill, lot_ids, migrate_pending, migration_status
+from .geollaqta_bulk import (
+    _activate_payload,
+    backfill,
+    lot_ids,
+    migrate_pending,
+    migration_status,
+)
 from .master_store import MasterStore
+from .master_store import Conflict
 from .storage import R2
 
 
@@ -94,3 +102,45 @@ class GeollaqtaBulkTests(SimpleTestCase):
             'geollaqta/040126/04012601011003/datos.json',
             read_limit=R2.MANIFEST_READ_LIMIT + 1,
         )
+
+    def test_unit_activation_is_split_into_bounded_source_feature_chunks(self):
+        class Store:
+            revision = 1
+            plans = []
+
+            def stage(self, payload, revision, actor):
+                return {'revision': 1}
+
+            def preview(self, plan):
+                self.plans.append(plan)
+                return {'token': 'token'}
+
+            def apply(self, plan, token, actor):
+                return {'revision': len(self.plans) + 1}
+
+        store = Store()
+        payload = {
+            'version': {'id': 'batch'},
+            'features': [{'id': 'lot', 'kind': 'lote'}]
+                        + [{'id': f'unit-{index}', 'kind': 'unidad'}
+                           for index in range(85)],
+        }
+        result = _activate_payload(store, payload, '040126', 'tester')
+        unit_scopes = [
+            plan['scope']['source_feature_ids']
+            for plan in store.plans if plan['scope']['kind'] == 'unidad'
+        ]
+        self.assertEqual([len(values) for values in unit_scopes], [40, 40, 5])
+        self.assertEqual(len(result['applied']), 4)
+
+    def test_migration_retries_when_another_writer_changes_the_master(self):
+        remote = FakeRemote()
+        with patch('catastro.geollaqta_bulk.ScopeCommitGateway'), \
+             patch('catastro.geollaqta_bulk.D1Store') as store_class, \
+             patch('catastro.geollaqta_bulk.stage_batch',
+                   side_effect=[Conflict('revision changed'), {'revision': 11}]) as stage:
+            store_class.return_value = SimpleNamespace(
+                db=SimpleNamespace(close=lambda: None), revision=10)
+            result = migrate_pending(remote, '040126', 2, cloud=self.cloud)
+        self.assertEqual(result['processed_lots'], 2)
+        self.assertEqual(stage.call_count, 2)

@@ -140,18 +140,28 @@ def _activate_payload(store, payload, ubigeo, actor):
     result = store.stage(payload, store.revision, actor)
     applied = []
     for kind in ('lote', 'unidad'):
-        if not any(item.get('kind') == kind for item in payload['features']):
+        feature_ids = [
+            str(item['id']) for item in payload['features']
+            if item.get('kind') == kind
+        ]
+        if not feature_ids:
             continue
-        plan = {
-            'revision': store.revision,
-            'version_id': payload['version']['id'],
-            'mode': 'fill',
-            'scope': {'ubigeo': ubigeo, 'kind': kind},
-            'fields': [],
-            'reason': 'Incorporar lote validado desde Geollaqta.',
-        }
-        preview = store.preview(plan)
-        applied.append(store.apply(plan, preview['token'], actor))
+        chunk_size = 40 if kind == 'unidad' else len(feature_ids)
+        for offset in range(0, len(feature_ids), chunk_size):
+            chunk = feature_ids[offset:offset + chunk_size]
+            scope = {'ubigeo': ubigeo, 'kind': kind}
+            if kind == 'unidad':
+                scope['source_feature_ids'] = chunk
+            plan = {
+                'revision': store.revision,
+                'version_id': payload['version']['id'],
+                'mode': 'fill',
+                'scope': scope,
+                'fields': [],
+                'reason': 'Incorporar lote validado desde Geollaqta.',
+            }
+            preview = store.preview(plan)
+            applied.append(store.apply(plan, preview['token'], actor))
     return {**result, 'applied': applied}
 
 
@@ -306,12 +316,23 @@ def migrate_pending(gateway, ubigeo='040126', limit=20, actor='sistema-geollaqta
     if not selected:
         return {**migration_status(gateway, ubigeo, cloud), 'processed_lots': 0,
                 'remaining_lots': 0, 'done': True}
-    commit_gateway = ScopeCommitGateway(gateway)
-    store = D1Store(gateway=commit_gateway, scope=ubigeo)
-    try:
-        result = stage_batch(store, cloud, ubigeo, selected, actor, activate=True)
-    finally:
-        store.db.close()
+    result = None
+    last_conflict = None
+    for attempt in range(5):
+        commit_gateway = ScopeCommitGateway(gateway)
+        store = D1Store(gateway=commit_gateway, scope=ubigeo)
+        try:
+            result = stage_batch(store, cloud, ubigeo, selected, actor, activate=True)
+            break
+        except Conflict as error:
+            last_conflict = error
+            if attempt == 4:
+                raise
+            time.sleep(.25 * (attempt + 1))
+        finally:
+            store.db.close()
+    if result is None:
+        raise last_conflict or Conflict('No se pudo aplicar la tanda.')
     linked.update(selected)
     remaining = sorted(set(ids) - linked)
     return {

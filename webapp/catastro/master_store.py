@@ -421,6 +421,21 @@ class MasterStore:
                 JOIN versions v ON v.id=c.version_id WHERE c.version_id=? AND c.layer=?''', (vid, scope['kind'])).fetchall()
             if not observations:
                 raise ValueError('Esta versión todavía no contiene elementos de la capa elegida.')
+            source_feature_ids = scope.get('source_feature_ids')
+            if source_feature_ids is not None:
+                if mode != 'fill':
+                    raise ValueError('La selección explícita de elementos se usa sólo para activación parcial.')
+                if (not isinstance(source_feature_ids, list) or
+                        not source_feature_ids or
+                        len(set(source_feature_ids)) != len(source_feature_ids) or
+                        any(not isinstance(value, str) for value in source_feature_ids)):
+                    raise ValueError('La selección de elementos no es válida.')
+                available = {row['source_feature_id'] for row in observations}
+                if not set(source_feature_ids).issubset(available):
+                    raise ValueError('La versión no contiene todos los elementos seleccionados.')
+                allowed = set(source_feature_ids)
+                observations = [row for row in observations
+                                if row['source_feature_id'] in allowed]
             mapping = plan.get('identity_map', {})
             valid_keys = {r['layer'] + ':' + r['source_feature_id'] for r in observations}
             if not set(mapping).issubset(valid_keys):

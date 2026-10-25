@@ -109,6 +109,24 @@ class MasterVersionTests(SimpleTestCase):
         self.apply(self.plan('v2'))
         self.assertEqual(len(self.store.records()),2)
 
+    def test_source_feature_ids_limit_activation_to_a_safe_subset(self):
+        payload = candidate()
+        second = deepcopy(payload['features'][0])
+        second['id'] = 'b'
+        second['fields']['lot'] = '002'
+        second['geometry']['coordinates'] = [[
+            [-71.549, -16.36], [-71.548, -16.36],
+            [-71.548, -16.359], [-71.549, -16.359], [-71.549, -16.36],
+        ]]
+        payload['features'].append(second)
+        self.stage(payload)
+        plan = self.plan()
+        plan['scope']['source_feature_ids'] = ['a']
+        preview = self.store.preview(plan)
+        self.assertEqual(preview['affected_entities'], 1)
+        self.apply(plan)
+        self.assertEqual(len(self.store.records()), 1)
+
     def test_incremental_catalog_links_market_records_actors_and_coverage_to_entity(self):
         payload = candidate(fields={'sector':'32'})
         payload.update({
