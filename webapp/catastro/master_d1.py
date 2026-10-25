@@ -28,6 +28,30 @@ TABLES = {'meta':('key',),'projects':('id',),'sources':('id',),'versions':('id',
           'plan_workspace':('document_key',),'plan_notes':('id',),
           'current_attributes':('entity_id',),'journal':('revision',)}
 
+# Pagination order must follow a D1 index. These tuples are only cursors for
+# loading the same scoped rows; primary keys in TABLES still identify rows.
+PAGE_KEYS = {
+    'contributions': ('version_id', 'id'),
+}
+
+
+def _page_query(sql, keys, cursor):
+    """Return a deterministic keyset page query without OFFSET scans."""
+    if not cursor:
+        return sql, []
+    terms = []
+    params = []
+    for index, key in enumerate(keys):
+        equal = [candidate + '=?' for candidate in keys[:index]]
+        params.extend(cursor[:index])
+        if equal:
+            terms.append('(' + ' AND '.join(equal + [key + '>?']) + ')')
+        else:
+            terms.append(key + '>?')
+        params.append(cursor[index])
+    base, order = sql.rsplit(' ORDER BY ', 1)
+    return base + ' AND (' + ' OR '.join(terms) + ') ORDER BY ' + order, params
+
 
 def configuration():
     # App Service receives these as protected application settings. Local
@@ -152,7 +176,8 @@ This is a correctness limit, never a silent subset of the master database.
                       "json_extract(details_json,'$.version_id') IN ("+district_versions+") OR "
                       "json_extract(details_json,'$.project_id') IN (SELECT id FROM projects WHERE ubigeo=?)))"
         }
-        return {table:('SELECT * FROM '+table+' WHERE '+predicates[table]+' ORDER BY '+','.join(keys),
+        return {table:('SELECT * FROM '+table+' WHERE '+predicates[table]+
+                       ' ORDER BY '+','.join(PAGE_KEYS.get(table,keys)),
                        [self.scope]*predicates[table].count('?')) for table,keys in TABLES.items()}
 
     def _rows(self):
@@ -175,16 +200,27 @@ This is a correctness limit, never a silent subset of the master database.
                         for name in batch])
                     first_pages.update(zip(batch,results))
             for table,keys in TABLES.items():
-                rows[table]=[];offset=0
+                rows[table]=[];cursor=None
+                page_keys=PAGE_KEYS.get(table,keys)
                 while True:
-                    page=first_pages[table] if offset==0 and first_pages is not None else self.gateway.read(
-                        queries[table][0]+' LIMIT 1000 OFFSET ?',[*queries[table][1],offset])
+                    if first_pages is not None and cursor is None:
+                        page=first_pages[table]
+                    else:
+                        sql,params=_page_query(queries[table][0],page_keys,cursor)
+                        page=self.gateway.read(sql+' LIMIT 1000',
+                                               [*queries[table][1],*params])
                     total+=len(page);size+=len(encoded(page).encode())
                     if total>250000 or size>64*1024*1024:
                         raise StorageError('El ámbito excede el límite de edición en memoria; requiere particionar la carga antes de continuar.')
                     rows[table].extend(page)
                     if len(page)<1000:break
-                    offset+=1000
+                    cursor=tuple(page[-1][key] for key in page_keys)
+            # Optimized page order is a transport detail. Restore the original
+            # primary-key order inside the working copy so visible ordering and
+            # every calculation stay byte-for-byte compatible with prior loads.
+            for table,keys in TABLES.items():
+                rows[table].sort(key=lambda row, keys=keys:
+                                 tuple(row[key] for key in keys))
             if self.gateway.revision()!=revision:
                 raise Conflict('El maestro cambió durante la lectura; actualiza para cargar una revisión coherente.')
             with self.db:

@@ -39,9 +39,11 @@ class FakeGateway:
     def __init__(self):
         self.db=sqlite3.connect(':memory:');self.db.row_factory=sqlite3.Row
         self.db.executescript(Path(__file__).with_name('master_schema.sql').read_text(encoding='utf8'))
-        self.saved={};self.fail=False
+        self.saved={};self.fail=False;self.queries=[]
     def revision(self):return int(self.db.execute("SELECT value FROM meta WHERE key='revision'").fetchone()[0])
-    def read(self,sql,params=()):return [dict(r) for r in self.db.execute(sql,params)]
+    def read(self,sql,params=()):
+        self.queries.append((sql,tuple(params)))
+        return [dict(r) for r in self.db.execute(sql,params)]
     def call(self,payload):
         if payload['id'] in self.saved:return self.saved[payload['id']]
         if payload['revision']!=self.revision():raise Conflict('stale')
@@ -157,3 +159,39 @@ class DurableMasterTests(TestCase):
         self.assertEqual(snapshot['selection_changes'],[])
         restored.restore(2,3,'admin','Recuperar revisión previa')
         self.assertEqual(len(restored.collection('040103','lote')['features']),1)
+
+    def test_refresh_uses_complete_keyset_pages_without_offset_scans(self):
+        self.store.stage(candidate(),0,'admin')
+        self.gateway.db.execute('DELETE FROM contributions')
+        self.gateway.db.executemany(
+            '''INSERT INTO contributions
+               (id,version_id,source_feature_id,layer,field,value_json,evidence_json)
+               VALUES (?,?,?,?,?,?,?)''',
+            [('c%05d' % index,'v1','feature-%05d' % index,'lote',
+              'field-%05d' % index,json.dumps(index),'{}')
+             for index in range(2505)])
+        self.gateway.queries.clear()
+
+        restored=D1Store(self.gateway)
+        contribution_pages=[
+            (sql,params) for sql,params in self.gateway.queries
+            if sql.startswith('SELECT * FROM contributions ')]
+
+        self.assertEqual(
+            restored.db.execute('SELECT count(*) FROM contributions').fetchone()[0],
+            2505)
+        self.assertEqual(
+            restored.db.execute(
+                'SELECT count(DISTINCT id) FROM contributions').fetchone()[0],
+            2505)
+        self.assertEqual(len(contribution_pages),3)
+        self.assertFalse(any(' OFFSET ' in sql for sql,_ in contribution_pages))
+        self.assertTrue(all('ORDER BY version_id,id' in sql
+                            for sql,_ in contribution_pages))
+
+        plan=self.gateway.db.execute(
+            'EXPLAIN QUERY PLAN '+contribution_pages[-1][0],
+            contribution_pages[-1][1]).fetchall()
+        plan_detail=' '.join(str(row['detail']) for row in plan)
+        self.assertIn('contributions_scope_page',plan_detail)
+        self.assertNotIn('TEMP B-TREE',plan_detail)

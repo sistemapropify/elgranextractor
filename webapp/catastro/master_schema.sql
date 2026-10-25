@@ -37,6 +37,7 @@ CREATE TABLE contributions (
  value_json TEXT NOT NULL, evidence_json TEXT NOT NULL,
  UNIQUE(version_id,layer,source_feature_id,field)
 );
+CREATE INDEX contributions_scope_page ON contributions(version_id,id);
 CREATE TABLE identities (
  version_id TEXT NOT NULL REFERENCES versions(id), layer TEXT NOT NULL,
  source_feature_id TEXT NOT NULL, entity_id TEXT NOT NULL REFERENCES entities(id),
