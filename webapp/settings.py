@@ -107,6 +107,7 @@ INSTALLED_APPS = [
     'propifai',
     'matching',
     'acm',
+    'catastro',
     'market_analysis',
     'analisis_crm',
     'lead_intelligence',
