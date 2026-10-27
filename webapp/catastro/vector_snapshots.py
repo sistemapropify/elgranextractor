@@ -3,6 +3,7 @@ import gzip
 import hashlib
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 from django.core.cache import cache
 
@@ -11,6 +12,7 @@ from .storage import R2, StorageError
 PREFIX = 'geollaqta/vectores/'
 INDEX_KEY = PREFIX + 'index.json'
 LAYERS = ('lotes', 'manzanas', 'vias')
+LOCAL_INDEX = Path(__file__).with_name('data') / 'geollaqta-vector-index.json'
 ROAD_TYPES = {
     '1': 'Avenida', '2': 'Calle', '3': 'Jirón', '4': 'Pasaje',
     '7': 'Prolongación', '13': 'Callejón',
@@ -29,6 +31,18 @@ def _index(cloud=None):
 
 
 def inventory(cloud=None):
+    if cloud is None and LOCAL_INDEX.is_file():
+        try:
+            local = json.loads(LOCAL_INDEX.read_text(encoding='utf8'))
+            rows = [
+                row for row in local.get('snapshots', [])
+                if isinstance(row, dict) and row.get('ubigeo')
+                and row.get('layer') in LAYERS
+            ]
+            if rows:
+                return {'schema': local.get('schema'), 'snapshots': rows}
+        except (OSError, ValueError, TypeError):
+            pass
     saved = cache.get('catastro-vector-snapshot-index-v1')
     if saved is not None:
         return saved
