@@ -39,6 +39,7 @@
     const dataFeatures=new Map();
     const layerOn={manzanas:true,lotes:true};
     const ALL_DISTRICTS='all';
+    const masterRole=source=>source.role==='draft'||source.role==='snapshot';
     const districtLabel=code=>code===ALL_DISTRICTS?'Todos los distritos D1':
         (catalog?.districts.find(d=>d.ubigeo===code)?.name||code||'Sin distrito');
     const sourceDistrict=source=>source.ubigeo||source.districts?.[0]||district;
@@ -87,12 +88,14 @@
         if(displayEntityId(entityKind,p.ELEMENT_ID))values.push(['Alias de pantalla',displayEntityId(entityKind,p.ELEMENT_ID)]);
         if(p.BLOCK_REF)values.push(['Manzana vinculada (ID interno)',p.BLOCK_REF]);
         if(item.source.role==='draft')values.push(['Vinculación','Consultando identidades del maestro…'],['Versión geométrica',p.GEOMETRY_VERSION_ID||'Sin dato']);
+        else if(item.source.role==='snapshot')values.push(['Estado','Vector extraído y conservado en el Catastro Maestro'],['Ficha maestra','Pendiente de vincular; no impide mostrar la geometría']);
         else if(item.source.reference_only)values.push(['Estado','Contorno recuperado; pendiente de contraste con otros mapas'],
             ['Fecha del plano','Agosto de 2006'],['Ubicación','PSAD56 / UTM 19S inferido; transformado a WGS84']);
         for(const [label,value] of values){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;dl.append(dt,dd);}
         panel.append(dl);
         const details=document.createElement('div');details.className='master-entity-data';details.setAttribute('aria-live','polite');panel.append(details);
         if(item.source.role==='draft'&&isUuid(p.ELEMENT_ID))loadEntityDetail(item,p.ELEMENT_ID,details);
+        else if(item.source.role==='snapshot')details.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'La geometría ya pertenece al Catastro Maestro. La ficha y demás campos se incorporarán como piezas independientes cuando estén disponibles.'}));
         else if(item.source.role!=='draft')details.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Esta fuente es de referencia. Para ver la ficha completa debe estar vinculada como Registro Maestro de Lote.'}));
     }
     function addEntitySection(host,title,content,className='') {
@@ -226,6 +229,7 @@
         const current=scope===ALL_DISTRICTS?sourceDistrict(source):scope;
         const client=source.transport==='arcgis'?window.GeollaqtaDistrict.create():null;
         for(const key of ['manzanas','lotes']) {
+            if(!Number(source.layers?.[key]?.count||0))continue;
             const id=current+':'+source.id+':'+key;
             if(collections.has(id))continue;
             let task=pending.get(id);
@@ -240,6 +244,8 @@
                     if(client)result=await client.load({ubigeo:current,layers:source.layers,service_base:source.service_base},key,{signal,onBatch:(_,snapshot)=>{
                         if(scope===district&&!signal.aborted)status('Cargando '+source.name+' · '+key+': '+fmt(snapshot.processed)+' de '+fmt(snapshot.total_in_view));
                     }});
+                    else if(source.transport==='snapshot')
+                        result=await json('/catastro/api/maestro/vectores/'+encodeURIComponent(current)+'/'+key+'/',signal);
                     else result=await json('/catastro/api/maestro/fuentes/'+encodeURIComponent(source.id)+'/'+key+'/?ubigeo='+current,signal);
                     if(signal.aborted)return;
                     const collection={source,key,district:current,records:result.features.map(f=>record(f,source,key)).filter(Boolean)};
@@ -255,7 +261,7 @@
         controller?.abort();controller=new AbortController();const signal=controller.signal;
         if(selectedFeature)vectorLayer?.revertStyle(selectedFeature);
         selected=null;selectedFeature=null;vectorLayer?.setStyle(vectorStyle);counts();
-        const sources=catalog.sources.filter(s=>s.active&&s.role==='draft'&&
+        const sources=catalog.sources.filter(s=>s.active&&masterRole(s)&&
             (district===ALL_DISTRICTS||s.districts.includes(district))&&enabled.get(s.id));
         status(sources.length?'Cargando los registros del Catastro Maestro…':'Este distrito todavía no tiene registros activos en el Catastro Maestro.');
         try{
@@ -290,7 +296,7 @@
     }
     function sourcesPanel() {
         el('sources').replaceChildren();
-        const sources=catalog.sources.filter(s=>s.active&&s.role==='draft'&&
+        const sources=catalog.sources.filter(s=>s.active&&masterRole(s)&&
             (district===ALL_DISTRICTS||s.districts.includes(district)));
         if(!sources.length){const p=document.createElement('p');p.className='master-help';p.textContent='Este distrito todavía no tiene registros activos en el Catastro Maestro.';el('sources').append(p);}
         for(const source of sources){
@@ -298,8 +304,8 @@
             const card=document.createElement('article'),label=document.createElement('label'),check=document.createElement('input'),name=document.createElement('span');
             card.className='master-source';label.className='master-check';check.type='checkbox';check.checked=enabled.get(source.id);name.textContent=source.name;label.append(check,name);card.append(label);
             check.addEventListener('change',()=>{enabled.set(source.id,check.checked);refresh(false);});
-            const badge=document.createElement('span');badge.className='master-badge';badge.textContent='Maestro · fuente de verdad';card.append(badge);
-            const p=document.createElement('p');p.className='master-help';p.textContent='Registros vinculados en D1: '+fmt(source.layers.lotes.count)+' lotes y '+fmt(source.layers.manzanas.count)+' manzanas. Cada campo conserva su fuente, versión y evidencia.';card.append(p);
+            const badge=document.createElement('span');badge.className='master-badge';badge.textContent=source.role==='snapshot'?'Vectores extraídos · ficha pendiente':'Maestro · registro normalizado';card.append(badge);
+            const p=document.createElement('p');p.className='master-help';p.textContent='Capas disponibles: '+fmt(source.layers.lotes?.count||0)+' lotes y '+fmt(source.layers.manzanas?.count||0)+' manzanas. Cada capa se conserva de forma independiente.';card.append(p);
             el('sources').append(card);
         }
         counts();
@@ -324,7 +330,7 @@
             status('Cargando distritos y fuentes del Catastro Maestro…');
             catalog=await json('/catastro/api/maestro/catalogo/');
             const districtSelect=el('district');districtSelect.replaceChildren();
-            const masterDistricts=new Set(catalog.sources.filter(s=>s.active&&s.role==='draft').flatMap(s=>s.districts));
+            const masterDistricts=new Set(catalog.sources.filter(s=>s.active&&masterRole(s)).flatMap(s=>s.districts));
             if(masterDistricts.size){const option=document.createElement('option');option.value=ALL_DISTRICTS;option.textContent='Todos los distritos D1 · '+masterDistricts.size+' con registros';districtSelect.append(option);}
             for(const d of catalog.districts){const option=document.createElement('option');option.value=d.ubigeo;option.textContent=d.name+(masterDistricts.has(d.ubigeo)?'':' · sin registros maestros');districtSelect.append(option);}
             const requested=new URL(location.href).searchParams.get('ubigeo');

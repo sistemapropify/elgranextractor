@@ -7,6 +7,7 @@ import math
 import re
 import json
 import os
+import subprocess
 from pathlib import Path
 from html.parser import HTMLParser
 from urllib.parse import urlencode, urljoin, urlsplit
@@ -81,6 +82,22 @@ def _download(url, params=None):
             raise UpstreamError('La respuesta de COFOPRI es demasiado grande. Acércate al mapa.')
         return body
     except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        # Some Python installations cannot build the upstream certificate
+        # chain while the operating system TLS store can. curl keeps
+        # certificate verification enabled and completes the documented chain.
+        try:
+            command = ['curl', '--fail', '--silent', '--show-error',
+                       '--location', '--max-time', '20', '--get']
+            for key, value in sorted((params or {}).items()):
+                command.extend(['--data-urlencode', str(key) + '=' + str(value)])
+            command.append(url)
+            completed = subprocess.run(
+                command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, timeout=25, check=False)
+            if completed.returncode == 0 and len(completed.stdout) <= 2_000_000:
+                return completed.stdout
+        except (OSError, subprocess.SubprocessError):
+            pass
         raise UpstreamError('COFOPRI no está disponible. Intenta actualizar en unos minutos.') from exc
 
 

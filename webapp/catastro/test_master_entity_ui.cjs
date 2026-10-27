@@ -19,7 +19,8 @@ assert.match(master, /value==null\|\|value===''\?'Sin dato'/);
 assert.match(master, /unit_attributes/);
 assert.match(master, /Todos los distritos D1/);
 assert.match(master, /ALL_DISTRICTS/);
-assert.match(master, /s\.role==='draft'/);
+assert.match(master, /source\.role==='draft'\|\|source\.role==='snapshot'/);
+assert.match(master, /maestro\/vectores\//);
 
 assert.match(dashboard, /maestro\/migracion\//);
 assert.match(dashboard, /maestro\/migracion\/iniciar\//);

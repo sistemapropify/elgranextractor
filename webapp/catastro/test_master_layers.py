@@ -1,10 +1,25 @@
 import json
 import os
+from django.core.cache import cache
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.test import RequestFactory, SimpleTestCase, override_settings
-from . import master_layers, master_views
+from . import master_layers, master_views, vector_snapshots
+from .storage import StorageError
+
+
+class FakeSnapshotCloud:
+    def __init__(self):
+        self.objects = {}
+
+    def put_verified(self, key, body, content_type):
+        self.objects[key] = body
+
+    def get_manifest(self, key):
+        if key not in self.objects:
+            raise StorageError('R2 respondió HTTP 404.', 404)
+        return self.objects[key], {}
 
 
 class MasterGeometryTests(SimpleTestCase):
@@ -31,10 +46,20 @@ class MasterGeometryTests(SimpleTestCase):
     def test_d1_catalogue_uses_bounded_reads_without_loading_the_authoring_store(self):
         summaries = {'040126': {'ubigeo': '040126', 'revision': 4114,
                                 'lotes': 5240, 'manzanas': 0}}
+        snapshots = [{
+            'id': 'vectores-040126', 'name': 'vectores', 'ubigeo': '040126',
+            'districts': ['040126'], 'active': True, 'default_visible': True,
+            'contributes': False, 'reference_only': False, 'role': 'snapshot',
+            'transport': 'snapshot', 'crs': 'EPSG:4326',
+            'layers': {'lotes': {'count': 5240, 'kind': 'polygon'},
+                       'manzanas': {'count': 319, 'kind': 'polygon'}},
+        }]
         with patch.dict(os.environ, {'CATASTRO_MASTER_STORAGE': 'd1',
                                      'CATASTRO_MASTER_ENABLED': '1'}), \
                 patch('catastro.source_manager.district_summaries',
                       return_value=summaries), \
+                patch('catastro.vector_snapshots.catalog_sources',
+                      return_value=snapshots), \
                 patch('catastro.source_manager.store',
                       side_effect=AssertionError('No debe cargar D1Store')):
             data = master_layers.catalogue()
@@ -45,6 +70,29 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertFalse(source['reference_only'])
         yanahuara = next(item for item in data['districts'] if item['ubigeo'] == '040126')
         self.assertIn('borrador-040126', yanahuara['sources'])
+        self.assertIn('vectores-040126', yanahuara['sources'])
+        snapshot = next(item for item in data['sources'] if item['id'] == 'vectores-040126')
+        self.assertNotIn('lotes', snapshot['layers'])
+        self.assertEqual(snapshot['layers']['manzanas']['count'], 319)
+
+    def test_vector_snapshot_chunks_are_reassembled_independently(self):
+        cache.clear()
+        cloud = FakeSnapshotCloud()
+        collection = {
+            'type': 'FeatureCollection', 'ubigeo': '040102', 'layer': 'lotes',
+            'features': [{'type': 'Feature', 'id': index,
+                          'properties': {'COD_LOTE': str(index)},
+                          'geometry': {'type': 'Polygon', 'coordinates': []}}
+                         for index in range(9001)],
+        }
+        row = vector_snapshots.save_snapshot(
+            '040102', 'lotes', collection, cloud=cloud,
+            captured_at='2026-10-27T00:00:00+00:00')
+        self.assertEqual(row['features'], 9001)
+        self.assertEqual(len(row['chunks']), 3)
+        restored = vector_snapshots.read_snapshot('040102', 'lotes', cloud=cloud)
+        self.assertEqual(restored['total_features'], 9001)
+        self.assertIn('geollaqta/vectores/index.json', cloud.objects)
 
     def test_draft_layer_keeps_master_identity_and_is_not_reference_geometry(self):
         summary = {'ubigeo': '040126', 'revision': 4114,
@@ -173,4 +221,4 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertNotIn('geollaqta-data.js', html)
         self.assertNotIn('geollaqta-district.js', html)
         self.assertNotIn('collection-form', html)
-        self.assertIn('catastro-maestro.js?v=15', html)
+        self.assertIn('catastro-maestro.js?v=16', html)

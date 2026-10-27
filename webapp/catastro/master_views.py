@@ -13,6 +13,7 @@ from . import raster_overlays
 from . import source_manager
 from . import source_manager_views
 from . import source_placement
+from . import vector_snapshots
 from .storage import StorageError
 import json
 
@@ -55,6 +56,20 @@ def layer(request, source_id, layer_key):
     except (ValueError, OSError) as error:
         return JsonResponse({'error': str(error) if isinstance(error, ValueError)
                              else 'La capa todavía no está disponible.'}, status=400)
+
+
+@require_GET
+@admin_required
+def vector_snapshot(request, ubigeo, layer):
+    try:
+        value = vector_snapshots.read_snapshot(ubigeo, layer)
+        response = JsonResponse(value, json_dumps_params={'separators': (',', ':')})
+        response['Cache-Control'] = 'private, no-store'
+        return response
+    except StorageError as error:
+        return JsonResponse({'error': str(error)}, status=503)
+    except ValueError as error:
+        return JsonResponse({'error': str(error)}, status=404)
 
 
 @csrf_protect

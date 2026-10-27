@@ -184,6 +184,27 @@ def catalogue():
     if source_manager.enabled() or source_manager.durable():
         for district, summary in source_manager.district_summaries().items():
             sources.append(_draft_metadata('borrador-'+district, summary))
+    from . import vector_snapshots
+    try:
+        snapshots = vector_snapshots.catalog_sources()
+    except StorageError:
+        snapshots = []
+    d1_layers = {
+        source['ubigeo']: source.get('layers', {})
+        for source in sources if source.get('role') == 'draft'
+    }
+    for source in snapshots:
+        existing = d1_layers.get(source['ubigeo'], {})
+        source['layers'] = {
+            key: value for key, value in source.get('layers', {}).items()
+            if not int(existing.get(key, {}).get('count') or 0)
+        }
+        if not source['layers']:
+            continue
+        district_name = (geo.DISTRICTS.get(source['ubigeo']) or {}).get(
+            'name', source['ubigeo'])
+        source['name'] = 'Catastro Maestro · ' + district_name + ' · vectores'
+        sources.append(source)
     districts = [{**d} for d in geo.DISTRICTS.values()]
     for district in districts:
         district['sources'] = [s['id'] for s in sources if district['ubigeo'] in s['districts']]
