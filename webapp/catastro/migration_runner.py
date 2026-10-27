@@ -6,6 +6,7 @@ import uuid
 
 from . import geollaqta_bulk
 from .master_d1 import Gateway
+from .migration_audit import audit_district
 from .master_store import Conflict
 from .storage import R2, StorageError
 
@@ -126,12 +127,51 @@ def _owns(gateway, ubigeo, job_id):
     return current.get('id') == job_id and current.get('status') == 'running'
 
 
+def _audit_job(gateway, ubigeo, expected_lots, current):
+    audit = audit_district(
+        gateway, ubigeo, expected_lots, revision=gateway.revision())
+    passed = audit['status'] != 'failed'
+    return _write_job(gateway, ubigeo, {
+        **current,
+        'linked_lots': audit['linked_lots'],
+        'pending_lots': 0,
+        'status': 'done' if passed else 'error',
+        'message': (
+            'Migración y auditoría completas: ' +
+            str(audit['linked_lots']) + ' lotes verificados.'
+            if passed else
+            'Auditoría bloqueó la publicación: ' +
+            ' '.join(audit['errors'])),
+        'audit': audit,
+        'retryable': False,
+    })
+
+
+def audit_existing(ubigeo='040126', actor='azure-migration-watchdog'):
+    """Audit a completed migration that predates the integrity gate."""
+    gateway = Gateway()
+    cloud = R2(timeout=20)
+    ids, truncated = geollaqta_bulk.lot_ids(ubigeo, cloud)
+    if truncated:
+        raise ValueError('El inventario R2 está truncado; no se puede aprobar la auditoría.')
+    if not ids:
+        raise ValueError('No hay lotes R2 para auditar.')
+    current = _read_job(gateway, ubigeo)
+    if current.get('status') != 'done':
+        raise ValueError('La migración no está terminada.')
+    if current.get('audit'):
+        return current
+    return _audit_job(gateway, ubigeo, ids, current)
+
+
 def _run(ubigeo, actor, batch_size, job_id):
     gateway = Gateway()
     cloud = R2(timeout=20)
     total = 0
     try:
         ids, truncated = geollaqta_bulk.lot_ids(ubigeo, cloud)
+        if truncated:
+            raise ValueError('El inventario R2 está truncado; divide el ámbito antes de migrar.')
         linked = geollaqta_bulk.linked_lot_ids(gateway, ubigeo)
         pending = sorted(set(ids) - linked)
         linked_count = len(linked.intersection(ids))
@@ -149,11 +189,15 @@ def _run(ubigeo, actor, batch_size, job_id):
                 'linked_lots': linked_count,
                 'pending_lots': len(pending),
                 'last_batch_revision': result.get('revision'),
-                'message': ('Vinculación terminada.' if not pending
+                'message': ('Vínculos completos; ejecutando auditoría de integridad.' if not pending
                             else 'Migrando en tandas de ' + str(batch_size) + ' lotes.'),
-                'status': 'done' if not pending else 'running',
+                'status': 'running',
             }
             _write_job(gateway, ubigeo, value)
+        if not pending:
+            current = _read_job(gateway, ubigeo)
+            _audit_job(gateway, ubigeo, ids, current)
+            return
         if pending and _owns(gateway, ubigeo, job_id):
             raise ValueError('La migración no pudo avanzar; revisa el siguiente manifiesto.')
     except Exception as error:

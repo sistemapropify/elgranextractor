@@ -1,7 +1,7 @@
 {% extends 'propifai_base.html' %}
 {% load static %}
 {% block title %}Catastro · Prometeo{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-dashboard.css' %}?v=5">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-dashboard.css' %}?v=6">{% endblock %}
 {% block content %}
 <main class="catastro" id="catastro-dashboard">
   <header class="catastro-heading"><div><p class="eyebrow">GEOLLAQTA · COFOPRI</p><h1>Catastro</h1><p>Reportes, fichas disponibles y fachadas, organizados por distrito y predio.</p></div><a class="btn btn-secondary catastro-button" href="/catastro/maestro/planos/">Planos y etapas</a><a class="btn btn-secondary catastro-button" href="/catastro/maestro/?ubigeo=040103">Catastro maestro</a><a class="btn btn-secondary catastro-button" href="/cuadrantizacion/mapa/?catastro=yanahuara">Abrir mapa</a></header>
@@ -21,12 +21,14 @@
       <li><span>02</span><strong>Archivo privado R2</strong><small><code>geollaqta/040126/&lt;lote&gt;/datos.json</code> y archivos originales.</small></li>
       <li><span>03</span><strong>Normalización</strong><small>Registro Maestro de Lote con <code>entities.id</code> inmutable.</small></li>
       <li><span>04</span><strong>Cloudflare D1</strong><small><code>identities</code>, <code>current_attributes</code>, titulares, medios y procedencia.</small></li>
-      <li><span>05</span><strong>Mapa y ficha</strong><small>El Catastro Maestro y el ACM consultan la misma identidad.</small></li>
+      <li><span>05</span><strong>Auditoría de integridad D1</strong><small>Reconcilia lotes R2, identidades, geometría, atributos y medios antes de publicar.</small></li>
+      <li><span>06</span><strong>Mapa y ficha</strong><small>El Catastro Maestro y el ACM consultan la misma identidad.</small></li>
     </ol>
     <div class="catastro-pipeline-summary" aria-live="polite">
       <article><span>JSON disponibles en R2</span><strong id="master-source-lots">—</strong></article>
       <article><span>Lotes vinculados en D1</span><strong id="master-linked-lots">—</strong></article>
       <article><span>Pendientes de vincular</span><strong id="master-pending-lots">—</strong></article>
+      <article><span>Auditoría D1</span><strong id="master-audit-status">Pendiente</strong></article>
     </div>
     <progress id="master-migration-progress" value="0" max="1" aria-label="Progreso de vinculación al Catastro Maestro"></progress>
     <div class="catastro-pipeline-actions">
@@ -55,4 +57,4 @@
   <section class="catastro-card"><h2>Predios del archivo</h2><p class="catastro-help">Últimos 50 predios del distrito seleccionado. Abre un predio para revisar sus documentos y fotos.</p><div class="catastro-table-wrap"><table><thead><tr><th>Código del lote</th><th>Estado</th><th>Documentos</th><th>Fachadas</th><th>Pendientes</th><th>Archivo</th></tr></thead><tbody id="lots-list"><tr><td colspan="6">Consultando el archivo catastral…</td></tr></tbody></table></div></section>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=7" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=8" defer></script>{% endblock %}

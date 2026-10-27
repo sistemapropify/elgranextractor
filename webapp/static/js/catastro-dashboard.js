@@ -30,16 +30,20 @@
   function renderMigration(data){
     const source=Number(data.source_lots||0),linked=Number(data.linked_lots||0),pending=Number(data.pending_lots||0);
     const job=data.job||{},running=job.status==='running',stale=job.status==='stale';
+    const audit=job.audit||{},auditStatus=audit.status||'pending';
     el('master-source-lots').textContent=source.toLocaleString('es-PE');
     el('master-linked-lots').textContent=linked.toLocaleString('es-PE');
     el('master-pending-lots').textContent=pending.toLocaleString('es-PE');
+    el('master-audit-status').textContent=auditStatus==='passed'?'Aprobada':auditStatus==='warnings'?'Aprobada con avisos':auditStatus==='failed'?'Falló':running&&!pending?'En curso':'Pendiente';
+    el('master-audit-status').classList.toggle('warn',auditStatus==='warnings');
+    el('master-audit-status').classList.toggle('error-message',auditStatus==='failed');
     const progress=el('master-migration-progress');progress.max=Math.max(1,source);progress.value=Math.min(source,linked);
     const button=el('migrate-master');button.disabled=migrationBusy||running||!source||!pending;
     button.textContent=running?'Migrando en segundo plano…':pending?linked?'Continuar vinculación al Maestro':'Migrar al Catastro Maestro':'Todos los lotes están vinculados';
     if(running)migrationMessage('Azure está migrando en segundo plano. Puedes cerrar esta página o apagar tu computadora; el avance queda guardado en D1.',false);
     else if(stale)migrationMessage('La ejecución anterior se interrumpió. El vigilante de Azure la reanudará automáticamente; también puedes continuarla manualmente.',true);
     else if(job.status==='error')migrationMessage(job.message||'La migración se detuvo. Puedes reanudarla con el botón.',true);
-    else if(job.status==='done'&&!pending)migrationMessage('Vinculación completa: '+linked.toLocaleString('es-PE')+' lotes están disponibles en el Catastro Maestro.');
+    else if(job.status==='done'&&!pending)migrationMessage((job.message||('Auditoría aprobada: '+linked.toLocaleString('es-PE')+' lotes verificados.'))+(audit.warnings?.length?' Avisos: '+audit.warnings.length+'.':''),false);
     else if(data.listing_truncated)migrationMessage('El inventario R2 supera el límite de listado; procesa el distrito por bloques antes de continuar.',true);
     else if(!source)migrationMessage('No hay manifiestos JSON archivados para este distrito.',true);
     else if(!pending)migrationMessage('Vinculación completa: '+linked.toLocaleString('es-PE')+' lotes del Catastro Maestro están disponibles en el mapa y en su ficha.');

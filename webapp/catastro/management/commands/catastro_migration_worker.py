@@ -34,6 +34,9 @@ class Command(BaseCommand):
         current = migration_runner.job(gateway, ubigeo)
         status = current.get('status')
         attempts = int(current.get('attempts', 0))
+        if status == 'done' and not current.get('audit'):
+            migration_runner.audit_existing(ubigeo, 'azure-migration-watchdog')
+            return True
         old_size_error = (
             status == 'error' and
             str(current.get('message', '')).startswith('El archivo supera el límite de lectura.')

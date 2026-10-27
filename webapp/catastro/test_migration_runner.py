@@ -27,6 +27,16 @@ class FakeGateway:
 
 
 class MigrationRunnerTests(SimpleTestCase):
+    @patch('catastro.management.commands.catastro_migration_worker.migration_runner.audit_existing')
+    @patch('catastro.management.commands.catastro_migration_worker.Gateway')
+    @patch('catastro.management.commands.catastro_migration_worker.migration_runner.job',
+           return_value={'status': 'done', 'linked_lots': 1})
+    def test_watchdog_audits_completed_migration_without_result(
+            self, job, gateway, audit_existing):
+        from .management.commands.catastro_migration_worker import Command
+        self.assertTrue(Command._recover_once('040126'))
+        audit_existing.assert_called_once_with('040126', 'azure-migration-watchdog')
+
     def test_active_lease_prevents_a_second_worker(self):
         gateway = FakeGateway({'status': 'running', 'expires_at': int(time.time()) + 120})
         claimed, value = migration_runner._claim(gateway, '040126', 'admin', 20)
@@ -55,6 +65,24 @@ class MigrationRunnerTests(SimpleTestCase):
         self.assertTrue(migration_runner._owns(gateway, '040126', 'owner'))
         self.assertFalse(migration_runner._owns(gateway, '040126', 'other'))
 
+    @patch('catastro.migration_runner.audit_district',
+           return_value={'status': 'passed', 'linked_lots': 1,
+                         'errors': [], 'warnings': []})
+    @patch('catastro.migration_runner._write_job',
+           side_effect=lambda gateway, ubigeo, value: value)
+    @patch('catastro.migration_runner._read_job',
+           return_value={'id': 'done', 'status': 'done', 'linked_lots': 1})
+    @patch('catastro.migration_runner.Gateway')
+    @patch('catastro.migration_runner.R2')
+    @patch('catastro.migration_runner.geollaqta_bulk.lot_ids',
+           return_value=(['a'], False))
+    def test_completed_migration_without_audit_is_reaudited(
+            self, lots, cloud, gateway, read_job, write_job, audit):
+        result = migration_runner.audit_existing('040126')
+        self.assertEqual(result['status'], 'done')
+        self.assertEqual(result['audit']['status'], 'passed')
+        audit.assert_called_once()
+
     @patch('catastro.migration_runner._write_job',
            side_effect=lambda gateway, ubigeo, value: value)
     @patch('catastro.migration_runner._read_job',
@@ -68,14 +96,19 @@ class MigrationRunnerTests(SimpleTestCase):
            return_value=(['a', 'b', 'c'], False))
     @patch('catastro.migration_runner.R2')
     @patch('catastro.migration_runner.Gateway')
+    @patch('catastro.migration_runner.audit_district',
+           return_value={'status': 'passed', 'linked_lots': 3,
+                         'errors': [], 'warnings': []})
     def test_runner_loads_inventory_once_for_all_batches(
-            self, gateway, cloud, lots, linked, migrate, owns, read_job, write_job):
+            self, audit, gateway, cloud, lots, linked, migrate, owns,
+            read_job, write_job):
         migration_runner._run('040126', 'admin', 1, 'job')
         lots.assert_called_once()
         linked.assert_called_once()
         self.assertEqual(migrate.call_count, 3)
         self.assertTrue(all(call.args[2] == [value]
                             for call, value in zip(migrate.call_args_list, 'abc')))
+        audit.assert_called_once()
 
     @patch('catastro.migration_runner._claim',
            return_value=(True, {'id': 'bounded', 'batch_size': 5}))
