@@ -117,7 +117,7 @@ class Gateway:
 class D1ReadModel:
     """Bounded read-only queries that never build the authoring working copy."""
 
-    PAGE_SIZE = 5000
+    PAGE_SIZE = 10000
 
     def __init__(self, gateway=None):
         self.gateway = gateway or Gateway()
@@ -363,34 +363,36 @@ class D1ReadModel:
                           (SELECT i.source_feature_id FROM identities i
                            WHERE i.entity_id=e.id AND i.layer=e.kind
                            ORDER BY i.version_id DESC LIMIT 1) AS source_feature_id,
-                          MAX(CASE WHEN s.field='$geometry' THEN c.version_id END)
-                              AS geometry_version_id,
-                          json_group_object(s.field,json(c.value_json)) AS values_json
+                          c.version_id AS geometry_version_id,
+                          c.value_json AS geometry_json,
+                          a.ubigeo,a.sector,a.block,a.lot,a.floors,a.units,
+                          a.is_corner,a.is_through,a.faces_park,a.address,a.zoning
                    FROM entities e
-                   JOIN selections s ON s.entity_id=e.id
+                   JOIN selections s ON s.entity_id=e.id AND s.field='$geometry'
                    JOIN contributions c ON c.id=s.contribution_id
+                   LEFT JOIN current_attributes a ON a.entity_id=e.id
                    WHERE e.ubigeo=? AND e.kind=? AND e.id>?
-                     AND EXISTS(SELECT 1 FROM selections g
-                                WHERE g.entity_id=e.id AND g.field='$geometry')
-                   GROUP BY e.id,e.kind
                    ORDER BY e.id
                    LIMIT """ + str(self.PAGE_SIZE),
                 [ubigeo, kind, cursor],
             )
             for row in rows:
                 try:
-                    values = json.loads(row.get('values_json') or '{}')
+                    geometry = json.loads(row.get('geometry_json') or 'null')
                 except (TypeError, ValueError):
                     raise StorageError('D1 devolvió una geometría no válida.') from None
-                geometry = values.pop('$geometry', None)
                 if not isinstance(geometry, dict):
                     continue
+                properties = {
+                    key: value for key, value in row.items()
+                    if key not in ('id', 'kind', 'source_feature_id',
+                                   'geometry_version_id', 'geometry_json',
+                                   'entity_id')
+                }
+                properties['source_feature_id'] = row.get('source_feature_id')
                 features.append({
                     'type': 'Feature', 'id': row['id'], 'geometry': geometry,
-                    'properties': {
-                        **values,
-                        'source_feature_id': row.get('source_feature_id'),
-                    },
+                    'properties': properties,
                     'provenance': {
                         '$geometry': {
                             'version_id': row.get('geometry_version_id'),
