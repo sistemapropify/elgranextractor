@@ -352,19 +352,38 @@
             }
             {
                 task=(async()=>{
-                    let result;
+                    let collection;
                     if(scope===district&&!signal.aborted)
                         loading(source.name+' · '+key+'…',loadDone,loadTotal);
-                    if(client)result=await client.load({ubigeo:current,layers:source.layers,service_base:source.service_base},key,{signal,onBatch:(_,snapshot)=>{
-                        if(scope===district&&!signal.aborted)status('Cargando '+source.name+' · '+key+': '+fmt(snapshot.processed)+' de '+fmt(snapshot.total_in_view));
-                    }});
-                    else if(source.transport==='snapshot')
-                        result=await json('/catastro/api/maestro/vectores/'+encodeURIComponent(current)+'/'+key+'/',signal);
-                    else result=await json('/catastro/api/maestro/fuentes/'+encodeURIComponent(source.id)+'/'+key+'/?ubigeo='+current,signal);
-                    if(signal.aborted)return;
-                    const collection={source,key,district:current,records:result.features.map(f=>record(f,source,key)).filter(Boolean)};
-                    collections.set(id,collection);
-                    if(vectorLayer)await addVectorFeatures(collection);
+                    if(source.transport==='snapshot'){
+                        const base='/catastro/api/maestro/vectores/'+encodeURIComponent(current)+'/'+key+'/';
+                        const manifest=await json(base+'manifiesto/',signal);
+                        collection={source,key,district:current,records:[]};
+                        collections.set(id,collection);
+                        for(let part=1;part<=manifest.parts;part++){
+                            if(signal.aborted)return;
+                            if(scope===district)
+                                loading(source.name+' · '+key+' · parte '+part+'/'+manifest.parts,
+                                    loadDone+(part-1)/Math.max(1,manifest.parts),loadTotal);
+                            const data=await json(base+'?part='+part,signal);
+                            const records=(data.features||[]).map(f=>record(f,source,key)).filter(Boolean);
+                            collection.records.push(...records);
+                            if(vectorLayer&&records.length)
+                                await addVectorFeatures({source,key,district:current,records});
+                            counts();
+                        }
+                    }else{
+                        let result;
+                        if(client)result=await client.load({ubigeo:current,layers:source.layers,service_base:source.service_base},key,{signal,onBatch:(_,snapshot)=>{
+                            if(scope===district&&!signal.aborted)status('Cargando '+source.name+' · '+key+': '+fmt(snapshot.processed)+' de '+fmt(snapshot.total_in_view));
+                        }});
+                        else result=await json('/catastro/api/maestro/fuentes/'+encodeURIComponent(source.id)+'/'+key+'/?ubigeo='+current,signal);
+                        if(signal.aborted)return;
+                        collection={source,key,district:current,records:result.features.map(f=>record(f,source,key)).filter(Boolean)};
+                        collections.set(id,collection);
+                        if(vectorLayer)await addVectorFeatures(collection);
+                    }
+                    if(signal.aborted||!collection)return;
                     if(scope===district&&!signal.aborted){
                         loadDone++;
                         loading(source.name+' · '+key+': '+fmt(collection.records.length)+' elementos',loadDone,loadTotal);

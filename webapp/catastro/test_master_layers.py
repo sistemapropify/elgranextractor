@@ -99,6 +99,12 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertEqual(len(row['chunks']), 3)
         restored = vector_snapshots.read_snapshot('040102', 'lotes', cloud=cloud)
         self.assertEqual(restored['total_features'], 9001)
+        manifest = vector_snapshots.snapshot_manifest('040102', 'lotes', cloud=cloud)
+        self.assertEqual(manifest['parts'], 3)
+        self.assertEqual(manifest['features'], 9001)
+        self.assertEqual(
+            len(vector_snapshots.read_snapshot_part('040102', 'lotes', 1, cloud=cloud)['features']),
+            4000)
         self.assertIn('geollaqta/vectores/index.json', cloud.objects)
 
     def test_manual_park_lots_are_saved_independently_by_district(self):
@@ -242,4 +248,4 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertNotIn('geollaqta-data.js', html)
         self.assertNotIn('geollaqta-district.js', html)
         self.assertNotIn('collection-form', html)
-        self.assertIn('catastro-maestro.js?v=20', html)
+        self.assertIn('catastro-maestro.js?v=21', html)

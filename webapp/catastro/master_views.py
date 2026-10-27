@@ -63,12 +63,30 @@ def layer(request, source_id, layer_key):
 @admin_required
 def vector_snapshot(request, ubigeo, layer):
     try:
-        value = vector_snapshots.read_snapshot(ubigeo, layer)
+        part = request.GET.get('part')
+        if part is not None:
+            value = vector_snapshots.read_snapshot_part(ubigeo, layer, int(part))
+        else:
+            value = vector_snapshots.read_snapshot(ubigeo, layer)
         response = JsonResponse(value, json_dumps_params={'separators': (',', ':')})
         response['Cache-Control'] = 'private, max-age=86400'
         fingerprint = vector_snapshots.snapshot_fingerprint(ubigeo, layer)
         if fingerprint:
             response['ETag'] = '"' + fingerprint + '"'
+        return response
+    except StorageError as error:
+        return JsonResponse({'error': str(error)}, status=503)
+    except ValueError as error:
+        return JsonResponse({'error': str(error)}, status=404)
+
+
+@require_GET
+@admin_required
+def vector_snapshot_manifest(request, ubigeo, layer):
+    try:
+        value = vector_snapshots.snapshot_manifest(ubigeo, layer)
+        response = JsonResponse(value)
+        response['Cache-Control'] = 'private, max-age=3600'
         return response
     except StorageError as error:
         return JsonResponse({'error': str(error)}, status=503)

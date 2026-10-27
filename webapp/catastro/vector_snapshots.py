@@ -187,6 +187,45 @@ def read_snapshot(ubigeo, layer, cloud=None):
     return {**result, 'features': features, 'total_features': len(features)}
 
 
+def snapshot_manifest(ubigeo, layer, cloud=None):
+    row = next((item for item in inventory(cloud)['snapshots']
+                if item.get('ubigeo') == ubigeo and item.get('layer') == layer), None)
+    if not row:
+        raise ValueError('La capa vectorial todavía no está disponible.')
+    chunks = row.get('chunks') or ([{
+        'object_key': row['object_key'], 'sha256': row['sha256'],
+        'features': row.get('features', 0),
+    }] if row.get('object_key') else [])
+    return {
+        'ubigeo': ubigeo, 'layer': layer, 'parts': len(chunks),
+        'features': row.get('features', 0),
+        'chunks': [{'part': index + 1, 'features': item.get('features', 0),
+                    'sha256': item['sha256']}
+                   for index, item in enumerate(chunks)],
+    }
+
+
+def read_snapshot_part(ubigeo, layer, part, cloud=None):
+    row = next((item for item in inventory(cloud)['snapshots']
+                if item.get('ubigeo') == ubigeo and item.get('layer') == layer), None)
+    if not row:
+        raise ValueError('La capa vectorial todavía no está disponible.')
+    chunks = row.get('chunks') or ([{
+        'object_key': row['object_key'], 'sha256': row['sha256'],
+    }] if row.get('object_key') else [])
+    if type(part) is not int or not 1 <= part <= len(chunks):
+        raise ValueError('Parte vectorial no válida.')
+    item = chunks[part - 1]
+    body, _ = (cloud or R2(timeout=30)).get_manifest(item['object_key'])
+    raw = gzip.decompress(body)
+    if hashlib.sha256(raw).hexdigest() != item['sha256']:
+        raise StorageError('La parte vectorial no coincide con su huella registrada.')
+    value = json.loads(raw)
+    if not isinstance(value, dict) or not isinstance(value.get('features'), list):
+        raise StorageError('La parte vectorial almacenada no es válida.')
+    return value
+
+
 def snapshot_fingerprint(ubigeo, layer, cloud=None):
     row = next((item for item in inventory(cloud)['snapshots']
                 if item.get('ubigeo') == ubigeo and item.get('layer') == layer), None)
