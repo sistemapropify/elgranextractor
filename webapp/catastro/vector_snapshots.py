@@ -10,7 +10,11 @@ from .storage import R2, StorageError
 
 PREFIX = 'geollaqta/vectores/'
 INDEX_KEY = PREFIX + 'index.json'
-LAYERS = ('lotes', 'manzanas')
+LAYERS = ('lotes', 'manzanas', 'vias')
+ROAD_TYPES = {
+    '1': 'Avenida', '2': 'Calle', '3': 'Jirón', '4': 'Pasaje',
+    '7': 'Prolongación', '13': 'Callejón',
+}
 
 
 def _index(cloud=None):
@@ -51,7 +55,7 @@ def capture_district(ubigeo, layers=LAYERS, progress=None, cloud=None):
     for layer in layers:
         if layer not in LAYERS:
             raise ValueError('Capa vectorial no válida: ' + str(layer))
-        config = geollaqta.LAYERS[layer]
+        config = geollaqta.LAYERS['ejes-vias' if layer == 'vias' else layer]
         field = config.get('district_field', 'ID_DIST')
         inventory_result = geollaqta._query(
             layer=config['id'], where=field + "='" + ubigeo + "'",
@@ -68,6 +72,9 @@ def capture_district(ubigeo, layers=LAYERS, progress=None, cloud=None):
                     row.get('attributes') or {}, config['fields'])
                 if attributes.get(field) != ubigeo:
                     continue
+                if layer == 'vias':
+                    attributes['TIPO_VIA'] = ROAD_TYPES.get(
+                        str(attributes.get('TIP_VIA')), 'Otro')
                 try:
                     geometry = geollaqta._esri_geometry(
                         row.get('geometry') or {}, config['kind'])
@@ -84,6 +91,7 @@ def capture_district(ubigeo, layers=LAYERS, progress=None, cloud=None):
             'name': config['name'],
             'ubigeo': ubigeo,
             'layer': layer,
+            'source_layer': 'ejes-vias' if layer == 'vias' else layer,
             'source': 'GeoLlaqta · COFOPRI',
             'features': features,
         }

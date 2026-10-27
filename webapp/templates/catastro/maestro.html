@@ -14,6 +14,7 @@
       <section><h2>Capas</h2>
         <label class="master-check"><input id="master-manzanas" type="checkbox" checked><span class="master-swatch blocks"></span>Manzanas <strong id="master-count-manzanas">—</strong></label>
         <label class="master-check"><input id="master-lotes" type="checkbox" checked><span class="master-swatch lots"></span>Lotes <strong id="master-count-lotes">—</strong></label>
+        <label class="master-check"><input id="master-vias" type="checkbox" checked><span class="master-swatch"></span>Vías <strong id="master-count-vias">—</strong></label>
       </section>
       <section><h2>Fuentes del distrito</h2><div id="master-sources"><p class="master-help">Consultando fuentes…</p></div></section>
       <section id="master-raster-section">
@@ -125,7 +126,7 @@
 </dialog>
 {% endblock %}
 {% block extra_js %}
-<script src="{% static 'js/catastro-maestro.js' %}?v=16"></script>
+<script src="{% static 'js/catastro-maestro.js' %}?v=17"></script>
 <script src="{% static 'js/catastro-master-model.js' %}?v=1"></script>
 <script src="{% static 'js/catastro-raster-layers.js' %}?v=17"></script>
 {% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initCatastroMaster" async defer></script>{% else %}<script>document.getElementById('master-status').textContent='No se ha configurado la clave del mapa.';</script>{% endif %}

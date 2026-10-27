@@ -9,7 +9,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--ubigeo', required=True)
-        parser.add_argument('--layers', nargs='+', default=['lotes', 'manzanas'])
+        parser.add_argument('--layers', nargs='+', default=['lotes', 'manzanas', 'vias'])
 
     def handle(self, *args, **options):
         ubigeo = options['ubigeo']

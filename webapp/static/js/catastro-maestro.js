@@ -19,7 +19,14 @@
     }
     function record(feature,source,key) {
         const geometry=feature.geometry;
-        if(!['Polygon','MultiPolygon'].includes(geometry?.type))return null;
+        if(!['Polygon','MultiPolygon','LineString','MultiLineString'].includes(geometry?.type))return null;
+        if(['LineString','MultiLineString'].includes(geometry.type)){
+            const lines=geometry.type==='LineString'?[geometry.coordinates]:geometry.coordinates;
+            const paths=lines.map(line=>line.map(world));
+            const points=paths.flat(),xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
+            const path=paths.map(line=>line.map((p,i)=>(i?'L':'M')+p[0]+' '+p[1]).join('')).join('');
+            return {feature,source,key,rings:paths,path,bbox:[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]};
+        }
         const polygons=geometry.type==='Polygon'?[geometry.coordinates]:geometry.coordinates;
         const rings=polygons.flat().map(ring=>ring.map(world));
         const points=rings.flat(),xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
@@ -37,7 +44,7 @@
     let cataloguePromise=null;
     const collections=new Map(),enabled=new Map(),pending=new Map();
     const dataFeatures=new Map();
-    const layerOn={manzanas:true,lotes:true};
+    const layerOn={manzanas:true,lotes:true,vias:true};
     const ALL_DISTRICTS='all';
     const masterRole=source=>source.role==='draft'||source.role==='snapshot';
     const districtLabel=code=>code===ALL_DISTRICTS?'Todos los distritos D1':
@@ -56,7 +63,7 @@
         return scoped().filter(c=>enabled.get(c.source.id)&&layerOn[c.key]);
     }
     function counts() {
-        for(const key of ['manzanas','lotes']) {
+        for(const key of ['manzanas','lotes','vias']) {
             const n=visible().filter(c=>c.key===key).reduce((sum,c)=>sum+c.records.length,0);
             el('count-'+key).textContent=fmt(n);
         }
@@ -76,11 +83,17 @@
     }
     function detail(item) {
         const panel=el('detail');panel.replaceChildren();
-        const h=document.createElement('h2');h.textContent=item.key==='lotes'?'Lote seleccionado':'Manzana seleccionada';panel.append(h);
+        const h=document.createElement('h2');h.textContent=item.key==='lotes'?'Lote seleccionado':item.key==='vias'?'Vía seleccionada':'Manzana seleccionada';panel.append(h);
         const p=item.feature.properties,dl=document.createElement('dl');
         const entityKind=item.key==='manzanas'?'manzana':'lote';
         const itemDistrict=sourceDistrict(item.source);
-        const values=[['Distrito',p.DISTRICT_NAME||districtLabel(itemDistrict)],
+        const values=item.key==='vias'?[
+            ['Distrito',p.DISTRICT_NAME||districtLabel(itemDistrict)],
+            ['Fuente',item.source.name],
+            ['Tipo de vía',p.TIPO_VIA||p.TIP_VIA||'Sin dato'],
+            ['Nombre de vía',p.NOM_VIA||'Sin nombre'],
+            ['Código de vía',p.COD_VIA||'Sin dato']]:[
+            ['Distrito',p.DISTRICT_NAME||districtLabel(itemDistrict)],
             ['Fuente',item.source.name],['Manzana',p.COD_MZNA||'Sin numeración en la fuente']];
         if(item.key==='lotes')values.push(['Lote',p.COD_LOTE||'Sin numeración en la fuente']);
         values.push(['Código catastral',p.ID_LOTE||p.ID_MZNA||'No disponible'],
@@ -195,10 +208,10 @@
         return {
             visible:Boolean((district===ALL_DISTRICTS||feature.getProperty('DISTRICT')===district)&&layerOn[key]&&enabled.get(sourceId)!==false),
             clickable:false,fillOpacity:0,
-            strokeColor:key==='manzanas'?'#06d7af':'#efb140',
-            strokeOpacity:key==='manzanas'?.95:.8,
-            strokeWeight:key==='manzanas'?1.7:.8,
-            zIndex:key==='manzanas'?1:2,
+            strokeColor:key==='vias'?'#63b8ff':key==='manzanas'?'#06d7af':'#efb140',
+            strokeOpacity:key==='vias'?.9:key==='manzanas'?.95:.8,
+            strokeWeight:key==='vias'?2:key==='manzanas'?1.7:.8,
+            zIndex:key==='vias'?3:key==='manzanas'?1:2,
         };
     }
     function makeVectorLayer() {
@@ -228,7 +241,7 @@
         const scope=district;
         const current=scope===ALL_DISTRICTS?sourceDistrict(source):scope;
         const client=source.transport==='arcgis'?window.GeollaqtaDistrict.create():null;
-        for(const key of ['manzanas','lotes']) {
+        for(const key of ['manzanas','lotes','vias']) {
             if(!Number(source.layers?.[key]?.count||0))continue;
             const id=current+':'+source.id+':'+key;
             if(collections.has(id))continue;
@@ -355,7 +368,7 @@
         map.addListener('click',event=>selectAt([event.latLng.lng(),event.latLng.lat()]));
         el('fit').addEventListener('click',fit);
         el('satellite').addEventListener('click',()=>{const value=map.getMapTypeId()!=='satellite';map.setMapTypeId(value?'satellite':'roadmap');el('satellite').setAttribute('aria-pressed',String(value));});
-        for(const key of ['manzanas','lotes'])el(key).addEventListener('change',()=>{
+        for(const key of ['manzanas','lotes','vias'])el(key).addEventListener('change',()=>{
             layerOn[key]=el(key).checked;
             if(selectedFeature){vectorLayer.revertStyle(selectedFeature);selected=null;selectedFeature=null;}
             counts();vectorLayer.setStyle(vectorStyle);
