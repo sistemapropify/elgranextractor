@@ -43,6 +43,13 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertFalse(source['qa']['complete_inventory'])
         self.assertEqual(source['crs'], 'EPSG:4326')
 
+    def test_catalogue_remains_available_when_snapshot_storage_is_unconfigured(self):
+        with patch('catastro.vector_snapshots.catalog_sources',
+                   side_effect=StorageError('Configura las credenciales privadas de R2.')):
+            data = master_layers.catalogue()
+        self.assertTrue(data['districts'])
+        self.assertTrue(any(source['id'] == 'geollaqta' for source in data['sources']))
+
     def test_d1_catalogue_uses_bounded_reads_without_loading_the_authoring_store(self):
         summaries = {'040126': {'ubigeo': '040126', 'revision': 4114,
                                 'lotes': 5240, 'manzanas': 0}}

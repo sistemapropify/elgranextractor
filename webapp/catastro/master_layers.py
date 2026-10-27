@@ -11,6 +11,7 @@ from pathlib import Path
 
 from cuadrantizacion import geollaqta as geo
 from . import source_placement
+from .storage import StorageError
 
 DATA = Path(__file__).with_name('data')
 SOURCES = {
