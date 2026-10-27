@@ -55,6 +55,7 @@
     const caymaRequested=()=>new URL(location.href).searchParams.get('cayma')==='1';
     const status=(text,error=false)=>{el('status').textContent=text;el('status').dataset.error=String(error);};
     let parkMode=false,parkToken='',parkSaved=new Set(),parkDraft=new Set();
+    let loadTotal=0,loadDone=0;
     const isUuid=value=>/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(String(value||''));
     const displayEntityId=(kind,id)=>isUuid(id)?((kind==='manzana'?'MANZANA-CM-':'LOTE-CM-')+String(id).replaceAll('-','').slice(0,12).toUpperCase()):null;
     const valueText=value=>value==null||value===''?'—':typeof value==='boolean'?(value?'Sí':'No'):typeof value==='object'?JSON.stringify(value):String(value);
@@ -62,6 +63,17 @@
         country_code:'País',ubigeo:'UBIGEO',postal_code:'Código postal',department:'Departamento',province:'Provincia',district:'Distrito',zone:'Zona',sector:'Sector',urbanization:'Urbanización / habilitación',block:'Manzana',lot:'Lote',building:'Edificación',entrance:'Ingreso',floor:'Piso',unit:'Unidad',address:'Dirección',address_block:'Manzana de dirección',address_lot:'Lote de dirección',street_type:'Tipo de vía',street_name:'Nombre de vía',municipal_number:'Número municipal',condition:'Condición',registry_office:'Oficina registral',registry_entry_type:'Tipo de partida',registry_entry_number:'Partida registral',registry_folios:'Fojas',registry_seat:'Asiento',notary_name:'Notaría',notary_kardex:'Kárdex',deed_date:'Fecha de escritura',property_registration_date:'Inscripción del predio',construction_declaration:'Declaración de fábrica',construction_registration_seat:'Asiento de fábrica',construction_registration_date:'Inscripción de fábrica',cuc:'CUC',cadastral_reference:'Referencia catastral',cadastral_use:'Uso catastral',observed_use:'Uso observado',zoning:'Zonificación',use_category:'Categoría de uso',business_category:'Giro',business_subcategory:'Subgiro',ciiu_code:'CIIU',ciiu_version:'Versión CIIU',commercial_name:'Nombre comercial',land_area:'Área de terreno documental',built_area:'Área construida documental',geometric_land_area:'Área geométrica',gis_land_area:'Área SIG de terreno (valor de fuente)',gis_built_area:'Área SIG construida (valor de fuente)',front:'Frente',back:'Fondo',left:'Izquierda',right:'Derecha',perimeter:'Perímetro',bedrooms:'Dormitorios',bathrooms:'Baños',half_bathrooms:'Medios baños',parking_spaces:'Estacionamientos',floors:'Pisos',units:'Unidades',is_corner:'Esquina',is_through:'Pasaje',faces_park:'Frente a parque'
     };
     const parkStatus=(text,error=false)=>{const node=el('park-status');if(!node)return;node.textContent=text;node.dataset.error=String(error);};
+    function loading(text,done,total){
+        const host=el('load-progress'),bar=el('load-bar'),label=el('load-text');
+        if(!host)return;
+        if(done==null){
+            host.hidden=true;return;
+        }
+        host.hidden=false;
+        const value=Math.max(0,Math.min(1,(done||0)/(total||1)));
+        if(bar){bar.value=value;}
+        if(label)label.textContent=text+' · '+Math.round(value*100)+'%';
+    }
     const parkKey=(feature,source)=>{
         const value=String(feature?.properties?.ID_LOTE||'').trim();
         return /^\d{14}$/.test(value)?value:source.id+':'+String(feature.id);
@@ -287,26 +299,34 @@
         vectorLayer.setStyle(vectorStyle);
     }
     function addVectorFeatures(collection) {
-        const features=collection.records.map(item=>{
-            const masterId=recordId(item.source,item.key,item.feature);
-            return {type:'Feature',properties:{MASTER_ID:masterId,MASTER_LAYER:item.key,
-                SOURCE_ID:item.source.id,DISTRICT:collection.district},
-                // Data layers stay intact across districts; the style hides
-                // features that do not belong to the active district.
-                geometry:item.feature.geometry};
-        });
-        const added=vectorLayer.addGeoJson({type:'FeatureCollection',features},
-            {idPropertyName:'MASTER_ID'});
-        added.forEach((feature,index)=>{
-            dataFeatures.set(feature.getProperty('MASTER_ID'),feature);
-            const item=collection.records[index];
-            if(item?.key==='lotes'){
-                const key=parkKey(item.feature,item.source);
-                if(/^\d{14}$/.test(key))parkFeatures.set(key,feature);
+        return new Promise(resolve=>{
+            let start=0;
+            function drawNext(){
+                const slice=collection.records.slice(start,start+2000);
+                const features=slice.map(item=>{
+                    const masterId=recordId(item.source,item.key,item.feature);
+                    return {type:'Feature',properties:{MASTER_ID:masterId,MASTER_LAYER:item.key,
+                        SOURCE_ID:item.source.id,DISTRICT:collection.district},
+                        geometry:item.feature.geometry};
+                });
+                const added=vectorLayer.addGeoJson({type:'FeatureCollection',features},
+                    {idPropertyName:'MASTER_ID'});
+                added.forEach((feature,index)=>{
+                    dataFeatures.set(feature.getProperty('MASTER_ID'),feature);
+                    const item=slice[index];
+                    if(item?.key==='lotes'){
+                        const key=parkKey(item.feature,item.source);
+                        if(/^\d{14}$/.test(key))parkFeatures.set(key,feature);
+                    }
+                });
+                vectorLayer.setStyle(vectorStyle);
+                refreshParkStyles();
+                start+=slice.length;
+                if(start<collection.records.length)setTimeout(drawNext,0);
+                else resolve();
             }
+            drawNext();
         });
-        vectorLayer.setStyle(vectorStyle);
-        refreshParkStyles();
     }
     async function json(url,signal) {
         const response=await fetch(url,{credentials:'same-origin',signal,headers:{Accept:'application/json'}});
@@ -330,6 +350,8 @@
             {
                 task=(async()=>{
                     let result;
+                    if(scope===district&&!signal.aborted)
+                        loading(source.name+' · '+key+'…',loadDone,loadTotal);
                     if(client)result=await client.load({ubigeo:current,layers:source.layers,service_base:source.service_base},key,{signal,onBatch:(_,snapshot)=>{
                         if(scope===district&&!signal.aborted)status('Cargando '+source.name+' · '+key+': '+fmt(snapshot.processed)+' de '+fmt(snapshot.total_in_view));
                     }});
@@ -339,7 +361,11 @@
                     if(signal.aborted)return;
                     const collection={source,key,district:current,records:result.features.map(f=>record(f,source,key)).filter(Boolean)};
                     collections.set(id,collection);
-                    if(vectorLayer)addVectorFeatures(collection);
+                    if(vectorLayer)await addVectorFeatures(collection);
+                    if(scope===district&&!signal.aborted){
+                        loadDone++;
+                        loading(source.name+' · '+key+': '+fmt(collection.records.length)+' elementos',loadDone,loadTotal);
+                    }
                 })().finally(()=>pending.delete(id));pending.set(id,task);
             }
             await task;if(signal.aborted||district!==scope)return;
@@ -352,7 +378,11 @@
         selected=null;selectedFeature=null;vectorLayer?.setStyle(vectorStyle);counts();
         const sources=catalog.sources.filter(s=>s.active&&masterRole(s)&&
             (district===ALL_DISTRICTS||s.districts.includes(district))&&enabled.get(s.id));
+        const layerNames=['manzanas','lotes','vias'];
+        loadTotal=sources.reduce((sum,s)=>sum+layerNames.filter(key=>Number(s.layers?.[key]?.count||0)).length,0);
+        loadDone=0;
         status(sources.length?'Cargando los registros del Catastro Maestro…':'Este distrito todavía no tiene registros activos en el Catastro Maestro.');
+        loading(sources.length?'Cargando el Catastro Maestro…':'',0,loadTotal||1);
         try{
             let next=0,finished=0;
             async function worker(){
@@ -366,6 +396,7 @@
             }
             await Promise.all(Array.from({length:Math.min(4,sources.length)},()=>worker()));
             if(signal.aborted)return;
+            loading(null);
             counts();if(fitAfter)fit();
             if(sources.length)status((map?'Catastro Maestro cargado · ':'Catastro Maestro cargado sin Google Maps · ')+districtLabel()+' · fuente de verdad D1.');
         }catch(error){if(error.name!=='AbortError'&&!signal.aborted)status(error.message,true);}

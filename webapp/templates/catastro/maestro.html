@@ -1,7 +1,7 @@
 {% extends 'propifai_base.html' %}
 {% load static %}
 {% block title %}Catastro maestro · Prometeo{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-maestro.css' %}?v=10">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-maestro.css' %}?v=11">{% endblock %}
 {% block content %}
 <main class="master-workspace" id="master-workspace">
   <header class="master-heading">
@@ -72,7 +72,7 @@
       <section id="master-detail"><h2>Elemento seleccionado</h2><p class="master-help">Selecciona un contorno para ver su fuente y los datos disponibles.</p></section>
       <p class="master-help master-standard">Formato común: GeoJSON · WGS84. Cada fuente conserva su procedencia y sus datos originales.</p>
     </aside>
-    <section class="master-map-wrap" aria-label="Mapa catastral"><div id="master-map"></div><div class="master-map-note" id="master-map-note">Cargando el catastro maestro…</div></section>
+    <section class="master-map-wrap" aria-label="Mapa catastral"><div id="master-map"></div><div class="master-load-progress" id="master-load-progress" hidden><span id="master-load-text">Cargando…</span><progress id="master-load-bar" max="1" value="0"></progress></div><div class="master-map-note" id="master-map-note">Cargando el catastro maestro…</div></section>
   </div>
   <footer class="master-status" id="master-status" role="status" aria-live="polite">Preparando el mapa…</footer>
 </main>
@@ -136,7 +136,7 @@
 </dialog>
 {% endblock %}
 {% block extra_js %}
-<script src="{% static 'js/catastro-maestro.js' %}?v=18"></script>
+<script src="{% static 'js/catastro-maestro.js' %}?v=19"></script>
 <script src="{% static 'js/catastro-master-model.js' %}?v=1"></script>
 <script src="{% static 'js/catastro-raster-layers.js' %}?v=17"></script>
 {% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initCatastroMaster" async defer></script>{% else %}<script>document.getElementById('master-status').textContent='No se ha configurado la clave del mapa.';</script>{% endif %}

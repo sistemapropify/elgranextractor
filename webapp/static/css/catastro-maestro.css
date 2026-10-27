@@ -43,3 +43,4 @@
 .master-entity-list img{width:100%;max-height:180px;object-fit:cover;border-radius:5px;margin-bottom:4px;background:#08131b}
 .master-unit-links{display:flex;flex-wrap:wrap;gap:5px 10px}
 .master-park-actions{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.master-load-progress{position:absolute;left:12px;top:12px;display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #2b4659;border-radius:7px;background:#0b1721d9;color:#cde8f6;font-size:11px;z-index:5}.master-load-progress progress{width:160px;accent-color:#54d48a}
