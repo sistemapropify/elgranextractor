@@ -67,6 +67,20 @@ export async function handle(request,env){
   if(url.pathname==='/health'&&request.method==='GET')return reply({service:'catastro-maestro',configured:!!(env.DB&&env.MASTER_TOKEN)});
   if(!env.MASTER_TOKEN)return reply({error:'Servicio pendiente de configuración'},503);
   if(!await authorized(request,env.MASTER_TOKEN))return reply({error:'No autorizado'},401);
+  if(request.method==='GET'&&url.pathname==='/v1/vector-object'){
+    const key=url.searchParams.get('key')||'';
+    if(!/^geollaqta\/vectores\/[0-9]{6}\/[a-z-]+\.part-[0-9]{4}\.json\.gz$/.test(key))
+      return reply({error:'Ruta vectorial no válida'},400);
+    if(!env.VECTORS)return reply({error:'Bucket vectorial no configurado'},503);
+    const object=await env.VECTORS.get(key);
+    if(!object)return reply({error:'Parte vectorial no disponible'},404);
+    return new Response(object.body,{headers:{
+      'Content-Type':'application/gzip',
+      'Cache-Control':'private, max-age=86400',
+      'X-Vector-Key':key,
+      'X-Content-Type-Options':'nosniff'
+    }});
+  }
   if(request.method!=='POST'||url.pathname!=='/v1/database')return reply({error:'Ruta no disponible'},404);
   if(Number(request.headers.get('Content-Length')||0)>12*1024*1024)return reply({error:'Solicitud demasiado grande'},413);
   try{

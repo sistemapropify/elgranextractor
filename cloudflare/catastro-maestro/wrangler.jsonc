@@ -6,5 +6,6 @@
   "workers_dev": true,
   "preview_urls": false,
   "observability": {"enabled": false},
-  "d1_databases": [{"binding": "DB", "database_name": "prometeo-catastro-maestro", "database_id": "2769a97f-54f7-48d7-b7a8-83da2f7389a6"}]
+  "d1_databases": [{"binding": "DB", "database_name": "prometeo-catastro-maestro", "database_id": "2769a97f-54f7-48d7-b7a8-83da2f7389a6"}],
+  "r2_buckets": [{"binding": "VECTORS", "bucket_name": "prometeo-catastro"}]
 }

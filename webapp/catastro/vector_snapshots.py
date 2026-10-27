@@ -4,6 +4,8 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
+from urllib.request import Request, build_opener
 
 from django.core.cache import cache
 
@@ -17,6 +19,38 @@ ROAD_TYPES = {
     '1': 'Avenida', '2': 'Calle', '3': 'Jirón', '4': 'Pasaje',
     '7': 'Prolongación', '13': 'Callejón',
 }
+
+
+class WorkerVectorStorage:
+    """Read vector parts through the private Cloudflare Worker."""
+
+    def __init__(self):
+        from .master_d1 import configuration
+        from .storage import NoRedirect
+        self.url, self.token = configuration()
+        self.opener = build_opener(NoRedirect())
+
+    def get_manifest(self, key):
+        request = Request(
+            self.url + '/v1/vector-object?key=' + quote(key, safe=''),
+            headers={'Authorization': 'Bearer ' + self.token,
+                     'Accept': 'application/gzip',
+                     'User-Agent': 'PrometeoCatastro/1.0'})
+        with self.opener.open(request, timeout=30) as response:
+            body = response.read(16 * 1024 * 1024 + 1)
+            headers = dict(response.headers)
+        if len(body) > 16 * 1024 * 1024:
+            raise StorageError('La parte vectorial supera el límite de lectura.')
+        return body, headers
+
+
+def _storage(cloud=None):
+    if cloud is not None:
+        return cloud
+    try:
+        return WorkerVectorStorage()
+    except StorageError:
+        return R2(timeout=30)
 
 
 def _index(cloud=None):
@@ -118,7 +152,7 @@ def save_snapshot(ubigeo, layer, collection, cloud=None, captured_at=None):
         raise ValueError('Distrito o capa vectorial no válida.')
     if not isinstance(collection, dict) or not isinstance(collection.get('features'), list):
         raise ValueError('La colección vectorial no es válida.')
-    storage = cloud or R2(timeout=30)
+    storage = _storage(cloud)
     stamp = captured_at or datetime.now(timezone.utc).isoformat()
     chunks = []
     features = collection['features']
@@ -178,7 +212,7 @@ def read_snapshot(ubigeo, layer, cloud=None):
                 if item.get('ubigeo') == ubigeo and item.get('layer') == layer), None)
     if not row:
         raise ValueError('La capa vectorial todavía no está disponible.')
-    storage = cloud or R2(timeout=30)
+    storage = _storage(cloud)
     chunks = row.get('chunks') or ([{
         'object_key': row['object_key'],
         'sha256': row['sha256'],
@@ -230,7 +264,7 @@ def read_snapshot_part(ubigeo, layer, part, cloud=None):
     if type(part) is not int or not 1 <= part <= len(chunks):
         raise ValueError('Parte vectorial no válida.')
     item = chunks[part - 1]
-    body, _ = (cloud or R2(timeout=30)).get_manifest(item['object_key'])
+    body, _ = _storage(cloud).get_manifest(item['object_key'])
     raw = gzip.decompress(body)
     if hashlib.sha256(raw).hexdigest() != item['sha256']:
         raise StorageError('La parte vectorial no coincide con su huella registrada.')
