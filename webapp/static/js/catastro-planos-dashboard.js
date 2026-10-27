@@ -70,6 +70,19 @@
   const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=String(text);if(cls)n.className=cls;return n;};
   function setStatus(text,error=false){status.textContent=text;status.dataset.error=String(error);}
   function csrf(){return $('dwg-form').elements.csrfmiddlewaretoken.value;}
+  async function readJson(response,label){
+    const text=await response.text();
+    try{
+      const value=text?JSON.parse(text):null;
+      if(!response.ok)throw Error(value?.error||('No se pudo consultar '+label+'.'));
+      return value;
+    }catch(error){
+      if(error?.message&&!response.ok)throw error;
+      const preview=text.replace(/\s+/g,' ').slice(0,180);
+      throw Error('Respuesta no válida de '+label+' (HTTP '+response.status+')'+
+        (preview?': '+preview:'.'));
+    }
+  }
   async function masterApi(payload=null,query=''){
     const response=await fetch(endpoint+query,{credentials:'same-origin',cache:'no-store',
       method:payload?'POST':'GET',headers:{Accept:'application/json',
@@ -77,8 +90,7 @@
       ...(payload?{body:JSON.stringify(payload)}:{})});
     if(!response.headers.get('content-type')?.includes('application/json'))
       throw Error('Inicia sesión para administrar los planos.');
-    const value=await response.json();
-    if(!response.ok)throw Error(value.error||'No se pudo completar la acción.');
+    const value=await readJson(response,'el Catastro Maestro');
     if(Number.isInteger(value.revision))revision=value.revision;
     return value;
   }
@@ -390,9 +402,10 @@
         fetch('/catastro/api/maestro/planos/',{credentials:'same-origin',cache:'no-store'}),
         fetch('/catastro/api/planos/inventario/',{credentials:'same-origin',cache:'no-store'}),
       ]);
-      const portfolio=await portfolioResponse.json(),cad=await cadResponse.json();
-      if(!portfolioResponse.ok)throw Error(portfolio.error||'No se pudo consultar el maestro.');
-      if(!cadResponse.ok)throw Error(cad.error||'No se pudo consultar el inventario CAD.');
+      const [portfolio,cad]=await Promise.all([
+        readJson(portfolioResponse,'el inventario maestro'),
+        readJson(cadResponse,'el inventario DWG'),
+      ]);
       const keys=[
         ...consolidatePdfVersions((portfolio.files||[]).filter(file=>file.version_id&&!recordFile(file))).map(file=>'source:'+file.source_id),
         ...consolidateDwgCopies(cad.dwg||[]).map(file=>'dwg:'+(file.sha256?'sha-'+file.sha256:file.id)),
@@ -404,8 +417,7 @@
       if(selectedDataDistrict){
         try{
           const migrationResponse=await fetch('/catastro/api/maestro/migracion/?ubigeo='+encodeURIComponent(selectedDataDistrict),{credentials:'same-origin',cache:'no-store'});
-          const migration=await migrationResponse.json();
-          if(!migrationResponse.ok)throw Error(migration.error||'No se pudo consultar la vinculación al maestro.');
+          const migration=await readJson(migrationResponse,'la vinculación al maestro');
           if($('geollaqta-indexed'))$('geollaqta-indexed').textContent=Number(migration.linked_lots||0).toLocaleString('es-PE');
           if($('geollaqta-pending'))$('geollaqta-pending').textContent=Number(migration.pending_lots||0).toLocaleString('es-PE');
         }catch(error){setStatus(error.message,true);}

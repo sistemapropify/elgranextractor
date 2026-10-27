@@ -106,5 +106,39 @@ class PlanViewerTests(SimpleTestCase):
         self.assertIn('Ruta del archivo al Catastro Maestro',html)
         self.assertIn('Registrar un original no significa vectorizarlo',html)
         self.assertIn('Aportes parciales por capa y campo',html)
-        self.assertIn('catastro-planos-dashboard.js?v=17',html)
+        self.assertIn('catastro-planos-dashboard.js?v=18',html)
         self.assertIn('catastro-planos-dashboard.css?v=10',html)
+
+    def test_plan_portfolio_reads_d1_metadata_without_loading_the_authoring_store(self):
+        from . import source_manager_views
+        request=RequestFactory().get('/catastro/api/maestro/planos/')
+        request.current_user=self.request().current_user
+        request.current_user.is_staff=True
+        gateway=SimpleNamespace(read_many=lambda queries:[
+            [{'id':'project-1','name':'Yanahuara','ubigeo':'040126',
+              'expected_sheets':1,'registered_sheets':1}],
+            [{'source_id':'cofopri-04012601004010','source_name':'COFOPRI · lote',
+              'ubigeo':'040126','sheet_code':'01','role':'candidate',
+              'project_name':'Yanahuara','expected_sheets':1}],
+            [{'version_id':'v1','version_source_id':'cofopri-04012601004010',
+              'label':'Original','source_date':'2026-10-14','crs':None,
+              'georeferencing':'{"status":"pending"}','original_name':'datos.json',
+              'digest':'abc','created_at':'2026-10-14T00:00:00Z',
+              'original_sha256':'def','vector_review':None,'vector_artifacts':None,
+              'original_name_payload':'datos.json','original_object_key':'geollaqta/original'}],
+            [{'version_id':'v1','elements':1}],
+            [{'ubigeo':'040126','geometries':5240}],
+        ])
+        with patch('catastro.source_manager.enabled',return_value=True), \
+             patch('catastro.source_manager.durable',return_value=True), \
+             patch('catastro.source_manager.store',
+                   side_effect=AssertionError('No debe cargar D1Store')), \
+             patch('catastro.source_manager_views.Gateway',return_value=gateway):
+            response=source_manager_views.plans_portfolio(request)
+        import json
+        value=json.loads(response.content)
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(value['storage'],'d1')
+        self.assertEqual(value['files'][0]['version_id'],'v1')
+        self.assertTrue(value['files'][0]['original_available'])
+        self.assertEqual(value['active_by_district'][0]['geometries'],5240)

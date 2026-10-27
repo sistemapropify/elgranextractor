@@ -12,6 +12,7 @@ from django.views.decorators.http import require_GET
 
 from .views import admin_required
 from . import source_manager, master_pipeline, cad_reader, plan_workspace
+from .master_d1 import Gateway
 from .master_store import Conflict
 from .storage import StorageError
 
@@ -61,7 +62,7 @@ def plans_portfolio(request):
     if not source_manager.enabled():
         return unavailable()
     try:
-        store = source_manager.store()
+        store = None if source_manager.durable() else source_manager.store()
         project_sql = '''SELECT p.id,p.name,p.ubigeo,p.expected_sheets,
             count(DISTINCT s.sheet_code) AS registered_sheets
             FROM projects p LEFT JOIN sources s ON s.project_id=p.id
@@ -85,7 +86,7 @@ def plans_portfolio(request):
             JOIN selections s ON s.entity_id=e.id AND s.field='$geometry'
             WHERE e.kind IN ('lote','manzana') GROUP BY ubigeo LIMIT 1000'''
         if source_manager.durable():
-            projects, sources, versions, elements, active = store.gateway.read_many([
+            projects, sources, versions, elements, active = Gateway().read_many([
                 {'sql': project_sql, 'params': []}, {'sql': source_sql, 'params': []},
                 {'sql': version_sql, 'params': []}, {'sql': elements_sql, 'params': []},
                 {'sql': active_sql, 'params': []}])
@@ -116,7 +117,10 @@ def plans_portfolio(request):
                         try:row[key]=json.loads(row[key])
                         except ValueError:row[key]=None
                 row['original_name']=row.pop('original_name_payload',None) or row.get('original_name')
-                row['original_available']=bool(row.pop('original_object_key',None)) or (source_manager.has_pdf(row['version_id']) if row.get('version_id') else False)
+                original_available=bool(row.pop('original_object_key',None))
+                if not original_available and not source_manager.durable() and row.get('version_id'):
+                    original_available=source_manager.has_pdf(row['version_id'])
+                row['original_available']=original_available
                 files.append(row)
         files.sort(key=lambda row: (
             str(row.get('ubigeo') or ''), str(row.get('source_name') or ''),
