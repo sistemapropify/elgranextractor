@@ -131,26 +131,31 @@ def _run(ubigeo, actor, batch_size, job_id):
     cloud = R2(timeout=20)
     total = 0
     try:
-        while _owns(gateway, ubigeo, job_id):
-            result = geollaqta_bulk.migrate_pending(
-                gateway, ubigeo, batch_size, actor, cloud)
-            total += int(result.get('processed_lots', 0))
+        ids, truncated = geollaqta_bulk.lot_ids(ubigeo, cloud)
+        linked = geollaqta_bulk.linked_lot_ids(gateway, ubigeo)
+        pending = sorted(set(ids) - linked)
+        linked_count = len(linked.intersection(ids))
+        while pending and _owns(gateway, ubigeo, job_id):
+            selected = pending[:batch_size]
+            result = geollaqta_bulk.migrate_selected(
+                gateway, ubigeo, selected, actor, cloud)
+            total += len(selected)
+            linked_count += len(selected)
+            pending = pending[len(selected):]
             current = _read_job(gateway, ubigeo)
             value = {
                 **current,
                 'processed_lots': total,
-                'linked_lots': int(result.get('linked_lots', 0)),
-                'pending_lots': int(result.get('pending_lots', 0)),
-                'last_batch_revision': result.get('batch_revision'),
-                'message': ('Vinculación terminada.' if result.get('done')
+                'linked_lots': linked_count,
+                'pending_lots': len(pending),
+                'last_batch_revision': result.get('revision'),
+                'message': ('Vinculación terminada.' if not pending
                             else 'Migrando en tandas de ' + str(batch_size) + ' lotes.'),
-                'status': 'done' if result.get('done') else 'running',
+                'status': 'done' if not pending else 'running',
             }
             _write_job(gateway, ubigeo, value)
-            if result.get('done'):
-                break
-            if not result.get('processed_lots'):
-                raise ValueError('La migración no pudo avanzar; revisa el siguiente manifiesto.')
+        if pending and _owns(gateway, ubigeo, job_id):
+            raise ValueError('La migración no pudo avanzar; revisa el siguiente manifiesto.')
     except Exception as error:
         current = _read_job(gateway, ubigeo)
         try:

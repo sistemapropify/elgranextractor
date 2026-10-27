@@ -55,6 +55,28 @@ class MigrationRunnerTests(SimpleTestCase):
         self.assertTrue(migration_runner._owns(gateway, '040126', 'owner'))
         self.assertFalse(migration_runner._owns(gateway, '040126', 'other'))
 
+    @patch('catastro.migration_runner._write_job',
+           side_effect=lambda gateway, ubigeo, value: value)
+    @patch('catastro.migration_runner._read_job',
+           return_value={'id': 'job', 'status': 'running'})
+    @patch('catastro.migration_runner._owns', return_value=True)
+    @patch('catastro.migration_runner.geollaqta_bulk.migrate_selected',
+           side_effect=[{'revision': 11}, {'revision': 12}, {'revision': 13}])
+    @patch('catastro.migration_runner.geollaqta_bulk.linked_lot_ids',
+           return_value=set())
+    @patch('catastro.migration_runner.geollaqta_bulk.lot_ids',
+           return_value=(['a', 'b', 'c'], False))
+    @patch('catastro.migration_runner.R2')
+    @patch('catastro.migration_runner.Gateway')
+    def test_runner_loads_inventory_once_for_all_batches(
+            self, gateway, cloud, lots, linked, migrate, owns, read_job, write_job):
+        migration_runner._run('040126', 'admin', 1, 'job')
+        lots.assert_called_once()
+        linked.assert_called_once()
+        self.assertEqual(migrate.call_count, 3)
+        self.assertTrue(all(call.args[2] == [value]
+                            for call, value in zip(migrate.call_args_list, 'abc')))
+
     @patch('catastro.migration_runner._claim',
            return_value=(True, {'id': 'bounded', 'batch_size': 5}))
     @patch('catastro.migration_runner.Gateway')

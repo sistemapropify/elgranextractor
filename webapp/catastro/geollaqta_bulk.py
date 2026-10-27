@@ -304,18 +304,13 @@ def _iso_timestamp(value):
     return value
 
 
-def migrate_pending(gateway, ubigeo='040126', limit=20, actor='sistema-geollaqta',
-                    cloud=None):
-    if type(limit) is not int or not 1 <= limit <= 50:
+def migrate_selected(gateway, ubigeo, selected, actor='sistema-geollaqta',
+                     cloud=None):
+    """Activate one explicit batch without recomputing the district inventory."""
+    selected = list(selected)
+    if not selected or len(selected) > 50:
         raise ValueError('La tanda debe contener entre 1 y 50 lotes.')
     cloud = cloud or R2(timeout=20)
-    ids, truncated = lot_ids(ubigeo, cloud)
-    linked = linked_lot_ids(gateway, ubigeo)
-    pending = sorted(set(ids) - linked)
-    selected = pending[:limit]
-    if not selected:
-        return {**migration_status(gateway, ubigeo, cloud), 'processed_lots': 0,
-                'remaining_lots': 0, 'done': True}
     result = None
     last_conflict = None
     for attempt in range(5):
@@ -333,6 +328,22 @@ def migrate_pending(gateway, ubigeo='040126', limit=20, actor='sistema-geollaqta
             store.db.close()
     if result is None:
         raise last_conflict or Conflict('No se pudo aplicar la tanda.')
+    return result
+
+
+def migrate_pending(gateway, ubigeo='040126', limit=20, actor='sistema-geollaqta',
+                    cloud=None):
+    if type(limit) is not int or not 1 <= limit <= 50:
+        raise ValueError('La tanda debe contener entre 1 y 50 lotes.')
+    cloud = cloud or R2(timeout=20)
+    ids, truncated = lot_ids(ubigeo, cloud)
+    linked = linked_lot_ids(gateway, ubigeo)
+    pending = sorted(set(ids) - linked)
+    selected = pending[:limit]
+    if not selected:
+        return {**migration_status(gateway, ubigeo, cloud), 'processed_lots': 0,
+                'remaining_lots': 0, 'done': True}
+    result = migrate_selected(gateway, ubigeo, selected, actor, cloud)
     linked.update(selected)
     remaining = sorted(set(ids) - linked)
     return {
