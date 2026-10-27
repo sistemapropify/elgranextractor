@@ -205,12 +205,18 @@ class D1ReadModel:
         queries = [
             ('entity', 'SELECT * FROM entities WHERE id=?'),
             ('attributes', 'SELECT * FROM current_attributes WHERE entity_id=?'),
-            ('owners', '''SELECT p.id,p.name,p.document_type,p.document_number,
+            ('owners', '''SELECT r.entity_id,p.id,p.name,p.document_type,p.document_number,
                 r.kind,r.source_version,r.details_json
                 FROM relationships r JOIN people p ON p.id=r.person_id
-                WHERE r.entity_id=? ORDER BY p.name'''),
-            ('media', '''SELECT id,kind,object_key,sha256,observed_at,source_version,
-                details_json FROM media WHERE entity_id=? ORDER BY kind,id'''),
+                WHERE r.entity_id=? OR r.entity_id IN (
+                    SELECT entity_id FROM relationships
+                    WHERE related_entity_id=? AND kind='unidad_en_lote')
+                ORDER BY p.name'''),
+            ('media', '''SELECT entity_id,id,kind,object_key,sha256,observed_at,source_version,
+                details_json FROM media WHERE entity_id=? OR entity_id IN (
+                    SELECT entity_id FROM relationships
+                    WHERE related_entity_id=? AND kind='unidad_en_lote')
+                ORDER BY kind,id'''),
             ('relationships', '''SELECT id,
                 CASE WHEN entity_id=? THEN related_entity_id ELSE entity_id END
                     AS related_entity_id,kind,source_version
@@ -220,14 +226,23 @@ class D1ReadModel:
             ('provenance', '''SELECT s.field,c.version_id,c.evidence_json
                 FROM selections s JOIN contributions c ON c.id=s.contribution_id
                 WHERE s.entity_id=?'''),
-            ('identity_links', '''SELECT i.version_id,i.layer,i.source_feature_id,
+            ('identity_links', '''SELECT i.entity_id,i.version_id,i.layer,i.source_feature_id,
                 v.source_id,v.label AS version_label,s.name AS source_name,
                 v.original_name,v.original_sha256
                 FROM identities i JOIN versions v ON v.id=i.version_id
                 LEFT JOIN sources s ON s.id=v.source_id
-                WHERE i.entity_id=? ORDER BY i.layer,v.created_at DESC'''),
-            ('boundary_segments', 'SELECT * FROM boundary_segments WHERE entity_id=?'),
-            ('registral_acts', 'SELECT * FROM registral_acts WHERE entity_id=?'),
+                WHERE i.entity_id=? OR i.entity_id IN (
+                    SELECT entity_id FROM relationships
+                    WHERE related_entity_id=? AND kind='unidad_en_lote')
+                ORDER BY i.layer,v.created_at DESC'''),
+            ('boundary_segments', '''SELECT * FROM boundary_segments
+                WHERE entity_id=? OR entity_id IN (
+                    SELECT entity_id FROM relationships
+                    WHERE related_entity_id=? AND kind='unidad_en_lote')'''),
+            ('registral_acts', '''SELECT * FROM registral_acts
+                WHERE entity_id=? OR entity_id IN (
+                    SELECT entity_id FROM relationships
+                    WHERE related_entity_id=? AND kind='unidad_en_lote')'''),
             ('addresses', '''SELECT address_type,full_address,street_type,street_name,
                 municipal_number,interior,postal_code,precision,status,source_version
                 FROM addresses WHERE entity_id=? ORDER BY address_type'''),
@@ -258,8 +273,17 @@ class D1ReadModel:
             ('development_links', '''SELECT d.id,d.name,d.status,d.expected_start,
                 d.expected_end,l.role,l.source_version FROM development_lots l
                 JOIN developments d ON d.id=l.development_id WHERE l.entity_id=?'''),
+            ('unit_attributes', '''SELECT e.id,e.kind,
+                (SELECT i.source_feature_id FROM identities i
+                 WHERE i.entity_id=e.id AND i.layer='unidad'
+                 ORDER BY i.version_id DESC LIMIT 1) AS source_feature_id,
+                a.* FROM relationships r
+                JOIN entities e ON e.id=r.entity_id
+                LEFT JOIN current_attributes a ON a.entity_id=e.id
+                WHERE r.related_entity_id=? AND r.kind='unidad_en_lote'
+                  AND e.kind='unidad' ORDER BY e.id'''),
         ]
-        parameter_counts = [1, 1, 1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        parameter_counts = [1, 1, 2, 2, 3, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
         results = self.gateway.read_many([
             {'sql': sql, 'params': [entity_id] * parameter_counts[index]}
             for index, (_, sql) in enumerate(queries)
@@ -321,6 +345,7 @@ class D1ReadModel:
                 decoded(row, 'details_json', 'details')
                 for row in values['registral_acts']
             ],
+            'unit_attributes': values['unit_attributes'],
             'catalog': catalog,
         }
 

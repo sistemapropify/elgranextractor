@@ -400,8 +400,9 @@
         if (!district) return;
         const token = ++loadToken;
         try {
-            const response = await fetch('/catastro/api/maestro/raster/?ubigeo=' +
-                encodeURIComponent(district), {credentials: 'same-origin', headers: {Accept: 'application/json'}});
+            const query=district==='all'?'':'?ubigeo='+encodeURIComponent(district);
+            const response = await fetch('/catastro/api/maestro/raster/'+query,
+                {credentials: 'same-origin', headers: {Accept: 'application/json'}});
             const value = await response.json();
             if (!response.ok) throw Error(value.error || 'No se pudieron cargar las capas satelitales.');
             if (token !== loadToken || district !== document.getElementById('master-district').value) return;
@@ -421,6 +422,10 @@
 
     uploadForm.addEventListener('submit', async event => {
         event.preventDefault();
+        if (district === 'all') {
+            say('Selecciona un distrito concreto para cargar una fotografía aérea.', true);
+            return;
+        }
         if (!district) {
             say('Selecciona un distrito antes de cargar la imagen.', true);
             return;

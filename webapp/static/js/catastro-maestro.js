@@ -38,6 +38,11 @@
     const collections=new Map(),enabled=new Map(),pending=new Map();
     const dataFeatures=new Map();
     const layerOn={manzanas:true,lotes:true};
+    const ALL_DISTRICTS='all';
+    const districtLabel=code=>code===ALL_DISTRICTS?'Todos los distritos D1':
+        (catalog?.districts.find(d=>d.ubigeo===code)?.name||code||'Sin distrito');
+    const sourceDistrict=source=>source.ubigeo||source.districts?.[0]||district;
+    const scoped=()=>[...collections.values()].filter(c=>district===ALL_DISTRICTS||c.district===district);
     const caymaRequested=()=>new URL(location.href).searchParams.get('cayma')==='1';
     const status=(text,error=false)=>{el('status').textContent=text;el('status').dataset.error=String(error);};
     const isUuid=value=>/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(String(value||''));
@@ -47,16 +52,16 @@
         country_code:'País',ubigeo:'UBIGEO',postal_code:'Código postal',department:'Departamento',province:'Provincia',district:'Distrito',zone:'Zona',sector:'Sector',urbanization:'Urbanización / habilitación',block:'Manzana',lot:'Lote',building:'Edificación',entrance:'Ingreso',floor:'Piso',unit:'Unidad',address:'Dirección',address_block:'Manzana de dirección',address_lot:'Lote de dirección',street_type:'Tipo de vía',street_name:'Nombre de vía',municipal_number:'Número municipal',condition:'Condición',registry_office:'Oficina registral',registry_entry_type:'Tipo de partida',registry_entry_number:'Partida registral',registry_folios:'Fojas',registry_seat:'Asiento',notary_name:'Notaría',notary_kardex:'Kárdex',deed_date:'Fecha de escritura',property_registration_date:'Inscripción del predio',construction_declaration:'Declaración de fábrica',construction_registration_seat:'Asiento de fábrica',construction_registration_date:'Inscripción de fábrica',cuc:'CUC',cadastral_reference:'Referencia catastral',cadastral_use:'Uso catastral',observed_use:'Uso observado',zoning:'Zonificación',use_category:'Categoría de uso',business_category:'Giro',business_subcategory:'Subgiro',ciiu_code:'CIIU',ciiu_version:'Versión CIIU',commercial_name:'Nombre comercial',land_area:'Área de terreno documental',built_area:'Área construida documental',geometric_land_area:'Área geométrica',gis_land_area:'Área SIG de terreno (valor de fuente)',gis_built_area:'Área SIG construida (valor de fuente)',front:'Frente',back:'Fondo',left:'Izquierda',right:'Derecha',perimeter:'Perímetro',bedrooms:'Dormitorios',bathrooms:'Baños',half_bathrooms:'Medios baños',parking_spaces:'Estacionamientos',floors:'Pisos',units:'Unidades',is_corner:'Esquina',is_through:'Pasaje',faces_park:'Frente a parque'
     };
     function visible() {
-        return [...collections.values()].filter(c=>c.district===district&&enabled.get(c.source.id)&&layerOn[c.key]);
+        return scoped().filter(c=>enabled.get(c.source.id)&&layerOn[c.key]);
     }
     function counts() {
         for(const key of ['manzanas','lotes']) {
             const n=visible().filter(c=>c.key===key).reduce((sum,c)=>sum+c.records.length,0);
             el('count-'+key).textContent=fmt(n);
         }
-        el('map-note').textContent=!visible().length?'Sin capas visibles. El plano antiguo de Cayma se conserva como respaldo y puedes activarlo para comparar.':visible().some(c=>c.source.role==='draft')?'Catastro Maestro · registros vinculados por UUID; cada campo conserva su fuente y versión.':visible().some(c=>c.source.reference_only)
-            ?'Cayma · geometría recuperada del plano de 2006. Ubicación de referencia; numeración pendiente.'
-            :'Geometrías publicadas por GeoLlaqta · COFOPRI';
+        el('map-note').textContent=!visible().length?'Sin registros maestros visibles en el ámbito seleccionado.':district===ALL_DISTRICTS
+            ?'Catastro Maestro · todos los distritos con registros D1 · procedencia conservada por entidad.'
+            :'Catastro Maestro · registros vinculados por UUID; cada campo conserva su fuente y versión.';
     }
     function fit() {
         if(!map)return;
@@ -66,14 +71,15 @@
             parts.forEach(p=>p[0].forEach(([lng,lat])=>bounds.extend({lat,lng})));
         }));
         if(!bounds.isEmpty())map.fitBounds(bounds,35);
-        else {const center=catalog?.districts.find(d=>d.ubigeo===district)?.center;if(center){map.setCenter(center);map.setZoom(15);}}
+        else if(district!==ALL_DISTRICTS){const center=catalog?.districts.find(d=>d.ubigeo===district)?.center;if(center){map.setCenter(center);map.setZoom(15);}}
     }
     function detail(item) {
         const panel=el('detail');panel.replaceChildren();
         const h=document.createElement('h2');h.textContent=item.key==='lotes'?'Lote seleccionado':'Manzana seleccionada';panel.append(h);
         const p=item.feature.properties,dl=document.createElement('dl');
         const entityKind=item.key==='manzanas'?'manzana':'lote';
-        const values=[['Distrito',p.DISTRICT_NAME||catalog.districts.find(d=>d.ubigeo===district)?.name],
+        const itemDistrict=sourceDistrict(item.source);
+        const values=[['Distrito',p.DISTRICT_NAME||districtLabel(itemDistrict)],
             ['Fuente',item.source.name],['Manzana',p.COD_MZNA||'Sin numeración en la fuente']];
         if(item.key==='lotes')values.push(['Lote',p.COD_LOTE||'Sin numeración en la fuente']);
         values.push(['Código catastral',p.ID_LOTE||p.ID_MZNA||'No disponible'],
@@ -118,13 +124,32 @@
                 addEntitySection(host,'Identidad y procedencia',linked);
             }
             const attributes={...(data.attributes||{})};
-            attributes.district=attributes.district||catalog?.districts.find(d=>d.ubigeo===district)?.name||null;
+            attributes.district=attributes.district||districtLabel(sourceDistrict(item.source));
             addEntityValues(host,'Ubicación e identificación',attributes,'Sin dato','', {all:true,
                 keys:['district','ubigeo','sector','block','lot','address','street_type','street_name','municipal_number','cadastral_reference','cuc']});
             addEntityValues(host,'Áreas y perímetro',attributes,'Sin dato','', {all:true,
                 keys:['land_area','built_area','gis_land_area','gis_built_area','perimeter','front','back','left','right']});
             addEntityValues(host,'Características del lote',attributes,'Sin dato','', {all:true,
                 keys:['floors','units','is_corner','is_through','faces_park','condition','cadastral_use','observed_use','zoning']});
+            const documentsByRecord=new Map();
+            for(const media of data.media||[]){const record=media.details?.source_record_id;if(!record)continue;if(!documentsByRecord.has(record))documentsByRecord.set(record,[]);documentsByRecord.get(record).push(media);}
+            const units=document.createElement('div');units.className='master-entity-list';
+            const unitRows=data.unit_attributes||[];
+            if(unitRows.length){
+                for(const unit of unitRows){
+                    const row=document.createElement('article');
+                    row.append(Object.assign(document.createElement('strong'),{textContent:'Unidad / ficha '+unit.source_feature_id}));
+                    row.append(Object.assign(document.createElement('small'),{textContent:[
+                        unit.land_area!=null?'Área terreno '+valueText(unit.land_area)+' m²':null,
+                        unit.built_area!=null?'Área construida '+valueText(unit.built_area)+' m²':null,
+                        unit.floors!=null?'Pisos '+valueText(unit.floors):null
+                    ].filter(Boolean).join(' · ')||'Sin medidas normalizadas'}));
+                    const links=document.createElement('span');links.className='master-unit-links';
+                    for(const document of documentsByRecord.get(unit.source_feature_id)||[]){const link=document.createElement('a');link.href=document.url;link.target='_blank';link.rel='noopener';link.textContent=document.kind==='individual_record_pdf'?'Abrir ficha individual':document.kind==='cadastral_report_pdf'?'Abrir reporte catastral':(document.kind||'Abrir documento');links.append(link);}
+                    row.append(links);units.append(row);
+                }
+            }else units.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Sin unidades o fichas documentales vinculadas.'}));
+            addEntitySection(host,'Unidades y fichas registrales',units);
             const owners=document.createElement('div');owners.className='master-entity-list';
             if((data.owners||[]).length){for(const owner of data.owners){const row=document.createElement('article');row.append(Object.assign(document.createElement('strong'),{textContent:owner.name||'Titular sin nombre'}),Object.assign(document.createElement('small'),{textContent:[owner.document_type,owner.document_number,owner.kind].filter(Boolean).join(' · ')}));owners.append(row);}}
             else owners.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Sin titulares documentados.'}));
@@ -165,7 +190,7 @@
         const key=feature.getProperty('MASTER_LAYER');
         const sourceId=feature.getProperty('SOURCE_ID');
         return {
-            visible:Boolean(feature.getProperty('DISTRICT')===district&&layerOn[key]&&enabled.get(sourceId)!==false),
+            visible:Boolean((district===ALL_DISTRICTS||feature.getProperty('DISTRICT')===district)&&layerOn[key]&&enabled.get(sourceId)!==false),
             clickable:false,fillOpacity:0,
             strokeColor:key==='manzanas'?'#06d7af':'#efb140',
             strokeOpacity:key==='manzanas'?.95:.8,
@@ -197,7 +222,8 @@
         const result=await response.json();if(!response.ok)throw Error(result.error||'No se pudo cargar la capa.');return result;
     }
     async function loadSource(source,signal) {
-        const current=district;
+        const scope=district;
+        const current=scope===ALL_DISTRICTS?sourceDistrict(source):scope;
         const client=source.transport==='arcgis'?window.GeollaqtaDistrict.create():null;
         for(const key of ['manzanas','lotes']) {
             const id=current+':'+source.id+':'+key;
@@ -212,7 +238,7 @@
                 task=(async()=>{
                     let result;
                     if(client)result=await client.load({ubigeo:current,layers:source.layers,service_base:source.service_base},key,{signal,onBatch:(_,snapshot)=>{
-                        if(current===district&&!signal.aborted)status('Cargando '+source.name+' · '+key+': '+fmt(snapshot.processed)+' de '+fmt(snapshot.total_in_view));
+                        if(scope===district&&!signal.aborted)status('Cargando '+source.name+' · '+key+': '+fmt(snapshot.processed)+' de '+fmt(snapshot.total_in_view));
                     }});
                     else result=await json('/catastro/api/maestro/fuentes/'+encodeURIComponent(source.id)+'/'+key+'/?ubigeo='+current,signal);
                     if(signal.aborted)return;
@@ -221,7 +247,7 @@
                     if(vectorLayer)addVectorFeatures(collection);
                 })().finally(()=>pending.delete(id));pending.set(id,task);
             }
-            await task;if(signal.aborted||district!==current)return;
+            await task;if(signal.aborted||district!==scope)return;
             counts();
         }
     }
@@ -229,12 +255,24 @@
         controller?.abort();controller=new AbortController();const signal=controller.signal;
         if(selectedFeature)vectorLayer?.revertStyle(selectedFeature);
         selected=null;selectedFeature=null;vectorLayer?.setStyle(vectorStyle);counts();
-        const sources=catalog.sources.filter(s=>s.active&&s.role==='draft'&&s.districts.includes(district)&&enabled.get(s.id));
+        const sources=catalog.sources.filter(s=>s.active&&s.role==='draft'&&
+            (district===ALL_DISTRICTS||s.districts.includes(district))&&enabled.get(s.id));
         status(sources.length?'Cargando los registros del Catastro Maestro…':'Este distrito todavía no tiene registros activos en el Catastro Maestro.');
         try{
-            await Promise.all(sources.map(s=>loadSource(s,signal)));if(signal.aborted)return;
+            let next=0,finished=0;
+            async function worker(){
+                while(next<sources.length&&!signal.aborted){
+                    const source=sources[next++];
+                    await loadSource(source,signal);
+                    finished++;
+                    if(district===ALL_DISTRICTS&&!signal.aborted)
+                        status('Catastro Maestro · '+finished+' de '+sources.length+' distritos cargados…');
+                }
+            }
+            await Promise.all(Array.from({length:Math.min(4,sources.length)},()=>worker()));
+            if(signal.aborted)return;
             counts();if(fitAfter)fit();
-            if(sources.length)status((map?'Catastro Maestro cargado · ':'Catastro Maestro cargado sin Google Maps · ')+catalog.districts.find(d=>d.ubigeo===district).name+' · fuente de verdad D1.');
+            if(sources.length)status((map?'Catastro Maestro cargado · ':'Catastro Maestro cargado sin Google Maps · ')+districtLabel()+' · fuente de verdad D1.');
         }catch(error){if(error.name!=='AbortError'&&!signal.aborted)status(error.message,true);}
     }
     function showCaymaReference(updateUrl=true) {
@@ -252,7 +290,8 @@
     }
     function sourcesPanel() {
         el('sources').replaceChildren();
-        const sources=catalog.sources.filter(s=>s.active&&s.role==='draft'&&s.districts.includes(district));
+        const sources=catalog.sources.filter(s=>s.active&&s.role==='draft'&&
+            (district===ALL_DISTRICTS||s.districts.includes(district)));
         if(!sources.length){const p=document.createElement('p');p.className='master-help';p.textContent='Este distrito todavía no tiene registros activos en el Catastro Maestro.';el('sources').append(p);}
         for(const source of sources){
             enabled.set(source.id,true);
@@ -285,11 +324,13 @@
             status('Cargando distritos y fuentes del Catastro Maestro…');
             catalog=await json('/catastro/api/maestro/catalogo/');
             const districtSelect=el('district');districtSelect.replaceChildren();
-            for(const d of catalog.districts){const option=document.createElement('option');option.value=d.ubigeo;option.textContent=d.name+(d.sources.length?'':' · sin fuentes');districtSelect.append(option);}
+            const masterDistricts=new Set(catalog.sources.filter(s=>s.active&&s.role==='draft').flatMap(s=>s.districts));
+            if(masterDistricts.size){const option=document.createElement('option');option.value=ALL_DISTRICTS;option.textContent='Todos los distritos D1 · '+masterDistricts.size+' con registros';districtSelect.append(option);}
+            for(const d of catalog.districts){const option=document.createElement('option');option.value=d.ubigeo;option.textContent=d.name+(masterDistricts.has(d.ubigeo)?'':' · sin registros maestros');districtSelect.append(option);}
             const requested=new URL(location.href).searchParams.get('ubigeo');
-            const fallback=catalog.districts.find(d=>d.published_lots>0&&d.sources.length)||catalog.districts.find(d=>d.sources.length);
-            districtSelect.value=catalog.districts.some(d=>d.ubigeo===requested)?requested:
-                (caymaRequested()?'040103':(fallback?.ubigeo||'040103'));
+            const fallback=catalog.districts.find(d=>masterDistricts.has(d.ubigeo));
+            districtSelect.value=requested===ALL_DISTRICTS&&masterDistricts.size?ALL_DISTRICTS:
+                (masterDistricts.has(requested)?requested:(fallback?.ubigeo||catalog.districts[0]?.ubigeo||''));
             districtSelect.disabled=false;
             if(!districtSelect.dataset.ready){districtSelect.addEventListener('change',()=>changeDistrict(true));districtSelect.dataset.ready='true';}
             if(caymaRequested())enabled.set('cayma-pud-2006-eu03',true);
