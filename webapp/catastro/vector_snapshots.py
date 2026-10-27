@@ -187,6 +187,16 @@ def read_snapshot(ubigeo, layer, cloud=None):
     return {**result, 'features': features, 'total_features': len(features)}
 
 
+def snapshot_fingerprint(ubigeo, layer, cloud=None):
+    row = next((item for item in inventory(cloud)['snapshots']
+                if item.get('ubigeo') == ubigeo and item.get('layer') == layer), None)
+    if not row:
+        return None
+    return hashlib.sha256(
+        json.dumps(row.get('chunks') or row, sort_keys=True,
+                   separators=(',', ':')).encode()).hexdigest()
+
+
 def catalog_sources(cloud=None):
     grouped = {}
     for row in inventory(cloud)['snapshots']:

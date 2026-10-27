@@ -64,15 +64,18 @@
     };
     const parkStatus=(text,error=false)=>{const node=el('park-status');if(!node)return;node.textContent=text;node.dataset.error=String(error);};
     function loading(text,done,total){
-        const host=el('load-progress'),bar=el('load-bar'),label=el('load-text');
+        const host=el('load-modal'),title=el('load-title'),bar=el('load-bar'),
+            label=el('load-text'),percent=el('load-percent');
         if(!host)return;
         if(done==null){
             host.hidden=true;return;
         }
         host.hidden=false;
         const value=Math.max(0,Math.min(1,(done||0)/(total||1)));
-        if(bar){bar.value=value;}
-        if(label)label.textContent=text+' · '+Math.round(value*100)+'%';
+        if(title)title.textContent='Cargando Catastro Maestro';
+        if(bar)bar.value=value;
+        if(percent)percent.textContent=Math.round(value*100)+'%';
+        if(label)label.textContent=text;
     }
     const parkKey=(feature,source)=>{
         const value=String(feature?.properties?.ID_LOTE||'').trim();

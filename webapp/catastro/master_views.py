@@ -65,7 +65,10 @@ def vector_snapshot(request, ubigeo, layer):
     try:
         value = vector_snapshots.read_snapshot(ubigeo, layer)
         response = JsonResponse(value, json_dumps_params={'separators': (',', ':')})
-        response['Cache-Control'] = 'private, no-store'
+        response['Cache-Control'] = 'private, max-age=86400'
+        fingerprint = vector_snapshots.snapshot_fingerprint(ubigeo, layer)
+        if fingerprint:
+            response['ETag'] = '"' + fingerprint + '"'
         return response
     except StorageError as error:
         return JsonResponse({'error': str(error)}, status=503)
