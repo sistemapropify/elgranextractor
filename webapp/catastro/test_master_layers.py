@@ -1,4 +1,5 @@
 import json
+import os
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -26,6 +27,59 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertFalse(source['georeferencing']['datum_documented'])
         self.assertFalse(source['qa']['complete_inventory'])
         self.assertEqual(source['crs'], 'EPSG:4326')
+
+    def test_d1_catalogue_uses_bounded_reads_without_loading_the_authoring_store(self):
+        summaries = {'040126': {'ubigeo': '040126', 'revision': 4114,
+                                'lotes': 5240, 'manzanas': 0}}
+        with patch.dict(os.environ, {'CATASTRO_MASTER_STORAGE': 'd1',
+                                     'CATASTRO_MASTER_ENABLED': '1'}), \
+                patch('catastro.source_manager.district_summaries',
+                      return_value=summaries), \
+                patch('catastro.source_manager.store',
+                      side_effect=AssertionError('No debe cargar D1Store')):
+            data = master_layers.catalogue()
+
+        source = next(item for item in data['sources'] if item['id'] == 'borrador-040126')
+        self.assertEqual(source['revision'], 4114)
+        self.assertEqual(source['layers']['lotes']['count'], 5240)
+        self.assertFalse(source['reference_only'])
+        yanahuara = next(item for item in data['districts'] if item['ubigeo'] == '040126')
+        self.assertIn('borrador-040126', yanahuara['sources'])
+
+    def test_draft_layer_keeps_master_identity_and_is_not_reference_geometry(self):
+        summary = {'ubigeo': '040126', 'revision': 4114,
+                   'lotes': 1, 'manzanas': 0}
+        feature = {
+            'type': 'Feature', 'id': 'entity-1',
+            'geometry': {'type': 'Polygon', 'coordinates': [
+                [[-71.55, -16.36], [-71.549, -16.36], [-71.549, -16.359],
+                 [-71.55, -16.359], [-71.55, -16.36]]]},
+            'properties': {'ubigeo': '040126', 'sector': '01', 'block': '004',
+                           'lot': '010', 'source_feature_id': '04012601004010'},
+            'provenance': {'$geometry': {'version_id': 'version-1'}},
+        }
+        with patch.dict(os.environ, {'CATASTRO_MASTER_STORAGE': 'd1',
+                                     'CATASTRO_MASTER_ENABLED': '1'}), \
+                patch('catastro.source_manager.district_summary',
+                      return_value=summary), \
+                patch('catastro.source_manager.collection',
+                      return_value={'type': 'FeatureCollection',
+                                    'features': [feature], 'revision': 4114}), \
+                patch('catastro.source_manager.store',
+                      side_effect=AssertionError('No debe cargar D1Store')):
+            data = master_layers.layer('borrador-040126', 'lotes', '040126')
+
+        properties = data['features'][0]['properties']
+        self.assertEqual(properties['ID_LOTE'], '04012601004010')
+        self.assertEqual(properties['COD_SECT'], '01')
+        self.assertEqual(properties['COD_MZNA'], '004')
+        self.assertEqual(properties['COD_LOTE'], '010')
+        self.assertEqual(properties['ELEMENT_ID'], 'entity-1')
+        self.assertFalse(properties['REFERENCE_ONLY'])
+        self.assertFalse(data['reference_only'])
+        published = master_layers.public_draft_layer(data)
+        self.assertEqual(published['features'][0]['properties']['ID_LOTE'],
+                         '04012601004010')
 
     def test_sector32_priority_clips_the_2006_backup_without_overlap(self):
         from shapely.geometry import shape

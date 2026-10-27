@@ -129,6 +129,7 @@
     }
     function create(config,fetcher=fetch){
         const references=config.providers.filter(p=>p.active&&p.transport==='master');
+        const masterProviders=references.filter(p=>p.role==='draft');
         const primary=createGeollaqta(config,fetcher);
         if(!references.length)return primary;
         const cache=new Map();
@@ -159,10 +160,16 @@
                 onBatch(added,entry.result);
             }
             const run=async()=>{
-                const tasks=[primary.loadRadius(center,radius,{signal,onBatch:(features,data)=>{
+                // A normalized district replaces the external COFOPRI layer.
+                // Outside its documented bounds, the external source remains
+                // the fallback instead of disappearing from the map.
+                const activeMaster=masterProviders.filter(s=>overlaps(s,center,radius));
+                const tasks=activeMaster.length?[]:[primary.loadRadius(center,radius,{signal,onBatch:(features,data)=>{
                     if(signal?.aborted)return;entry.geo=data;progress(data.lots.features);
                 }})];
-                for(const source of references.filter(s=>overlaps(s,center,radius))){
+                const referenceSources=activeMaster.length?activeMaster:
+                    references.filter(s=>s.role!=='draft'&&overlaps(s,center,radius));
+                for(const source of referenceSources.filter(s=>overlaps(s,center,radius))){
                     if(entry.refs.has(source.id))continue;
                     tasks.push((async()=>{
                         const query=new URLSearchParams({lat:center.lat,lng:center.lng,radius});

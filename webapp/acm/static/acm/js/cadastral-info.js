@@ -92,7 +92,7 @@
                 $('hint').textContent='Cayma · contorno recuperado del plano de 2006';
                 status('Geometría de referencia; ubicación provisional y numeración pendiente.');$('retry').hidden=true;return;
             }
-            if($('source'))$('source').textContent='GeoLlaqta · COFOPRI';
+            if($('source'))$('source').textContent=p.SOURCE_NAME||'Catastro Maestro · D1';
             $('code').textContent=p.ID_LOTE;$('address').textContent=p.COD_SECT+' / '+p.COD_MZNA+' / '+String(p.COD_LOTE??'').padStart(3,'0');
             const year=Number(p.ANIO_CAT);$('year').textContent=Number.isInteger(year)&&year>=1900&&year<=2100?String(year):'Sin dato';
             $('hint').textContent=(p.DISTRICT_NAME||result.district)+' · lote '+p.COD_LOTE;

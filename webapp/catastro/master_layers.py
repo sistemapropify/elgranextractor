@@ -66,34 +66,24 @@ def _without_sector32(feature):
     return {**feature, 'geometry': mapping(remaining)}
 
 
-def _draft_metadata(source_id):
+def _draft_metadata(source_id, summary=None):
     import re
     from . import source_manager
-    if not source_manager.enabled() or not re.fullmatch(r'borrador-[0-9]{6}', source_id):
+    if not (source_manager.enabled() or source_manager.durable()) or not re.fullmatch(r'borrador-[0-9]{6}', source_id):
         raise ValueError('Fuente no disponible.')
     district = source_id[-6:]
-    store = source_manager.store()
-    with store.lock:
-        return _draft_metadata_locked(source_id, district, store)
-
-
-def _draft_metadata_locked(source_id, district, store):
-    collections = {key: store.collection(district, kind) for key,kind in [('lotes','lote'),('manzanas','manzana')]}
-    points = []
-    for collection in collections.values():
-        for f in collection['features']:
-            parts = [f['geometry']['coordinates']] if f['geometry']['type']=='Polygon' else f['geometry']['coordinates']
-            points.extend(p for part in parts for ring in part for p in ring)
-    if not points:
+    summary = summary or source_manager.district_summary(district)
+    if not summary or not (summary.get('lotes') or summary.get('manzanas')):
         raise ValueError('El borrador todavía no tiene geometrías activas en este distrito.')
-    bounds = [min(p[0] for p in points),min(p[1] for p in points),max(p[0] for p in points),max(p[1] for p in points)]
     district_name=(geo.DISTRICTS.get(district) or {}).get('name',district)
     return {'id':source_id,'name':'Catastro Maestro · '+district_name,'ubigeo':district,'districts':[district],
             'active':True,'default_visible':True,'contributes':True,'reference_only':False,
             'role':'draft','status':'active_master','transport':'master','crs':'EPSG:4326',
-            'bbox':bounds,'original_bbox':bounds,'revision':store.revision,
-            'placement':{'revision':store.revision,'east_m':0.,'north_m':0.,'locked':True},
-            'layers':{key:{'count':len(data['features']),'kind':'polygon'} for key,data in collections.items()}}
+            'bbox':summary.get('bbox'),'original_bbox':summary.get('bbox'),
+            'revision':summary['revision'],
+            'placement':{'revision':summary['revision'],'east_m':0.,'north_m':0.,'locked':True},
+            'layers':{'lotes':{'count':summary['lotes'],'kind':'polygon'},
+                      'manzanas':{'count':summary['manzanas'],'kind':'polygon'}}}
 
 
 @lru_cache(maxsize=4)
@@ -105,9 +95,9 @@ def read(path):
     return _read(str(path), path.stat().st_mtime_ns)
 
 
-def source_metadata(source_id):
+def source_metadata(source_id, summary=None):
     if source_id.startswith('borrador-'):
-        return _draft_metadata(source_id)
+        return _draft_metadata(source_id, summary)
     folder = SOURCES[source_id]
     meta = read(folder/'metadata.json')
     if source_id == SECTOR32:
@@ -148,11 +138,9 @@ def revisions():
         else:
             value[source_id] = source_placement.read(folder)['revision']
     from . import source_manager
-    if source_manager.enabled():
-        store = source_manager.store()
-        with store.lock:
-            for district in store.active_districts():
-                value['borrador-'+district] = store.revision
+    if source_manager.enabled() or source_manager.durable():
+        for district, summary in source_manager.district_summaries().items():
+            value['borrador-'+district] = summary['revision']
     return value
 
 
@@ -193,11 +181,9 @@ def catalogue():
             sources.append({**source_metadata(source_id), 'transport': 'master',
                             'districts': [read(folder/'metadata.json')['ubigeo']]})
     from . import source_manager
-    if source_manager.enabled():
-        store = source_manager.store()
-        with store.lock:
-            for district in store.active_districts():
-                sources.append(_draft_metadata('borrador-'+district))
+    if source_manager.enabled() or source_manager.durable():
+        for district, summary in source_manager.district_summaries().items():
+            sources.append(_draft_metadata('borrador-'+district, summary))
     districts = [{**d} for d in geo.DISTRICTS.values()]
     for district in districts:
         district['sources'] = [s['id'] for s in sources if district['ubigeo'] in s['districts']]
@@ -235,7 +221,7 @@ def intersects(geometry, bounds):
 
 def public_draft_layer(value):
     """Map permission does not grant the administrative documentary record."""
-    allowed = {'ID_DIST','COD_SECT','COD_MZNA','COD_LOTE','ELEMENT_ID','SOURCE_ID',
+    allowed = {'ID_DIST','ID_LOTE','ID_MZNA','COD_SECT','COD_MZNA','COD_LOTE','ELEMENT_ID','SOURCE_ID',
                'SOURCE_NAME','MASTER_LAYER','REFERENCE_ONLY','GEOMETRY_VERSION_ID','BLOCK_REF'}
     return {**value, 'features':[{'type':'Feature','id':feature['id'],'geometry':feature['geometry'],
              'properties':{k:v for k,v in feature.get('properties',{}).items() if k in allowed}}
@@ -245,10 +231,9 @@ def public_draft_layer(value):
 def layer(source_id, key, district, bounds=None, *, original=False, metadata=None):
     if source_id.startswith('borrador-'):
         from . import source_manager
-        if not source_manager.enabled():
+        if not (source_manager.enabled() or source_manager.durable()):
             raise ValueError('Fuente no disponible.')
-        with source_manager.store().lock:
-            return _layer(source_id, key, district, bounds, original=original, metadata=metadata)
+        return _layer(source_id, key, district, bounds, original=original, metadata=metadata)
     return _layer(source_id, key, district, bounds, original=original, metadata=metadata)
 
 
@@ -258,18 +243,24 @@ def _layer(source_id, key, district, bounds=None, *, original=False, metadata=No
             raise ValueError('Fuente, capa o distrito no válido.')
         from . import source_manager
         meta = metadata if metadata is not None else _draft_metadata(source_id)
-        data = source_manager.store().collection(district, 'lote' if key=='lotes' else 'manzana')
+        data = source_manager.collection(
+            district, 'lote' if key=='lotes' else 'manzana',
+            revision=meta.get('revision'))
         features = []
         aliases = {'ubigeo':'ID_DIST','sector':'COD_SECT','block':'COD_MZNA','lot':'COD_LOTE'}
         for feature in data['features']:
             if bounds and not intersects(feature['geometry'],bounds):
                 continue
             attrs = {**feature['properties'], 'ELEMENT_ID':feature['id'], 'SOURCE_ID':source_id,
-                     'REFERENCE_ONLY':True, 'GEOMETRY_VERSION_ID':feature['provenance'].get('$geometry',{}).get('version_id')}
+                     'REFERENCE_ONLY':False, 'MASTER_LAYER':key,
+                     'GEOMETRY_VERSION_ID':feature['provenance'].get('$geometry',{}).get('version_id')}
             attrs.update({target:attrs.get(source) for source,target in aliases.items()})
+            source_feature_id = attrs.pop('source_feature_id', None)
+            if source_feature_id:
+                attrs['ID_LOTE' if key=='lotes' else 'ID_MZNA'] = str(source_feature_id)
             features.append({**feature,'id':source_id+':'+feature['id'],'properties':attrs})
         return {**data,'features':features,'total':len(features),'source_total':len(data['features']),
-                'complete':True,'reference_only':True,'bbox':meta['bbox'],'original_bbox':meta['bbox'],
+                'complete':True,'reference_only':False,'bbox':meta['bbox'],'original_bbox':meta['bbox'],
                 'original':False,'placement':meta['placement'],'schema':SCHEMA}
     if source_id not in SOURCES or key not in ('lotes', 'manzanas'):
         raise ValueError('Fuente o capa no disponible.')
@@ -298,10 +289,9 @@ def _layer(source_id, key, district, bounds=None, *, original=False, metadata=No
 def radius(source_id, lat, lng, metres):
     if source_id.startswith('borrador-'):
         from . import source_manager
-        if not source_manager.enabled():
+        if not (source_manager.enabled() or source_manager.durable()):
             raise ValueError('Fuente no disponible.')
-        with source_manager.store().lock:
-            return _radius(source_id, lat, lng, metres)
+        return _radius(source_id, lat, lng, metres)
     return _radius(source_id, lat, lng, metres)
 
 
@@ -313,7 +303,11 @@ def _radius(source_id, lat, lng, metres):
         raise ValueError('Ubicación o radio no válido.')
     if source_id not in SOURCES and not source_id.startswith('borrador-'):
         raise ValueError('Fuente no disponible.')
-    meta = source_metadata(source_id)
+    summary = None
+    if source_id.startswith('borrador-'):
+        from . import source_manager
+        summary = source_manager.district_summary(source_id[-6:])
+    meta = source_metadata(source_id, summary)
     sy = 6371008.8 * math.pi/180
     sx = sy * math.cos(math.radians(lat))
     bounds = [lng-metres/sx, lat-metres/sy, lng+metres/sx, lat+metres/sy]
@@ -341,5 +335,5 @@ def _radius(source_id, lat, lng, metres):
         candidates = layer(source_id, key, meta['ubigeo'], bounds, metadata=meta)
         result[label] = {**candidates, 'features': [f for f in candidates['features'] if touches(f['geometry'])]}
         result[label]['total'] = len(result[label]['features'])
-    return {**result, 'source_id': source_id, 'reference_only': True, 'complete': True,
+    return {**result, 'source_id': source_id, 'reference_only': meta['reference_only'], 'complete': True,
             'center': {'lat': lat, 'lng': lng}, 'radius': metres, 'schema': SCHEMA}

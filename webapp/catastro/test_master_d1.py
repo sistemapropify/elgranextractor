@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 import os
 from unittest import TestCase
-from .master_d1 import D1Store,TABLES,configuration
+from .master_d1 import D1ReadModel,D1Store,TABLES,configuration
 from .master_store import Conflict
 from .storage import StorageError
 from .source_manager import enabled
@@ -44,6 +44,8 @@ class FakeGateway:
     def read(self,sql,params=()):
         self.queries.append((sql,tuple(params)))
         return [dict(r) for r in self.db.execute(sql,params)]
+    def read_many(self,queries):
+        return [self.read(item['sql'],item.get('params',())) for item in queries]
     def call(self,payload):
         if payload['id'] in self.saved:return self.saved[payload['id']]
         if payload['revision']!=self.revision():raise Conflict('stale')
@@ -73,6 +75,30 @@ class DurableMasterTests(TestCase):
         self.assertEqual(restored.revision,2)
         self.assertEqual(restored.records(),self.store.records())
         self.assertEqual(restored.collection('040103','lote'),self.store.collection('040103','lote'))
+
+    def test_bounded_read_model_returns_district_inventory_and_map_features(self):
+        self.store.stage(candidate(),0,'admin')
+        plan={'revision':1,'mode':'fill','version_id':'v1',
+              'scope':{'ubigeo':'040103','kind':'lote'},'reason':'lectura acotada'}
+        self.store.apply(plan,self.store.preview(plan)['token'],'admin')
+
+        model=D1ReadModel(self.gateway)
+        summaries=model.district_summaries()
+        collection=model.collection('040103','lote',summaries['040103']['revision'])
+
+        self.assertEqual(summaries['040103']['lotes'],1)
+        self.assertEqual(summaries['040103']['manzanas'],0)
+        self.assertEqual(summaries['040103']['bbox'][0],-71.55)
+        self.assertEqual(summaries['040103']['bbox'][1],-16.36)
+        self.assertEqual(summaries['040103']['bbox'][2],-71.549)
+        self.assertEqual(summaries['040103']['bbox'][3],-16.359)
+        self.assertEqual(collection['revision'],self.gateway.revision())
+        self.assertEqual(len(collection['features']),1)
+        feature=collection['features'][0]
+        self.assertEqual(feature['properties']['source_feature_id'],'a')
+        self.assertEqual(feature['properties']['sector'],'32')
+        self.assertEqual(feature['properties']['block'],'001')
+        self.assertEqual(feature['geometry']['type'],'Polygon')
     def test_catalog_review_and_environment_layer_survive_restart(self):
         payload=candidate()
         payload['identifiers']=[{'target_ref':'lote:a','scheme':'referencia_catastral',

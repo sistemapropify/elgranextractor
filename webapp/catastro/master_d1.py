@@ -114,6 +114,146 @@ class Gateway:
         return int(rows[0]['value'])
 
 
+class D1ReadModel:
+    """Bounded read-only queries that never build the authoring working copy."""
+
+    PAGE_SIZE = 5000
+
+    def __init__(self, gateway=None):
+        self.gateway = gateway or Gateway()
+
+    def revision(self):
+        return self.gateway.revision()
+
+    def district_summaries(self, revision=None):
+        query = """SELECT e.ubigeo,e.kind,COUNT(*) AS count
+                   FROM entities e
+                   JOIN selections s ON s.entity_id=e.id AND s.field='$geometry'
+                   WHERE e.kind IN ('lote','manzana')
+                   GROUP BY e.ubigeo,e.kind
+                   ORDER BY e.ubigeo,e.kind"""
+        bounds_query = """SELECT ubigeo,kind,MIN(lng) AS west,MIN(lat) AS south,
+                                 MAX(lng) AS east,MAX(lat) AS north
+                          FROM (
+                            SELECT e.ubigeo,e.kind,
+                                   json_extract(point.value,'$[0]') AS lng,
+                                   json_extract(point.value,'$[1]') AS lat
+                            FROM selections s
+                            JOIN entities e ON e.id=s.entity_id
+                            JOIN contributions c ON c.id=s.contribution_id
+                            JOIN json_each(c.value_json,'$.coordinates[0]') point
+                            WHERE s.field='$geometry'
+                              AND json_extract(c.value_json,'$.type')='Polygon'
+                            UNION ALL
+                            SELECT e.ubigeo,e.kind,
+                                   json_extract(point.value,'$[0]') AS lng,
+                                   json_extract(point.value,'$[1]') AS lat
+                            FROM selections s
+                            JOIN entities e ON e.id=s.entity_id
+                            JOIN contributions c ON c.id=s.contribution_id
+                            JOIN json_each(c.value_json,'$.coordinates') polygon
+                            JOIN json_each(polygon.value,'$[0]') point
+                            WHERE s.field='$geometry'
+                              AND json_extract(c.value_json,'$.type')='MultiPolygon'
+                          )
+                          GROUP BY ubigeo,kind
+                          ORDER BY ubigeo,kind"""
+        if revision is None:
+            revision_rows, count_rows, bounds_rows = self.gateway.read_many([
+                {'sql': "SELECT value FROM meta WHERE key='revision'", 'params': []},
+                {'sql': query, 'params': []},
+                {'sql': bounds_query, 'params': []},
+            ])
+            if len(revision_rows) != 1:
+                raise StorageError('El esquema de D1 no está inicializado.')
+            revision = int(revision_rows[0]['value'])
+        else:
+            count_rows, bounds_rows = self.gateway.read_many([
+                {'sql': query, 'params': []},
+                {'sql': bounds_query, 'params': []},
+            ])
+        summaries = {}
+        for row in count_rows:
+            item = summaries.setdefault(row['ubigeo'], {
+                'ubigeo': row['ubigeo'], 'revision': revision,
+                'lotes': 0, 'manzanas': 0,
+            })
+            if row['kind'] == 'lote':
+                item['lotes'] = int(row['count'])
+            elif row['kind'] == 'manzana':
+                item['manzanas'] = int(row['count'])
+        for row in bounds_rows:
+            item = summaries.get(row['ubigeo'])
+            if not item:
+                continue
+            try:
+                item['bbox'] = [float(row['west']), float(row['south']),
+                                float(row['east']), float(row['north'])]
+            except (TypeError, ValueError):
+                continue
+        return summaries
+
+    def district_summary(self, ubigeo):
+        return self.district_summaries().get(ubigeo)
+
+    def collection(self, ubigeo, kind, revision=None):
+        """Read selected fields and geometry directly from D1 with keyset pages."""
+        from .master_contract import validate_field
+        validate_field('ubigeo', ubigeo)
+        if kind not in ('lote', 'manzana'):
+            raise ValueError('Capa no válida.')
+        features = []
+        cursor = ''
+        while True:
+            rows = self.gateway.read(
+                """SELECT e.id,e.kind,
+                          (SELECT i.source_feature_id FROM identities i
+                           WHERE i.entity_id=e.id AND i.layer=e.kind
+                           ORDER BY i.version_id DESC LIMIT 1) AS source_feature_id,
+                          MAX(CASE WHEN s.field='$geometry' THEN c.version_id END)
+                              AS geometry_version_id,
+                          json_group_object(s.field,json(c.value_json)) AS values_json
+                   FROM entities e
+                   JOIN selections s ON s.entity_id=e.id
+                   JOIN contributions c ON c.id=s.contribution_id
+                   WHERE e.ubigeo=? AND e.kind=? AND e.id>?
+                     AND EXISTS(SELECT 1 FROM selections g
+                                WHERE g.entity_id=e.id AND g.field='$geometry')
+                   GROUP BY e.id,e.kind
+                   ORDER BY e.id
+                   LIMIT """ + str(self.PAGE_SIZE),
+                [ubigeo, kind, cursor],
+            )
+            for row in rows:
+                try:
+                    values = json.loads(row.get('values_json') or '{}')
+                except (TypeError, ValueError):
+                    raise StorageError('D1 devolvió una geometría no válida.') from None
+                geometry = values.pop('$geometry', None)
+                if not isinstance(geometry, dict):
+                    continue
+                features.append({
+                    'type': 'Feature', 'id': row['id'], 'geometry': geometry,
+                    'properties': {
+                        **values,
+                        'source_feature_id': row.get('source_feature_id'),
+                    },
+                    'provenance': {
+                        '$geometry': {
+                            'version_id': row.get('geometry_version_id'),
+                        },
+                    },
+                })
+            if len(rows) < self.PAGE_SIZE:
+                break
+            cursor = rows[-1]['id']
+        return {
+            'type': 'FeatureCollection', 'features': features,
+            'revision': revision if revision is not None else self.gateway.revision(),
+            'crs': 'EPSG:4326',
+        }
+
+
 class D1Store(MasterStore):
     """RAM working copy with a row-level, atomic and revision-guarded D1 commit.
 

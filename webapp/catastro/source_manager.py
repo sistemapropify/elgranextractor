@@ -8,6 +8,7 @@ from .master_store import MasterStore
 _store = None
 _lock = RLock()
 _pdfs = {}
+_read_cache = {}
 
 
 def retain_pdf(version_id, body):
@@ -79,6 +80,67 @@ def enabled():
     if configured is not None:
         return configured == '1'
     return os.environ.get('CATASTRO_MASTER_LOCAL_PREVIEW') == '1'
+
+
+def district_summaries():
+    """Return the active geometry inventory without loading an authoring store."""
+    if durable():
+        from .master_d1 import D1ReadModel
+        model = D1ReadModel()
+        revision = model.revision()
+        with _lock:
+            cached = _read_cache.get(('summaries', revision))
+        if cached is not None:
+            return cached
+        result = model.district_summaries(revision)
+        with _lock:
+            _read_cache[('summaries', revision)] = result
+            _trim_read_cache()
+        return result
+    if not enabled():
+        return {}
+    value = store()
+    with value.lock:
+        result = {}
+        for district in value.active_districts():
+            result[district] = {
+                'ubigeo': district,
+                'revision': value.revision,
+                'lotes': len(value.collection(district, 'lote')['features']),
+                'manzanas': len(value.collection(district, 'manzana')['features']),
+            }
+        return result
+
+
+def district_summary(ubigeo):
+    return district_summaries().get(ubigeo)
+
+
+def collection(ubigeo, kind, revision=None):
+    """Use the bounded D1 reader for map queries, not the editable RAM store."""
+    if durable():
+        from .master_d1 import D1ReadModel
+        model = D1ReadModel()
+        revision = revision if revision is not None else model.revision()
+        key = ('collection', revision, ubigeo, kind)
+        with _lock:
+            cached = _read_cache.get(key)
+        if cached is not None:
+            return cached
+        result = model.collection(ubigeo, kind, revision)
+        with _lock:
+            _read_cache[key] = result
+            _trim_read_cache()
+        return result
+    if not enabled():
+        raise ValueError('Fuente no disponible.')
+    return store().collection(ubigeo, kind)
+
+
+def _trim_read_cache():
+    """Keep only the newest revisions; geometry items are bounded per district."""
+    while len(_read_cache) > 8:
+        _read_cache.pop(next(iter(_read_cache)))
 
 
 def store():
