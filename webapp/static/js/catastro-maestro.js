@@ -331,10 +331,30 @@
             drawNext();
         });
     }
-    async function json(url,signal) {
-        const response=await fetch(url,{credentials:'same-origin',signal,headers:{Accept:'application/json'}});
-        if(!response.headers.get('content-type')?.includes('application/json'))throw Error('Inicia sesión para consultar el catastro.');
-        const result=await response.json();if(!response.ok)throw Error(result.error||'No se pudo cargar la capa.');return result;
+    async function json(url,signal,timeoutMs=45000) {
+        const controller=new AbortController(),abort=()=>controller.abort();let timedOut=false;
+        if(signal?.aborted)controller.abort();
+        signal?.addEventListener('abort',abort,{once:true});
+        const timer=setTimeout(()=>{timedOut=true;controller.abort();},timeoutMs);
+        try{
+            const response=await fetch(url,{credentials:'same-origin',signal:controller.signal,headers:{Accept:'application/json'}});
+            if(!response.headers.get('content-type')?.includes('application/json'))throw Error('Inicia sesión para consultar el catastro.');
+            const result=await response.json();if(!response.ok)throw Error(result.error||'No se pudo cargar la capa.');return result;
+        }catch(error){
+            if(timedOut)throw Error('La consulta tardó demasiado. Se reintentará automáticamente.');
+            throw error;
+        }finally{
+            clearTimeout(timer);signal?.removeEventListener('abort',abort);
+        }
+    }
+    async function snapshotJson(url,signal){
+        try{
+            return await json(url,signal,45000);
+        }catch(error){
+            if(signal?.aborted||error.name==='AbortError')throw error;
+            await new Promise(resolve=>setTimeout(resolve,300));
+            return json(url,signal,60000);
+        }
     }
     async function loadSource(source,signal) {
         const scope=district;
@@ -357,7 +377,7 @@
                         loading(source.name+' · '+key+'…',loadDone,loadTotal);
                     if(source.transport==='snapshot'){
                         const base='/catastro/api/maestro/vectores/'+encodeURIComponent(current)+'/'+key+'/';
-                        const manifest=await json(base+'manifiesto/',signal);
+                        const manifest=await snapshotJson(base+'manifiesto/',signal);
                         collection={source,key,district:current,records:[]};
                         collections.set(id,collection);
                         for(let part=1;part<=manifest.parts;part++){
@@ -365,7 +385,7 @@
                             if(scope===district)
                                 loading(source.name+' · '+key+' · parte '+part+'/'+manifest.parts,
                                     loadDone+(part-1)/Math.max(1,manifest.parts),loadTotal);
-                            const data=await json(base+'?part='+part,signal);
+                            const data=await snapshotJson(base+'?part='+part,signal);
                             const records=(data.features||[]).map(f=>record(f,source,key)).filter(Boolean);
                             collection.records.push(...records);
                             if(vectorLayer&&records.length)
@@ -416,7 +436,8 @@
                         status('Catastro Maestro · '+finished+' de '+sources.length+' distritos cargados…');
                 }
             }
-            await Promise.all(Array.from({length:Math.min(4,sources.length)},()=>worker()));
+            const concurrency=district===ALL_DISTRICTS?2:4;
+            await Promise.all(Array.from({length:Math.min(concurrency,sources.length)},()=>worker()));
             if(signal.aborted)return;
             loading(null);
             counts();if(fitAfter)fit();
