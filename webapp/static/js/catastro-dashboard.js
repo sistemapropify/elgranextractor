@@ -35,6 +35,7 @@
     el('master-linked-lots').textContent=linked.toLocaleString('es-PE');
     el('master-pending-lots').textContent=pending.toLocaleString('es-PE');
     el('master-audit-status').textContent=auditStatus==='passed'?'Aprobada':auditStatus==='warnings'?'Aprobada con avisos':auditStatus==='failed'?'Falló':running&&!pending?'En curso':'Pendiente';
+    el('master-last-revision').textContent=Number.isFinite(Number(job.last_batch_revision))?Number(job.last_batch_revision).toLocaleString('es-PE'):Number.isFinite(Number(audit.revision))?Number(audit.revision).toLocaleString('es-PE'):'—';
     el('master-audit-status').classList.toggle('warn',auditStatus==='warnings');
     el('master-audit-status').classList.toggle('error-message',auditStatus==='failed');
     const progress=el('master-migration-progress');progress.max=Math.max(1,source);progress.value=Math.min(source,linked);
