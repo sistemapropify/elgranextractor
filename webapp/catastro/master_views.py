@@ -61,7 +61,8 @@ def layer(request, source_id, layer_key):
 
 @require_GET
 @admin_required
-def vector_snapshot(request, ubigeo, layer):
+def vector_snapshot(request, ubigeo, layer_key):
+    layer = layer_key
     try:
         part = request.GET.get('part')
         if part is not None:
@@ -82,7 +83,8 @@ def vector_snapshot(request, ubigeo, layer):
 
 @require_GET
 @admin_required
-def vector_snapshot_manifest(request, ubigeo, layer):
+def vector_snapshot_manifest(request, ubigeo, layer_key):
+    layer = layer_key
     try:
         value = vector_snapshots.snapshot_manifest(ubigeo, layer)
         response = JsonResponse(value)

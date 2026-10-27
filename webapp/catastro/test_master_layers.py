@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.test import RequestFactory, SimpleTestCase, override_settings
+from django.urls import resolve
 from . import manual_parks, master_layers, master_views, vector_snapshots
 from .storage import StorageError
 
@@ -106,6 +107,19 @@ class MasterGeometryTests(SimpleTestCase):
             len(vector_snapshots.read_snapshot_part('040102', 'lotes', 1, cloud=cloud)['features']),
             4000)
         self.assertIn('geollaqta/vectores/index.json', cloud.objects)
+
+    def test_vector_manifest_url_passes_the_layer_parameter_to_the_view(self):
+        request = RequestFactory().get(
+            '/catastro/api/maestro/vectores/040102/manzanas/manifiesto/')
+        request.current_user = SimpleNamespace(
+            is_authenticated=True, is_active=True, is_staff=True, is_superuser=True)
+        match = resolve(request.path)
+        self.assertEqual(match.kwargs, {'ubigeo': '040102', 'layer_key': 'manzanas'})
+        with patch('catastro.vector_snapshots.snapshot_manifest',
+                   return_value={'ubigeo': '040102', 'layer': 'manzanas',
+                                 'parts': 1, 'features': 1}):
+            response = match.func(request, **match.kwargs)
+        self.assertEqual(response.status_code, 200)
 
     def test_manual_park_lots_are_saved_independently_by_district(self):
         cloud = FakeSnapshotCloud()
