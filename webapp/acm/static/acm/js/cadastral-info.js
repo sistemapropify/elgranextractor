@@ -174,13 +174,22 @@
         }
         async function update(center,radius,epoch,signal){
             try{
-                if(!provider){if(!providerPromise)providerPromise=api('configuracion/').then(data=>{
-                    if(epoch!==areaEpoch)return;
-                    sourceVersions=versions(Object.fromEntries(data.providers.filter(p=>p.active&&p.transport==='master').map(p=>[p.id,p.placement?.revision??0])));
-                    provider=spatial.create(data);
-                }).finally(()=>{providerPromise=null;});await providerPromise;}
+                if(!provider){
+                    if(!providerPromise){
+                        const pending=api('configuracion/').then(data=>{
+                            sourceVersions=versions(Object.fromEntries(data.providers.filter(p=>p.active&&p.transport==='master').map(p=>[p.id,p.placement?.revision??0])));
+                            return spatial.create(data);
+                        }).finally(()=>{if(providerPromise===pending)providerPromise=null;});
+                        providerPromise=pending;
+                    }
+                    const created=await providerPromise;
+                    if(epoch!==areaEpoch||!allowed)return;
+                    if(!provider)provider=created;
+                }
                 if(epoch!==areaEpoch||!allowed)return;
-                const loaded=await provider.loadRadius(center,radius,{signal,onBatch:(_,data)=>{if(allowed&&epoch===areaEpoch)progress(data);}});
+                const activeProvider=provider;
+                if(!activeProvider||typeof activeProvider.loadRadius!=='function')throw Error('La configuración del Catastro no creó un proveedor de lotes. Vuelve a consultar.');
+                const loaded=await activeProvider.loadRadius(center,radius,{signal,onBatch:(_,data)=>{if(allowed&&epoch===areaEpoch)progress(data);}});
                 if(epoch!==areaEpoch)return;result=loaded;draw();select();finish();
             }catch(error){if(epoch===areaEpoch){
                 status(error.name==='AbortError'?'La consulta se interrumpió.':error.message,true);
