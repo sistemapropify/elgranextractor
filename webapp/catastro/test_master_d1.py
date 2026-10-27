@@ -99,6 +99,23 @@ class DurableMasterTests(TestCase):
         self.assertEqual(feature['properties']['sector'],'32')
         self.assertEqual(feature['properties']['block'],'001')
         self.assertEqual(feature['geometry']['type'],'Polygon')
+
+    def test_bounded_read_model_returns_complete_entity_without_full_store(self):
+        self.store.stage(candidate(),0,'admin')
+        plan={'revision':1,'mode':'fill','version_id':'v1',
+              'scope':{'ubigeo':'040103','kind':'lote'},'reason':'ficha acotada'}
+        self.store.apply(plan,self.store.preview(plan)['token'],'admin')
+        entity_id=self.gateway.read('SELECT id FROM entities')[0]['id']
+
+        value=D1ReadModel(self.gateway).entity(entity_id)
+
+        self.assertEqual(value['entity']['id'],entity_id)
+        self.assertEqual(value['attributes']['sector'],'32')
+        self.assertEqual(value['attributes']['block'],'001')
+        self.assertEqual(len(value['identity_links']),1)
+        self.assertEqual(value['identity_links'][0]['source_feature_id'],'a')
+        self.assertIsInstance(value['owners'],list)
+        self.assertIsInstance(value['catalog'],dict)
     def test_catalog_review_and_environment_layer_survive_restart(self):
         payload=candidate()
         payload['identifiers']=[{'target_ref':'lote:a','scheme':'referencia_catastral',

@@ -196,6 +196,134 @@ class D1ReadModel:
     def district_summary(self, ubigeo):
         return self.district_summaries().get(ubigeo)
 
+    def entity(self, entity_id):
+        """Read the complete normalized record with one bounded D1 batch."""
+        try:
+            uuid.UUID(entity_id)
+        except (AttributeError, TypeError, ValueError):
+            raise ValueError('Identificador maestro no válido.') from None
+        queries = [
+            ('entity', 'SELECT * FROM entities WHERE id=?'),
+            ('attributes', 'SELECT * FROM current_attributes WHERE entity_id=?'),
+            ('owners', '''SELECT p.id,p.name,p.document_type,p.document_number,
+                r.kind,r.source_version,r.details_json
+                FROM relationships r JOIN people p ON p.id=r.person_id
+                WHERE r.entity_id=? ORDER BY p.name'''),
+            ('media', '''SELECT id,kind,object_key,sha256,observed_at,source_version,
+                details_json FROM media WHERE entity_id=? ORDER BY kind,id'''),
+            ('relationships', '''SELECT id,
+                CASE WHEN entity_id=? THEN related_entity_id ELSE entity_id END
+                    AS related_entity_id,kind,source_version
+                FROM relationships
+                WHERE (entity_id=? OR related_entity_id=?)
+                  AND related_entity_id IS NOT NULL'''),
+            ('provenance', '''SELECT s.field,c.version_id,c.evidence_json
+                FROM selections s JOIN contributions c ON c.id=s.contribution_id
+                WHERE s.entity_id=?'''),
+            ('identity_links', '''SELECT i.version_id,i.layer,i.source_feature_id,
+                v.source_id,v.label AS version_label,s.name AS source_name,
+                v.original_name,v.original_sha256
+                FROM identities i JOIN versions v ON v.id=i.version_id
+                LEFT JOIN sources s ON s.id=v.source_id
+                WHERE i.entity_id=? ORDER BY i.layer,v.created_at DESC'''),
+            ('boundary_segments', 'SELECT * FROM boundary_segments WHERE entity_id=?'),
+            ('registral_acts', 'SELECT * FROM registral_acts WHERE entity_id=?'),
+            ('addresses', '''SELECT address_type,full_address,street_type,street_name,
+                municipal_number,interior,postal_code,precision,status,source_version
+                FROM addresses WHERE entity_id=? ORDER BY address_type'''),
+            ('observations', '''SELECT namespace,field_name,value_type,value_json,unit,
+                method,status,observed_at,valid_from,valid_to,source_version
+                FROM property_observations WHERE entity_id=? ORDER BY observed_at,id'''),
+            ('identifiers', '''SELECT scheme,value,authority,scope,status,observed_at,
+                source_version FROM external_identifiers WHERE entity_id=?
+                ORDER BY scheme,value'''),
+            ('listings', '''SELECT id,portal,external_id,url,operation,price,currency,
+                area_value,area_unit,area_basis,status,first_seen,last_seen,source_version
+                FROM listings WHERE entity_id=? ORDER BY last_seen DESC'''),
+            ('listing_history', '''SELECT listing_id,observed_at,price,currency,operation,
+                status,details_json,source_version FROM listing_observations
+                WHERE listing_id IN (SELECT id FROM listings WHERE entity_id=?)
+                ORDER BY observed_at DESC'''),
+            ('transactions', '''SELECT transaction_type,amount,currency,transaction_date,
+                recorded_date,source_version FROM transactions WHERE entity_id=?
+                ORDER BY transaction_date DESC'''),
+            ('activities', '''SELECT a.category,a.subcategory,a.activity_name,a.ciiu_code,
+                a.ciiu_version,a.valid_from,a.valid_to,a.source_version,
+                o.name AS organization_name,o.document_type AS organization_document_type,
+                o.document_number AS organization_document_number
+                FROM activities a LEFT JOIN organizations o ON o.id=a.organization_id
+                WHERE a.entity_id=? ORDER BY a.valid_from DESC'''),
+            ('visits', '''SELECT visited_at,observer,summary,details_json,source_version
+                FROM visits WHERE entity_id=? ORDER BY visited_at DESC'''),
+            ('development_links', '''SELECT d.id,d.name,d.status,d.expected_start,
+                d.expected_end,l.role,l.source_version FROM development_lots l
+                JOIN developments d ON d.id=l.development_id WHERE l.entity_id=?'''),
+        ]
+        parameter_counts = [1, 1, 1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        results = self.gateway.read_many([
+            {'sql': sql, 'params': [entity_id] * parameter_counts[index]}
+            for index, (_, sql) in enumerate(queries)
+        ])
+        values = {name: rows for (name, _), rows in zip(queries, results)}
+        if not values['entity']:
+            raise ValueError('Inmueble no disponible.')
+
+        def decoded(row, key, target):
+            row = dict(row)
+            if key in row:
+                try:
+                    row[target] = json.loads(row.pop(key) or '{}')
+                except (TypeError, ValueError):
+                    row[target] = {}
+            return row
+
+        owners = [decoded(row, 'details_json', 'details') for row in values['owners']]
+        media = []
+        for row in values['media']:
+            item = decoded(row, 'details_json', 'details')
+            item['url'] = '/catastro/api/maestro/medios/' + item['id'] + '/'
+            media.append(item)
+        provenance = {
+            row['field']: {
+                'version_id': row['version_id'],
+                'evidence': decoded(row, 'evidence_json', 'evidence')['evidence'],
+            }
+            for row in values['provenance']
+        }
+        catalog = {
+            'addresses': values['addresses'],
+            'observations': [
+                decoded(row, 'value_json', 'value') for row in values['observations']
+            ],
+            'identifiers': values['identifiers'],
+            'listings': values['listings'],
+            'listing_history': [
+                decoded(row, 'details_json', 'details')
+                for row in values['listing_history']
+            ],
+            'transactions': values['transactions'],
+            'activities': values['activities'],
+            'visits': [
+                decoded(row, 'details_json', 'details') for row in values['visits']
+            ],
+            'development_links': values['development_links'],
+        }
+        return {
+            'entity': values['entity'][0],
+            'attributes': values['attributes'][0] if values['attributes'] else {},
+            'owners': owners,
+            'media': media,
+            'relationships': values['relationships'],
+            'provenance': provenance,
+            'identity_links': values['identity_links'],
+            'boundary_segments': values['boundary_segments'],
+            'registral_acts': [
+                decoded(row, 'details_json', 'details')
+                for row in values['registral_acts']
+            ],
+            'catalog': catalog,
+        }
+
     def collection(self, ubigeo, kind, revision=None):
         """Read selected fields and geometry directly from D1 with keyset pages."""
         from .master_contract import validate_field

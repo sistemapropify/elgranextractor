@@ -91,6 +91,12 @@ def _raster_store():
     return source_manager.store()
 
 
+def _raster_read_store():
+    if not (source_manager.enabled() or source_manager.durable()):
+        raise PermissionError('El mosaico satelital no está habilitado en este entorno.')
+    return source_manager.map_store()
+
+
 def _raster_actor(request):
     user = getattr(request, 'current_user', None) or request.user
     return getattr(user, 'username', '') or str(getattr(user, 'pk', 'administrador'))
@@ -110,7 +116,7 @@ def authenticated_map_user(view):
 def raster_catalog(request):
     """Single Catastro Maestro feed consumed by every map view."""
     try:
-        store = _raster_store()
+        store = _raster_read_store()
         ubigeo = request.GET.get('ubigeo', '')
         overlays = (raster_overlays.list_overlays(store, ubigeo) if ubigeo
                     else raster_overlays.list_all_overlays(store))
@@ -131,12 +137,13 @@ def raster_catalog(request):
 @admin_required
 def raster_layers(request):
     try:
-        store = _raster_store()
         if request.method == 'GET':
+            store = _raster_read_store()
             ubigeo = request.GET.get('ubigeo', '')
             value = {'overlays': raster_overlays.list_overlays(store, ubigeo),
                      'revision': store.revision}
         elif request.method == 'POST':
+            store = _raster_store()
             request.upload_handlers = [source_manager_views.MemoryPDFUpload(request)]
             upload = request.FILES.get('image')
             if upload is None:
@@ -193,7 +200,7 @@ def raster_calibration(request, overlay_id):
 @authenticated_map_user
 def raster_image(request, overlay_id):
     try:
-        store = _raster_store()
+        store = _raster_read_store()
         body, content_type = raster_overlays.image_body(
             store, overlay_id, request.GET.get('ubigeo', ''))
         response = HttpResponse(body, content_type=content_type)

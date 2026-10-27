@@ -11,6 +11,19 @@ _pdfs = {}
 _read_cache = {}
 
 
+class D1MapReadStore:
+    """Minimal raster/entity facade backed by the private D1 gateway."""
+
+    def __init__(self):
+        from .master_d1 import Gateway
+        self.gateway = Gateway()
+        self.revision = self.gateway.revision()
+
+
+def map_store():
+    return D1MapReadStore() if durable() else store()
+
+
 def retain_pdf(version_id, body):
     with _lock:
         total = sum(len(value) for key,value in _pdfs.items() if key != version_id)

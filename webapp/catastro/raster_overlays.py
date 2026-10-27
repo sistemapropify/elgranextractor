@@ -208,13 +208,16 @@ def _values(rows, published_only=False):
 def _latest(store, ubigeo):
     if hasattr(store, 'scope'):
         store.summary(ubigeo)
-    with store.lock:
-        rows = store.db.execute(
-            '''SELECT s.id AS source_id,s.name,s.ubigeo,v.id AS version_id,
+    query = '''SELECT s.id AS source_id,s.name,s.ubigeo,v.id AS version_id,
                       v.created_at,v.payload
                FROM sources s JOIN versions v ON v.source_id=s.id
-               WHERE s.ubigeo=? AND s.id LIKE ? ORDER BY v.created_at DESC''',
-            (ubigeo, SOURCE_PREFIX + '%')).fetchall()
+               WHERE s.ubigeo=? AND s.id LIKE ? ORDER BY v.created_at DESC'''
+    if hasattr(store, 'gateway'):
+        rows = store.gateway.read(query, [ubigeo, SOURCE_PREFIX + '%'])
+    else:
+        with store.lock:
+            rows = [dict(row) for row in store.db.execute(
+                query, (ubigeo, SOURCE_PREFIX + '%'))]
     return _values(rows)
 
 

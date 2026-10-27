@@ -122,7 +122,7 @@ class RasterOverlayTests(SimpleTestCase):
 
         request = factory.get('/catastro/api/maestro/raster/catalogo/')
         request.current_user = actor
-        with patch('catastro.master_views._raster_store', return_value=self.store):
+        with patch('catastro.master_views._raster_read_store', return_value=self.store):
             response = master_views.raster_catalog(request)
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(json.loads(response.content)['overlays'][0]['id'], overlay['id'])

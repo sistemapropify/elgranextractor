@@ -12,7 +12,7 @@ from django.views.decorators.http import require_GET
 
 from .views import admin_required
 from . import source_manager, master_pipeline, cad_reader, plan_workspace
-from .master_d1 import Gateway
+from .master_d1 import D1ReadModel, Gateway
 from .master_store import Conflict
 from .storage import StorageError
 
@@ -143,7 +143,10 @@ def workspace(request):
         return unavailable()
     response = None
     try:
-        store = source_manager.store()
+        direct_entity = (request.method == 'GET' and
+                         request.GET.get('view') == 'entity' and
+                         source_manager.durable())
+        store = None if direct_entity else source_manager.store()
         if request.method == 'GET':
             if request.GET.get('view') == 'records':
                 value = {'records': store.records({k:v for k,v in request.GET.items() if k != 'view'}),
@@ -151,7 +154,9 @@ def workspace(request):
             elif request.GET.get('view') == 'geometry':
                 value = store.collection(request.GET.get('ubigeo', ''), request.GET.get('kind', 'lote'))
             elif request.GET.get('view') == 'entity':
-                value = store.entity(request.GET.get('id',''))
+                value = (D1ReadModel().entity(request.GET.get('id',''))
+                         if source_manager.durable() else
+                         store.entity(request.GET.get('id','')))
             elif request.GET.get('view') == 'catalog':
                 from . import master_catalog
                 if hasattr(store, 'refresh'):
@@ -487,7 +492,13 @@ def medium(request,media_id):
     try:
         from .storage import R2
         import hashlib
-        item=source_manager.store().medium(media_id)
+        if source_manager.durable():
+            rows=Gateway().read('SELECT * FROM media WHERE id=?',[media_id])
+            if not rows:
+                raise ValueError('Archivo no disponible.')
+            item=rows[0]
+        else:
+            item=source_manager.store().medium(media_id)
         key=item['object_key']
         if not key.startswith('geollaqta/') or '..' in key.split('/'):
             raise ValueError('Ruta de archivo no válida.')
