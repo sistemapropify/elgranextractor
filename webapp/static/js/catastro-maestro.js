@@ -44,6 +44,7 @@
     let cataloguePromise=null;
     const collections=new Map(),enabled=new Map(),pending=new Map();
     const dataFeatures=new Map();
+    const parkFeatures=new Map();
     const layerOn={manzanas:true,lotes:true,vias:true};
     const ALL_DISTRICTS='all';
     const masterRole=source=>source.role==='draft'||source.role==='snapshot';
@@ -53,12 +54,59 @@
     const scoped=()=>[...collections.values()].filter(c=>district===ALL_DISTRICTS||c.district===district);
     const caymaRequested=()=>new URL(location.href).searchParams.get('cayma')==='1';
     const status=(text,error=false)=>{el('status').textContent=text;el('status').dataset.error=String(error);};
+    let parkMode=false,parkToken='',parkSaved=new Set(),parkDraft=new Set();
     const isUuid=value=>/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(String(value||''));
     const displayEntityId=(kind,id)=>isUuid(id)?((kind==='manzana'?'MANZANA-CM-':'LOTE-CM-')+String(id).replaceAll('-','').slice(0,12).toUpperCase()):null;
     const valueText=value=>value==null||value===''?'—':typeof value==='boolean'?(value?'Sí':'No'):typeof value==='object'?JSON.stringify(value):String(value);
     const attributeLabels={
         country_code:'País',ubigeo:'UBIGEO',postal_code:'Código postal',department:'Departamento',province:'Provincia',district:'Distrito',zone:'Zona',sector:'Sector',urbanization:'Urbanización / habilitación',block:'Manzana',lot:'Lote',building:'Edificación',entrance:'Ingreso',floor:'Piso',unit:'Unidad',address:'Dirección',address_block:'Manzana de dirección',address_lot:'Lote de dirección',street_type:'Tipo de vía',street_name:'Nombre de vía',municipal_number:'Número municipal',condition:'Condición',registry_office:'Oficina registral',registry_entry_type:'Tipo de partida',registry_entry_number:'Partida registral',registry_folios:'Fojas',registry_seat:'Asiento',notary_name:'Notaría',notary_kardex:'Kárdex',deed_date:'Fecha de escritura',property_registration_date:'Inscripción del predio',construction_declaration:'Declaración de fábrica',construction_registration_seat:'Asiento de fábrica',construction_registration_date:'Inscripción de fábrica',cuc:'CUC',cadastral_reference:'Referencia catastral',cadastral_use:'Uso catastral',observed_use:'Uso observado',zoning:'Zonificación',use_category:'Categoría de uso',business_category:'Giro',business_subcategory:'Subgiro',ciiu_code:'CIIU',ciiu_version:'Versión CIIU',commercial_name:'Nombre comercial',land_area:'Área de terreno documental',built_area:'Área construida documental',geometric_land_area:'Área geométrica',gis_land_area:'Área SIG de terreno (valor de fuente)',gis_built_area:'Área SIG construida (valor de fuente)',front:'Frente',back:'Fondo',left:'Izquierda',right:'Derecha',perimeter:'Perímetro',bedrooms:'Dormitorios',bathrooms:'Baños',half_bathrooms:'Medios baños',parking_spaces:'Estacionamientos',floors:'Pisos',units:'Unidades',is_corner:'Esquina',is_through:'Pasaje',faces_park:'Frente a parque'
     };
+    const parkStatus=(text,error=false)=>{const node=el('park-status');if(!node)return;node.textContent=text;node.dataset.error=String(error);};
+    const parkKey=(feature,source)=>{
+        const value=String(feature?.properties?.ID_LOTE||'').trim();
+        return /^\d{14}$/.test(value)?value:source.id+':'+String(feature.id);
+    };
+    const parkDirty=()=>parkSaved.size!==parkDraft.size||[...parkSaved].some(value=>!parkDraft.has(value));
+    function refreshParkStyles(){
+        for(const feature of dataFeatures.values())vectorLayer?.revertStyle(feature);
+        for(const [key,feature] of parkFeatures){
+            if(parkSaved.has(key)||parkDraft.has(key))vectorLayer?.overrideStyle(feature,{
+                fillColor:'#54d48a',fillOpacity:.42,strokeColor:'#b8ffd4',strokeWeight:2.4,zIndex:4
+            });
+        }
+        if(selectedFeature)vectorLayer?.overrideStyle(selectedFeature,{
+            visible:true,fillColor:'#ffff55',fillOpacity:.24,strokeColor:'#ffffff',
+            strokeOpacity:1,strokeWeight:3,clickable:true,zIndex:5
+        });
+    }
+    function parkControls(){
+        const concrete=district&&district!==ALL_DISTRICTS;
+        if(el('park-search'))el('park-search').disabled=!concrete;
+        if(el('park-save'))el('park-save').disabled=!concrete||!parkDirty();
+        if(el('park-cancel'))el('park-cancel').disabled=!concrete||!parkDirty();
+        if(el('park-search'))el('park-search').textContent=parkMode?'Terminar selección':'Buscar parques';
+    }
+    async function loadParkLots(){
+        parkMode=false;parkToken='';parkSaved=new Set();parkDraft=new Set();
+        parkControls();refreshParkStyles();
+        if(!district||district===ALL_DISTRICTS){
+            parkStatus('Selecciona un distrito concreto para editar parques.');
+            return;
+        }
+        parkStatus('Consultando parques marcados…');
+        try{
+            const response=await fetch('/catastro/api/maestro/parques/?ubigeo='+encodeURIComponent(district),
+                {credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}});
+            const value=await response.json();
+            if(!response.ok)throw Error(value.error||'No se pudieron cargar los parques.');
+            parkToken=value.token||'';
+            parkSaved=new Set(value.lots||[]);
+            parkDraft=new Set(parkSaved);
+            parkStatus(value.lots?.length?fmt(value.lots.length)+' lotes marcados como parque.':'Todavía no hay lotes marcados como parque.');
+            refreshParkStyles();
+        }catch(error){parkStatus(error.message,true);}
+        parkControls();
+    }
     function visible() {
         return scoped().filter(c=>enabled.get(c.source.id)&&layerOn[c.key]);
     }
@@ -201,6 +249,26 @@
         const item=matches[0]||null;
         selectFeature(item,item?dataFeatures.get(recordId(item.source,item.key,item.feature)):null);
     }
+    function lotAt(point){
+        const target=world(point),matches=[];
+        visible().filter(c=>c.key==='lotes').forEach(c=>c.records.forEach(r=>{
+            if(target[0]>=r.bbox[0]&&target[0]<=r.bbox[2]&&target[1]>=r.bbox[1]&&target[1]<=r.bbox[3]&&contains(r.feature.geometry,point))matches.push(r);
+        }));
+        matches.sort((a,b)=>(a.source.role==='draft'?-1:0)-(b.source.role==='draft'?-1:0));
+        return matches[0]||null;
+    }
+    function toggleParkAt(point){
+        const item=lotAt(point);
+        if(!item){parkStatus('El punto seleccionado no está dentro de un lote.',true);return;}
+        const key=parkKey(item.feature,item.source);
+        if(!/^\d{14}$/.test(key)){parkStatus('El lote no tiene un código catastral válido para guardar.',true);return;}
+        if(parkDraft.has(key))parkDraft.delete(key);else parkDraft.add(key);
+        refreshParkStyles();parkControls();
+        const p=item.feature.properties||{};
+        parkStatus((parkDraft.has(key)?'Marcado':'Desmarcado')+' · sector '+valueText(p.COD_SECT)+
+            ' · manzana '+valueText(p.COD_MZNA)+' · lote '+valueText(p.COD_LOTE)+
+            ' · '+parkDraft.size+' seleccionados');
+    }
 
     function vectorStyle(feature) {
         const key=feature.getProperty('MASTER_LAYER');
@@ -229,8 +297,16 @@
         });
         const added=vectorLayer.addGeoJson({type:'FeatureCollection',features},
             {idPropertyName:'MASTER_ID'});
-        added.forEach(feature=>dataFeatures.set(feature.getProperty('MASTER_ID'),feature));
+        added.forEach((feature,index)=>{
+            dataFeatures.set(feature.getProperty('MASTER_ID'),feature);
+            const item=collection.records[index];
+            if(item?.key==='lotes'){
+                const key=parkKey(item.feature,item.source);
+                if(/^\d{14}$/.test(key))parkFeatures.set(key,feature);
+            }
+        });
         vectorLayer.setStyle(vectorStyle);
+        refreshParkStyles();
     }
     async function json(url,signal) {
         const response=await fetch(url,{credentials:'same-origin',signal,headers:{Accept:'application/json'}});
@@ -324,9 +400,15 @@
         counts();
     }
     function changeDistrict(fitAfter=true) {
-        district=el('district').value;selected=null;
+        const requested=el('district').value;
+        if(parkDirty()){
+            el('district').value=district;
+            parkStatus('Guarda o cancela los cambios de parques antes de cambiar de distrito.',true);
+            return;
+        }
+        district=requested;selected=null;
         el('detail').replaceChildren();const h=document.createElement('h2'),p=document.createElement('p');h.textContent='Elemento seleccionado';p.className='master-help';p.textContent='Selecciona un contorno para ver su fuente y los datos disponibles.';el('detail').append(h,p);
-        const url=new URL(location.href);url.searchParams.set('ubigeo',district);history.replaceState(null,'',url);sourcesPanel();refresh(fitAfter);
+        const url=new URL(location.href);url.searchParams.set('ubigeo',district);history.replaceState(null,'',url);sourcesPanel();loadParkLots();refresh(fitAfter);
         window.dispatchEvent(new CustomEvent('catastro-master-district',{detail:{ubigeo:district}}));
     }
     function showCatalogueError(error) {
@@ -365,7 +447,37 @@
         for(const collection of collections.values())addVectorFeatures(collection);
         window.CatastroMasterMap={getMap:()=>map};
         window.dispatchEvent(new CustomEvent('catastro-master-ready',{detail:{map}}));
-        map.addListener('click',event=>selectAt([event.latLng.lng(),event.latLng.lat()]));
+        map.addListener('click',event=>{
+            const point=[event.latLng.lng(),event.latLng.lat()];
+            if(parkMode)toggleParkAt(point);else selectAt(point);
+        });
+        el('park-search')?.addEventListener('click',()=>{
+            if(!district||district===ALL_DISTRICTS){parkStatus('Selecciona un distrito concreto para editar parques.',true);return;}
+            parkMode=!parkMode;parkControls();
+            parkStatus(parkMode?'Modo búsqueda activo: un clic marca el lote; otro clic lo desmarca.':'Modo búsqueda cerrado. Puedes guardar o cancelar los cambios.');
+        });
+        el('park-save')?.addEventListener('click',async()=>{
+            if(!district||district===ALL_DISTRICTS||!parkDirty())return;
+            const button=el('park-save');button.disabled=true;
+            parkStatus('Guardando '+parkDraft.size+' lotes como parques…');
+            try{
+                const response=await fetch('/catastro/api/maestro/parques/',{
+                    method:'POST',credentials:'same-origin',cache:'no-store',
+                    headers:{Accept:'application/json','Content-Type':'application/json',
+                        'X-CSRFToken':el('raster-upload')?.elements?.csrfmiddlewaretoken?.value||''},
+                    body:JSON.stringify({ubigeo:district,lots:[...parkDraft],token:parkToken})
+                });
+                const value=await response.json();
+                if(!response.ok)throw Error(value.error||'No se pudieron guardar los parques.');
+                parkToken=value.token;parkSaved=new Set(value.lots||[]);parkDraft=new Set(parkSaved);
+                parkMode=false;refreshParkStyles();parkControls();
+                parkStatus('Cambios guardados · '+parkSaved.size+' lotes marcados como parque.');
+            }catch(error){parkStatus(error.message,true);parkControls();}
+        });
+        el('park-cancel')?.addEventListener('click',()=>{
+            parkDraft=new Set(parkSaved);parkMode=false;refreshParkStyles();parkControls();
+            parkStatus('Cambios descartados · '+parkSaved.size+' lotes marcados como parque.');
+        });
         el('fit').addEventListener('click',fit);
         el('satellite').addEventListener('click',()=>{const value=map.getMapTypeId()!=='satellite';map.setMapTypeId(value?'satellite':'roadmap');el('satellite').setAttribute('aria-pressed',String(value));});
         for(const key of ['manzanas','lotes','vias'])el(key).addEventListener('change',()=>{

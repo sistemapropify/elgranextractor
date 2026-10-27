@@ -42,6 +42,7 @@ urlpatterns = [
     path('api/maestro/migracion/estado/', migration_views.job, name='master_migration_job'),
     path('api/maestro/fuentes/<slug:source_id>/posicion/', master_views.placement, name='maestro_placement'),
     path('api/maestro/vectores/<str:ubigeo>/<slug:layer_key>/', master_views.vector_snapshot, name='maestro_vector_snapshot'),
+    path('api/maestro/parques/', master_views.park_lots, name='maestro_park_lots'),
     path('api/maestro/fuentes/<slug:source_id>/<slug:layer_key>/', master_views.layer, name='maestro_layer'),
     path('visor-planos/', planos_views.viewer, name='visor_planos'),
     path('api/planos/importar/', planos_views.upload, name='planos_upload'),

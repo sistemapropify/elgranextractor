@@ -1,7 +1,7 @@
 {% extends 'propifai_base.html' %}
 {% load static %}
 {% block title %}Catastro maestro · Prometeo{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-maestro.css' %}?v=9">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-maestro.css' %}?v=10">{% endblock %}
 {% block content %}
 <main class="master-workspace" id="master-workspace">
   <header class="master-heading">
@@ -58,6 +58,16 @@
           <label>Opacidad (%)<input id="master-raster-opacity" type="number" min="5" max="100" step="1"></label>
           <div class="master-raster-editor-actions"><button type="button" id="master-raster-save">Fijar parche satelital</button><button type="button" id="master-raster-cancel">Descartar ajuste</button></div>
         </div>
+      </section>
+      <section id="master-park-editor">
+        <h2>Editar catastro</h2>
+        <p class="master-help">Marca lotes que correspondan a parques. Un clic agrega el lote y otro clic lo quita.</p>
+        <div class="master-park-actions">
+          <button id="master-park-search" type="button">Buscar parques</button>
+          <button id="master-park-save" type="button" disabled>Guardar cambios</button>
+          <button id="master-park-cancel" type="button" disabled>Cancelar</button>
+        </div>
+        <p id="master-park-status" class="master-help" role="status" aria-live="polite">Selecciona un distrito concreto para editar parques.</p>
       </section>
       <section id="master-detail"><h2>Elemento seleccionado</h2><p class="master-help">Selecciona un contorno para ver su fuente y los datos disponibles.</p></section>
       <p class="master-help master-standard">Formato común: GeoJSON · WGS84. Cada fuente conserva su procedencia y sus datos originales.</p>
@@ -126,7 +136,7 @@
 </dialog>
 {% endblock %}
 {% block extra_js %}
-<script src="{% static 'js/catastro-maestro.js' %}?v=17"></script>
+<script src="{% static 'js/catastro-maestro.js' %}?v=18"></script>
 <script src="{% static 'js/catastro-master-model.js' %}?v=1"></script>
 <script src="{% static 'js/catastro-raster-layers.js' %}?v=17"></script>
 {% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initCatastroMaster" async defer></script>{% else %}<script>document.getElementById('master-status').textContent='No se ha configurado la clave del mapa.';</script>{% endif %}

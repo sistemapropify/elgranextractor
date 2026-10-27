@@ -14,6 +14,7 @@ from . import source_manager
 from . import source_manager_views
 from . import source_placement
 from . import vector_snapshots
+from . import manual_parks
 from .storage import StorageError
 import json
 
@@ -70,6 +71,34 @@ def vector_snapshot(request, ubigeo, layer):
         return JsonResponse({'error': str(error)}, status=503)
     except ValueError as error:
         return JsonResponse({'error': str(error)}, status=404)
+
+
+@csrf_protect
+@admin_required
+def park_lots(request):
+    try:
+        if request.method == 'GET':
+            value = manual_parks.read(request.GET.get('ubigeo', ''))
+        elif request.method == 'POST':
+            if len(request.body) > 8 * 1024 * 1024:
+                raise ValueError('La clasificación enviada es demasiado grande.')
+            payload = json.loads(request.body)
+            actor = getattr(request, 'current_user', None) or request.user
+            value = manual_parks.save(
+                payload.get('ubigeo'), payload.get('lots'),
+                payload.get('token'), getattr(actor, 'username', '') or
+                str(getattr(actor, 'pk', 'administrador')))
+        else:
+            return JsonResponse({'error': 'Método no permitido.'}, status=405)
+        response = JsonResponse(value)
+        response['Cache-Control'] = 'private, no-store'
+        return response
+    except manual_parks.Conflict as error:
+        return JsonResponse({'error': str(error)}, status=409)
+    except StorageError as error:
+        return JsonResponse({'error': str(error)}, status=503)
+    except (ValueError, TypeError, json.JSONDecodeError) as error:
+        return JsonResponse({'error': str(error)}, status=400)
 
 
 @csrf_protect

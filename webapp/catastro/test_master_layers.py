@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.test import RequestFactory, SimpleTestCase, override_settings
-from . import master_layers, master_views, vector_snapshots
+from . import manual_parks, master_layers, master_views, vector_snapshots
 from .storage import StorageError
 
 
@@ -93,6 +93,20 @@ class MasterGeometryTests(SimpleTestCase):
         restored = vector_snapshots.read_snapshot('040102', 'lotes', cloud=cloud)
         self.assertEqual(restored['total_features'], 9001)
         self.assertIn('geollaqta/vectores/index.json', cloud.objects)
+
+    def test_manual_park_lots_are_saved_independently_by_district(self):
+        cloud = FakeSnapshotCloud()
+        initial = manual_parks.read('040102', cloud=cloud)
+        lot_id = '04010201001001'
+        saved = manual_parks.save(
+            '040102', [lot_id], initial['token'], 'editor', cloud=cloud)
+        self.assertEqual(saved['lots'], [lot_id])
+        self.assertEqual(saved['updated_by'], 'editor')
+        with self.assertRaises(manual_parks.Conflict):
+            manual_parks.save('040102', [], initial['token'], 'editor', cloud=cloud)
+        with self.assertRaises(ValueError):
+            manual_parks.save(
+                '040102', ['04012601001001'], saved['token'], 'editor', cloud=cloud)
 
     def test_draft_layer_keeps_master_identity_and_is_not_reference_geometry(self):
         summary = {'ubigeo': '040126', 'revision': 4114,
@@ -221,4 +235,4 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertNotIn('geollaqta-data.js', html)
         self.assertNotIn('geollaqta-district.js', html)
         self.assertNotIn('collection-form', html)
-        self.assertIn('catastro-maestro.js?v=17', html)
+        self.assertIn('catastro-maestro.js?v=18', html)
