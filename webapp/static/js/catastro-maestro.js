@@ -146,10 +146,12 @@
     }
     function detail(item) {
         const panel=el('detail');panel.replaceChildren();
+        const itemDistrict=sourceDistrict(item.source);
+        if(district===ALL_DISTRICTS&&/^\d{6}$/.test(itemDistrict||''))
+            window.dispatchEvent(new CustomEvent('catastro-master-raster-focus',{detail:{ubigeo:itemDistrict}}));
         const h=document.createElement('h2');h.textContent=item.key==='lotes'?'Lote seleccionado':item.key==='vias'?'Vía seleccionada':'Manzana seleccionada';panel.append(h);
         const p=item.feature.properties,dl=document.createElement('dl');
         const entityKind=item.key==='manzanas'?'manzana':'lote';
-        const itemDistrict=sourceDistrict(item.source);
         const values=item.key==='vias'?[
             ['Distrito',p.DISTRICT_NAME||districtLabel(itemDistrict)],
             ['Fuente',item.source.name],
@@ -224,7 +226,7 @@
                         unit.floors!=null?'Pisos '+valueText(unit.floors):null
                     ].filter(Boolean).join(' · ')||'Sin medidas normalizadas'}));
                     const links=document.createElement('span');links.className='master-unit-links';
-                    for(const document of documentsByRecord.get(unit.source_feature_id)||[]){const link=document.createElement('a');link.href=document.url;link.target='_blank';link.rel='noopener';link.textContent=document.kind==='individual_record_pdf'?'Abrir ficha individual':document.kind==='cadastral_report_pdf'?'Abrir reporte catastral':(document.kind||'Abrir documento');links.append(link);}
+                    for(const doc of documentsByRecord.get(unit.source_feature_id)||[]){const link=document.createElement('a');link.href=doc.url;link.target='_blank';link.rel='noopener';link.textContent=doc.kind==='individual_record_pdf'?'Abrir ficha individual':doc.kind==='cadastral_report_pdf'?'Abrir reporte catastral':(doc.kind||'Abrir documento');links.append(link);}
                     row.append(links);units.append(row);
                 }
             }else units.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Sin unidades o fichas documentales vinculadas.'}));
@@ -441,7 +443,7 @@
             if(signal.aborted)return;
             loading(null);
             counts();if(fitAfter)fit();
-            if(sources.length)status((map?'Catastro Maestro cargado · ':'Catastro Maestro cargado sin Google Maps · ')+districtLabel()+' · fuente de verdad D1.');
+            if(sources.length)status((map?'Catastro Maestro cargado · ':'Catastro Maestro cargado sin Google Maps · ')+districtLabel(district)+' · fuente de verdad D1.');
         }catch(error){if(error.name!=='AbortError'&&!signal.aborted)status(error.message,true);}
     }
     function showCaymaReference(updateUrl=true) {

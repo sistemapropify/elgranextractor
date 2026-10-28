@@ -471,6 +471,11 @@
         district = event.detail.ubigeo;
         loadOverlays();
     });
+    window.addEventListener('catastro-master-raster-focus', event => {
+        if (!/^\d{6}$/.test(String(event.detail?.ubigeo || ''))) return;
+        district = event.detail.ubigeo;
+        loadOverlays();
+    });
     if (window.CatastroMasterMap?.getMap()) {
         map = window.CatastroMasterMap.getMap();
         for (const record of overlays) createView(record);
