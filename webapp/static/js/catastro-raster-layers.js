@@ -398,6 +398,17 @@
 
     async function loadOverlays(focusId = null) {
         if (!district) return;
+        if (district === 'all') {
+            for (const view of views.values()) view.setMap(null);
+            views.clear();
+            overlays = [];
+            active = null;
+            draft = null;
+            editor.hidden = true;
+            renderList();
+            say('Selecciona un distrito concreto para consultar su mosaico satelital.');
+            return;
+        }
         const token = ++loadToken;
         try {
             const query=district==='all'?'':'?ubigeo='+encodeURIComponent(district);
