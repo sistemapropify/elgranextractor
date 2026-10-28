@@ -1,3 +1,34 @@
+# Catastro Maestro canonical dossier and compact lot card - 2026-10-28
+
+Status: Validated
+Recipe: existing serialized GitHub Actions App Service pipeline.
+Authorization: the user explicitly requested production deployment of the reviewed Catastro Maestro lot card on 2026-10-28.
+Base: origin/main c69044b03a73d2a4804516c6bc7ccbe80127660c.
+Target: existing granextractorservice / rg-elgranextractor, Brazil South, subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Public: https://acm.propifai.com/catastro/maestro/?ubigeo=all
+
+## Scope
+Publish one canonical Catastro Maestro lot contract consumed by both the master map and ACM. Normalized D1 data is read without an application cache, archived R2 layers remain independently visible while D1 normalization is pending, and the ACM no longer requests a parallel GeoLlaqta ficha or facade.
+
+Show the selected lot in a compact floating card with a fixed facade image and category tabs. The Summary contains only District, Urbanization, Manzana/Lote, Via, Characteristics, principal areas, and perimeter measurements. Characteristics use two vertical columns: Pisos/Unidades and Esquina/Frente a parque. Areas use two vertical columns: Terreno/Terreno SIG and Construida/Construida SIG. Source, identifiers, status and provenance remain outside Summary under Mas/Origen.
+
+No infrastructure, subscription, region, RBAC, secret, pipeline-identity, database schema, or user-data migration changes are included.
+
+## Validation Proof - 2026-10-28 America/Lima
+- Catastro dossier/master suite: 40 tests passed with `catastro.test_master_dossier`, `test_master_layers`, `test_master_d1` and `test_raster_overlays`; Django system check clean.
+- ACM shared-cadastre suite: 31 tests passed with `acm.test_cadastral`; Django system check clean.
+- Final Catastro layer suite: 16 tests passed after the compact-card and two-column layout changes.
+- JavaScript syntax and regressions passed for the master entity card, master geometry, ACM cadastre, Cayma master integration and private D1 Worker.
+- Real canonical reads were verified: Yanahuara lot `04012603016005` resolved to normalized D1 revision 4114 with one owner, four media records and a facade; archived `04010209014018` exposed four owners, six media records, three reports and a facade without a primary-source query.
+- Azure read-only target verification: `granextractorservice` is Running in Brazil South under subscription `0219eecc-9920-4789-9929-3091a2f09daf`.
+- The existing workflow remains responsible for collectstatic, Azure WSGI startup validation and exact public asset checks before/after App Service publication.
+- Final non-forced main push, workflow completion, public revision, changed assets and authenticated map behavior are supervised by the user.
+
+## Execution and rollback
+Commit only the reviewed Catastro Maestro card, tests and release record; fetch latest main immediately before a non-forced push to `main`. The existing serialized workflow performs build, deploy and public verification. Rollback is a scoped revert through the same workflow.
+
+---
+
 # ACM PDF PDM layout and mandatory justification - 2026-10-23
 
 Status: Validated
