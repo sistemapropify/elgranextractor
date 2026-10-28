@@ -46,6 +46,7 @@ urlpatterns = [
     path('api/maestro/lotes/<str:lot_id>/galeria/', master_views.lot_gallery, name='maestro_lot_gallery'),
     path('api/maestro/lotes/<str:lot_id>/ficha/', master_views.lot_dossier, name='maestro_lot_dossier'),
     path('api/maestro/lotes/<str:lot_id>/archivos/<str:filename>/', master_views.lot_archive_asset, name='maestro_lot_archive_asset'),
+    path('api/maestro/clasificaciones/', master_views.park_lots, name='maestro_lot_classifications'),
     path('api/maestro/parques/', master_views.park_lots, name='maestro_park_lots'),
     path('api/maestro/fuentes/<slug:source_id>/<slug:layer_key>/', master_views.layer, name='maestro_layer'),
     path('visor-planos/', planos_views.viewer, name='visor_planos'),

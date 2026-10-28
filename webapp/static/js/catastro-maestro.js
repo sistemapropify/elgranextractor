@@ -46,6 +46,8 @@
     const dataFeatures=new Map();
     const parkFeatures=new Map();
     const layerOn={manzanas:true,lotes:true,vias:true};
+    const classificationVisible={parks:true,corners:true,faces_park:true};
+    const classificationKinds=['parks','corners','faces_park'];
     const ALL_DISTRICTS='all';
     const masterRole=source=>source.role==='draft'||source.role==='snapshot';
     const districtLabel=code=>code===ALL_DISTRICTS?'Todos los distritos D1':
@@ -54,7 +56,11 @@
     const scoped=()=>[...collections.values()].filter(c=>district===ALL_DISTRICTS||c.district===district);
     const caymaRequested=()=>new URL(location.href).searchParams.get('cayma')==='1';
     const status=(text,error=false)=>{el('status').textContent=text;el('status').dataset.error=String(error);};
-    let parkMode=false,parkToken='',parkSaved=new Set(),parkDraft=new Set();
+    let classificationMode='',classificationToken='';
+    const classificationSaved={parks:new Set(),corners:new Set(),faces_park:new Set()};
+    const classificationDraft={parks:new Set(),corners:new Set(),faces_park:new Set()};
+    let classificationColors={parks:'#54d48a',corners:'#ff8c42',faces_park:'#4f8cff'};
+    let classificationSavedColors={...classificationColors};
     let loadTotal=0,loadDone=0;
     const isUuid=value=>/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(String(value||''));
     const displayEntityId=(kind,id)=>isUuid(id)?((kind==='manzana'?'MANZANA-CM-':'LOTE-CM-')+String(id).replaceAll('-','').slice(0,12).toUpperCase()):null;
@@ -62,7 +68,7 @@
     const attributeLabels={
         country_code:'País',ubigeo:'UBIGEO',postal_code:'Código postal',department:'Departamento',province:'Provincia',district:'Distrito',zone:'Zona',sector:'Sector',urbanization:'Urbanización / habilitación',block:'Manzana',lot:'Lote',building:'Edificación',entrance:'Ingreso',floor:'Piso',unit:'Unidad',address:'Dirección',address_block:'Manzana de dirección',address_lot:'Lote de dirección',street_type:'Tipo de vía',street_name:'Nombre de vía',municipal_number:'Número municipal',condition:'Condición',registry_office:'Oficina registral',registry_entry_type:'Tipo de partida',registry_entry_number:'Partida registral',registry_folios:'Fojas',registry_seat:'Asiento',notary_name:'Notaría',notary_kardex:'Kárdex',deed_date:'Fecha de escritura',property_registration_date:'Inscripción del predio',construction_declaration:'Declaración de fábrica',construction_registration_seat:'Asiento de fábrica',construction_registration_date:'Inscripción de fábrica',cuc:'CUC',cadastral_reference:'Referencia catastral',cadastral_use:'Uso catastral',observed_use:'Uso observado',zoning:'Zonificación',use_category:'Categoría de uso',business_category:'Giro',business_subcategory:'Subgiro',ciiu_code:'CIIU',ciiu_version:'Versión CIIU',commercial_name:'Nombre comercial',land_area:'Área de terreno documental',built_area:'Área construida documental',geometric_land_area:'Área geométrica',gis_land_area:'Área SIG de terreno (valor de fuente)',gis_built_area:'Área SIG construida (valor de fuente)',front:'Frente',back:'Fondo',left:'Izquierda',right:'Derecha',perimeter:'Perímetro',bedrooms:'Dormitorios',bathrooms:'Baños',half_bathrooms:'Medios baños',parking_spaces:'Estacionamientos',floors:'Pisos',units:'Unidades',is_corner:'Esquina',is_through:'Pasaje',faces_park:'Frente a parque'
     };
-    const parkStatus=(text,error=false)=>{const node=el('park-status');if(!node)return;node.textContent=text;node.dataset.error=String(error);};
+    const classificationStatus=(text,error=false)=>{const node=el('classification-status');if(!node)return;node.textContent=text;node.dataset.error=String(error);};
     function loading(text,done,total){
         const host=el('load-modal'),title=el('load-title'),bar=el('load-bar'),
             label=el('load-text'),percent=el('load-percent');
@@ -77,50 +83,73 @@
         if(percent)percent.textContent=Math.round(value*100)+'%';
         if(label)label.textContent=text;
     }
-    const parkKey=(feature,source)=>{
+    const lotKey=(feature,source)=>{
         const value=String(feature?.properties?.ID_LOTE||'').trim();
         return /^\d{14}$/.test(value)?value:source.id+':'+String(feature.id);
     };
-    const parkDirty=()=>parkSaved.size!==parkDraft.size||[...parkSaved].some(value=>!parkDraft.has(value));
-    function refreshParkStyles(){
+    const sameSet=(left,right)=>left.size===right.size&&[...left].every(value=>right.has(value));
+    const classificationDirty=()=>classificationKinds.some(kind=>!sameSet(classificationSaved[kind],classificationDraft[kind])||classificationSavedColors[kind]!==classificationColors[kind]);
+    function classificationCounts(){
+        for(const kind of classificationKinds){
+            const count=el('count-'+kind),layerCount=el('layer-count-'+kind);
+            if(count)count.textContent=fmt(classificationDraft[kind].size);
+            if(layerCount)layerCount.textContent=fmt(classificationDraft[kind].size);
+            const color = kind==='faces_park' ? el('swatch-faces-park') : el('swatch-'+kind);
+            if(color)color.style.color=classificationColors[kind];
+        }
+    }
+    function refreshClassificationStyles(){
         for(const feature of dataFeatures.values())vectorLayer?.revertStyle(feature);
         for(const [key,feature] of parkFeatures){
-            if(parkSaved.has(key)||parkDraft.has(key))vectorLayer?.overrideStyle(feature,{
-                fillColor:'#54d48a',fillOpacity:.42,strokeColor:'#b8ffd4',strokeWeight:2.4,zIndex:4
-            });
+            const corner=classificationDraft.corners.has(key),facePark=classificationDraft.faces_park.has(key),park=classificationDraft.parks.has(key);
+            if((corner&&classificationVisible.corners)||(facePark&&classificationVisible.faces_park)||(park&&classificationVisible.parks)){
+                const fill=park?classificationColors.parks:corner?classificationColors.corners:classificationColors.faces_park;
+                const stroke=facePark?classificationColors.faces_park:park?classificationColors.parks:classificationColors.corners;
+                vectorLayer?.overrideStyle(feature,{fillColor:fill,fillOpacity:.38,strokeColor:stroke,strokeOpacity:1,strokeWeight:facePark?3.1:2.2,zIndex:4});
+            }
         }
         if(selectedFeature)vectorLayer?.overrideStyle(selectedFeature,{
             visible:true,fillColor:'#ffff55',fillOpacity:.24,strokeColor:'#ffffff',
             strokeOpacity:1,strokeWeight:3,clickable:true,zIndex:5
         });
+        classificationCounts();
     }
-    function parkControls(){
+    function classificationControls(){
         const concrete=district&&district!==ALL_DISTRICTS;
-        if(el('park-search'))el('park-search').disabled=!concrete;
-        if(el('park-save'))el('park-save').disabled=!concrete||!parkDirty();
-        if(el('park-cancel'))el('park-cancel').disabled=!concrete||!parkDirty();
-        if(el('park-search'))el('park-search').textContent=parkMode?'Terminar selección':'Buscar parques';
+        if(el('classification-start'))el('classification-start').disabled=!concrete;
+        if(el('classification-save'))el('classification-save').disabled=!concrete||!classificationDirty();
+        if(el('classification-cancel'))el('classification-cancel').disabled=!concrete||!classificationDirty();
+        if(el('classification-start'))el('classification-start').textContent=classificationMode?'Terminar selección':'Seleccionar en el mapa';
     }
-    async function loadParkLots(){
-        parkMode=false;parkToken='';parkSaved=new Set();parkDraft=new Set();
-        parkControls();refreshParkStyles();
+    async function loadClassifications(){
+        classificationMode='';classificationToken='';
+        for(const kind of classificationKinds){classificationSaved[kind]=new Set();classificationDraft[kind]=new Set();}
+        classificationColors={parks:'#54d48a',corners:'#ff8c42',faces_park:'#4f8cff'};
+        classificationSavedColors={...classificationColors};
+        classificationControls();refreshClassificationStyles();
         if(!district||district===ALL_DISTRICTS){
-            parkStatus('Selecciona un distrito concreto para editar parques.');
+            classificationStatus('Selecciona un distrito concreto para clasificar lotes.');
             return;
         }
-        parkStatus('Consultando parques marcados…');
+        classificationStatus('Consultando clasificaciones del distrito…');
         try{
-            const response=await fetch('/catastro/api/maestro/parques/?ubigeo='+encodeURIComponent(district),
+            const response=await fetch('/catastro/api/maestro/clasificaciones/?ubigeo='+encodeURIComponent(district),
                 {credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}});
             const value=await response.json();
-            if(!response.ok)throw Error(value.error||'No se pudieron cargar los parques.');
-            parkToken=value.token||'';
-            parkSaved=new Set(value.lots||[]);
-            parkDraft=new Set(parkSaved);
-            parkStatus(value.lots?.length?fmt(value.lots.length)+' lotes marcados como parque.':'Todavía no hay lotes marcados como parque.');
-            refreshParkStyles();
-        }catch(error){parkStatus(error.message,true);}
-        parkControls();
+            if(!response.ok)throw Error(value.error||'No se pudieron cargar las clasificaciones.');
+            classificationToken=value.token||'';
+            for(const kind of classificationKinds){
+                classificationSaved[kind]=new Set(value[kind]||[]);
+                classificationDraft[kind]=new Set(classificationSaved[kind]);
+            }
+            classificationColors={...classificationColors,...(value.colors||{})};
+            classificationSavedColors={...classificationColors};
+            for(const kind of classificationKinds){const input=el('color-'+kind.replaceAll('_','-'));if(input)input.value=classificationColors[kind];}
+            const total=classificationKinds.reduce((sum,kind)=>sum+classificationSaved[kind].size,0);
+            classificationStatus(total?fmt(total)+' lotes clasificados en este distrito.':'Todavía no hay lotes clasificados en este distrito.');
+            refreshClassificationStyles();
+        }catch(error){classificationStatus(error.message,true);}
+        classificationControls();
     }
     function visible() {
         return scoped().filter(c=>enabled.get(c.source.id)&&layerOn[c.key]);
@@ -298,6 +327,8 @@
         host.replaceChildren();
         const attributes={...(data.attributes||{})};
         attributes.district=attributes.district||districtLabel(sourceDistrict(item.source));
+        if(classificationSaved.corners.has(data.lot_id)||classificationDraft.corners.has(data.lot_id))attributes.is_corner=true;
+        if(classificationSaved.faces_park.has(data.lot_id)||classificationDraft.faces_park.has(data.lot_id))attributes.faces_park=true;
         const media=data.media||[],unitRows=data.unit_attributes||data.units||[];
         const selectedRecord=data.selected_record_id||unitRows[0]?.source_feature_id||unitRows[0]?.record_id||'';
         const selectedUnit=unitRows.find(unit=>String(unit.source_feature_id||unit.record_id||'')===String(selectedRecord))||unitRows[0]||{};
@@ -476,17 +507,19 @@
         matches.sort((a,b)=>(a.source.role==='draft'?-1:0)-(b.source.role==='draft'?-1:0));
         return matches[0]||null;
     }
-    function toggleParkAt(point){
+    function toggleClassificationAt(point){
         const item=lotAt(point);
-        if(!item){parkStatus('El punto seleccionado no está dentro de un lote.',true);return;}
-        const key=parkKey(item.feature,item.source);
-        if(!/^\d{14}$/.test(key)){parkStatus('El lote no tiene un código catastral válido para guardar.',true);return;}
-        if(parkDraft.has(key))parkDraft.delete(key);else parkDraft.add(key);
-        refreshParkStyles();parkControls();
+        if(!item){classificationStatus('El punto seleccionado no está dentro de un lote.',true);return;}
+        const key=lotKey(item.feature,item.source);
+        if(!/^\d{14}$/.test(key)){classificationStatus('El lote no tiene un código catastral válido para guardar.',true);return;}
+        const kind=el('classification-kind')?.value||'corners',draft=classificationDraft[kind];
+        if(draft.has(key))draft.delete(key);else draft.add(key);
+        refreshClassificationStyles();classificationControls();
         const p=item.feature.properties||{};
-        parkStatus((parkDraft.has(key)?'Marcado':'Desmarcado')+' · sector '+valueText(p.COD_SECT)+
+        const label={corners:'Esquina',faces_park:'Frente a parque',parks:'Parque'}[kind];
+        classificationStatus((draft.has(key)?'Marcado':'Desmarcado')+' como '+label+' · sector '+valueText(p.COD_SECT)+
             ' · manzana '+valueText(p.COD_MZNA)+' · lote '+valueText(p.COD_LOTE)+
-            ' · '+parkDraft.size+' seleccionados');
+            ' · '+draft.size+' seleccionados');
     }
 
     function vectorStyle(feature) {
@@ -522,12 +555,12 @@
                     dataFeatures.set(feature.getProperty('MASTER_ID'),feature);
                     const item=slice[index];
                     if(item?.key==='lotes'){
-                        const key=parkKey(item.feature,item.source);
+                        const key=lotKey(item.feature,item.source);
                         if(/^\d{14}$/.test(key))parkFeatures.set(key,feature);
                     }
                 });
                 vectorLayer.setStyle(vectorStyle);
-                refreshParkStyles();
+                refreshClassificationStyles();
                 start+=slice.length;
                 if(start<collection.records.length)setTimeout(drawNext,0);
                 else resolve();
@@ -679,13 +712,13 @@
     }
     function changeDistrict(fitAfter=true) {
         const requested=el('district').value;
-        if(parkDirty()){
+        if(classificationDirty()){
             el('district').value=district;
-            parkStatus('Guarda o cancela los cambios de parques antes de cambiar de distrito.',true);
+            classificationStatus('Guarda o cancela las clasificaciones antes de cambiar de distrito.',true);
             return;
         }
         district=requested;selected=null;closeDetailCard(false);
-        const url=new URL(location.href);url.searchParams.set('ubigeo',district);history.replaceState(null,'',url);sourcesPanel();loadParkLots();refresh(fitAfter);
+        const url=new URL(location.href);url.searchParams.set('ubigeo',district);history.replaceState(null,'',url);sourcesPanel();loadClassifications();refresh(fitAfter);
         window.dispatchEvent(new CustomEvent('catastro-master-district',{detail:{ubigeo:district}}));
     }
     function showCatalogueError(error) {
@@ -730,34 +763,50 @@
         });
         map.addListener('click',event=>{
             const point=[event.latLng.lng(),event.latLng.lat()];
-            if(parkMode)toggleParkAt(point);else selectAt(point);
+            if(classificationMode)toggleClassificationAt(point);else selectAt(point);
         });
-        el('park-search')?.addEventListener('click',()=>{
-            if(!district||district===ALL_DISTRICTS){parkStatus('Selecciona un distrito concreto para editar parques.',true);return;}
-            parkMode=!parkMode;parkControls();
-            parkStatus(parkMode?'Modo búsqueda activo: un clic marca el lote; otro clic lo desmarca.':'Modo búsqueda cerrado. Puedes guardar o cancelar los cambios.');
+        el('classification-start')?.addEventListener('click',()=>{
+            if(!district||district===ALL_DISTRICTS){classificationStatus('Selecciona un distrito concreto para clasificar lotes.',true);return;}
+            classificationMode=classificationMode?'':'corners';classificationControls();
+            const label={corners:'esquina',faces_park:'frente a parque',parks:'parque'}[el('classification-kind')?.value||'corners'];
+            classificationStatus(classificationMode?'Selección activa para '+label+'. Un clic marca el lote y otro clic lo quita.':'Selección cerrada. Puedes guardar o cancelar los cambios.');
         });
-        el('park-save')?.addEventListener('click',async()=>{
-            if(!district||district===ALL_DISTRICTS||!parkDirty())return;
-            const button=el('park-save');button.disabled=true;
-            parkStatus('Guardando '+parkDraft.size+' lotes como parques…');
+        el('classification-kind')?.addEventListener('change',()=>{
+            if(!classificationMode)return;
+            const label={corners:'esquina',faces_park:'frente a parque',parks:'parque'}[el('classification-kind').value];
+            classificationStatus('Selección activa para '+label+'.');
+        });
+        for(const kind of classificationKinds){
+            const input=el('color-'+kind.replaceAll('_','-'));
+            input?.addEventListener('input',()=>{classificationColors[kind]=input.value;refreshClassificationStyles();classificationControls();});
+        }
+        el('classification-save')?.addEventListener('click',async()=>{
+            if(!district||district===ALL_DISTRICTS||!classificationDirty())return;
+            const button=el('classification-save');button.disabled=true;
+            classificationStatus('Guardando clasificaciones del distrito…');
             try{
-                const response=await fetch('/catastro/api/maestro/parques/',{
+                const response=await fetch('/catastro/api/maestro/clasificaciones/',{
                     method:'POST',credentials:'same-origin',cache:'no-store',
                     headers:{Accept:'application/json','Content-Type':'application/json',
                         'X-CSRFToken':el('raster-upload')?.elements?.csrfmiddlewaretoken?.value||''},
-                    body:JSON.stringify({ubigeo:district,lots:[...parkDraft],token:parkToken})
+                    body:JSON.stringify({ubigeo:district,parks:[...classificationDraft.parks],
+                        corners:[...classificationDraft.corners],faces_park:[...classificationDraft.faces_park],
+                        colors:classificationColors,token:classificationToken})
                 });
                 const value=await response.json();
-                if(!response.ok)throw Error(value.error||'No se pudieron guardar los parques.');
-                parkToken=value.token;parkSaved=new Set(value.lots||[]);parkDraft=new Set(parkSaved);
-                parkMode=false;refreshParkStyles();parkControls();
-                parkStatus('Cambios guardados · '+parkSaved.size+' lotes marcados como parque.');
-            }catch(error){parkStatus(error.message,true);parkControls();}
+                if(!response.ok)throw Error(value.error||'No se pudieron guardar las clasificaciones.');
+                classificationToken=value.token;classificationColors={...classificationColors,...(value.colors||{})};classificationSavedColors={...classificationColors};
+                for(const kind of classificationKinds){classificationSaved[kind]=new Set(value[kind]||[]);classificationDraft[kind]=new Set(classificationSaved[kind]);}
+                classificationMode='';refreshClassificationStyles();classificationControls();
+                classificationStatus('Cambios guardados · '+classificationDraft.corners.size+' esquinas y '+classificationDraft.faces_park.size+' lotes frente a parque.');
+            }catch(error){classificationStatus(error.message,true);classificationControls();}
         });
-        el('park-cancel')?.addEventListener('click',()=>{
-            parkDraft=new Set(parkSaved);parkMode=false;refreshParkStyles();parkControls();
-            parkStatus('Cambios descartados · '+parkSaved.size+' lotes marcados como parque.');
+        el('classification-cancel')?.addEventListener('click',()=>{
+            for(const kind of classificationKinds)classificationDraft[kind]=new Set(classificationSaved[kind]);
+            classificationColors={...classificationSavedColors};classificationMode='';
+            for(const kind of classificationKinds){const input=el('color-'+kind.replaceAll('_','-'));if(input)input.value=classificationColors[kind];}
+            refreshClassificationStyles();classificationControls();
+            classificationStatus('Cambios descartados.');
         });
         el('fit').addEventListener('click',fit);
         el('satellite').addEventListener('click',()=>{const value=map.getMapTypeId()!=='satellite';map.setMapTypeId(value?'satellite':'roadmap');el('satellite').setAttribute('aria-pressed',String(value));});
@@ -766,6 +815,10 @@
             if(selectedFeature){vectorLayer.revertStyle(selectedFeature);selected=null;selectedFeature=null;}
             counts();vectorLayer.setStyle(vectorStyle);
         });
+        for(const kind of classificationKinds){
+            const id=kind==='faces_park'?'layer-faces-park':'layer-'+kind;
+            el(id)?.addEventListener('change',()=>{classificationVisible[kind]=el(id).checked;refreshClassificationStyles();});
+        }
         try{
             await prepareCatalogue();fit();
         }catch(_){/* The catalogue already renders its own retry state. */}

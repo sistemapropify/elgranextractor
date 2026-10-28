@@ -41,9 +41,11 @@ assert.match(master, /Todos los distritos D1/);
 assert.match(master, /ALL_DISTRICTS/);
 assert.match(master, /source\.role==='draft'\|\|source\.role==='snapshot'/);
 assert.match(master, /maestro\/vectores\//);
-assert.match(master, /Buscar parques/);
-assert.match(master, /maestro\/parques\//);
-assert.match(master, /toggleParkAt/);
+assert.match(master, /maestro\/clasificaciones\//);
+assert.match(master, /toggleClassificationAt/);
+assert.match(master, /classificationColors/);
+assert.match(master, /faces_park/);
+assert.match(master, /classificationVisible/);
 
 assert.match(dashboard, /maestro\/migracion\//);
 assert.match(dashboard, /maestro\/migracion\/iniciar\//);

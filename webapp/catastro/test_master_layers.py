@@ -135,6 +135,58 @@ class MasterGeometryTests(SimpleTestCase):
             manual_parks.save(
                 '040102', ['04012601001001'], saved['token'], 'editor', cloud=cloud)
 
+    def test_manual_corner_and_park_front_layers_have_independent_colors(self):
+        cloud = FakeSnapshotCloud()
+        initial = manual_parks.read('040102', cloud=cloud)
+        corner = '04010201001001'
+        face_park = '04010201001002'
+        saved = manual_parks.save_classifications(
+            '040102',
+            {
+                'parks': ['04010201001003'],
+                'corners': [corner],
+                'faces_park': [face_park],
+                'colors': {'parks': '#112233', 'corners': '#445566',
+                           'faces_park': '#778899'},
+            },
+            initial['token'], 'editor', cloud=cloud,
+        )
+        self.assertEqual(saved['corners'], [corner])
+        self.assertEqual(saved['faces_park'], [face_park])
+        self.assertEqual(saved['colors']['corners'], '#445566')
+        self.assertEqual(saved['colors']['faces_park'], '#778899')
+        restored = manual_parks.read('040102', cloud=cloud)
+        self.assertEqual(restored['token'], saved['token'])
+        self.assertEqual(restored['parks'], ['04010201001003'])
+
+    def test_classification_api_saves_all_layers_and_colors(self):
+        match = resolve('/catastro/api/maestro/clasificaciones/')
+        request = RequestFactory().post(
+            match.route,
+            data=json.dumps({
+                'ubigeo': '040102', 'parks': [],
+                'corners': ['04010201001001'],
+                'faces_park': ['04010201001002'],
+                'colors': {'corners': '#123456', 'faces_park': '#abcdef',
+                           'parks': '#654321'},
+                'token': 'old',
+            }),
+            content_type='application/json',
+        )
+        request.current_user = SimpleNamespace(
+            is_authenticated=True, is_active=True, is_staff=True,
+            is_superuser=True, username='editor')
+        request._dont_enforce_csrf_checks = True
+        expected = {'ubigeo': '040102', 'corners': ['04010201001001'],
+                    'faces_park': ['04010201001002'], 'parks': []}
+        with patch('catastro.master_views.manual_parks.save_classifications',
+                   return_value=expected) as save:
+            response = match.func(request)
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertEqual(payload['corners'], expected['corners'])
+        save.assert_called_once()
+
     def test_draft_layer_keeps_master_identity_and_is_not_reference_geometry(self):
         summary = {'ubigeo': '040126', 'revision': 4114,
                    'lotes': 1, 'manzanas': 0}
@@ -306,9 +358,13 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertIn('id="master-lotes"', html)
         self.assertIn('id="master-detail-card"', html)
         self.assertIn('id="master-detail-close"', html)
+        self.assertIn('id="master-classification-kind"', html)
+        self.assertIn('id="master-color-corners"', html)
+        self.assertIn('id="master-color-faces-park"', html)
+        self.assertIn('id="master-layer-corners"', html)
         self.assertNotIn('id="master-cayma-preview"', html)
         self.assertNotIn('Ver Cayma temporal', html)
         self.assertNotIn('geollaqta-data.js', html)
         self.assertNotIn('geollaqta-district.js', html)
         self.assertNotIn('collection-form', html)
-        self.assertIn('catastro-maestro.js?v=30', html)
+        self.assertIn('catastro-maestro.js?v=31', html)

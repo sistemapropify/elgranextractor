@@ -1,7 +1,7 @@
 {% extends 'propifai_base.html' %}
 {% load static %}
 {% block title %}Catastro maestro · Prometeo{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-maestro.css' %}?v=16">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-maestro.css' %}?v=17">{% endblock %}
 {% block content %}
 <main class="master-workspace" id="master-workspace">
   <header class="master-heading">
@@ -15,6 +15,9 @@
         <label class="master-check"><input id="master-manzanas" type="checkbox" checked><span class="master-swatch blocks"></span>Manzanas <strong id="master-count-manzanas">—</strong></label>
         <label class="master-check"><input id="master-lotes" type="checkbox" checked><span class="master-swatch lots"></span>Lotes <strong id="master-count-lotes">—</strong></label>
         <label class="master-check"><input id="master-vias" type="checkbox" checked><span class="master-swatch"></span>Vías <strong id="master-count-vias">—</strong></label>
+        <label class="master-check master-classification-layer"><input id="master-layer-corners" type="checkbox" checked><span class="master-swatch classification-corners" id="master-swatch-corners"></span>Esquinas <strong id="master-layer-count-corners">0</strong></label>
+        <label class="master-check master-classification-layer"><input id="master-layer-faces-park" type="checkbox" checked><span class="master-swatch classification-faces-park" id="master-swatch-faces-park"></span>Frente a parque <strong id="master-layer-count-faces-park">0</strong></label>
+        <label class="master-check master-classification-layer"><input id="master-layer-parks" type="checkbox" checked><span class="master-swatch classification-parks" id="master-swatch-parks"></span>Parques <strong id="master-layer-count-parks">0</strong></label>
       </section>
       <section><h2>Fuentes del distrito</h2><div id="master-sources"><p class="master-help">Consultando fuentes…</p></div></section>
       <section id="master-raster-section">
@@ -59,15 +62,27 @@
           <div class="master-raster-editor-actions"><button type="button" id="master-raster-save">Fijar parche satelital</button><button type="button" id="master-raster-cancel">Descartar ajuste</button></div>
         </div>
       </section>
-      <section id="master-park-editor">
-        <h2>Editar catastro</h2>
-        <p class="master-help">Marca lotes que correspondan a parques. Un clic agrega el lote y otro clic lo quita.</p>
-        <div class="master-park-actions">
-          <button id="master-park-search" type="button">Buscar parques</button>
-          <button id="master-park-save" type="button" disabled>Guardar cambios</button>
-          <button id="master-park-cancel" type="button" disabled>Cancelar</button>
+      <section id="master-classification-editor">
+        <h2>Clasificar lotes</h2>
+        <p class="master-help">Selecciona una categoría, pulsa «Seleccionar en el mapa» y haz clic en cada lote. Otro clic lo quita.</p>
+        <label class="master-classification-type" for="master-classification-kind">Categoría para seleccionar
+          <select id="master-classification-kind">
+            <option value="corners">Lote en esquina</option>
+            <option value="faces_park">Lote frente a parque</option>
+            <option value="parks">Lote de parque</option>
+          </select>
+        </label>
+        <div class="master-classification-colors">
+          <label>Esquina <input id="master-color-corners" type="color" value="#ff8c42"><strong id="master-count-corners">0</strong></label>
+          <label>Frente a parque <input id="master-color-faces-park" type="color" value="#4f8cff"><strong id="master-count-faces-park">0</strong></label>
+          <label>Parque <input id="master-color-parks" type="color" value="#54d48a"><strong id="master-count-parks">0</strong></label>
         </div>
-        <p id="master-park-status" class="master-help" role="status" aria-live="polite">Selecciona un distrito concreto para editar parques.</p>
+        <div class="master-park-actions">
+          <button id="master-classification-start" type="button">Seleccionar en el mapa</button>
+          <button id="master-classification-save" type="button" disabled>Guardar cambios</button>
+          <button id="master-classification-cancel" type="button" disabled>Cancelar</button>
+        </div>
+        <p id="master-classification-status" class="master-help" role="status" aria-live="polite">Selecciona un distrito concreto para clasificar lotes.</p>
       </section>
       <p class="master-help master-standard">Formato común: GeoJSON · WGS84. Cada fuente conserva su procedencia y sus datos originales.</p>
     </aside>
@@ -157,7 +172,7 @@
 </dialog>
 {% endblock %}
 {% block extra_js %}
-<script src="{% static 'js/catastro-maestro.js' %}?v=30"></script>
+<script src="{% static 'js/catastro-maestro.js' %}?v=31"></script>
 <script src="{% static 'js/catastro-master-model.js' %}?v=1"></script>
 <script src="{% static 'js/catastro-raster-layers.js' %}?v=19"></script>
 {% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initCatastroMaster" async defer></script>{% else %}<script>document.getElementById('master-status').textContent='No se ha configurado la clave del mapa.';</script>{% endif %}

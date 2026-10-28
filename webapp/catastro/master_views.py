@@ -153,10 +153,16 @@ def park_lots(request):
                 raise ValueError('La clasificación enviada es demasiado grande.')
             payload = json.loads(request.body)
             actor = getattr(request, 'current_user', None) or request.user
-            value = manual_parks.save(
-                payload.get('ubigeo'), payload.get('lots'),
-                payload.get('token'), getattr(actor, 'username', '') or
-                str(getattr(actor, 'pk', 'administrador')))
+            author = getattr(actor, 'username', '') or str(
+                getattr(actor, 'pk', 'administrador'))
+            if any(key in payload for key in ('parks', 'corners', 'faces_park', 'colors')):
+                value = manual_parks.save_classifications(
+                    payload.get('ubigeo'), payload, payload.get('token'),
+                    author)
+            else:
+                value = manual_parks.save(
+                    payload.get('ubigeo'), payload.get('lots'),
+                    payload.get('token'), author)
         else:
             return JsonResponse({'error': 'Método no permitido.'}, status=405)
         response = JsonResponse(value)
