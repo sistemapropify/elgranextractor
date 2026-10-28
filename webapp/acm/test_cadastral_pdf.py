@@ -16,22 +16,36 @@ class CadastralPDFTests(SimpleTestCase):
         request.acm_access = SimpleNamespace(permissions={'cadastral_info':info,'cadastral_pdf':pdf})
         return request
 
-    @patch('catastro.map_report.report_pdf')
+    @patch('acm.cadastral_views.master_dossier.load')
     def test_direct_pdf_requires_both_role_permissions(self, read):
         self.assertEqual(cadastral_views.report_pdf(self.request(), LOT).status_code, 403)
         self.assertEqual(cadastral_views.report_pdf(self.request(True, False), LOT).status_code, 403)
         self.assertEqual(cadastral_views.report_pdf(RequestFactory().get('/'), LOT).status_code, 401)
         read.assert_not_called()
 
-    @patch('catastro.map_report.report_pdf', return_value=b'%PDF-original')
-    def test_allowed_role_gets_original_pdf_inline_without_public_cache(self, read):
+    @patch('acm.cadastral_views._document_body', return_value=(b'%PDF-original', 'application/pdf'))
+    @patch('acm.cadastral_views.master_dossier.load', return_value={
+        'lot_id': LOT, 'master_status': 'archived_pending_d1',
+        'attributes': {},
+        'media': [{'kind': 'cadastral_report_pdf', 'record_id': RECORD,
+                   'filename': 'reporte.pdf',
+                   'url': '/acm/catastro/lotes/' + LOT + '/archivos/reporte.pdf/'}],
+        'unit_attributes': [{'record_id': RECORD, 'source_feature_id': RECORD}],
+        'owners': [], 'gallery': [],
+        'reports': [{'record_id': RECORD, 'form_number': '1/1'}],
+        'selected_record_id': RECORD,
+        'provenance': {}, 'identity_links': [], 'relationships': [],
+        'catalog': {}, 'registral_acts': [], 'master': {},
+    })
+    def test_allowed_role_gets_original_pdf_inline_without_public_cache(self, read, body):
         response = cadastral_views.report_pdf(self.request(True), LOT)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b'%PDF-original')
         self.assertEqual(response['Content-Type'], 'application/pdf')
         self.assertIn('inline;', response['Content-Disposition'])
         self.assertEqual(response['Cache-Control'], 'no-store')
-        read.assert_called_once_with(LOT, RECORD)
+        read.assert_called_once_with(LOT, RECORD, surface='acm')
+        body.assert_called_once()
 
     def test_pdf_uses_verified_r2_original_without_contacting_source(self):
         body = b'%PDF-verified-original'
@@ -46,14 +60,27 @@ class CadastralPDFTests(SimpleTestCase):
             self.assertEqual(report_pdf(LOT, RECORD), body)
             source.assert_not_called()
 
-    @patch('catastro.map_report.report_pdf', side_effect=RuntimeError('unavailable'))
+    @patch('acm.cadastral_views.master_dossier.load', side_effect=RuntimeError('unavailable'))
     def test_unavailable_pdf_is_not_reported_as_success(self, read):
         self.assertEqual(cadastral_views.report_pdf(self.request(True), LOT).status_code, 502)
 
 
 class BasicCadastralPDFTests(TestCase):
-    @patch('catastro.map_report.report_pdf', return_value=b'%PDF-original')
-    def test_basic_roles_can_open_original_pdf_by_default(self, read):
+    @patch('acm.cadastral_views._document_body', return_value=(b'%PDF-original', 'application/pdf'))
+    @patch('acm.cadastral_views.master_dossier.load', return_value={
+        'lot_id': LOT, 'master_status': 'archived_pending_d1',
+        'attributes': {},
+        'media': [{'kind': 'cadastral_report_pdf', 'record_id': RECORD,
+                   'filename': 'reporte.pdf',
+                   'url': '/acm/catastro/lotes/' + LOT + '/archivos/reporte.pdf/'}],
+        'unit_attributes': [{'record_id': RECORD, 'source_feature_id': RECORD}],
+        'owners': [], 'gallery': [],
+        'reports': [{'record_id': RECORD, 'form_number': '1/1'}],
+        'selected_record_id': RECORD,
+        'provenance': {}, 'identity_links': [], 'relationships': [],
+        'catalog': {}, 'registral_acts': [], 'master': {},
+    })
+    def test_basic_roles_can_open_original_pdf_by_default(self, read, body):
         url = reverse('acm:cadastral_report_pdf', args=[LOT])
         self.assertEqual(resolve(url).func, cadastral_views.report_pdf)
         for role_id, name in ((2, 'Agente Interno'), (20, 'Agente No Afiliado'),

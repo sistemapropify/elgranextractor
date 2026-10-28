@@ -202,6 +202,7 @@ def report_pdf(request, lot_id):
         body, _ = _document_body(value, media, lot_id)
         response = HttpResponse(body, content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="reporte-catastral-{lot_id}.pdf"'
+        response['Cache-Control'] = 'private, no-store'
         response['X-Content-Type-Options'] = 'nosniff'
         return response
     except ValueError:
