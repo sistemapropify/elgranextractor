@@ -74,8 +74,10 @@ export async function handle(request,env){
     if(!env.VECTORS)return reply({error:'Bucket vectorial no configurado'},503);
     const object=await env.VECTORS.get(key);
     if(!object)return reply({error:'Parte vectorial no disponible'},404);
-    return new Response(object.body,{headers:{
+    const body=await object.arrayBuffer();
+    return new Response(body,{headers:{
       'Content-Type':'application/gzip',
+      'Content-Length':String(body.byteLength),
       'Cache-Control':'private, max-age=86400',
       'X-Vector-Key':key,
       'X-Content-Type-Options':'nosniff'

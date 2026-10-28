@@ -5,7 +5,7 @@ import {handle} from './worker.mjs';
 const sql=new DatabaseSync(':memory:');sql.exec(readFileSync(new URL('schema.sql',import.meta.url),'utf8'));
 const DB={prepare(query){let values=[];return {bind(...args){values=args;return this;},async all(){return {results:sql.prepare(query).all(...values)};},async first(){return sql.prepare(query).get(...values)||null;},_run(){const statement=sql.prepare(query);return {results:statement.columns().length?statement.all(...values):(statement.run(...values),[])};}};},async batch(statements){sql.exec('BEGIN');try{const results=statements.map(s=>s._run());sql.exec('COMMIT');return results;}catch(e){sql.exec('ROLLBACK');throw e;}}};
 const token='test-only-'.repeat(8);
-const VECTORS={async get(key){return key==='geollaqta/vectores/040102/lotes.part-0001.json.gz'?{body:new TextEncoder().encode('vector-data')}:null;}};
+const VECTORS={async get(key){const data=new TextEncoder().encode('vector-data');return key==='geollaqta/vectores/040102/lotes.part-0001.json.gz'?{body:data,async arrayBuffer(){return data.buffer;}}:null;}};
 const env={DB,MASTER_TOKEN:token,VECTORS};
 const request=data=>new Request('https://unit.test/v1/database',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(data)});
 assert.equal((await handle(new Request('https://unit.test/v1/database',{method:'POST'}),env)).status,401);
