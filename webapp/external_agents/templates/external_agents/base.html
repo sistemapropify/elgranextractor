@@ -1,0 +1,457 @@
+{% extends "propifai_base.html" %}
+
+{% block title %}{% block page_title %}Agentes externos{% endblock %} · Propifai{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+    .ea-shell {
+        --ea-bg: #0d1117;
+        --ea-panel: #161b22;
+        --ea-panel-raised: #1c2128;
+        --ea-border: #30363d;
+        --ea-muted: #8b949e;
+        --ea-text: #e6edf3;
+        --ea-blue: #58a6ff;
+        --ea-green: #3fb950;
+        --ea-amber: #d29922;
+        --ea-red: #f85149;
+        --ea-purple: #a371f7;
+        max-width: 1500px;
+        margin: 0 auto;
+        color: var(--ea-text);
+    }
+
+    .ea-shell * {
+        box-sizing: border-box;
+    }
+
+    .ea-module-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 4px 0 20px;
+    }
+
+    .ea-title-group {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        min-width: 0;
+    }
+
+    .ea-title-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 13px;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        color: #fff;
+        background: linear-gradient(135deg, #1f6feb, #8250df);
+        box-shadow: 0 10px 28px rgba(56, 139, 253, 0.2);
+        font-size: 23px;
+    }
+
+    .ea-kicker {
+        margin: 0 0 5px;
+        color: var(--ea-blue);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 1.15px;
+        text-transform: uppercase;
+    }
+
+    .ea-title {
+        margin: 0;
+        color: #f0f6fc;
+        font-size: clamp(24px, 3vw, 33px);
+        line-height: 1.15;
+        letter-spacing: -0.7px;
+    }
+
+    .ea-subtitle {
+        margin: 7px 0 0;
+        color: var(--ea-muted);
+        max-width: 760px;
+        font-size: 14px;
+        line-height: 1.55;
+    }
+
+    .ea-head-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .ea-btn {
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--ea-border);
+        background: var(--ea-panel);
+        color: var(--ea-text);
+        text-decoration: none;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 650;
+        line-height: 1.2;
+        cursor: pointer;
+        transition: border-color .16s ease, background .16s ease, transform .16s ease;
+    }
+
+    .ea-btn:hover {
+        border-color: #6e7681;
+        background: #21262d;
+        color: #fff;
+        transform: translateY(-1px);
+    }
+
+    .ea-btn-primary {
+        border-color: #2ea043;
+        background: #238636;
+        color: #fff;
+    }
+
+    .ea-btn-primary:hover {
+        border-color: #3fb950;
+        background: #2ea043;
+    }
+
+    .ea-btn-blue {
+        border-color: #388bfd;
+        background: #1f6feb;
+        color: #fff;
+    }
+
+    .ea-btn-blue:hover {
+        border-color: #58a6ff;
+        background: #388bfd;
+    }
+
+    .ea-btn-danger {
+        border-color: rgba(248, 81, 73, .55);
+        background: rgba(248, 81, 73, .08);
+        color: #ff958e;
+    }
+
+    .ea-btn-danger:hover {
+        border-color: var(--ea-red);
+        background: rgba(248, 81, 73, .15);
+    }
+
+    .ea-btn-small {
+        min-height: 32px;
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+
+    .ea-module-nav {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px;
+        margin: 0 0 20px;
+        border: 1px solid var(--ea-border);
+        border-radius: 11px;
+        background: var(--ea-panel);
+        overflow-x: auto;
+    }
+
+    .ea-nav-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 9px 13px;
+        border-radius: 7px;
+        color: var(--ea-muted);
+        text-decoration: none;
+        white-space: nowrap;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .ea-nav-link:hover {
+        color: var(--ea-text);
+        background: var(--ea-panel-raised);
+    }
+
+    .ea-nav-link.active {
+        color: #fff;
+        background: #1f6feb;
+    }
+
+    .ea-messages {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .ea-message {
+        padding: 10px 13px;
+        border: 1px solid var(--ea-border);
+        border-radius: 8px;
+        color: var(--ea-text);
+        background: var(--ea-panel);
+        font-size: 13px;
+        line-height: 1.45;
+    }
+
+    .ea-message.success {
+        border-color: rgba(63, 185, 80, .45);
+        background: rgba(35, 134, 54, .12);
+        color: #7ee787;
+    }
+
+    .ea-message.error {
+        border-color: rgba(248, 81, 73, .45);
+        background: rgba(248, 81, 73, .1);
+        color: #ff9d95;
+    }
+
+    .ea-message.warning {
+        border-color: rgba(210, 153, 34, .45);
+        background: rgba(210, 153, 34, .1);
+        color: #e3b341;
+    }
+
+    .ea-panel {
+        border: 1px solid var(--ea-border);
+        border-radius: 12px;
+        background: var(--ea-panel);
+        box-shadow: 0 1px 2px rgba(1, 4, 9, .18);
+    }
+
+    .ea-panel-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--ea-border);
+    }
+
+    .ea-panel-title {
+        margin: 0;
+        color: #f0f6fc;
+        font-size: 16px;
+        font-weight: 700;
+    }
+
+    .ea-panel-note {
+        margin: 4px 0 0;
+        color: var(--ea-muted);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+
+    .ea-form-control,
+    .ea-input,
+    .ea-select {
+        width: 100%;
+        min-height: 42px;
+        padding: 9px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--ea-border);
+        background: #0d1117;
+        color: var(--ea-text);
+        font: inherit;
+        font-size: 13px;
+        outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .ea-input::placeholder {
+        color: #6e7681;
+    }
+
+    .ea-input:focus,
+    .ea-select:focus {
+        border-color: var(--ea-blue);
+        box-shadow: 0 0 0 3px rgba(88, 166, 255, .15);
+    }
+
+    .ea-select {
+        appearance: auto;
+    }
+
+    .ea-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .ea-label {
+        color: #c9d1d9;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: .15px;
+    }
+
+    .ea-required {
+        color: var(--ea-red);
+    }
+
+    .ea-help {
+        color: #6e7681;
+        font-size: 11px;
+        line-height: 1.45;
+    }
+
+    .ea-errors {
+        color: #ff9d95;
+        font-size: 11px;
+        line-height: 1.45;
+    }
+
+    .ea-errorlist {
+        margin: 0;
+        padding-left: 17px;
+    }
+
+    .ea-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--ea-border);
+        background: var(--ea-panel-raised);
+        color: var(--ea-muted);
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1.3;
+        text-transform: uppercase;
+        letter-spacing: .35px;
+    }
+
+    .ea-badge.green {
+        border-color: rgba(63, 185, 80, .35);
+        background: rgba(35, 134, 54, .12);
+        color: #7ee787;
+    }
+
+    .ea-badge.blue {
+        border-color: rgba(88, 166, 255, .35);
+        background: rgba(31, 111, 235, .13);
+        color: #79c0ff;
+    }
+
+    .ea-badge.amber {
+        border-color: rgba(210, 153, 34, .35);
+        background: rgba(210, 153, 34, .11);
+        color: #e3b341;
+    }
+
+    .ea-badge.muted {
+        opacity: .72;
+    }
+
+    .ea-empty {
+        padding: 54px 24px;
+        text-align: center;
+        color: var(--ea-muted);
+    }
+
+    .ea-empty-icon {
+        width: 58px;
+        height: 58px;
+        margin: 0 auto 14px;
+        display: grid;
+        place-items: center;
+        border-radius: 16px;
+        border: 1px solid var(--ea-border);
+        background: var(--ea-panel-raised);
+        font-size: 26px;
+    }
+
+    .ea-empty h3 {
+        margin: 0 0 6px;
+        color: var(--ea-text);
+        font-size: 17px;
+    }
+
+    .ea-empty p {
+        margin: 0 auto 18px;
+        max-width: 540px;
+        font-size: 13px;
+        line-height: 1.55;
+    }
+
+    .ea-inline-form {
+        display: inline-flex;
+    }
+
+    @media (max-width: 760px) {
+        .ea-module-head {
+            flex-direction: column;
+        }
+
+        .ea-head-actions {
+            width: 100%;
+            justify-content: stretch;
+        }
+
+        .ea-head-actions .ea-btn {
+            flex: 1 1 auto;
+        }
+
+        .ea-title-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 11px;
+        }
+    }
+</style>
+{% block extra_module_css %}{% endblock %}
+{% endblock %}
+
+{% block content %}
+<main class="ea-shell">
+    <header class="ea-module-head">
+        <div class="ea-title-group">
+            <div class="ea-title-icon" aria-hidden="true">◎</div>
+            <div>
+                <div class="ea-kicker">{% block eyebrow %}Marketing · Red externa{% endblock %}</div>
+                <h1 class="ea-title">{% block hero_title %}Agentes externos{% endblock %}</h1>
+                <p class="ea-subtitle">{% block hero_subtitle %}Registro y documentación de agentes inmobiliarios que colaboran con Propify.{% endblock %}</p>
+            </div>
+        </div>
+        <div class="ea-head-actions">
+            {% block head_actions %}
+            <a class="ea-btn" href="{% url 'external_agents:configuration' %}">Configuración</a>
+            <a class="ea-btn ea-btn-primary" href="{% url 'external_agents:agent_create' %}">＋ Nuevo agente</a>
+            {% endblock %}
+        </div>
+    </header>
+
+    <nav class="ea-module-nav" aria-label="Navegación de agentes externos">
+        <a href="{% url 'external_agents:dashboard' %}" class="ea-nav-link {% if '/agentes-externos/configuracion/' not in request.path and '/agentes-externos/nuevo/' not in request.path %}active{% endif %}">
+            <span aria-hidden="true">▦</span> Directorio
+        </a>
+        <a href="{% url 'external_agents:agent_create' %}" class="ea-nav-link {% if '/agentes-externos/nuevo/' in request.path %}active{% endif %}">
+            <span aria-hidden="true">＋</span> Registrar agente
+        </a>
+        <a href="{% url 'external_agents:configuration' %}" class="ea-nav-link {% if '/agentes-externos/configuracion/' in request.path %}active{% endif %}">
+            <span aria-hidden="true">⚙</span> Tipos de documento
+        </a>
+    </nav>
+
+    {% if messages %}
+    <div class="ea-messages" aria-live="polite">
+        {% for message in messages %}
+        <div class="ea-message {{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% block module_content %}{% endblock %}
+</main>
+{% endblock %}

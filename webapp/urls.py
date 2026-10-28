@@ -132,6 +132,9 @@ urlpatterns = [
         prospects_views.prospect_dashboard,
         name='marketing_prospeccion_dashboard',
     ),
+
+    # Agentes inmobiliarios externos: módulo independiente con login Propify.
+    path('agentes-externos/', include('external_agents.urls')),
 # WhatsApp Extractor - Extracción automática de requerimientos
 path('whatsapp-extractor/', include('whatsapp_extractor.urls')),
 

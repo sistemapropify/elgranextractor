@@ -1,0 +1,308 @@
+{% extends "external_agents/base.html" %}
+
+{% block page_title %}{{ agent.full_name }}{% endblock %}
+{% block hero_title %}{{ agent.full_name }}{% endblock %}
+{% block hero_subtitle %}Ficha personal, identificación y documentación digital del agente externo.{% endblock %}
+
+{% block head_actions %}
+<a class="ea-btn" href="{% url 'external_agents:dashboard' %}">Volver al directorio</a>
+<a class="ea-btn ea-btn-blue" href="{% url 'external_agents:agent_edit' pk=agent.pk %}">Editar datos</a>
+{% endblock %}
+
+{% block extra_module_css %}
+<style>
+    .ea-detail-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(380px, .95fr);
+        gap: 16px;
+        align-items: start;
+    }
+    .ea-profile-card {
+        padding: 18px;
+        margin-bottom: 16px;
+    }
+    .ea-profile-head {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--ea-border);
+    }
+    .ea-profile-avatar {
+        width: 58px;
+        height: 58px;
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        border-radius: 17px;
+        color: #fff;
+        background: linear-gradient(135deg, #1f6feb, #8250df);
+        font-size: 18px;
+        font-weight: 800;
+    }
+    .ea-profile-head h2 {
+        margin: 0;
+        color: #f0f6fc;
+        font-size: 20px;
+        line-height: 1.3;
+    }
+    .ea-profile-head p {
+        margin: 5px 0 0;
+        color: var(--ea-muted);
+        font-size: 12px;
+    }
+    .ea-data-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 15px 18px;
+        padding-top: 17px;
+    }
+    .ea-data-block {
+        min-width: 0;
+    }
+    .ea-data-block.wide { grid-column: 1 / -1; }
+    .ea-data-label {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--ea-muted);
+        font-size: 10px;
+        font-weight: 750;
+        letter-spacing: .5px;
+        text-transform: uppercase;
+    }
+    .ea-data-value {
+        color: #e6edf3;
+        font-size: 14px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+    .ea-data-value a {
+        color: var(--ea-blue);
+        text-decoration: none;
+    }
+    .ea-data-value a:hover { text-decoration: underline; }
+    .ea-audit {
+        display: flex;
+        gap: 12px 20px;
+        flex-wrap: wrap;
+        margin-top: 17px;
+        padding-top: 13px;
+        border-top: 1px solid var(--ea-border);
+        color: #6e7681;
+        font-size: 11px;
+    }
+    .ea-upload-box {
+        padding: 16px;
+        border-bottom: 1px solid var(--ea-border);
+        background: rgba(13, 17, 23, .25);
+    }
+    .ea-upload-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+        gap: 10px;
+    }
+    .ea-file-input {
+        width: 100%;
+        color: var(--ea-muted);
+        font-size: 12px;
+    }
+    .ea-file-input::file-selector-button {
+        min-height: 38px;
+        margin-right: 8px;
+        padding: 7px 10px;
+        border: 1px solid var(--ea-border);
+        border-radius: 7px;
+        background: var(--ea-panel-raised);
+        color: var(--ea-text);
+        font: inherit;
+        font-weight: 650;
+        cursor: pointer;
+    }
+    .ea-upload-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 10px;
+    }
+    .ea-attachments {
+        display: grid;
+        gap: 0;
+    }
+    .ea-attachment {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 16px;
+        border-bottom: 1px solid var(--ea-border);
+    }
+    .ea-attachment:last-child { border-bottom: 0; }
+    .ea-file-icon {
+        width: 39px;
+        height: 39px;
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        border-radius: 10px;
+        border: 1px solid rgba(88, 166, 255, .25);
+        background: rgba(31, 111, 235, .1);
+        color: #79c0ff;
+        font-size: 15px;
+    }
+    .ea-file-main {
+        flex: 1;
+        min-width: 0;
+    }
+    .ea-file-main strong {
+        display: block;
+        color: var(--ea-text);
+        font-size: 13px;
+        line-height: 1.35;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .ea-file-main span {
+        display: block;
+        margin-top: 3px;
+        color: var(--ea-muted);
+        font-size: 10px;
+    }
+    .ea-file-actions {
+        display: flex;
+        gap: 5px;
+        align-items: center;
+        flex: 0 0 auto;
+    }
+    .ea-attachment-empty {
+        padding: 38px 20px;
+        text-align: center;
+        color: var(--ea-muted);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    @media (max-width: 1050px) {
+        .ea-detail-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 620px) {
+        .ea-data-grid, .ea-upload-grid { grid-template-columns: 1fr; }
+        .ea-data-block.wide { grid-column: auto; }
+        .ea-attachment { align-items: flex-start; flex-wrap: wrap; }
+        .ea-file-main { flex-basis: calc(100% - 52px); }
+        .ea-file-actions { width: 100%; padding-left: 51px; }
+    }
+</style>
+{% endblock %}
+
+{% block module_content %}
+<div class="ea-detail-layout">
+    <div>
+        <section class="ea-panel ea-profile-card">
+            <div class="ea-profile-head">
+                <div class="ea-profile-avatar">{{ agent.initials }}</div>
+                <div style="min-width:0;flex:1">
+                    <h2>{{ agent.full_name }}</h2>
+                    <p>{{ agent.personal_document_type.name }} · {{ agent.document_number }}</p>
+                </div>
+                {% if agent.is_active %}
+                <span class="ea-badge green">Activo</span>
+                {% else %}
+                <span class="ea-badge muted">Inactivo</span>
+                {% endif %}
+            </div>
+            <div class="ea-data-grid">
+                <div class="ea-data-block">
+                    <span class="ea-data-label">Nombre</span>
+                    <div class="ea-data-value">{{ agent.first_name }}</div>
+                </div>
+                <div class="ea-data-block">
+                    <span class="ea-data-label">Apellido paterno</span>
+                    <div class="ea-data-value">{{ agent.paternal_last_name }}</div>
+                </div>
+                <div class="ea-data-block">
+                    <span class="ea-data-label">Apellido materno</span>
+                    <div class="ea-data-value">{{ agent.maternal_last_name|default:"No registrado" }}</div>
+                </div>
+                <div class="ea-data-block">
+                    <span class="ea-data-label">Documento</span>
+                    <div class="ea-data-value">{{ agent.personal_document_type.name }} · {{ agent.document_number }}</div>
+                </div>
+                <div class="ea-data-block">
+                    <span class="ea-data-label">Correo electrónico</span>
+                    <div class="ea-data-value"><a href="mailto:{{ agent.email }}">{{ agent.email }}</a></div>
+                </div>
+                <div class="ea-data-block">
+                    <span class="ea-data-label">Celular</span>
+                    <div class="ea-data-value"><a href="tel:{{ agent.mobile }}">{{ agent.mobile }}</a></div>
+                </div>
+                <div class="ea-data-block wide">
+                    <span class="ea-data-label">Dirección</span>
+                    <div class="ea-data-value">{{ agent.address }}</div>
+                </div>
+            </div>
+            <div class="ea-audit">
+                <span>Registrado por {{ agent.created_by_username|default:"Propify" }} · {{ agent.created_at|date:"d/m/Y H:i" }}</span>
+                <span>Actualizado por {{ agent.updated_by_username|default:agent.created_by_username|default:"Propify" }} · {{ agent.updated_at|date:"d/m/Y H:i" }}</span>
+            </div>
+        </section>
+    </div>
+
+    <section class="ea-panel">
+        <div class="ea-panel-head">
+            <div>
+                <h2 class="ea-panel-title">Documentos adjuntos</h2>
+                <p class="ea-panel-note">{{ attachments|length }} archivo{{ attachments|length|pluralize }} asociado{{ attachments|length|pluralize }} a esta ficha.</p>
+            </div>
+            <a class="ea-btn ea-btn-small" href="{% url 'external_agents:configuration' %}">Tipos de adjunto</a>
+        </div>
+
+        {% if attachment_types_available %}
+        <form class="ea-upload-box" method="post" enctype="multipart/form-data" action="{% url 'external_agents:attachment_upload' pk=agent.pk %}">
+            {% csrf_token %}
+            <div class="ea-upload-grid">
+                <div class="ea-field">
+                    <label class="ea-label" for="{{ attachment_form.document_type.id_for_label }}">Tipo de documento</label>
+                    {{ attachment_form.document_type }}
+                    {% if attachment_form.document_type.errors %}<div class="ea-errors">{{ attachment_form.document_type.errors }}</div>{% endif %}
+                </div>
+                <div class="ea-field">
+                    <label class="ea-label" for="{{ attachment_form.file.id_for_label }}">Archivo</label>
+                    {{ attachment_form.file }}
+                    {% if attachment_form.file.errors %}<div class="ea-errors">{{ attachment_form.file.errors }}</div>{% endif %}
+                    <span class="ea-help">{{ attachment_form.file.help_text }}</span>
+                </div>
+            </div>
+            <div class="ea-upload-actions">
+                <button class="ea-btn ea-btn-blue ea-btn-small" type="submit">Subir documento</button>
+            </div>
+        </form>
+        {% else %}
+        <div class="ea-upload-box" style="color:var(--ea-muted);font-size:12px;line-height:1.55">
+            No hay tipos de documento para adjuntos activos.
+            <a href="{% url 'external_agents:configuration' %}" style="color:var(--ea-blue)">Crea el primero en Configuración</a>.
+        </div>
+        {% endif %}
+
+        {% if attachments %}
+        <div class="ea-attachments">
+            {% for attachment in attachments %}
+            <div class="ea-attachment">
+                <div class="ea-file-icon" aria-hidden="true">▤</div>
+                <div class="ea-file-main">
+                    <strong title="{{ attachment.original_name|default:attachment.file.name }}">{{ attachment.original_name|default:attachment.file.name }}</strong>
+                    <span>{{ attachment.document_type.name }} · {{ attachment.created_at|date:"d/m/Y H:i" }}{% if attachment.uploaded_by_username %} · {{ attachment.uploaded_by_username }}{% endif %}</span>
+                </div>
+                <div class="ea-file-actions">
+                    <a class="ea-btn ea-btn-small" href="{% url 'external_agents:attachment_download' pk=agent.pk attachment_pk=attachment.pk %}">Descargar</a>
+                    <form class="ea-inline-form" method="post" action="{% url 'external_agents:attachment_delete' pk=agent.pk attachment_pk=attachment.pk %}" onsubmit="return confirm('¿Eliminar este documento adjunto? Esta acción no se puede deshacer.');">
+                        {% csrf_token %}
+                        <button class="ea-btn ea-btn-small ea-btn-danger" type="submit" title="Eliminar documento">Eliminar</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="ea-attachment-empty">Todavía no hay documentos adjuntos.<br>Selecciona un tipo y carga el primer archivo.</div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

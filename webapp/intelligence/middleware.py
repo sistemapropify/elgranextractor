@@ -28,6 +28,8 @@ PUBLIC_PATHS = [
     # no debe pedir el login interno de Django antes.
     r'^/prospects/',              # web + API del módulo (login Propify propio)
     r'^/marketing/prospeccion/',  # dashboard de prospección
+    # Agentes externos: módulo independiente con login web propio de Propify.
+    r'^/agentes-externos/',
     r'^/admin/',
     r'^/static/',
     r'^/favicon\.ico$',           # Icono global del navegador

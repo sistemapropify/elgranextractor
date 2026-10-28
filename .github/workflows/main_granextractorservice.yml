@@ -196,6 +196,11 @@ jobs:
           node --check webapp/acm/static/acm/js/map-card-docking.js
           node --check webapp/acm/static/acm/js/floating-comparison.js
 
+      - name: Validate external real estate agents registry
+        run: |
+          source antenv/bin/activate
+          python webapp/manage.py test external_agents.tests --settings=settings_tests_external_agents --noinput --verbosity=0
+
       - name: Collect Django static files
         env:
           # Valores dummy para que Django cargue settings sin conexión a BD.
@@ -234,6 +239,7 @@ jobs:
           grep -Fq 'libgtk-3-0' startup.sh
           grep -Fq 'timeout 90 python manage.py migrate' startup.sh
           grep -Fq 'python manage.py migrate prospects --noinput' startup.sh
+          grep -Fq 'python manage.py migrate external_agents --noinput' startup.sh
           grep -Fq 'python manage.py scraping_watchdog' startup.sh
           grep -Fq 'SCRAPING_EXECUTION_MODE' startup.sh
           grep -Fq 'exec gunicorn' startup.sh

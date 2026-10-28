@@ -1,0 +1,296 @@
+{% extends "external_agents/base.html" %}
+
+{% block page_title %}Directorio{% endblock %}
+{% block hero_title %}Directorio de agentes externos{% endblock %}
+{% block hero_subtitle %}Consulta, registra y mantén actualizada la ficha de cada agente, junto con su documento de identidad y adjuntos digitales.{% endblock %}
+
+{% block extra_module_css %}
+<style>
+    .ea-stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+    .ea-stat {
+        position: relative;
+        overflow: hidden;
+        padding: 14px 16px;
+        border: 1px solid var(--ea-border);
+        border-radius: 11px;
+        background: var(--ea-panel);
+        text-decoration: none;
+    }
+    .ea-stat::after {
+        content: "";
+        position: absolute;
+        width: 70px;
+        height: 70px;
+        right: -30px;
+        bottom: -38px;
+        border-radius: 50%;
+        background: rgba(88, 166, 255, .07);
+    }
+    .ea-stat strong {
+        display: block;
+        color: #f0f6fc;
+        font-size: 25px;
+        line-height: 1.1;
+    }
+    .ea-stat span {
+        display: block;
+        margin-top: 4px;
+        color: var(--ea-muted);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .55px;
+        text-transform: uppercase;
+    }
+    .ea-stat.blue strong { color: #79c0ff; }
+    .ea-stat.green strong { color: #7ee787; }
+    .ea-stat.amber strong { color: #e3b341; }
+    .ea-filters {
+        display: flex;
+        gap: 9px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+        padding: 13px;
+        margin-bottom: 16px;
+        border: 1px solid var(--ea-border);
+        border-radius: 11px;
+        background: var(--ea-panel);
+    }
+    .ea-filters .ea-field { min-width: 150px; }
+    .ea-filters .search { flex: 1 1 290px; }
+    .ea-agent-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 12px;
+    }
+    .ea-agent-card {
+        display: flex;
+        flex-direction: column;
+        min-height: 286px;
+        border: 1px solid var(--ea-border);
+        border-radius: 12px;
+        background: var(--ea-panel);
+        overflow: hidden;
+        transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+    }
+    .ea-agent-card:hover {
+        transform: translateY(-2px);
+        border-color: #6e7681;
+        box-shadow: 0 10px 24px rgba(1, 4, 9, .24);
+    }
+    .ea-card-top {
+        display: flex;
+        gap: 12px;
+        padding: 15px 15px 12px;
+    }
+    .ea-avatar {
+        width: 45px;
+        height: 45px;
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        border-radius: 13px;
+        color: #fff;
+        background: linear-gradient(135deg, #1f6feb, #8250df);
+        font-size: 14px;
+        font-weight: 800;
+    }
+    .ea-card-heading {
+        flex: 1;
+        min-width: 0;
+    }
+    .ea-card-heading h2 {
+        margin: 0;
+        color: #f0f6fc;
+        font-size: 15px;
+        line-height: 1.35;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .ea-card-heading p {
+        margin: 4px 0 0;
+        color: var(--ea-muted);
+        font-size: 11px;
+    }
+    .ea-card-data {
+        display: grid;
+        gap: 8px;
+        padding: 0 15px 14px;
+        flex: 1;
+    }
+    .ea-data-line {
+        display: flex;
+        align-items: flex-start;
+        gap: 7px;
+        min-width: 0;
+        color: #c9d1d9;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .ea-data-line > span:first-child {
+        width: 16px;
+        flex: 0 0 16px;
+        color: var(--ea-muted);
+        text-align: center;
+    }
+    .ea-data-line > span:last-child {
+        overflow-wrap: anywhere;
+    }
+    .ea-card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 11px 15px;
+        border-top: 1px solid var(--ea-border);
+        background: rgba(13, 17, 23, .28);
+    }
+    .ea-card-meta {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap;
+    }
+    .ea-pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 6px;
+        margin-top: 18px;
+        color: var(--ea-muted);
+        font-size: 12px;
+    }
+    .ea-page-link {
+        min-width: 34px;
+        min-height: 34px;
+        display: grid;
+        place-items: center;
+        padding: 6px 10px;
+        border: 1px solid var(--ea-border);
+        border-radius: 7px;
+        background: var(--ea-panel);
+        color: var(--ea-blue);
+        text-decoration: none;
+    }
+    .ea-page-link:hover { background: var(--ea-panel-raised); }
+    @media (max-width: 900px) {
+        .ea-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 600px) {
+        .ea-agent-grid { grid-template-columns: 1fr; }
+        .ea-filters .ea-field { flex: 1 1 100%; }
+    }
+</style>
+{% endblock %}
+
+{% block module_content %}
+<section class="ea-stats" aria-label="Resumen de agentes">
+    <a class="ea-stat" href="{% url 'external_agents:dashboard' %}">
+        <strong>{{ stats.total }}</strong>
+        <span>Agentes registrados</span>
+    </a>
+    <a class="ea-stat green" href="{% url 'external_agents:dashboard' %}?estado=activos">
+        <strong>{{ stats.active }}</strong>
+        <span>Agentes activos</span>
+    </a>
+    <div class="ea-stat blue">
+        <strong>{{ stats.with_attachments }}</strong>
+        <span>Con documentos</span>
+    </div>
+    <div class="ea-stat amber">
+        <strong>{{ stats.without_attachments }}</strong>
+        <span>Sin adjuntos</span>
+    </div>
+</section>
+
+<form class="ea-filters" method="get" action="{% url 'external_agents:dashboard' %}">
+    <div class="ea-field search">
+        <label class="ea-label" for="ea-q">Buscar agente</label>
+        <input class="ea-input" id="ea-q" type="search" name="q" value="{{ query }}" placeholder="Nombre, documento, correo o celular">
+    </div>
+    <div class="ea-field">
+        <label class="ea-label" for="ea-status">Estado</label>
+        <select class="ea-select" id="ea-status" name="estado">
+            <option value="">Todos</option>
+            <option value="activos" {% if status_filter == 'activos' %}selected{% endif %}>Activos</option>
+            <option value="inactivos" {% if status_filter == 'inactivos' %}selected{% endif %}>Inactivos</option>
+        </select>
+    </div>
+    <div class="ea-field">
+        <label class="ea-label" for="ea-doc-type">Tipo de documento</label>
+        <select class="ea-select" id="ea-doc-type" name="tipo_documento">
+            <option value="">Todos</option>
+            {% for type in document_types %}
+            <option value="{{ type.pk }}" {% if document_type_filter == type.pk|stringformat:'s' %}selected{% endif %}>{{ type.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button class="ea-btn ea-btn-blue" type="submit">Aplicar filtros</button>
+    {% if query or status_filter or document_type_filter %}
+    <a class="ea-btn" href="{% url 'external_agents:dashboard' %}">Limpiar</a>
+    {% endif %}
+</form>
+
+{% if agents %}
+<section class="ea-agent-grid" aria-label="Agentes encontrados">
+    {% for agent in agents %}
+    <article class="ea-agent-card">
+        <div class="ea-card-top">
+            <div class="ea-avatar">{{ agent.initials }}</div>
+            <div class="ea-card-heading">
+                <h2 title="{{ agent.full_name }}">{{ agent.full_name }}</h2>
+                <p>{{ agent.personal_document_type.name }} · {{ agent.document_number }}</p>
+            </div>
+            {% if agent.is_active %}
+            <span class="ea-badge green">Activo</span>
+            {% else %}
+            <span class="ea-badge muted">Inactivo</span>
+            {% endif %}
+        </div>
+        <div class="ea-card-data">
+            <div class="ea-data-line"><span aria-hidden="true">✉</span><span>{{ agent.email }}</span></div>
+            <div class="ea-data-line"><span aria-hidden="true">☎</span><span>{{ agent.mobile }}</span></div>
+            <div class="ea-data-line"><span aria-hidden="true">⌖</span><span>{{ agent.address }}</span></div>
+        </div>
+        <footer class="ea-card-footer">
+            <div class="ea-card-meta">
+                <span class="ea-badge blue">{{ agent.attachment_count }} adjunto{{ agent.attachment_count|pluralize }}</span>
+                <span style="color:var(--ea-muted);font-size:10px">Actualizado {{ agent.updated_at|date:"d/m/Y" }}</span>
+            </div>
+            <a class="ea-btn ea-btn-small" href="{% url 'external_agents:agent_detail' pk=agent.pk %}">Abrir ficha</a>
+        </footer>
+    </article>
+    {% endfor %}
+</section>
+
+{% if page.paginator.num_pages > 1 %}
+<nav class="ea-pagination" aria-label="Paginación">
+    {% if page.has_previous %}
+    <a class="ea-page-link" href="?page={{ page.previous_page_number }}{% if pagination_query %}&{{ pagination_query }}{% endif %}">←</a>
+    {% endif %}
+    <span>Página {{ page.number }} de {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}
+    <a class="ea-page-link" href="?page={{ page.next_page_number }}{% if pagination_query %}&{{ pagination_query }}{% endif %}">→</a>
+    {% endif %}
+</nav>
+{% endif %}
+{% else %}
+<section class="ea-panel ea-empty">
+    <div class="ea-empty-icon" aria-hidden="true">◎</div>
+    {% if query or status_filter or document_type_filter %}
+    <h3>No encontramos coincidencias</h3>
+    <p>Prueba con otro nombre, documento o filtro. Los datos existentes no se modificaron.</p>
+    <a class="ea-btn" href="{% url 'external_agents:dashboard' %}">Ver todos los agentes</a>
+    {% else %}
+    <h3>Aún no hay agentes externos registrados</h3>
+    <p>Registra la ficha del primer agente y luego agrega sus documentos desde la sección de adjuntos.</p>
+    <a class="ea-btn ea-btn-primary" href="{% url 'external_agents:agent_create' %}">Registrar primer agente</a>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

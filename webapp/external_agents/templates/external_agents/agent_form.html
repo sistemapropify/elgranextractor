@@ -1,0 +1,151 @@
+{% extends "external_agents/base.html" %}
+
+{% block page_title %}{% if mode == 'create' %}Registrar agente{% else %}Editar agente{% endif %}{% endblock %}
+{% block hero_title %}{% if mode == 'create' %}Registrar agente externo{% else %}Editar ficha del agente{% endif %}{% endblock %}
+{% block hero_subtitle %}{% if mode == 'create' %}Completa los datos personales y de contacto. El tipo de documento personal se administra desde Configuración.{% else %}Actualiza los datos de contacto o identificación sin perder los documentos ya cargados.{% endif %}{% endblock %}
+
+{% block head_actions %}
+{% if agent %}
+<a class="ea-btn" href="{% url 'external_agents:agent_detail' pk=agent.pk %}">Volver a la ficha</a>
+{% else %}
+<a class="ea-btn" href="{% url 'external_agents:dashboard' %}">Volver al directorio</a>
+{% endif %}
+{% endblock %}
+
+{% block extra_module_css %}
+<style>
+    .ea-form-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 280px;
+        gap: 16px;
+        align-items: start;
+    }
+    .ea-form-panel { padding: 18px; }
+    .ea-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 15px 14px;
+    }
+    .ea-span-2 { grid-column: 1 / -1; }
+    .ea-form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 20px;
+        padding-top: 16px;
+        border-top: 1px solid var(--ea-border);
+    }
+    .ea-guide {
+        position: sticky;
+        top: 78px;
+        padding: 17px;
+    }
+    .ea-guide h2 {
+        margin: 0 0 9px;
+        color: #f0f6fc;
+        font-size: 14px;
+    }
+    .ea-guide p, .ea-guide li {
+        color: var(--ea-muted);
+        font-size: 12px;
+        line-height: 1.55;
+    }
+    .ea-guide ul {
+        margin: 9px 0 0;
+        padding-left: 18px;
+    }
+    .ea-guide a {
+        color: var(--ea-blue);
+        text-decoration: none;
+    }
+    .ea-guide a:hover { text-decoration: underline; }
+    @media (max-width: 950px) {
+        .ea-form-layout { grid-template-columns: 1fr; }
+        .ea-guide { position: static; }
+    }
+    @media (max-width: 620px) {
+        .ea-form-grid { grid-template-columns: 1fr; }
+        .ea-span-2 { grid-column: auto; }
+        .ea-form-actions { flex-direction: column-reverse; }
+        .ea-form-actions .ea-btn { width: 100%; }
+    }
+</style>
+{% endblock %}
+
+{% block module_content %}
+<div class="ea-form-layout">
+    <section class="ea-panel ea-form-panel">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+            <div class="ea-errors ea-message error" style="margin-bottom:16px">{{ form.non_field_errors }}</div>
+            {% endif %}
+            <div class="ea-form-grid">
+                <div class="ea-field">
+                    <label class="ea-label" for="{{ form.first_name.id_for_label }}">Nombre <span class="ea-required">*</span></label>
+                    {{ form.first_name }}
+                    {% if form.first_name.errors %}<div class="ea-errors">{{ form.first_name.errors }}</div>{% endif %}
+                </div>
+                <div class="ea-field">
+                    <label class="ea-label" for="{{ form.paternal_last_name.id_for_label }}">Apellido paterno <span class="ea-required">*</span></label>
+                    {{ form.paternal_last_name }}
+                    {% if form.paternal_last_name.errors %}<div class="ea-errors">{{ form.paternal_last_name.errors }}</div>{% endif %}
+                </div>
+                <div class="ea-field">
+                    <label class="ea-label" for="{{ form.maternal_last_name.id_for_label }}">Apellido materno</label>
+                    {{ form.maternal_last_name }}
+                    <span class="ea-help">Campo opcional.</span>
+                    {% if form.maternal_last_name.errors %}<div class="ea-errors">{{ form.maternal_last_name.errors }}</div>{% endif %}
+                </div>
+                <div class="ea-field">
+                    <label class="ea-label" for="{{ form.personal_document_type.id_for_label }}">Tipo de documento personal <span class="ea-required">*</span></label>
+                    {{ form.personal_document_type }}
+                    {% if form.personal_document_type.errors %}<div class="ea-errors">{{ form.personal_document_type.errors }}</div>{% endif %}
+                </div>
+                <div class="ea-field">
+                    <label class="ea-label" for="{{ form.document_number.id_for_label }}">Número de documento <span class="ea-required">*</span></label>
+                    {{ form.document_number }}
+                    <span class="ea-help">La combinación tipo + número no puede repetirse.</span>
+                    {% if form.document_number.errors %}<div class="ea-errors">{{ form.document_number.errors }}</div>{% endif %}
+                </div>
+                <div class="ea-field">
+                    <label class="ea-label" for="{{ form.mobile.id_for_label }}">Celular <span class="ea-required">*</span></label>
+                    {{ form.mobile }}
+                    {% if form.mobile.errors %}<div class="ea-errors">{{ form.mobile.errors }}</div>{% endif %}
+                </div>
+                <div class="ea-field">
+                    <label class="ea-label" for="{{ form.email.id_for_label }}">Correo electrónico <span class="ea-required">*</span></label>
+                    {{ form.email }}
+                    {% if form.email.errors %}<div class="ea-errors">{{ form.email.errors }}</div>{% endif %}
+                </div>
+                <div class="ea-field ea-span-2">
+                    <label class="ea-label" for="{{ form.address.id_for_label }}">Dirección <span class="ea-required">*</span></label>
+                    {{ form.address }}
+                    {% if form.address.errors %}<div class="ea-errors">{{ form.address.errors }}</div>{% endif %}
+                </div>
+            </div>
+            <div class="ea-form-actions">
+                {% if agent %}
+                <a class="ea-btn" href="{% url 'external_agents:agent_detail' pk=agent.pk %}">Cancelar</a>
+                {% else %}
+                <a class="ea-btn" href="{% url 'external_agents:dashboard' %}">Cancelar</a>
+                {% endif %}
+                <button class="ea-btn ea-btn-primary" type="submit">
+                    {% if mode == 'create' %}Registrar agente{% else %}Guardar cambios{% endif %}
+                </button>
+            </div>
+        </form>
+    </section>
+
+    <aside class="ea-panel ea-guide">
+        <h2>Antes de guardar</h2>
+        <p>Los campos con <span class="ea-required">*</span> son obligatorios. El correo y el celular quedan disponibles para la gestión comercial.</p>
+        <ul>
+            <li>Verifica que el número coincida con el tipo elegido.</li>
+            <li>El apellido materno puede quedar vacío.</li>
+            <li>Los documentos adjuntos se cargan después, desde la ficha del agente.</li>
+        </ul>
+        <p style="margin-top:14px"><a href="{% url 'external_agents:configuration' %}">Administrar tipos de documento →</a></p>
+    </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,255 @@
+{% extends "external_agents/base.html" %}
+
+{% block page_title %}Tipos de documento{% endblock %}
+{% block hero_title %}Configuración documental{% endblock %}
+{% block hero_subtitle %}Administra dos catálogos independientes: documentos de identidad para la ficha del agente y tipos disponibles al cargar archivos adjuntos.{% endblock %}
+
+{% block head_actions %}
+<a class="ea-btn" href="{% url 'external_agents:dashboard' %}">Volver al directorio</a>
+{% endblock %}
+
+{% block extra_module_css %}
+<style>
+    .ea-config-intro {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+    .ea-config-callout {
+        display: flex;
+        gap: 11px;
+        padding: 13px 14px;
+        border: 1px solid var(--ea-border);
+        border-radius: 10px;
+        background: var(--ea-panel);
+    }
+    .ea-config-callout-icon {
+        width: 34px;
+        height: 34px;
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        border-radius: 9px;
+        background: var(--ea-panel-raised);
+        color: var(--ea-blue);
+    }
+    .ea-config-callout strong {
+        display: block;
+        color: var(--ea-text);
+        font-size: 12px;
+    }
+    .ea-config-callout span {
+        display: block;
+        margin-top: 3px;
+        color: var(--ea-muted);
+        font-size: 11px;
+        line-height: 1.45;
+    }
+    .ea-config-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        align-items: start;
+    }
+    .ea-create-type {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 90px auto;
+        gap: 8px;
+        align-items: end;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--ea-border);
+        background: rgba(13, 17, 23, .25);
+    }
+    .ea-type-list {
+        display: grid;
+    }
+    .ea-type-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 66px auto;
+        gap: 7px;
+        align-items: center;
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--ea-border);
+    }
+    .ea-type-row:last-child { border-bottom: 0; }
+    .ea-type-row.is-inactive { opacity: .62; }
+    .ea-type-edit-form {
+        grid-column: 1 / 3;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 68px;
+        gap: 7px;
+        min-width: 0;
+    }
+    .ea-type-edit-form .ea-input {
+        min-height: 35px;
+        padding: 6px 9px;
+        font-size: 12px;
+    }
+    .ea-type-state {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: -2px;
+    }
+    .ea-type-actions {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        justify-content: flex-end;
+    }
+    .ea-type-empty {
+        padding: 30px 18px;
+        text-align: center;
+        color: var(--ea-muted);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .ea-category-note {
+        margin: 13px 16px 16px;
+        padding: 10px 11px;
+        border-radius: 8px;
+        background: rgba(88, 166, 255, .06);
+        color: var(--ea-muted);
+        font-size: 11px;
+        line-height: 1.5;
+    }
+    @media (max-width: 980px) {
+        .ea-config-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 650px) {
+        .ea-config-intro { grid-template-columns: 1fr; }
+        .ea-create-type { grid-template-columns: 1fr 80px; }
+        .ea-create-type .ea-btn { grid-column: 1 / -1; }
+        .ea-type-row { grid-template-columns: minmax(0, 1fr) auto; }
+        .ea-type-edit-form { grid-column: 1 / -1; }
+        .ea-type-actions { justify-content: flex-end; }
+    }
+</style>
+{% endblock %}
+
+{% block module_content %}
+<section class="ea-config-intro">
+    <div class="ea-config-callout">
+        <div class="ea-config-callout-icon" aria-hidden="true">ID</div>
+        <div>
+            <strong>Tipo de documento personal</strong>
+            <span>Se elige en la ficha del agente, por ejemplo DNI o Pasaporte. Una ficha usa exactamente un tipo.</span>
+        </div>
+    </div>
+    <div class="ea-config-callout">
+        <div class="ea-config-callout-icon" aria-hidden="true">▤</div>
+        <div>
+            <strong>Tipo de documento adjunto</strong>
+            <span>Clasifica los archivos digitales que se cargan después, por ejemplo DNI frontal o contrato firmado.</span>
+        </div>
+    </div>
+</section>
+
+<div class="ea-config-grid">
+    <section class="ea-panel">
+        <div class="ea-panel-head">
+            <div>
+                <h2 class="ea-panel-title">Datos personales</h2>
+                <p class="ea-panel-note">{{ personal_types|length }} tipo{{ personal_types|length|pluralize }} en este catálogo.</p>
+            </div>
+            <span class="ea-badge blue">Ficha</span>
+        </div>
+        <form class="ea-create-type" method="post" action="{% url 'external_agents:document_type_create' %}">
+            {% csrf_token %}
+            <input type="hidden" name="scope" value="personal">
+            <div class="ea-field">
+                <label class="ea-label" for="{{ personal_form.name.id_for_label }}">Nuevo tipo</label>
+                {{ personal_form.name }}
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="{{ personal_form.sort_order.id_for_label }}">Orden</label>
+                {{ personal_form.sort_order }}
+            </div>
+            <button class="ea-btn ea-btn-primary" type="submit">Agregar</button>
+        </form>
+        {% if personal_types %}
+        <div class="ea-type-list">
+            {% for type in personal_types %}
+            <div class="ea-type-row {% if not type.is_active %}is-inactive{% endif %}">
+                <form class="ea-type-edit-form" id="edit-personal-{{ type.pk }}" method="post" action="{% url 'external_agents:document_type_update' pk=type.pk %}">
+                    {% csrf_token %}
+                    <input class="ea-input" type="text" name="name" value="{{ type.name }}" maxlength="80" aria-label="Nombre de {{ type.name }}" required>
+                    <input class="ea-input" type="number" name="sort_order" value="{{ type.sort_order }}" min="0" max="999" aria-label="Orden de {{ type.name }}">
+                </form>
+                <div class="ea-type-actions">
+                    <button class="ea-btn ea-btn-small" type="submit" form="edit-personal-{{ type.pk }}">Guardar</button>
+                    <form class="ea-inline-form" method="post" action="{% url 'external_agents:document_type_toggle' pk=type.pk %}">
+                        {% csrf_token %}
+                        <button class="ea-btn ea-btn-small {% if type.is_active %}ea-btn-danger{% else %}ea-btn-primary{% endif %}" type="submit">
+                            {% if type.is_active %}Desactivar{% else %}Activar{% endif %}
+                        </button>
+                    </form>
+                </div>
+                <div class="ea-type-state">
+                    {% if type.is_active %}<span class="ea-badge green">Disponible</span>{% else %}<span class="ea-badge muted">Oculto en nuevas fichas</span>{% endif %}
+                    {% if type.agent_count %}<span class="ea-badge blue">{{ type.agent_count }} ficha{{ type.agent_count|pluralize }}</span>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="ea-type-empty">No hay tipos de documento personal. Agrega al menos uno para registrar agentes.</div>
+        {% endif %}
+        <p class="ea-category-note">Al desactivar un tipo, deja de aparecer en fichas nuevas. Los agentes ya registrados conservan su tipo actual.</p>
+    </section>
+
+    <section class="ea-panel">
+        <div class="ea-panel-head">
+            <div>
+                <h2 class="ea-panel-title">Documentos adjuntos</h2>
+                <p class="ea-panel-note">{{ attachment_types|length }} tipo{{ attachment_types|length|pluralize }} en este catálogo.</p>
+            </div>
+            <span class="ea-badge amber">Archivos</span>
+        </div>
+        <form class="ea-create-type" method="post" action="{% url 'external_agents:document_type_create' %}">
+            {% csrf_token %}
+            <input type="hidden" name="scope" value="attachment">
+            <div class="ea-field">
+                <label class="ea-label" for="{{ attachment_form.name.id_for_label }}">Nuevo tipo</label>
+                {{ attachment_form.name }}
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="{{ attachment_form.sort_order.id_for_label }}">Orden</label>
+                {{ attachment_form.sort_order }}
+            </div>
+            <button class="ea-btn ea-btn-primary" type="submit">Agregar</button>
+        </form>
+        {% if attachment_types %}
+        <div class="ea-type-list">
+            {% for type in attachment_types %}
+            <div class="ea-type-row {% if not type.is_active %}is-inactive{% endif %}">
+                <form class="ea-type-edit-form" id="edit-attachment-{{ type.pk }}" method="post" action="{% url 'external_agents:document_type_update' pk=type.pk %}">
+                    {% csrf_token %}
+                    <input class="ea-input" type="text" name="name" value="{{ type.name }}" maxlength="80" aria-label="Nombre de {{ type.name }}" required>
+                    <input class="ea-input" type="number" name="sort_order" value="{{ type.sort_order }}" min="0" max="999" aria-label="Orden de {{ type.name }}">
+                </form>
+                <div class="ea-type-actions">
+                    <button class="ea-btn ea-btn-small" type="submit" form="edit-attachment-{{ type.pk }}">Guardar</button>
+                    <form class="ea-inline-form" method="post" action="{% url 'external_agents:document_type_toggle' pk=type.pk %}">
+                        {% csrf_token %}
+                        <button class="ea-btn ea-btn-small {% if type.is_active %}ea-btn-danger{% else %}ea-btn-primary{% endif %}" type="submit">
+                            {% if type.is_active %}Desactivar{% else %}Activar{% endif %}
+                        </button>
+                    </form>
+                </div>
+                <div class="ea-type-state">
+                    {% if type.is_active %}<span class="ea-badge green">Disponible</span>{% else %}<span class="ea-badge muted">Oculto en cargas nuevas</span>{% endif %}
+                    {% if type.attachment_count %}<span class="ea-badge amber">{{ type.attachment_count }} archivo{{ type.attachment_count|pluralize }}</span>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="ea-type-empty">No hay tipos para adjuntos. Agrega, por ejemplo, DNI frontal o contrato firmado.</div>
+        {% endif %}
+        <p class="ea-category-note">Este catálogo solo se muestra al subir documentos. No puede usarse como tipo de documento personal y viceversa.</p>
+    </section>
+</div>
+{% endblock %}

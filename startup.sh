@@ -184,6 +184,13 @@ else
     echo "  WARNING: critical ACM migrations failed or timed out; see $MIGRATE_LOG."
 fi
 
+# Agentes externos: la tabla debe existir antes de abrir el nuevo módulo.
+if timeout 90 python manage.py migrate external_agents --noinput >> "$MIGRATE_LOG" 2>&1; then
+    echo "  Critical external agents migrations applied."
+else
+    echo "  WARNING: critical external agents migrations failed or timed out; see $MIGRATE_LOG."
+fi
+
 # ── Run remaining migrations (non-blocking) ──
 # No bloquear el arranque web: si SQL tarda o el driver ODBC aun se instala
 # en segundo plano, migrar en background evita el ContainerTimeout (230s).

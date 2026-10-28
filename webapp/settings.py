@@ -116,6 +116,7 @@ INSTALLED_APPS = [
     'intelligence',
     'meta_ads',  # Habilitado para desarrollo - dashboard de Meta Ads
     'prospects',  # Captura de prospectos inmobiliarios desde el celular
+    'external_agents',  # Registro y documentación de agentes inmobiliarios externos
     'whatsapp_extractor',  # Extracción automática de requerimientos desde WhatsApp
     'agentes',  # Gestión de agentes e inmobiliarias
     'canvas',   # PropFlow Visual Canvas — lienzos interactivos
@@ -276,6 +277,10 @@ DEFAULT_FILE_STORAGE = 'storages.backends.azure_storage.AzureStorage'
 AZURE_ACCOUNT_NAME = env('AZURE_STORAGE_ACCOUNT_NAME', default='granextractormedia')
 AZURE_ACCOUNT_KEY = env('AZURE_STORAGE_ACCOUNT_KEY', default='')
 AZURE_CONTAINER = env('AZURE_PHOTOS_CONTAINER', default='fotosprospecciones')
+AZURE_EXTERNAL_AGENTS_CONTAINER = env(
+    'AZURE_EXTERNAL_AGENTS_CONTAINER',
+    default='documentos-agentes-externos',
+)
 AZURE_CUSTOM_DOMAIN = f'{AZURE_ACCOUNT_NAME}.blob.core.windows.net'
 # El contenedor es privado. Django debe entregar URLs SAS temporales para que
 # la web y la APK puedan mostrar las fotos sin hacer público el Blob Storage.
