@@ -129,9 +129,16 @@
     }
     function create(config,fetcher=fetch){
         const references=config.providers.filter(p=>p.active&&p.transport==='master');
-        const masterProviders=references.filter(p=>p.role==='draft');
-        const primary=createGeollaqta(config,fetcher);
-        if(!references.length)return primary;
+        const masterProviders=references.filter(p=>p.role==='draft'||p.role==='snapshot');
+        const direct=config.providers.some(p=>p.id==='geollaqta'&&p.active&&p.transport!=='master');
+        let primary=null;
+        const primaryProvider=()=>primary||(primary=createGeollaqta(config,fetcher));
+        if(!references.length)return direct?primaryProvider():{loadRadius:async(value,radius,{onBatch=()=>{}}={})=>{
+            const center=point(value),size=Number(radius);
+            if(!center||!Number.isFinite(size))throw Error('Ubicación o radio no válido.');
+            const empty={center,radius:size,district:'Lotes del radio',lots:{type:'FeatureCollection',features:[]},blocks:{type:'FeatureCollection',features:[]},total:0,processed:0,complete:true,reference_sources:[]};
+            onBatch([],empty);return empty;
+        }};
         const cache=new Map();
         function overlaps(source,center,radius){
             const b=source.bbox;if(!b)return true;
@@ -164,9 +171,9 @@
                 // Outside its documented bounds, the external source remains
                 // the fallback instead of disappearing from the map.
                 const activeMaster=masterProviders.filter(s=>overlaps(s,center,radius));
-                const tasks=activeMaster.length?[]:[primary.loadRadius(center,radius,{signal,onBatch:(features,data)=>{
+                const tasks=activeMaster.length?[]:(direct?[primaryProvider().loadRadius(center,radius,{signal,onBatch:(features,data)=>{
                     if(signal?.aborted)return;entry.geo=data;progress(data.lots.features);
-                }})];
+                }})]:[]);
                 const referenceSources=activeMaster.length?activeMaster:
                     references.filter(s=>s.role!=='draft'&&overlaps(s,center,radius));
                 for(const source of referenceSources.filter(s=>overlaps(s,center,radius))){

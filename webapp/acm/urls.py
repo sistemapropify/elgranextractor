@@ -22,6 +22,8 @@ urlpatterns = [
          name='cadastral_master_medium'),
     path('catastro/fuentes/<slug:source_id>/radio/', cadastral_views.reference_geometry, name='cadastral_reference'),
     path('catastro/lotes/<str:lot_id>/', cadastral_views.lot, name='cadastral_lot'),
+    path('catastro/lotes/<str:lot_id>/archivos/<str:filename>/',
+         cadastral_views.archive_asset, name='cadastral_archive_asset'),
     path('catastro/lotes/<str:lot_id>/fachada/', cadastral_views.facade, name='cadastral_facade'),
     path('catastro/lotes/<str:lot_id>/reporte.pdf', cadastral_views.report_pdf, name='cadastral_report_pdf'),
     path('login/', portal_views.login, name='login'),

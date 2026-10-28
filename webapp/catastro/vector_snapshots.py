@@ -15,6 +15,7 @@ PREFIX = 'geollaqta/vectores/'
 INDEX_KEY = PREFIX + 'index.json'
 LAYERS = ('lotes', 'manzanas', 'vias')
 LOCAL_INDEX = Path(__file__).with_name('data') / 'geollaqta-vector-index.json'
+LOCAL_BOUNDS = Path(__file__).with_name('data') / 'geollaqta-vector-bounds.json'
 ROAD_TYPES = {
     '1': 'Avenida', '2': 'Calle', '3': 'Jirón', '4': 'Pasaje',
     '7': 'Prolongación', '13': 'Callejón',
@@ -288,6 +289,10 @@ def catalog_sources(cloud=None):
     grouped = {}
     for row in inventory(cloud)['snapshots']:
         grouped.setdefault(row['ubigeo'], {})[row['layer']] = row
+    try:
+        saved_bounds = json.loads(LOCAL_BOUNDS.read_text(encoding='utf8')).get('bounds') or {}
+    except (OSError, TypeError, ValueError):
+        saved_bounds = {}
     return [{
         'id': 'vectores-' + ubigeo,
         'name': 'Catastro Maestro · vectores del distrito',
@@ -301,6 +306,7 @@ def catalog_sources(cloud=None):
         'status': 'available_vectors',
         'transport': 'snapshot',
         'crs': 'EPSG:4326',
+        'bbox': saved_bounds.get(ubigeo),
         'layers': {
             layer: {'count': int(item.get('features') or 0), 'kind': 'polygon'}
             for layer, item in layers.items()

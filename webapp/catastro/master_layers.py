@@ -6,6 +6,7 @@ Files here are curated application layers, not collector downloads or state.
 """
 import json
 import math
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -309,12 +310,113 @@ def _layer(source_id, key, district, bounds=None, *, original=False, metadata=No
 
 
 def radius(source_id, lat, lng, metres):
+    if source_id.startswith('vectores-'):
+        return _snapshot_radius(source_id, lat, lng, metres)
     if source_id.startswith('borrador-'):
         from . import source_manager
         if not (source_manager.enabled() or source_manager.durable()):
             raise ValueError('Fuente no disponible.')
         return _radius(source_id, lat, lng, metres)
     return _radius(source_id, lat, lng, metres)
+
+
+@lru_cache(maxsize=6)
+def _snapshot_collection(ubigeo, layer, fingerprint):
+    """Keep bounded immutable chunks warm inside each app process."""
+    from . import vector_snapshots
+    return vector_snapshots.read_snapshot(ubigeo, layer)
+
+
+def _snapshot_radius(source_id, lat, lng, metres):
+    """Publish an archived district snapshot through the same radius contract."""
+    from . import vector_snapshots
+    ubigeo = source_id.removeprefix('vectores-')
+    if not re.fullmatch(r'\d{6}', ubigeo):
+        raise ValueError('Fuente vectorial no válida.')
+    source = next((item for item in vector_snapshots.catalog_sources()
+                   if item.get('id') == source_id), None)
+    if not source or not source.get('active'):
+        raise ValueError('La capa vectorial todavía no está disponible.')
+    lat, lng, metres = float(lat), float(lng), float(metres)
+    if (not all(math.isfinite(v) for v in (lat, lng, metres))
+            or not -85 <= lat <= 85 or not -180 <= lng <= 180
+            or not 100 <= metres <= 2000):
+        raise ValueError('Ubicación o radio no válido.')
+    sy = 6371008.8 * math.pi / 180
+    sx = sy * math.cos(math.radians(lat))
+
+    def inside(ring):
+        hit = False
+        for a, b in zip(ring, ring[1:]):
+            if ((a[1] > lat) != (b[1] > lat) and
+                    lng < (b[0]-a[0])*(lat-a[1])/(b[1]-a[1])+a[0]):
+                hit = not hit
+        return hit
+
+    def touches(geometry):
+        polygons = ([geometry['coordinates']]
+                    if geometry.get('type') == 'Polygon'
+                    else geometry.get('coordinates') or [])
+        for rings in polygons:
+            if not rings:
+                continue
+            if inside(rings[0]) and not any(inside(ring) for ring in rings[1:]):
+                return True
+            for ring in rings:
+                for a, b in zip(ring, ring[1:]):
+                    ax, ay = (a[0]-lng)*sx, (a[1]-lat)*sy
+                    bx, by = (b[0]-lng)*sx, (b[1]-lat)*sy
+                    dx, dy = bx-ax, by-ay
+                    t = max(0, min(1, -(ax*dx+ay*dy)/(dx*dx+dy*dy or 1)))
+                    if (ax+t*dx)**2 + (ay+t*dy)**2 <= (metres+0.1)**2:
+                        return True
+        return False
+
+    result = {}
+    for layer, label, prefix in (('lotes', 'lots', 'lote'),
+                                 ('manzanas', 'blocks', 'manzana')):
+        if layer not in source.get('layers', {}):
+            features = []
+            source_total = 0
+        else:
+            fingerprint = vector_snapshots.snapshot_fingerprint(ubigeo, layer)
+            collection = _snapshot_collection(
+                ubigeo, layer, fingerprint or 'missing')
+            source_total = len(collection.get('features') or [])
+            features = []
+            for feature in collection.get('features') or []:
+                geometry = feature.get('geometry') or {}
+                if not geometry or not touches(geometry):
+                    continue
+                properties = {
+                    **(feature.get('properties') or {}),
+                    'SOURCE_ID': source_id,
+                    'SOURCE_NAME': source['name'],
+                    'MASTER_LAYER': layer,
+                    'REFERENCE_ONLY': False,
+                }
+                features.append({
+                    **feature,
+                    'id': source_id + ':' + prefix + ':' + str(feature.get('id')),
+                    'properties': properties,
+                })
+        result[label] = {
+            'type': 'FeatureCollection',
+            'features': features,
+            'total': len(features),
+            'source_total': source_total,
+            'complete': True,
+        }
+    return {
+        **result,
+        'source_id': source_id,
+        'source': source,
+        'reference_only': False,
+        'complete': True,
+        'center': {'lat': lat, 'lng': lng},
+        'radius': metres,
+        'schema': SCHEMA,
+    }
 
 
 def _radius(source_id, lat, lng, metres):

@@ -1,10 +1,10 @@
 """ACM facade for the shared master; enforce the active role on every request."""
 import io
-import json
 from django.http import JsonResponse, HttpResponse, Http404
 from django.views.decorators.http import require_GET
 from .access import required
 from catastro import master
+from catastro import master_dossier
 from catastro import raster_overlays, source_manager
 from catastro.storage import StorageError
 
@@ -63,28 +63,7 @@ def raster_image(request, overlay_id):
 def master_medium(request, media_id):
     """Serve a verified R2 original linked to a Catastro Maestro entity."""
     try:
-        if not (source_manager.enabled() or source_manager.durable()):
-            raise ValueError('El archivo del maestro no está disponible.')
-        import hashlib
-        from catastro.master_d1 import Gateway
-        from catastro.storage import R2
-        rows = Gateway().read(
-            'SELECT id,kind,object_key,sha256,observed_at,source_version FROM media WHERE id=?',
-            [media_id])
-        if not rows:
-            raise ValueError('Archivo no disponible.')
-        item = rows[0]
-        key = item['object_key']
-        if not key.startswith('geollaqta/') or '..' in key.split('/'):
-            raise ValueError('Ruta de archivo no válida.')
-        body, _ = R2(timeout=15).get(key)
-        if item.get('sha256') and hashlib.sha256(body).hexdigest() != item['sha256']:
-            raise ValueError('El archivo no coincide con su huella registrada.')
-        mime = ('application/pdf' if body.startswith(b'%PDF-') else
-                'image/jpeg' if body.startswith(b'\xff\xd8\xff') else
-                'image/png' if body.startswith(b'\x89PNG\r\n\x1a\n') else None)
-        if not mime:
-            raise ValueError('Formato de archivo no disponible.')
+        body, mime = _master_medium_body(media_id)
         response = HttpResponse(body, content_type=mime)
         response['Content-Disposition'] = 'inline'
         response['Cache-Control'] = 'private, max-age=3600'
@@ -94,6 +73,40 @@ def master_medium(request, media_id):
         return JsonResponse({'error': 'El archivo del Catastro Maestro no está disponible.'}, status=503)
     except (ValueError, KeyError):
         raise Http404
+
+
+def _master_medium_body(media_id):
+    if not (source_manager.enabled() or source_manager.durable()):
+        raise ValueError('El archivo del maestro no está disponible.')
+    import hashlib
+    from catastro.master_d1 import Gateway
+    from catastro.storage import R2
+    rows = Gateway().read(
+        'SELECT id,kind,object_key,sha256,observed_at,source_version FROM media WHERE id=?',
+        [media_id])
+    if not rows:
+        raise ValueError('Archivo no disponible.')
+    item = rows[0]
+    key = item['object_key']
+    if not key.startswith('geollaqta/') or '..' in key.split('/'):
+        raise ValueError('Ruta de archivo no válida.')
+    body, _ = R2(timeout=15).get(key, max_bytes=64_000_000)
+    if item.get('sha256') and hashlib.sha256(body).hexdigest() != item['sha256']:
+        raise ValueError('El archivo no coincide con su huella registrada.')
+    mime = ('application/pdf' if body.startswith(b'%PDF-') else
+            'image/jpeg' if body.startswith(b'\xff\xd8\xff') else
+            'image/png' if body.startswith(b'\x89PNG\r\n\x1a\n') else None)
+    if not mime:
+        raise ValueError('Formato de archivo no disponible.')
+    return body, mime
+
+
+def _document_body(value, media, lot_id):
+    if media and media.get('id'):
+        return _master_medium_body(media['id'])
+    if media and media.get('filename'):
+        return master_dossier.archive_asset(lot_id, media['filename'])
+    raise ValueError('El documento no está disponible en el Catastro Maestro.')
 
 
 @require_GET
@@ -131,24 +144,20 @@ def reference_geometry(request, source_id):
 @required('cadastral_info')
 def lot(request, lot_id):
     try:
-        master.validate_lot(lot_id)
-        from cuadrantizacion.geollaqta import report_response
         record_id = request.GET.get('record_id') or None
-        legacy = report_response(lot_id, lot_id[:6], record_id, report_only=True)
-        try:
-            master_record = master.d1_lot_summary(lot_id, record_id)
-        except (StorageError, ValueError):
-            master_record = None
-        if master_record:
-            base = json.loads(legacy.content) if legacy.status_code == 200 else {}
-            value = master.merge_d1_summary(base, master_record)
-            response = JsonResponse(value, json_dumps_params={'ensure_ascii': False})
-            response['Cache-Control'] = 'private, no-store'
-            response['Vary'] = 'Cookie'
-            return response
-        return legacy
+        dossier = master_dossier.load(lot_id, record_id, surface='acm')
+        value = master_dossier.summary(dossier, record_id)
+        response = JsonResponse(value, json_dumps_params={'ensure_ascii': False})
+        response['Cache-Control'] = 'private, no-store'
+        response['Vary'] = 'Cookie'
+        if dossier.get('master_revision') is not None:
+            response['X-Catastro-Master-Revision'] = str(
+                dossier['master_revision'])
+        return response
     except ValueError as error:
         return JsonResponse({'error': str(error)}, status=400)
+    except StorageError as error:
+        return JsonResponse({'error': str(error)}, status=503)
 
 
 @require_GET
@@ -156,7 +165,11 @@ def lot(request, lot_id):
 def facade(request, lot_id):
     try:
         from PIL import Image
-        body = master.archived_facade(lot_id)
+        value = master_dossier.load(lot_id, surface='acm')
+        media = next((item for item in value.get('gallery') or [] if item.get('url')), None)
+        if not media:
+            raise ValueError('Fachada no disponible.')
+        body, _ = _document_body(value, media, lot_id)
         if len(body) > 8_000_000:
             raise ValueError('Image too large')
         with Image.open(io.BytesIO(body)) as image:
@@ -175,14 +188,43 @@ def facade(request, lot_id):
 @required('cadastral_info')
 def report_pdf(request, lot_id):
     try:
-        from catastro.map_report import report_pdf as original_pdf
-        master.validate_lot(lot_id)
-        body = original_pdf(lot_id, request.GET.get('record_id') or None)
+        record_id = request.GET.get('record_id') or None
+        value = master_dossier.load(lot_id, record_id, surface='acm')
+        summary = master_dossier.summary(value, record_id)
+        selected = summary.get('selected_record_id')
+        media = next((item for item in value.get('media') or []
+                      if str(item.get('kind') or '').lower().endswith('pdf') and
+                      str(item.get('record_id') or item.get('source_record_id') or '') ==
+                      str(selected or '')), None)
+        if media is None:
+            media = next((item for item in value.get('media') or []
+                          if str(item.get('kind') or '').lower().endswith('pdf')), None)
+        body, _ = _document_body(value, media, lot_id)
         response = HttpResponse(body, content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="reporte-catastral-{lot_id}.pdf"'
         response['X-Content-Type-Options'] = 'nosniff'
         return response
     except ValueError:
         return JsonResponse({'error': 'Lote o reporte catastral no válido.'}, status=400)
-    except (OSError, RuntimeError):
+    except (OSError, RuntimeError, StorageError):
         return JsonResponse({'error': 'El PDF catastral no está disponible. Vuelve a intentarlo.'}, status=502)
+
+
+@require_GET
+@required('cadastral_info')
+def archive_asset(request, lot_id, filename):
+    permissions = getattr(getattr(request, 'acm_access', None), 'permissions', {})
+    if filename.lower().endswith('.pdf') and not permissions.get('cadastral_pdf'):
+        return JsonResponse({'error': 'La descarga de fichas no está habilitada.'},
+                            status=403)
+    try:
+        body, content_type = master_dossier.archive_asset(lot_id, filename)
+        response = HttpResponse(body, content_type=content_type)
+        response['Content-Disposition'] = 'inline'
+        response['Cache-Control'] = 'private, max-age=86400'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+    except StorageError:
+        return JsonResponse({'error': 'El archivo del Catastro Maestro no está disponible.'}, status=503)
+    except ValueError:
+        raise Http404

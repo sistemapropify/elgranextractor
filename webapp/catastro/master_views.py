@@ -15,6 +15,8 @@ from . import source_manager_views
 from . import source_placement
 from . import vector_snapshots
 from . import manual_parks
+from . import master_gallery
+from . import master_dossier
 from .storage import StorageError
 import json
 
@@ -89,6 +91,50 @@ def vector_snapshot_manifest(request, ubigeo, layer_key):
         value = vector_snapshots.snapshot_manifest(ubigeo, layer)
         response = JsonResponse(value)
         response['Cache-Control'] = 'private, max-age=3600'
+        return response
+    except StorageError as error:
+        return JsonResponse({'error': str(error)}, status=503)
+    except ValueError as error:
+        return JsonResponse({'error': str(error)}, status=404)
+
+
+@require_GET
+@admin_required
+def lot_gallery(request, lot_id):
+    try:
+        response = JsonResponse(master_gallery.load(lot_id))
+        response['Cache-Control'] = 'private, max-age=3600'
+        return response
+    except StorageError as error:
+        return JsonResponse({'error': str(error)}, status=503)
+    except ValueError as error:
+        return JsonResponse({'error': str(error)}, status=400)
+
+
+@require_GET
+@admin_required
+def lot_dossier(request, lot_id):
+    try:
+        value = master_dossier.load(
+            lot_id, request.GET.get('record_id') or None, surface='master')
+        response = JsonResponse(value, json_dumps_params={'ensure_ascii': False})
+        response['Cache-Control'] = 'private, no-store'
+        return response
+    except StorageError as error:
+        return JsonResponse({'error': str(error)}, status=503)
+    except ValueError as error:
+        return JsonResponse({'error': str(error)}, status=400)
+
+
+@require_GET
+@admin_required
+def lot_archive_asset(request, lot_id, filename):
+    try:
+        body, content_type = master_dossier.archive_asset(lot_id, filename)
+        response = HttpResponse(body, content_type=content_type)
+        response['Content-Disposition'] = 'inline'
+        response['Cache-Control'] = 'private, max-age=86400'
+        response['X-Content-Type-Options'] = 'nosniff'
         return response
     except StorageError as error:
         return JsonResponse({'error': str(error)}, status=503)

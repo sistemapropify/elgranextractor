@@ -112,13 +112,13 @@
                 // A verified archive image can arrive after source candidates failed.
             }
             if(photoLookup)clearTimeout(photoLookup.timer);
-            const urls=[...new Set([url,...Array.from({length:12},(_,index)=>window.GeollaqtaData.facadeUrl(id,index))].filter(Boolean))];
+            const urls=[...new Set([url].filter(Boolean))];
             const lookup=photoLookup={id,stamp,urls,timer:null,loaded:false};let next=0;
             const current=()=>photoLookup===lookup&&stamp===serial&&lot?.properties.ID_LOTE===id;
             $('photo-status').textContent='Cargando fachada…';$('photo-status').hidden=false;
             function attempt(){
                 clearTimeout(lookup.timer);if(!current())return;
-                if(next>=urls.length){image.hidden=true;$('photo-status').hidden=false;$('photo-status').textContent='Sin fachada disponible';return;}
+                if(next>=urls.length){image.hidden=true;$('photo-status').hidden=false;$('photo-status').textContent='Sin fachada publicada en el Catastro Maestro';return;}
                 const candidate=urls[next++],active=()=>current()&&(image.getAttribute?.('src')??image.src)===candidate;
                 image.onload=()=>{if(!active())return;clearTimeout(lookup.timer);lookup.loaded=true;image.hidden=false;$('photo-status').hidden=true;};
                 image.onerror=()=>{if(active())attempt();};

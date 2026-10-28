@@ -146,7 +146,7 @@
 </dialog>
 {% endblock %}
 {% block extra_js %}
-<script src="{% static 'js/catastro-maestro.js' %}?v=23"></script>
+<script src="{% static 'js/catastro-maestro.js' %}?v=25"></script>
 <script src="{% static 'js/catastro-master-model.js' %}?v=1"></script>
 <script src="{% static 'js/catastro-raster-layers.js' %}?v=19"></script>
 {% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initCatastroMaster" async defer></script>{% else %}<script>document.getElementById('master-status').textContent='No se ha configurado la clave del mapa.';</script>{% endif %}

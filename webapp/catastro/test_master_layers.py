@@ -214,11 +214,58 @@ class MasterGeometryTests(SimpleTestCase):
         revisions = master_layers.revisions()
         providers = {item['id']: item['placement']['revision']
                      for item in master.configuration()['providers']
-                     if item.get('transport') == 'master'}
+                     if item.get('transport') == 'master'
+                     and 'revision' in item.get('placement', {})}
         self.assertEqual(revisions['cayma-pud-2006-eu03'],
                          providers['cayma-pud-2006-eu03'])
         self.assertEqual(revisions['cayma-sector-32-provisional'],
                          providers['cayma-sector-32-provisional'])
+
+    def test_acm_configuration_has_no_primary_cadastral_provider(self):
+        from . import master
+        config = master.configuration()
+        self.assertFalse(any(item.get('id') == 'geollaqta'
+                             for item in config['providers']))
+        snapshot = next(item for item in config['providers']
+                        if item.get('id') == 'vectores-040126')
+        self.assertEqual(snapshot['role'], 'snapshot')
+        self.assertEqual(snapshot['transport'], 'master')
+        self.assertEqual(snapshot['geometry_url'],
+                         '/acm/catastro/fuentes/vectores-040126/radio/')
+        self.assertEqual(snapshot['bbox'],
+                         [-71.57235497, -16.41116467,
+                          -71.53480113, -16.3797898])
+
+    def test_snapshot_radius_is_the_shared_acm_geometry_contract(self):
+        source = {
+            'id': 'vectores-040126', 'name': 'Catastro Maestro · Yanahuara',
+            'active': True, 'layers': {'lotes': {'count': 1},
+                                      'manzanas': {'count': 0}},
+        }
+        collection = {
+            'features': [{
+                'type': 'Feature', 'id': 7,
+                'properties': {'ID_LOTE': '04012603016005',
+                               'COD_SECT': '03', 'COD_MZNA': '016',
+                               'COD_LOTE': '005'},
+                'geometry': {'type': 'Polygon', 'coordinates': [[
+                    [-71.55, -16.36], [-71.549, -16.36],
+                    [-71.549, -16.359], [-71.55, -16.359],
+                    [-71.55, -16.36]]]},
+            }],
+        }
+        with patch('catastro.vector_snapshots.catalog_sources',
+                   return_value=[source]), \
+                patch('catastro.vector_snapshots.read_snapshot',
+                      return_value=collection):
+            value = master_layers.radius(
+                'vectores-040126', '-16.36', '-71.55', '500')
+        self.assertEqual(value['source_id'], 'vectores-040126')
+        self.assertEqual(value['lots']['total'], 1)
+        feature = value['lots']['features'][0]
+        self.assertEqual(feature['id'], 'vectores-040126:lote:7')
+        self.assertEqual(feature['properties']['SOURCE_ID'],
+                         'vectores-040126')
 
     def test_invalid_source_district_and_bbox_are_rejected(self):
         for args in [('../secret', 'lotes', '040103'), ('cayma-pud-2006-eu03', '../metadata', '040103'),
@@ -262,4 +309,4 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertNotIn('geollaqta-data.js', html)
         self.assertNotIn('geollaqta-district.js', html)
         self.assertNotIn('collection-form', html)
-        self.assertIn('catastro-maestro.js?v=23', html)
+        self.assertIn('catastro-maestro.js?v=25', html)

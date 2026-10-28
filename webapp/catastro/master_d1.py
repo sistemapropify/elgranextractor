@@ -196,6 +196,27 @@ class D1ReadModel:
     def district_summary(self, ubigeo):
         return self.district_summaries().get(ubigeo)
 
+    def lot_identity(self, source_feature_id):
+        """Resolve a source lot code to the stable Catastro Maestro UUID."""
+        try:
+            valid = len(source_feature_id) == 14 and source_feature_id.isdigit()
+        except TypeError:
+            valid = False
+        if not valid:
+            raise ValueError('Código catastral no válido.')
+        rows = self.gateway.read(
+            '''SELECT i.entity_id,i.version_id,i.source_feature_id,
+                      v.source_id,v.label AS version_label
+               FROM identities i
+               JOIN versions v ON v.id=i.version_id
+               JOIN entities e ON e.id=i.entity_id
+               WHERE i.layer='lote' AND i.source_feature_id=?
+                 AND (v.source_id LIKE 'geollaqta-%'
+                      OR v.source_id LIKE 'cofopri-%')
+               ORDER BY v.created_at DESC LIMIT 1''',
+            [source_feature_id])
+        return rows[0] if rows else None
+
     def entity(self, entity_id):
         """Read the complete normalized record with one bounded D1 batch."""
         try:
@@ -203,6 +224,7 @@ class D1ReadModel:
         except (AttributeError, TypeError, ValueError):
             raise ValueError('Identificador maestro no válido.') from None
         queries = [
+            ('revision', "SELECT value FROM meta WHERE key='revision'"),
             ('entity', 'SELECT * FROM entities WHERE id=?'),
             ('attributes', 'SELECT * FROM current_attributes WHERE entity_id=?'),
             ('owners', '''SELECT r.entity_id,p.id,p.name,p.document_type,p.document_number,
@@ -283,7 +305,7 @@ class D1ReadModel:
                 WHERE r.related_entity_id=? AND r.kind='unidad_en_lote'
                   AND e.kind='unidad' ORDER BY e.id'''),
         ]
-        parameter_counts = [1, 1, 2, 2, 3, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        parameter_counts = [0, 1, 1, 2, 2, 3, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
         results = self.gateway.read_many([
             {'sql': sql, 'params': [entity_id] * parameter_counts[index]}
             for index, (_, sql) in enumerate(queries)
@@ -333,6 +355,9 @@ class D1ReadModel:
             'development_links': values['development_links'],
         }
         return {
+            'master_revision': (
+                int(values['revision'][0]['value'])
+                if values['revision'] else None),
             'entity': values['entity'][0],
             'attributes': values['attributes'][0] if values['attributes'] else {},
             'owners': owners,

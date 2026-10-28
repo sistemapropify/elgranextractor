@@ -6,7 +6,7 @@ const master = fs.readFileSync(path.join(__dirname, '../static/js/catastro-maest
 const dashboard = fs.readFileSync(path.join(__dirname, '../static/js/catastro-dashboard.js'), 'utf8');
 
 assert.match(master, /LOTE-CM-/);
-assert.match(master, /Vinculado al Catastro Maestro/);
+assert.match(master, /Catastro Maestro · D1/);
 assert.match(master, /view:'entity'/);
 assert.match(master, /identity_links/);
 assert.match(master, /Ubicación e identificación/);
@@ -20,6 +20,9 @@ assert.match(master, /unit_attributes/);
 assert.doesNotMatch(master, /for\(const document\b/);
 assert.match(master, /districtLabel\(district\)/);
 assert.match(master, /catastro-master-raster-focus/);
+assert.match(master, /maestro\/lotes\//);
+assert.match(master, /\/ficha\//);
+assert.match(master, /master-lot-gallery/);
 assert.match(master, /Todos los distritos D1/);
 assert.match(master, /ALL_DISTRICTS/);
 assert.match(master, /source\.role==='draft'\|\|source\.role==='snapshot'/);

@@ -172,8 +172,8 @@
         for(const [label,value] of values){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;dl.append(dt,dd);}
         panel.append(dl);
         const details=document.createElement('div');details.className='master-entity-data';details.setAttribute('aria-live','polite');panel.append(details);
-        if(item.source.role==='draft'&&isUuid(p.ELEMENT_ID))loadEntityDetail(item,p.ELEMENT_ID,details);
-        else if(item.source.role==='snapshot')details.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'La geometría ya pertenece al Catastro Maestro. La ficha y demás campos se incorporarán como piezas independientes cuando estén disponibles.'}));
+        if(item.key==='lotes'&&/^\d{14}$/.test(String(p.ID_LOTE||'')))loadLotDossier(item,String(p.ID_LOTE),details);
+        else if(item.source.role==='draft'&&isUuid(p.ELEMENT_ID))loadEntityDetail(item,p.ELEMENT_ID,details);
         else if(item.source.role!=='draft')details.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Esta fuente es de referencia. Para ver la ficha completa debe estar vinculada como Registro Maestro de Lote.'}));
     }
     function addEntitySection(host,title,content,className='') {
@@ -190,59 +190,85 @@
         rows.forEach(([key,value])=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=attributeLabels[key]||key.replaceAll('_',' ');dd.textContent=value==null||value===''?'Sin dato':valueText(value);box.append(dt,dd);});
         return addEntitySection(host,title,box,className);
     }
+    function renderDossier(data,item,host,request) {
+        if(request!==detailRequest)return;
+        host.replaceChildren();
+        const statusBox=document.createElement('p');statusBox.className='master-link-status';
+        statusBox.textContent=data.master_status==='normalized_d1'
+            ?'Catastro Maestro · D1 · identidad normalizada'
+            :'Catastro Maestro · archivo durable · normalización D1 pendiente';
+        host.append(statusBox);
+        if(data.d1_warning)host.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'D1 no respondió en esta consulta; se muestra la capa archivada del maestro. '+data.d1_warning}));
+        const links=data.identity_links||[];
+        if(links.length){
+            const linked=document.createElement('div');linked.className='master-identity-links';
+            for(const link of links){const row=document.createElement('div');row.append(Object.assign(document.createElement('code'),{textContent:link.source_feature_id}),Object.assign(document.createElement('span'),{textContent:(link.layer||'')+' · '+(link.source_name||link.source_id||'')+' · '+(link.version_label||link.version_id||'')}));linked.append(row);}
+            addEntitySection(host,'Identidad y procedencia',linked);
+        }
+        const attributes={...(data.attributes||{})};
+        attributes.district=attributes.district||districtLabel(sourceDistrict(item.source));
+        const shown=new Set(['district','ubigeo','sector','block','lot','address','street_type','street_name','municipal_number','cadastral_reference','cuc','land_area','built_area','gis_land_area','gis_built_area','perimeter','front','back','left','right','floors','units','is_corner','is_through','faces_park','condition','cadastral_use','observed_use','zoning']);
+        addEntityValues(host,'Ubicación e identificación',attributes,'Sin dato','', {all:true,
+            keys:['district','ubigeo','sector','block','lot','address','street_type','street_name','municipal_number','cadastral_reference','cuc']});
+        addEntityValues(host,'Áreas y perímetro',attributes,'Sin dato','', {all:true,
+            keys:['land_area','built_area','gis_land_area','gis_built_area','perimeter','front','back','left','right']});
+        addEntityValues(host,'Características del lote',attributes,'Sin dato','', {all:true,
+            keys:['floors','units','is_corner','is_through','faces_park','condition','cadastral_use','observed_use','zoning']});
+        const other=Object.fromEntries(Object.entries(attributes).filter(([key])=>!shown.has(key)));
+        if(Object.keys(other).length)addEntityValues(host,'Otros campos extraídos',other,'Sin otros campos extraídos.');
+        const documentsByRecord=new Map();
+        for(const media of data.media||[]){const record=media.details?.source_record_id||media.record_id||media.source_record_id;if(!record)continue;if(!documentsByRecord.has(record))documentsByRecord.set(record,[]);documentsByRecord.get(record).push(media);}
+        const units=document.createElement('div');units.className='master-entity-list';
+        const unitRows=data.unit_attributes||data.units||[];
+        if(unitRows.length){
+            for(const unit of unitRows){
+                const record=String(unit.source_feature_id||unit.record_id||'');
+                const row=document.createElement('article');
+                row.append(Object.assign(document.createElement('strong'),{textContent:'Unidad / ficha '+record}));
+                row.append(Object.assign(document.createElement('small'),{textContent:[
+                    unit.land_area!=null?'Área terreno '+valueText(unit.land_area)+' m²':null,
+                    unit.built_area!=null?'Área construida '+valueText(unit.built_area)+' m²':null,
+                    unit.floors!=null?'Pisos '+valueText(unit.floors):null,
+                    unit.cadastral_year!=null?'Año '+valueText(unit.cadastral_year):null
+                ].filter(Boolean).join(' · ')||'Campos extraídos sin medidas normalizadas'}));
+                const links=document.createElement('span');links.className='master-unit-links';
+                for(const doc of documentsByRecord.get(record)||[]){if(!doc.url)continue;const link=document.createElement('a');link.href=doc.url;link.target='_blank';link.rel='noopener';link.textContent=doc.kind==='individual_record_pdf'?'Abrir ficha individual':doc.kind==='cadastral_report_pdf'?'Abrir reporte catastral':(doc.kind||'Abrir documento');links.append(link);}
+                row.append(links);units.append(row);
+            }
+        }else units.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Sin unidades o fichas documentales vinculadas.'}));
+        addEntitySection(host,'Unidades y fichas registrales',units);
+        const owners=document.createElement('div');owners.className='master-entity-list';
+        if((data.owners||[]).length){for(const owner of data.owners){const row=document.createElement('article');row.append(Object.assign(document.createElement('strong'),{textContent:owner.name||'Titular sin nombre'}),Object.assign(document.createElement('small'),{textContent:[owner.document_type,owner.document_number,owner.kind,owner.share!=null?owner.share+'%':null,owner.condition].filter(Boolean).join(' · ')}));owners.append(row);}}
+        else owners.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Sin titulares documentados en la capa extraída.'}));
+        addEntitySection(host,'Titulares y derechos',owners);
+        const galleryItems=data.gallery||[];
+        const gallery=document.createElement('div');gallery.className='master-lot-gallery';
+        for(const imageItem of galleryItems){if(!imageItem.url)continue;const link=document.createElement('a');link.href=imageItem.url;link.target='_blank';link.rel='noopener';const image=document.createElement('img');image.loading='lazy';image.alt='Fotografía catastral del lote '+data.lot_id;image.src=imageItem.url;link.append(image);gallery.append(link);}
+        if(!galleryItems.length)gallery.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Sin fotografías catastrales archivadas en esta capa.'}));
+        addEntitySection(host,'Galería de imágenes',gallery);
+        const mediaBox=document.createElement('div');mediaBox.className='master-entity-list';
+        if((data.media||[]).length){for(const media of data.media){if(!media.url)continue;const row=document.createElement('article');const link=document.createElement('a');link.href=media.url;link.target='_blank';link.rel='noopener';const kind=String(media.kind||'').toLowerCase();if(/facade|photo|image|foto/.test(kind)){const image=document.createElement('img');image.loading='lazy';image.alt=media.kind||'Fotografía del lote';image.src=media.url;link.append(image);}link.append(document.createTextNode(media.kind||media.filename||'Archivo'));row.append(link,Object.assign(document.createElement('small'),{textContent:[media.filename,media.observed_at,media.sha256&&('SHA-256 '+media.sha256.slice(0,12)+'…')].filter(Boolean).join(' · ')}));mediaBox.append(row);}}
+        else mediaBox.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Sin fotografías ni documentos vinculados.'}));
+        addEntitySection(host,'Fotografías y documentos',mediaBox);
+        const catalog=data.catalog||{};
+        if((catalog.identifiers||[]).length)addEntityValues(host,'Identificadores externos',Object.fromEntries(catalog.identifiers.map((row,index)=>[(row.scheme+' · '+(row.authority||'sin autoridad'))+(index?' #'+(index+1):''),row.value])),'Sin identificadores externos.');
+        if((catalog.addresses||[]).length){const box=document.createElement('div');box.className='master-entity-list';for(const address of catalog.addresses){const row=document.createElement('article');row.append(Object.assign(document.createElement('strong'),{textContent:address.full_address||'Dirección sin texto'}),Object.assign(document.createElement('small'),{textContent:[address.address_type,address.precision,address.status].filter(Boolean).join(' · ')}));box.append(row);}addEntitySection(host,'Direcciones',box);}
+        if((data.registral_acts||[]).length)addEntitySection(host,'Actos registrales',Object.assign(document.createElement('pre'),{className:'master-entity-json',textContent:JSON.stringify(data.registral_acts,null,2)}));
+        if(data.missing?.length)addEntitySection(host,'Datos faltantes en la fuente',Object.assign(document.createElement('p'),{className:'master-help',textContent:data.missing.join(' · ')}));
+        addEntityValues(host,'Cobertura del registro',{campos_con_valor:Object.values(attributes).filter(value=>value!==null&&value!==undefined&&value!=='').length,unidades:unitRows.length,titulares:(data.owners||[]).length,medios:(data.media||[]).length,evidencias:Object.keys(data.provenance||{}).length},'Sin métricas de cobertura.','master-entity-metrics');
+    }
+    async function loadLotDossier(item,lotId,host) {
+        const request=++detailRequest;host.replaceChildren(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Cargando todas las capas del lote desde el Catastro Maestro…'}));
+        try{
+            const data=await json('/catastro/api/maestro/lotes/'+encodeURIComponent(lotId)+'/ficha/');
+            renderDossier(data,item,host,request);
+        }catch(error){if(request===detailRequest){host.replaceChildren(Object.assign(document.createElement('p'),{className:'master-help',textContent:error.message}));host.lastElementChild.dataset.error='true';}}
+    }
     async function loadEntityDetail(item,entityId,host) {
         const request=++detailRequest;host.replaceChildren(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Cargando ficha maestra, titulares, documentos y procedencia…'}));
         try{
             const data=await json('/catastro/api/maestro/composicion/?'+new URLSearchParams({view:'entity',id:entityId}));
-            if(request!==detailRequest)return;host.replaceChildren();
-            const statusBox=document.createElement('p');statusBox.className='master-link-status';
-            statusBox.textContent='Vinculado al Catastro Maestro · '+(data.identity_links?.length||0)+' enlace(s) de identidad';
-            host.append(statusBox);
-            const links=data.identity_links||[];
-            if(links.length){
-                const linked=document.createElement('div');linked.className='master-identity-links';
-                for(const link of links){const row=document.createElement('div');row.append(Object.assign(document.createElement('code'),{textContent:link.source_feature_id}),Object.assign(document.createElement('span'),{textContent:(link.layer||'')+' · '+(link.source_name||link.source_id||'')+' · '+(link.version_label||link.version_id||'')}));linked.append(row);}
-                addEntitySection(host,'Identidad y procedencia',linked);
-            }
-            const attributes={...(data.attributes||{})};
-            attributes.district=attributes.district||districtLabel(sourceDistrict(item.source));
-            addEntityValues(host,'Ubicación e identificación',attributes,'Sin dato','', {all:true,
-                keys:['district','ubigeo','sector','block','lot','address','street_type','street_name','municipal_number','cadastral_reference','cuc']});
-            addEntityValues(host,'Áreas y perímetro',attributes,'Sin dato','', {all:true,
-                keys:['land_area','built_area','gis_land_area','gis_built_area','perimeter','front','back','left','right']});
-            addEntityValues(host,'Características del lote',attributes,'Sin dato','', {all:true,
-                keys:['floors','units','is_corner','is_through','faces_park','condition','cadastral_use','observed_use','zoning']});
-            const documentsByRecord=new Map();
-            for(const media of data.media||[]){const record=media.details?.source_record_id;if(!record)continue;if(!documentsByRecord.has(record))documentsByRecord.set(record,[]);documentsByRecord.get(record).push(media);}
-            const units=document.createElement('div');units.className='master-entity-list';
-            const unitRows=data.unit_attributes||[];
-            if(unitRows.length){
-                for(const unit of unitRows){
-                    const row=document.createElement('article');
-                    row.append(Object.assign(document.createElement('strong'),{textContent:'Unidad / ficha '+unit.source_feature_id}));
-                    row.append(Object.assign(document.createElement('small'),{textContent:[
-                        unit.land_area!=null?'Área terreno '+valueText(unit.land_area)+' m²':null,
-                        unit.built_area!=null?'Área construida '+valueText(unit.built_area)+' m²':null,
-                        unit.floors!=null?'Pisos '+valueText(unit.floors):null
-                    ].filter(Boolean).join(' · ')||'Sin medidas normalizadas'}));
-                    const links=document.createElement('span');links.className='master-unit-links';
-                    for(const doc of documentsByRecord.get(unit.source_feature_id)||[]){const link=document.createElement('a');link.href=doc.url;link.target='_blank';link.rel='noopener';link.textContent=doc.kind==='individual_record_pdf'?'Abrir ficha individual':doc.kind==='cadastral_report_pdf'?'Abrir reporte catastral':(doc.kind||'Abrir documento');links.append(link);}
-                    row.append(links);units.append(row);
-                }
-            }else units.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Sin unidades o fichas documentales vinculadas.'}));
-            addEntitySection(host,'Unidades y fichas registrales',units);
-            const owners=document.createElement('div');owners.className='master-entity-list';
-            if((data.owners||[]).length){for(const owner of data.owners){const row=document.createElement('article');row.append(Object.assign(document.createElement('strong'),{textContent:owner.name||'Titular sin nombre'}),Object.assign(document.createElement('small'),{textContent:[owner.document_type,owner.document_number,owner.kind].filter(Boolean).join(' · ')}));owners.append(row);}}
-            else owners.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Sin titulares documentados.'}));
-            addEntitySection(host,'Titulares y derechos',owners);
-            const mediaBox=document.createElement('div');mediaBox.className='master-entity-list';
-            if((data.media||[]).length){for(const media of data.media){const row=document.createElement('article');const link=document.createElement('a');link.href=media.url;link.target='_blank';link.rel='noopener';const kind=String(media.kind||'').toLowerCase();if(/facade|photo|image|foto/.test(kind)){const image=document.createElement('img');image.loading='lazy';image.alt=media.kind||'Fotografía del lote';image.src=media.url;link.append(image);}link.append(document.createTextNode(media.kind||'Archivo'));row.append(link,Object.assign(document.createElement('small'),{textContent:[media.observed_at,media.sha256&&('SHA-256 '+media.sha256.slice(0,12)+'…')].filter(Boolean).join(' · ')}));mediaBox.append(row);}}
-            else mediaBox.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Sin fotografías ni documentos vinculados.'}));
-            addEntitySection(host,'Fotografías y documentos',mediaBox);
-            const catalog=data.catalog||{};
-            if((catalog.identifiers||[]).length)addEntityValues(host,'Identificadores externos',Object.fromEntries(catalog.identifiers.map((row,index)=>[(row.scheme+' · '+(row.authority||'sin autoridad'))+(index?' #'+(index+1):''),row.value])),'Sin identificadores externos.');
-            if((catalog.addresses||[]).length){const box=document.createElement('div');box.className='master-entity-list';for(const address of catalog.addresses){const row=document.createElement('article');row.append(Object.assign(document.createElement('strong'),{textContent:address.full_address||'Dirección sin texto'}),Object.assign(document.createElement('small'),{textContent:[address.address_type,address.precision,address.status].filter(Boolean).join(' · ')}));box.append(row);}addEntitySection(host,'Direcciones',box);}
-            addEntityValues(host,'Cobertura del registro',{campos_con_valor:Object.values(data.attributes||{}).filter(value=>value!==null&&value!==undefined&&value!=='').length,relaciones:(data.relationships||[]).length,medios:(data.media||[]).length,evidencias:Object.keys(data.provenance||{}).length},'Sin métricas de cobertura.','master-entity-metrics');
+            renderDossier({...data,master_status:'normalized_d1'},item,host,request);
         }catch(error){if(request===detailRequest){host.replaceChildren(Object.assign(document.createElement('p'),{className:'master-help',textContent:error.message}));host.lastElementChild.dataset.error='true';}}
     }
     function selectFeature(item,feature) {

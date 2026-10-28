@@ -34,7 +34,7 @@ async function fetcher(url,options={}){
  if(url.includes('/configuracion/'))return response(config);
  if(url.includes('/acm/catastro/lotes/')){
   const lot_id=url.split('/lotes/')[1].split('/')[0],record=new URLSearchParams(url.split('?')[1]||'').get('record_id')||lot_id+'00001';
-  return response({lot_id,selected_record_id:record,verified:!documentsFailed,document_status:documentsFailed?'unavailable':'verified',metrics:{land_area:'200',built_area:'20.5',floors:null,units:null,boundaries:{frente:'10'}},facade_url:null,reports:[{record_id:lot_id+'00001'},{record_id:lot_id+'00002'}]});
+  return response({lot_id,selected_record_id:record,verified:!documentsFailed,document_status:documentsFailed?'unavailable':'verified',metrics:{land_area:'200',built_area:'20.5',floors:null,units:null,boundaries:{frente:'10'}},facade_url:'/acm/catastro/lotes/'+lot_id+'/archivos/facade.jpg/',reports:[{record_id:lot_id+'00001'},{record_id:lot_id+'00002'}]});
  }
  assert.ok(url.endsWith('/10/query'),'Do not load a district, sector or boundary inventory.');
  const p=options.body;assert.equal(p.has('resultRecordCount'),false);
@@ -68,8 +68,8 @@ const gis=()=>requests.filter(r=>r.url.startsWith('https://')).length;
  get('cmp-cadastral-report').value='0401040700100200002';get('cmp-cadastral-report').events.change();
  assert.equal(get('cmp-cadastral-pdf').hidden,true);await flush();
  assert.match(get('cmp-cadastral-pdf').attributes.href,/record_id=0401040700100200002$/);
- assert.ok(labelUpdates.includes(1201));assert.equal(get('cmp-cadastral-photo').src,'https://catastro.cofopri.gob.pe/img_catastro/040104/07001002.jpg');assert.equal(layer.styleFor(layer.features.find(f=>f.getId()===2)).strokeWeight,2.6);
- const image=get('cmp-cadastral-photo');image.onerror();assert.match(image.src,/07001002_1\.jpg$/);image.onerror();assert.match(image.src,/07001002_2\.jpg$/,'Missing suffix 1 must not hide an available suffix 2 facade.');image.onload();assert.equal(image.hidden,false);assert.equal(get('cmp-cadastral-photo-status').hidden,true);
+ assert.ok(labelUpdates.includes(1201));assert.equal(get('cmp-cadastral-photo').src,'/acm/catastro/lotes/04010407001002/archivos/facade.jpg/','Only the facade URL published by the Catastro Maestro is used.');assert.equal(layer.styleFor(layer.features.find(f=>f.getId()===2)).strokeWeight,2.6);
+ const image=get('cmp-cadastral-photo');image.onload();assert.equal(image.hidden,false);assert.equal(get('cmp-cadastral-photo-status').hidden,true);
  const oldLoaded=image.onload;
  const initial=gis();await move();await flush();assert.equal(gis(),initial,'A new lot inside the loaded radius does not query GIS again.');
  oldLoaded();assert.equal(get('cmp-cadastral-photo-status').hidden,false,'A late photo response from another lot must not replace this lot.');

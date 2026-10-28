@@ -13,6 +13,7 @@ from . import cadastral_views
 from .access import DEFAULTS, policy_for
 from .access_models import ACMRolePolicy
 from catastro import master
+from catastro.storage import StorageError
 from catastro.test_map_report import pages, LOT, RECORD
 
 
@@ -75,6 +76,12 @@ class CadastralAccessTests(SimpleTestCase):
         config=json.loads(response.content)
         self.assertEqual(config['scope'],'radius')
         self.assertNotIn('max_lots',config)
+        self.assertFalse(any(item.get('id') == 'geollaqta'
+                             for item in config['providers']))
+        snapshot=next(item for item in config['providers']
+                      if item.get('id') == 'vectores-040126')
+        self.assertEqual(snapshot['role'], 'snapshot')
+        self.assertTrue(snapshot['geometry_url'].endswith('/radio/'))
         cayma=next(item for item in config['providers']
                    if item['id']=='cayma-pud-2006-eu03')
         self.assertTrue(cayma['reference_only'])
@@ -148,46 +155,54 @@ class CadastralAccessTests(SimpleTestCase):
         self.assertEqual(value['reports'][0]['record_id'], RECORD)
         self.assertEqual(value['facade_url'], '/acm/catastro/medios/facade-1/')
 
-    @patch('acm.cadastral_views.master.d1_lot_summary')
     @patch('cuadrantizacion.geollaqta.report_response')
-    def test_acm_merges_d1_master_values_with_report_evidence(self, report, d1):
-        from django.http import JsonResponse
-        report.return_value = JsonResponse({
-            'lot_id': LOT, 'metrics': {'land_area': None, 'built_area': '20.5',
-                'floors': None, 'units': None,
-                'boundaries': {'frente': None, 'derecha': None,
-                               'izquierda': None, 'fondo': None}},
+    @patch('acm.cadastral_views.master_dossier.load')
+    def test_acm_reads_only_the_canonical_master_dossier(self, load, report):
+        load.return_value = {
+            'lot_id': LOT,
+            'master_status': 'normalized_d1',
+            'attributes': {'land_area': 99, 'gis_built_area': 21},
+            'unit_attributes': [{
+                'record_id': RECORD, 'land_area': 99, 'built_area': 20.5,
+                'front': 10,
+            }],
+            'owners': [{'name': 'Titular Maestro'}],
+            'media': [{'id': 'facade-1', 'kind': 'facade_image',
+                       'record_id': RECORD, 'url': '/acm/catastro/medios/facade-1/'}],
+            'gallery': [{'id': 'facade-1', 'kind': 'facade_image',
+                         'record_id': RECORD, 'url': '/acm/catastro/medios/facade-1/'}],
             'reports': [{'record_id': RECORD, 'form_number': '3/5'}],
-            'selected_record_id': RECORD, 'document_status': 'verified',
-            'verified': True, 'facade_url': None,
-        })
-        d1.return_value = {
-            'lot_id': LOT, 'metrics': {'land_area': '99', 'built_area': None,
-                'floors': '2', 'units': '1',
-                'boundaries': {'frente': '10', 'derecha': None,
-                               'izquierda': None, 'fondo': None}},
-            'gis_metrics': {'land_area': '99', 'built_area': '21'},
-            'reports': [{'record_id': RECORD, 'form_number': ''}],
-            'selected_record_id': RECORD, 'document_status': 'verified',
-            'verified': True, 'source_label': 'Catastro Maestro · D1',
+            'selected_record_id': RECORD,
             'master': {'entity_id': '11111111-2222-4333-8444-555555555555'},
+            'provenance': {}, 'identity_links': [], 'relationships': [],
+            'catalog': {}, 'registral_acts': [],
         }
         response = cadastral_views.lot(self.request(), LOT)
         value = json.loads(response.content)
-        self.assertEqual(value['metrics']['land_area'], '99')
-        self.assertEqual(value['metrics']['built_area'], '20.5')
-        self.assertEqual(value['gis_metrics']['built_area'], '21')
+        self.assertEqual(value['metrics']['land_area'], 99)
+        self.assertEqual(value['metrics']['built_area'], 20.5)
+        self.assertEqual(value['gis_metrics']['built_area'], 21)
         self.assertEqual(value['reports'][0]['form_number'], '3/5')
         self.assertEqual(value['source_label'], 'Catastro Maestro · D1')
+        load.assert_called_once_with(LOT, None, surface='acm')
+        report.assert_not_called()
 
     def test_invalid_lot_is_rejected_before_storage_access(self):
         with patch('catastro.master.manifest') as read:
             self.assertEqual(cadastral_views.lot(self.request(), '../../secret').status_code, 400)
             read.assert_not_called()
 
-    @patch('catastro.master.archived_facade')
-    def test_facade_is_image_bytes_and_never_a_pdf(self, read):
-        stream = io.BytesIO(); Image.new('RGB', (2, 2)).save(stream, 'PNG'); read.return_value = stream.getvalue()
+    @patch('acm.cadastral_views._document_body')
+    @patch('acm.cadastral_views.master_dossier.load')
+    def test_facade_is_image_bytes_and_never_a_pdf(self, load, document):
+        stream = io.BytesIO(); Image.new('RGB', (2, 2)).save(stream, 'PNG')
+        load.return_value = {
+            'lot_id': LOT, 'gallery': [{
+                'filename': 'facade.png', 'kind': 'facade_image',
+                'url': '/acm/catastro/lotes/' + LOT + '/archivos/facade.png/',
+            }],
+        }
+        document.return_value = (stream.getvalue(), 'image/png')
         response = cadastral_views.facade(self.request(), LOT)
         self.assertEqual(response['Content-Type'], 'image/jpeg')
         self.assertTrue(response.content.startswith(b'\xff\xd8'))
@@ -317,19 +332,29 @@ class SharedCadastralReportTests(SimpleTestCase):
         self.assertEqual(master.lot_summary(LOT)['metrics']['built_area'], '20.5')
 
 
-    @patch('catastro.map_report._archived_reports')
-    @patch('catastro.master.lot_summary', side_effect=AssertionError('ACM must use the exact same handler as Cuadrantización'))
-    def test_both_http_cards_return_identical_document_content_without_prometeo_login_in_acm(self, old, reports):
-        reports.return_value = archive()['reports']
+    @patch('acm.cadastral_views.master_dossier.load')
+    def test_acm_returns_the_master_contract_without_a_parallel_source(self, load):
+        load.return_value = {
+            'lot_id': LOT, 'master_status': 'archived_pending_d1',
+            'attributes': {'gis_land_area': 200},
+            'unit_attributes': [{'record_id': RECORD, 'land_area': 200}],
+            'owners': [], 'media': [], 'gallery': [],
+            'reports': [{'record_id': RECORD, 'form_number': '1/1'}],
+            'selected_record_id': RECORD, 'master': {},
+            'provenance': {}, 'identity_links': [], 'relationships': [],
+            'catalog': {}, 'registral_acts': [],
+        }
         request = self.factory.get('/acm/catastro/lotes/' + LOT + '/')
         request.acm_access = SimpleNamespace(permissions={**DEFAULTS, 'cadastral_info': True})
         acm = cadastral_views.lot(request, LOT)
-        quad = self.quad()
-        import json
+        value = json.loads(acm.content)
         self.assertEqual(acm.status_code, 200)
-        self.assertEqual(json.loads(acm.content), quad)
+        self.assertEqual(value['metrics']['land_area'], 200)
+        self.assertEqual(value['selected_record_id'], RECORD)
+        self.assertEqual(value['source_label'],
+                         'Catastro Maestro · archivo pendiente de normalización D1')
         self.assertEqual(acm['Cache-Control'], 'no-store')
-        old.assert_not_called()
+        load.assert_called_once_with(LOT, None, surface='acm')
 
     @patch('cuadrantizacion.geollaqta.report_response')
     def test_shared_report_handler_remains_protected_by_active_acm_role(self, report):
@@ -339,26 +364,33 @@ class SharedCadastralReportTests(SimpleTestCase):
         report.assert_not_called()
 
     @patch('cuadrantizacion.geollaqta.report_response')
-    def test_acm_requests_only_the_report_and_never_the_individual_ficha(self, report):
+    @patch('acm.cadastral_views.master_dossier.load')
+    def test_acm_never_requests_the_primary_cadastral_service(self, load, report):
         request=self.factory.get('/acm/catastro/lotes/'+LOT+'/')
         request.acm_access=SimpleNamespace(permissions={**DEFAULTS,'cadastral_info':True})
+        load.return_value = {
+            'lot_id': LOT, 'master_status': 'archived_pending_d1',
+            'attributes': {}, 'unit_attributes': [], 'owners': [], 'media': [],
+            'gallery': [], 'reports': [], 'selected_record_id': None,
+            'master': {}, 'provenance': {}, 'identity_links': [],
+            'relationships': [], 'catalog': {}, 'registral_acts': [],
+        }
         cadastral_views.lot(request,LOT)
-        report.assert_called_once_with(LOT,LOT[:6],None,report_only=True)
+        load.assert_called_once_with(LOT, None, surface='acm')
+        report.assert_not_called()
 
 
-    @patch('catastro.map_report.report_measurements', side_effect=RuntimeError('source offline'))
-    @patch('catastro.master.lot_summary', side_effect=AssertionError('do not start an extra gallery query'))
-    def test_http_cards_report_the_same_failure_and_allow_a_later_retry(self, old, reader):
-        from cuadrantizacion.geollaqta import report
+    @patch('acm.cadastral_views.master_dossier.load')
+    def test_master_failure_is_reported_and_can_be_retried(self, load):
         request = self.factory.get('/acm/catastro/lotes/' + LOT + '/')
         request.acm_access = SimpleNamespace(permissions={**DEFAULTS, 'cadastral_info': True})
+        load.side_effect = [StorageError('D1 temporalmente no disponible'), {
+            'lot_id': LOT, 'master_status': 'archived_pending_d1',
+            'attributes': {}, 'unit_attributes': [], 'owners': [], 'media': [],
+            'gallery': [], 'reports': [], 'selected_record_id': None,
+            'master': {}, 'provenance': {}, 'identity_links': [],
+            'relationships': [], 'catalog': {}, 'registral_acts': [],
+        }]
         acm = cadastral_views.lot(request, LOT)
-        quad_request = self.factory.get('/', {'ubigeo': LOT[:6]})
-        quad_request.current_user = SimpleNamespace(is_active=True, is_authenticated=True)
-        quad = report(quad_request, LOT)
-        self.assertEqual(acm.status_code, 502)
-        self.assertEqual(acm.content, quad.content)
-        reader.side_effect = None
-        reader.return_value = {'lot_id': LOT, 'metrics': {'land_area': '200'}}
+        self.assertEqual(acm.status_code, 503)
         self.assertEqual(cadastral_views.lot(request, LOT).status_code, 200)
-        old.assert_not_called()
