@@ -66,6 +66,10 @@ and relationships remain in SQL; binary documents live only in Azure Blob.
   optional `external_agents` namespace inside Catastro's isolated test URLconf.
   The two global links now use literal module paths; the exact Catastro suite
   (56 tests) and the external-agent suite (7 tests) both pass.
+- The second CI run exposed that the external-agent test settings inherited the
+  complete project app registry and failed before test discovery. Its settings
+  now load only auth/contenttypes/sessions/messages/staticfiles, prospects and
+  external_agents with an isolated URLconf and local base template.
 - Final CI/CD, production migration, public route, static assets, login redirect
   and Azure attachment upload/download remain required after deployment.
 

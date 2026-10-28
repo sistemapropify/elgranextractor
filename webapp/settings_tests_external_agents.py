@@ -1,19 +1,70 @@
-"""Aislamiento local para probar el módulo de agentes externos.
+"""Isolated settings for the external real estate agents module tests."""
 
-La base de producción no se usa. Las migraciones históricas de otras apps
-no son compatibles con SQLite, por lo que este settings crea el esquema desde
-los modelos actuales únicamente para ejecutar pruebas automatizadas.
-"""
-
-import os
+from pathlib import Path
 
 
-_ACTIVE_SETTINGS_MODULE = os.environ.get('DJANGO_SETTINGS_MODULE')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'test_settings'
-from test_settings import *  # noqa: E402,F403,F401
-os.environ['DJANGO_SETTINGS_MODULE'] = (
-    _ACTIVE_SETTINGS_MODULE or 'settings_tests_external_agents'
-)
+BASE_DIR = Path(__file__).resolve().parent
+
+SECRET_KEY = 'external-agents-tests-only'
+DEBUG = False
+ALLOWED_HOSTS = ['testserver', '127.0.0.1', 'localhost']
+
+INSTALLED_APPS = [
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'prospects',
+    'external_agents',
+]
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': ':memory:',
+    },
+}
+
+MIDDLEWARE = [
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+]
+
+ROOT_URLCONF = 'external_agents.test_urls'
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [
+            BASE_DIR / 'external_agents' / 'test_templates',
+            BASE_DIR / 'templates',
+        ],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
+STATIC_URL = '/static/'
+USE_TZ = True
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
+
+# The application imports this storage backend while defining models. These
+# dummy settings avoid production credentials; uploads are mocked by the tests.
+AZURE_CONTAINER = 'external-agents-tests'
+AZURE_EXTERNAL_AGENTS_CONTAINER = 'external-agents-tests'
+AZURE_ACCOUNT_NAME = 'externalagentstests'
+AZURE_ACCOUNT_KEY = ''
+AZURE_CONNECTION_STRING = ''
+AZURE_STORAGE_CONNECTION_STRING = ''
 
 
 class DisableMigrations(dict):
