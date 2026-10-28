@@ -187,6 +187,28 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertEqual(payload['corners'], expected['corners'])
         save.assert_called_once()
 
+    def test_all_cadastre_classifications_are_combined_across_districts(self):
+        cloud = FakeSnapshotCloud()
+        manual_parks.save_global_colors(
+            {'parks': '#101010', 'corners': '#202020',
+             'faces_park': '#303030'}, cloud=cloud)
+        for ubigeo, corner, face_park in (
+                ('040102', '04010201001001', '04010201001002'),
+                ('040126', '04012601001001', '04012601001002')):
+            initial = manual_parks.read(ubigeo, cloud=cloud)
+            manual_parks.save_classifications(
+                ubigeo,
+                {'parks': [], 'corners': [corner],
+                 'faces_park': [face_park], 'colors': initial['colors']},
+                initial['token'], 'editor', cloud=cloud)
+        value = manual_parks.read_all(['040102', '040126'], cloud=cloud)
+        self.assertEqual(value['scope'], 'all')
+        self.assertEqual(value['corners'],
+                         ['04010201001001', '04012601001001'])
+        self.assertEqual(value['faces_park'],
+                         ['04010201001002', '04012601001002'])
+        self.assertEqual(value['colors']['corners'], '#202020')
+
     def test_draft_layer_keeps_master_identity_and_is_not_reference_geometry(self):
         summary = {'ubigeo': '040126', 'revision': 4114,
                    'lotes': 1, 'manzanas': 0}
@@ -367,4 +389,4 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertNotIn('geollaqta-data.js', html)
         self.assertNotIn('geollaqta-district.js', html)
         self.assertNotIn('collection-form', html)
-        self.assertIn('catastro-maestro.js?v=31', html)
+        self.assertIn('catastro-maestro.js?v=32', html)

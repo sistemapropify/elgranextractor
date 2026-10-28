@@ -2,6 +2,7 @@
 import hashlib
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from .storage import R2, StorageError
@@ -14,6 +15,7 @@ DEFAULT_COLORS = {
     'corners': '#ff8c42',
     'faces_park': '#4f8cff',
 }
+CONFIG_KEY = 'geollaqta/maestro/manual/clasificaciones/config.json'
 
 
 class Conflict(RuntimeError):
@@ -56,7 +58,7 @@ def _token(value):
     ).hexdigest()
 
 
-def _normalized(ubigeo, value):
+def _normalized(ubigeo, value, global_colors=None):
     lists = {
         'parks': _validated(ubigeo, value.get('parks', value.get('lots', []))),
         'corners': _validated(ubigeo, value.get('corners', [])),
@@ -65,6 +67,9 @@ def _normalized(ubigeo, value):
     saved_colors = value.get('colors') if isinstance(value.get('colors'), dict) else {}
     colors = {key: _color(saved_colors.get(key), DEFAULT_COLORS[key])
               for key in CATEGORIES}
+    if global_colors:
+        colors.update({key: _color(global_colors.get(key), colors[key])
+                       for key in CATEGORIES})
     result = {
         'schema': SCHEMA,
         'ubigeo': ubigeo,
@@ -88,12 +93,70 @@ def _read_key(cloud, key):
         raise
 
 
-def read(ubigeo, cloud=None):
+def read_global_colors(cloud=None):
     cloud = cloud or R2(timeout=20)
+    value = _read_key(cloud, CONFIG_KEY) or {}
+    return {key: _color(value.get(key), DEFAULT_COLORS[key])
+            for key in CATEGORIES}
+
+
+def save_global_colors(colors, actor='administrador', cloud=None):
+    cloud = cloud or R2(timeout=30)
+    normalized = {key: _color((colors or {}).get(key), DEFAULT_COLORS[key])
+                  for key in CATEGORIES}
+    body = json.dumps({
+        **normalized,
+        'updated_at': datetime.now(timezone.utc).isoformat(),
+        'updated_by': str(actor or 'administrador')[:200],
+    }, ensure_ascii=False, separators=(',', ':')).encode()
+    cloud.put_verified(CONFIG_KEY, body, 'application/json')
+    return {'ubigeo': 'all', 'scope': 'all', 'colors': normalized}
+
+
+def _stored(ubigeo, cloud):
     value = _read_key(cloud, _key(ubigeo))
     if value is None:
         value = _read_key(cloud, _legacy_key(ubigeo)) or {}
-    return _normalized(ubigeo, value)
+    return value
+
+
+def read(ubigeo, cloud=None):
+    cloud = cloud or R2(timeout=20)
+    value = _stored(ubigeo, cloud)
+    return _normalized(ubigeo, value, read_global_colors(cloud))
+
+
+def read_all(ubigeos=None, cloud=None):
+    cloud = cloud or R2(timeout=20)
+    if ubigeos is None:
+        from .master_layers import catalogue
+        ubigeos = sorted({
+            source['ubigeo'] for source in catalogue()['sources']
+            if source.get('active')
+            and source.get('role') in ('draft', 'snapshot')
+            and source.get('ubigeo')
+        })
+    ubigeos = sorted({str(value) for value in ubigeos
+                      if re.fullmatch(r'\d{6}', str(value))})
+    with ThreadPoolExecutor(max_workers=min(6, max(1, len(ubigeos)))) as pool:
+        values = list(pool.map(
+            lambda ubigeo: _normalized(ubigeo, _stored(ubigeo, cloud)),
+            ubigeos))
+    colors = read_global_colors(cloud)
+    result = {
+        'schema': SCHEMA,
+        'ubigeo': 'all',
+        'scope': 'all',
+        'districts': ubigeos,
+        'colors': colors,
+    }
+    for kind in CATEGORIES:
+        result[kind] = sorted({
+            lot for value in values for lot in value[kind]
+        })
+    result['lots'] = result['parks']
+    result['token'] = _token(result)
+    return result
 
 
 def save_classifications(ubigeo, value, expected_token,
@@ -103,6 +166,7 @@ def save_classifications(ubigeo, value, expected_token,
     if expected_token != current['token']:
         raise Conflict('La clasificación cambió. Vuelve a cargar antes de guardar.')
     normalized = _normalized(ubigeo, value)
+    save_global_colors(normalized['colors'], actor, cloud)
     saved = {
         'schema': SCHEMA,
         'ubigeo': ubigeo,

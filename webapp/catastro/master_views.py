@@ -147,7 +147,10 @@ def lot_archive_asset(request, lot_id, filename):
 def park_lots(request):
     try:
         if request.method == 'GET':
-            value = manual_parks.read(request.GET.get('ubigeo', ''))
+            ubigeo = request.GET.get('ubigeo', '')
+            value = (manual_parks.read_all()
+                     if ubigeo in ('', 'all') else
+                     manual_parks.read(ubigeo))
         elif request.method == 'POST':
             if len(request.body) > 8 * 1024 * 1024:
                 raise ValueError('La clasificación enviada es demasiado grande.')
@@ -155,7 +158,10 @@ def park_lots(request):
             actor = getattr(request, 'current_user', None) or request.user
             author = getattr(actor, 'username', '') or str(
                 getattr(actor, 'pk', 'administrador'))
-            if any(key in payload for key in ('parks', 'corners', 'faces_park', 'colors')):
+            if payload.get('ubigeo') == 'all' and payload.get('action') == 'colors':
+                value = manual_parks.save_global_colors(
+                    payload.get('colors'), author)
+            elif any(key in payload for key in ('parks', 'corners', 'faces_park', 'colors')):
                 value = manual_parks.save_classifications(
                     payload.get('ubigeo'), payload, payload.get('token'),
                     author)

@@ -88,7 +88,9 @@
         return /^\d{14}$/.test(value)?value:source.id+':'+String(feature.id);
     };
     const sameSet=(left,right)=>left.size===right.size&&[...left].every(value=>right.has(value));
-    const classificationDirty=()=>classificationKinds.some(kind=>!sameSet(classificationSaved[kind],classificationDraft[kind])||classificationSavedColors[kind]!==classificationColors[kind]);
+    const classificationColorsDirty=()=>classificationKinds.some(kind=>classificationSavedColors[kind]!==classificationColors[kind]);
+    const classificationSetsDirty=()=>classificationKinds.some(kind=>!sameSet(classificationSaved[kind],classificationDraft[kind]));
+    const classificationDirty=()=>classificationColorsDirty()||classificationSetsDirty();
     function classificationCounts(){
         for(const kind of classificationKinds){
             const count=el('count-'+kind),layerCount=el('layer-count-'+kind);
@@ -117,8 +119,8 @@
     function classificationControls(){
         const concrete=district&&district!==ALL_DISTRICTS;
         if(el('classification-start'))el('classification-start').disabled=!concrete;
-        if(el('classification-save'))el('classification-save').disabled=!concrete||!classificationDirty();
-        if(el('classification-cancel'))el('classification-cancel').disabled=!concrete||!classificationDirty();
+        if(el('classification-save'))el('classification-save').disabled=!(classificationColorsDirty()||(concrete&&classificationSetsDirty()));
+        if(el('classification-cancel'))el('classification-cancel').disabled=!classificationDirty();
         if(el('classification-start'))el('classification-start').textContent=classificationMode?'Terminar selección':'Seleccionar en el mapa';
     }
     async function loadClassifications(){
@@ -127,13 +129,9 @@
         classificationColors={parks:'#54d48a',corners:'#ff8c42',faces_park:'#4f8cff'};
         classificationSavedColors={...classificationColors};
         classificationControls();refreshClassificationStyles();
-        if(!district||district===ALL_DISTRICTS){
-            classificationStatus('Selecciona un distrito concreto para clasificar lotes.');
-            return;
-        }
-        classificationStatus('Consultando clasificaciones del distrito…');
+        classificationStatus(district===ALL_DISTRICTS?'Consultando clasificaciones de todos los distritos…':'Consultando clasificaciones del distrito…');
         try{
-            const response=await fetch('/catastro/api/maestro/clasificaciones/?ubigeo='+encodeURIComponent(district),
+            const response=await fetch('/catastro/api/maestro/clasificaciones/?ubigeo='+encodeURIComponent(district||ALL_DISTRICTS),
                 {credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}});
             const value=await response.json();
             if(!response.ok)throw Error(value.error||'No se pudieron cargar las clasificaciones.');
@@ -146,7 +144,7 @@
             classificationSavedColors={...classificationColors};
             for(const kind of classificationKinds){const input=el('color-'+kind.replaceAll('_','-'));if(input)input.value=classificationColors[kind];}
             const total=classificationKinds.reduce((sum,kind)=>sum+classificationSaved[kind].size,0);
-            classificationStatus(total?fmt(total)+' lotes clasificados en este distrito.':'Todavía no hay lotes clasificados en este distrito.');
+            classificationStatus(total?fmt(total)+' lotes clasificados'+(district===ALL_DISTRICTS?' en el catastro.':' en este distrito.'):'Todavía no hay lotes clasificados.');
             refreshClassificationStyles();
         }catch(error){classificationStatus(error.message,true);}
         classificationControls();
@@ -781,24 +779,26 @@
             input?.addEventListener('input',()=>{classificationColors[kind]=input.value;refreshClassificationStyles();classificationControls();});
         }
         el('classification-save')?.addEventListener('click',async()=>{
-            if(!district||district===ALL_DISTRICTS||!classificationDirty())return;
+            if(!district||!classificationDirty())return;
             const button=el('classification-save');button.disabled=true;
-            classificationStatus('Guardando clasificaciones del distrito…');
+            classificationStatus(district===ALL_DISTRICTS?'Guardando colores globales…':'Guardando clasificaciones del distrito…');
             try{
+                const body=district===ALL_DISTRICTS?{ubigeo:'all',action:'colors',colors:classificationColors}:
+                    {ubigeo:district,parks:[...classificationDraft.parks],
+                     corners:[...classificationDraft.corners],faces_park:[...classificationDraft.faces_park],
+                     colors:classificationColors,token:classificationToken};
                 const response=await fetch('/catastro/api/maestro/clasificaciones/',{
                     method:'POST',credentials:'same-origin',cache:'no-store',
                     headers:{Accept:'application/json','Content-Type':'application/json',
                         'X-CSRFToken':el('raster-upload')?.elements?.csrfmiddlewaretoken?.value||''},
-                    body:JSON.stringify({ubigeo:district,parks:[...classificationDraft.parks],
-                        corners:[...classificationDraft.corners],faces_park:[...classificationDraft.faces_park],
-                        colors:classificationColors,token:classificationToken})
+                    body:JSON.stringify(body)
                 });
                 const value=await response.json();
                 if(!response.ok)throw Error(value.error||'No se pudieron guardar las clasificaciones.');
                 classificationToken=value.token;classificationColors={...classificationColors,...(value.colors||{})};classificationSavedColors={...classificationColors};
-                for(const kind of classificationKinds){classificationSaved[kind]=new Set(value[kind]||[]);classificationDraft[kind]=new Set(classificationSaved[kind]);}
+                if(district!==ALL_DISTRICTS)for(const kind of classificationKinds){classificationSaved[kind]=new Set(value[kind]||[]);classificationDraft[kind]=new Set(classificationSaved[kind]);}
                 classificationMode='';refreshClassificationStyles();classificationControls();
-                classificationStatus('Cambios guardados · '+classificationDraft.corners.size+' esquinas y '+classificationDraft.faces_park.size+' lotes frente a parque.');
+                classificationStatus(district===ALL_DISTRICTS?'Colores globales guardados.':'Cambios guardados · '+classificationDraft.corners.size+' esquinas y '+classificationDraft.faces_park.size+' lotes frente a parque.');
             }catch(error){classificationStatus(error.message,true);classificationControls();}
         });
         el('classification-cancel')?.addEventListener('click',()=>{
