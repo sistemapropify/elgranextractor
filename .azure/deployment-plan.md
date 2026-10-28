@@ -29,6 +29,44 @@ Commit only the reviewed Catastro Maestro card, tests and release record; fetch 
 
 ---
 
+# External real estate agents registry - 2026-10-28
+
+Status: Ready for production validation.
+Recipe: existing GitHub Actions App Service pipeline.
+Authorization: the user requested an independent external-agent registry, Propify login, configurable personal/attachment document types and Azure Blob Storage publication.
+Target: granextractorservice / rg-elgranextractor, Brazil South.
+Public: https://acm.propifai.com/agentes-externos/
+
+## Scope
+Add an independent Django module at `/agentes-externos/` with the existing dark
+Propify/Prospección visual language. It records first name, paternal and maternal
+last names, personal document type and number, address, email and mobile number.
+Agents can receive multiple attachment files classified with a separate
+configurable catalogue. Personal identity types and attachment types are
+maintained independently from the module configuration screen.
+
+Authentication validates credentials directly against Propify and does not use
+a Prometeo user. Every attachment download is protected by that same Propify web
+session. The module starts with DNI and Pasaporte as personal document types;
+attachment types begin empty so the user can define the operational catalogue.
+
+Attachments use `django-storages` with the existing Azure Storage account and a
+dedicated private container, `documentos-agentes-externos`. The App Service
+setting `AZURE_EXTERNAL_AGENTS_CONTAINER` selects that container. File metadata
+and relationships remain in SQL; binary documents live only in Azure Blob.
+
+## Validation
+- Seven focused Django tests cover Propify access guard, dashboard/ficha/form/
+  configuration rendering, registration and creator audit, duplicate identity
+  rejection, catalogue separation, Azure-backed upload storage call and delete.
+- The migration is synchronized (`makemigrations --check --dry-run`).
+- Desktop and mobile browser renders were inspected with authenticated sample
+  data. The private Azure container was created with public access disabled.
+- Final CI/CD, production migration, public route, static assets, login redirect
+  and Azure attachment upload/download remain required after deployment.
+
+---
+
 # ACM PDF PDM layout and mandatory justification - 2026-10-23
 
 Status: Validated
