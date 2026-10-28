@@ -62,6 +62,10 @@ and relationships remain in SQL; binary documents live only in Azure Blob.
 - The migration is synchronized (`makemigrations --check --dry-run`).
 - Desktop and mobile browser renders were inspected with authenticated sample
   data. The private Azure container was created with public access disabled.
+- The first CI run exposed that the global navigation reverse-resolved the
+  optional `external_agents` namespace inside Catastro's isolated test URLconf.
+  The two global links now use literal module paths; the exact Catastro suite
+  (56 tests) and the external-agent suite (7 tests) both pass.
 - Final CI/CD, production migration, public route, static assets, login redirect
   and Azure attachment upload/download remain required after deployment.
 

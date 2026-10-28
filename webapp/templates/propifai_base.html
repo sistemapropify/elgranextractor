@@ -729,7 +729,7 @@
                 <!-- ===== MARKETING Y PROSPECCIÓN ===== -->
                 <div class="nav-section-title" style="margin-top: 12px;">Marketing & Prospecci&oacute;n</div>
 
-                <a href="{% url 'external_agents:dashboard' %}" class="nav-item {% if '/agentes-externos/' in request.path %}active{% endif %}">
+                <a href="/agentes-externos/" class="nav-item {% if '/agentes-externos/' in request.path %}active{% endif %}">
                     <span class="nav-icon">&#x1F91D;</span>
                     <span>Agentes externos</span>
                 </a>
@@ -1040,7 +1040,7 @@
                         <div class="user-avatar" title="{{ request.propify_user.username }}">{{ request.propify_user.username|first|upper }}</div>
                         <span style="font-size:13px;color:var(--text-primary);font-weight:500;">{{ request.propify_user.username }}</span>
                     </div>
-                    <a href="{% if '/agentes-externos/' in request.path %}{% url 'external_agents:logout' %}{% else %}{% url 'prospects:logout' %}?next={{ request.path }}{% endif %}"
+                    <a href="{% if '/agentes-externos/' in request.path %}/agentes-externos/logout/{% else %}{% url 'prospects:logout' %}?next={{ request.path }}{% endif %}"
                        class="auth-btn auth-btn-logout"
                        title="Cerrar Sesión (Propify)"
                        style="text-decoration:none;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid var(--border-color);background-color:var(--bg-tertiary);color:#f85149;font-size:13px;font-weight:500;transition:all 0.2s ease;cursor:pointer;">
