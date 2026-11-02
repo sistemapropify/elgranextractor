@@ -29,6 +29,44 @@ Commit only the reviewed Catastro Maestro card, tests and release record; fetch 
 
 ---
 
+# Automatic corner-lot classification - 2026-11-02
+
+Status: Published to the shared Catastro classification store; application
+command pending final CI/CD.
+Authorization: the user asked to replace months of manual corner marking with
+an automatic classification across all districts, retaining manual unmarking.
+
+## Scope
+Add a reproducible Catastro management command that detects a corner parcel
+when its boundary touches two non-parallel exterior block frontages, each with
+at least three metres of geometric contact. Preserve park, park-frontage and
+colour classifications; never auto-classify a parcel already marked as a park.
+The existing map editor remains the correction mechanism: select “Lote en
+esquina”, click an orange parcel to unmark it and save.
+
+The command is idempotent, retries transient vector-worker reads and continues
+across district failures. Re-running only adds newly detected corners; it never
+removes a manual correction.
+
+## Published classification
+All nine districts with lot and block snapshots were processed:
+
+- 040102 Alto Selva Alegre: 5,848
+- 040104 Cerro Colorado: 3,766
+- 040105 Characato: 95
+- 040109 Mariano Melgar: 3,011
+- 040112 Paucarpata: 347
+- 040117 Sachaca: 1,801
+- 040126 Yanahuara: 1,315
+- 040128 Yura: 2,060
+- 040129 José Luis Bustamante y Rivero: 4,326
+
+Total corner lots added to the shared R2 classifications: 22,569. Existing
+parks and face-park classifications were preserved. Synthetic geometry tests
+cover corner, side and interior parcels.
+
+---
+
 # External real estate agents registry - 2026-10-28
 
 Status: Ready for production validation.
