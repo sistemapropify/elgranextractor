@@ -110,6 +110,26 @@
             cursor: pointer;
         }
         button:hover { background: #2ea043; }
+        button:disabled {
+            cursor: wait;
+            opacity: .72;
+            pointer-events: none;
+        }
+        button[aria-busy="true"]::before {
+            content: "";
+            display: inline-block;
+            width: 13px;
+            height: 13px;
+            margin-right: 8px;
+            vertical-align: -2px;
+            border: 2px solid rgba(255, 255, 255, .35);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: login-spin .8s linear infinite;
+        }
+        @keyframes login-spin {
+            to { transform: rotate(360deg); }
+        }
         .error {
             margin: 0 0 14px;
             padding: 10px 12px;
@@ -140,16 +160,53 @@
         </div>
         <p class="intro">Ingresa con tus credenciales de Propify para administrar el registro y los documentos de agentes externos.</p>
         {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
-        <form method="post" novalidate>
+        <form id="loginForm" method="post" novalidate>
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ next }}">
             <label for="username">Usuario Propify</label>
             <input id="username" name="username" value="{{ username }}" autocomplete="username" required autofocus>
             <label for="password">Contraseña</label>
             <input id="password" name="password" type="password" autocomplete="current-password" required>
-            <button type="submit">Ingresar con Propify</button>
+            <button id="loginSubmit" type="submit">Ingresar con Propify</button>
         </form>
         <p class="note">Módulo independiente del ACM. La sesión se valida directamente contra Propify.</p>
     </main>
+    <script>
+        (() => {
+            const form = document.getElementById('loginForm');
+            const button = document.getElementById('loginSubmit');
+            const label = 'Ingresar con Propify';
+            let submitting = false;
+
+            function lock() {
+                submitting = true;
+                button.disabled = true;
+                button.setAttribute('aria-busy', 'true');
+                button.textContent = 'Ingresando…';
+            }
+
+            function unlock() {
+                submitting = false;
+                button.disabled = false;
+                button.removeAttribute('aria-busy');
+                button.textContent = label;
+            }
+
+            form.addEventListener('submit', (event) => {
+                if (submitting) {
+                    event.preventDefault();
+                    return;
+                }
+                if (!form.reportValidity()) {
+                    return;
+                }
+                lock();
+            });
+
+            window.addEventListener('pageshow', (event) => {
+                if (event.persisted) unlock();
+            });
+        })();
+    </script>
 </body>
 </html>

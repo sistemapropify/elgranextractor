@@ -59,13 +59,41 @@
         text-decoration: none;
     }
     .ea-guide a:hover { text-decoration: underline; }
+    .ea-registration-attachment {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+        gap: 14px;
+        padding: 15px;
+        border: 1px solid var(--ea-border);
+        border-radius: 10px;
+        background: rgba(31, 111, 235, .06);
+    }
+    .ea-registration-attachment__head {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+    }
+    .ea-registration-attachment__head strong {
+        color: var(--ea-text);
+        font-size: 13px;
+    }
+    .ea-registration-attachment__head span {
+        color: var(--ea-muted);
+        font-size: 11px;
+        line-height: 1.45;
+    }
     @media (max-width: 950px) {
         .ea-form-layout { grid-template-columns: 1fr; }
         .ea-guide { position: static; }
     }
     @media (max-width: 620px) {
         .ea-form-grid { grid-template-columns: 1fr; }
+        .ea-registration-attachment { grid-template-columns: 1fr; }
         .ea-span-2 { grid-column: auto; }
+        .ea-registration-attachment { grid-column: auto; }
         .ea-form-actions { flex-direction: column-reverse; }
         .ea-form-actions .ea-btn { width: 100%; }
     }
@@ -123,6 +151,26 @@
                     {{ form.address }}
                     {% if form.address.errors %}<div class="ea-errors">{{ form.address.errors }}</div>{% endif %}
                 </div>
+                <div class="ea-registration-attachment">
+                    <div class="ea-registration-attachment__head">
+                        <div>
+                            <strong>Documento adjunto</strong>
+                            <span>Puedes guardar un archivo junto con el registro. Los demás documentos se agregan después desde la ficha.</span>
+                        </div>
+                        <span class="ea-badge blue">Opcional</span>
+                    </div>
+                    <div class="ea-field">
+                        <label class="ea-label" for="{{ form.attachment_type.id_for_label }}">Tipo de documento</label>
+                        {{ form.attachment_type }}
+                        {% if form.attachment_type.errors %}<div class="ea-errors">{{ form.attachment_type.errors }}</div>{% endif %}
+                    </div>
+                    <div class="ea-field">
+                        <label class="ea-label" for="{{ form.attachment_file.id_for_label }}">Archivo</label>
+                        {{ form.attachment_file }}
+                        {% if form.attachment_file.errors %}<div class="ea-errors">{{ form.attachment_file.errors }}</div>{% endif %}
+                        <span class="ea-help">{{ form.attachment_file.help_text }}</span>
+                    </div>
+                </div>
             </div>
             <div class="ea-form-actions">
                 {% if agent %}
@@ -143,7 +191,7 @@
         <ul>
             <li>Verifica que el número coincida con el tipo elegido.</li>
             <li>El apellido materno puede quedar vacío.</li>
-            <li>Los documentos adjuntos se cargan después, desde la ficha del agente.</li>
+            <li>Puedes adjuntar un documento durante el alta; después podrás agregar más desde la ficha.</li>
         </ul>
         <p style="margin-top:14px"><a href="{% url 'external_agents:configuration' %}">Administrar tipos de documento →</a></p>
     </aside>

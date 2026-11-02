@@ -154,12 +154,13 @@ def dashboard(request):
 
 @external_agent_access_required
 def agent_create(request):
-    form = ExternalAgentForm(request.POST or None)
+    form = ExternalAgentForm(request.POST or None, request.FILES or None)
     if request.method == 'POST' and form.is_valid():
         agent = form.save(commit=False)
         agent.created_by_username = _username(request)
         agent.updated_by_username = agent.created_by_username
         agent.save()
+        _save_optional_attachment(request, agent, form)
         messages.success(request, 'Agente externo registrado correctamente.')
         return redirect('external_agents:agent_detail', pk=agent.pk)
     return render(request, 'external_agents/agent_form.html', {
@@ -172,11 +173,16 @@ def agent_create(request):
 @external_agent_access_required
 def agent_edit(request, pk):
     agent = get_object_or_404(ExternalAgent, pk=pk)
-    form = ExternalAgentForm(request.POST or None, instance=agent)
+    form = ExternalAgentForm(
+        request.POST or None,
+        request.FILES or None,
+        instance=agent,
+    )
     if request.method == 'POST' and form.is_valid():
         agent = form.save(commit=False)
         agent.updated_by_username = _username(request)
         agent.save()
+        _save_optional_attachment(request, agent, form)
         messages.success(request, 'Datos del agente actualizados.')
         return redirect('external_agents:agent_detail', pk=agent.pk)
     return render(request, 'external_agents/agent_form.html', {
@@ -184,6 +190,32 @@ def agent_edit(request, pk):
         'mode': 'edit',
         'agent': agent,
     })
+
+
+def _save_optional_attachment(request, agent, form):
+    document_type = form.cleaned_data.get('attachment_type')
+    uploaded = form.cleaned_data.get('attachment_file')
+    if not document_type or not uploaded:
+        return None
+    from .forms import clean_attachment_file
+    attachment = ExternalAgentAttachment(
+        agent=agent,
+        document_type=document_type,
+        file=uploaded,
+        original_name=clean_attachment_file(uploaded),
+        uploaded_by_username=_username(request),
+    )
+    try:
+        attachment.save()
+    except Exception:
+        messages.error(
+            request,
+            'La ficha del agente se guardó, pero el documento no pudo subirse a Azure. '
+            'Puedes intentarlo nuevamente desde la ficha.',
+        )
+        return None
+    messages.success(request, 'Documento adjunto guardado en Azure.')
+    return attachment
 
 
 @external_agent_access_required

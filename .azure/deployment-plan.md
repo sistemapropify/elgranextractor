@@ -70,6 +70,11 @@ and relationships remain in SQL; binary documents live only in Azure Blob.
   complete project app registry and failed before test discovery. Its settings
   now load only auth/contenttypes/sessions/messages/staticfiles, prospects and
   external_agents with an isolated URLconf and local base template.
+- Registration now accepts one optional Azure-backed attachment with its own
+  configured document type, and the application seeds `Documento general` so the
+  attachment selector is usable before the administrator creates more types.
+- The Propify login submit button locks on the first valid submission, ignores
+  repeated submits and restores after browser-history navigation.
 - Final CI/CD, production migration, public route, static assets, login redirect
   and Azure attachment upload/download remain required after deployment.
 

@@ -61,6 +61,8 @@ class ExternalAgentsViewsTests(TestCase):
         login_response = self.client.get(reverse('external_agents:login'))
         self.assertEqual(login_response.status_code, 200)
         self.assertContains(login_response, 'Ingresar con Propify')
+        self.assertContains(login_response, 'id="loginForm"')
+        self.assertContains(login_response, "button.disabled = true")
 
         self.authenticate_propify()
         pages = [
@@ -92,6 +94,65 @@ class ExternalAgentsViewsTests(TestCase):
             reverse('external_agents:agent_detail', kwargs={'pk': created.pk}),
         )
         self.assertEqual(created.created_by_username, 'tester')
+
+    def test_create_agent_accepts_attachment_during_registration(self):
+        self.authenticate_propify()
+        uploaded = SimpleUploadedFile(
+            'documento-general.pdf',
+            b'%PDF-1.4 registration',
+            content_type='application/pdf',
+        )
+        field = ExternalAgentAttachment._meta.get_field('file')
+        with patch.object(
+            field.storage,
+            'save',
+            return_value='agentes-externos/2026/11/documento-general.pdf',
+        ):
+            response = self.client.post(reverse('external_agents:agent_create'), {
+                'first_name': 'Luis',
+                'paternal_last_name': 'Mamani',
+                'maternal_last_name': '',
+                'personal_document_type': self.personal_type.pk,
+                'document_number': '87654321',
+                'address': 'Calle Uno 456',
+                'email': 'luis@example.com',
+                'mobile': '+51 988 777 666',
+                'attachment_type': self.attachment_type.pk,
+                'attachment_file': uploaded,
+            })
+        created = ExternalAgent.objects.get(document_number='87654321')
+        self.assertRedirects(
+            response,
+            reverse('external_agents:agent_detail', kwargs={'pk': created.pk}),
+        )
+        attachment = ExternalAgentAttachment.objects.get(agent=created)
+        self.assertEqual(attachment.document_type, self.attachment_type)
+        self.assertEqual(attachment.original_name, 'documento-general.pdf')
+
+    def test_attachment_during_registration_requires_its_type(self):
+        self.authenticate_propify()
+        uploaded = SimpleUploadedFile(
+            'sin-tipo.pdf',
+            b'%PDF-1.4 missing type',
+            content_type='application/pdf',
+        )
+        response = self.client.post(reverse('external_agents:agent_create'), {
+            'first_name': 'Luis',
+            'paternal_last_name': 'Mamani',
+            'maternal_last_name': '',
+            'personal_document_type': self.personal_type.pk,
+            'document_number': '87654321',
+            'address': 'Calle Uno 456',
+            'email': 'luis@example.com',
+            'mobile': '+51 988 777 666',
+            'attachment_file': uploaded,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'Selecciona el tipo y adjunta el archivo para guardar el documento.',
+        )
+        self.assertFalse(ExternalAgent.objects.filter(document_number='87654321').exists())
 
     def test_duplicate_person_document_is_rejected(self):
         form = ExternalAgentForm(data={
