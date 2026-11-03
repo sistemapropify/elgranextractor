@@ -2,7 +2,9 @@
 import gzip
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote
 from urllib.request import Request, build_opener
@@ -283,6 +285,28 @@ def snapshot_fingerprint(ubigeo, layer, cloud=None):
     return hashlib.sha256(
         json.dumps(row.get('chunks') or row, sort_keys=True,
                    separators=(',', ':')).encode()).hexdigest()
+
+
+@lru_cache(maxsize=6)
+def _cached_collection(ubigeo, layer, fingerprint):
+    return read_snapshot(ubigeo, layer)
+
+
+def find_feature(ubigeo, layer, field, value, cloud=None):
+    """Find one archived vector without contacting a primary map service."""
+    if layer not in LAYERS or not re.fullmatch(r'\d{6}', str(ubigeo or '')):
+        raise ValueError('Distrito o capa vectorial no válida.')
+    expected = str(value or '').strip()
+    if not expected:
+        raise ValueError('Código vectorial no válido.')
+    if cloud is None:
+        fingerprint = snapshot_fingerprint(ubigeo, layer)
+        collection = _cached_collection(ubigeo, layer, fingerprint or 'missing')
+    else:
+        collection = read_snapshot(ubigeo, layer, cloud=cloud)
+    return next((feature for feature in collection.get('features', [])
+                 if str((feature.get('properties') or {}).get(field) or '').strip()
+                 == expected), None)
 
 
 def catalog_sources(cloud=None):

@@ -108,6 +108,19 @@ class MasterGeometryTests(SimpleTestCase):
             4000)
         self.assertIn('geollaqta/vectores/index.json', cloud.objects)
 
+    def test_vector_feature_lookup_uses_the_archived_snapshot(self):
+        collection = {'features': [
+            {'type': 'Feature', 'id': 1,
+             'properties': {'ID_LOTE': '04010201001001'}},
+        ]}
+        with patch('catastro.vector_snapshots.read_snapshot',
+                   return_value=collection) as read:
+            feature = vector_snapshots.find_feature(
+                '040102', 'lotes', 'ID_LOTE', '04010201001001',
+                cloud=object())
+        self.assertEqual(feature['id'], 1)
+        read.assert_called_once()
+
     def test_vector_manifest_url_passes_the_layer_parameter_to_the_view(self):
         request = RequestFactory().get(
             '/catastro/api/maestro/vectores/040102/manzanas/manifiesto/')
@@ -389,4 +402,4 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertNotIn('geollaqta-data.js', html)
         self.assertNotIn('geollaqta-district.js', html)
         self.assertNotIn('collection-form', html)
-        self.assertIn('catastro-maestro.js?v=33', html)
+        self.assertIn('catastro-maestro.js?v=34', html)

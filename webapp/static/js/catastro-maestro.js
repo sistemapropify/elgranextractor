@@ -432,12 +432,17 @@
         if(!galleryItems.length)gallery.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Sin fotografías catastrales archivadas en esta capa.'}));
         addEntitySection(galleryPanel,'Imágenes publicadas',gallery);
         const more=addTab('mas','Más datos');
+        const publicationState=data.master_status==='normalized_d1'
+            ?'Registro normalizado en D1'
+            :data.master_status==='vector_snapshot'
+                ?'Vector archivado · ficha documental pendiente'
+                :'Archivo pendiente de normalización D1';
         addEntityRows(more,'Identificación y publicación',[
             ['Código catastral',data.lot_id],
             ['ID maestro',masterId||'Sin vínculo D1'],
             ['Alias de pantalla',displayEntityId('lote',masterId)||'Sin alias'],
             ['Fuente',data.source_origin||item.source.name],
-            ['Estado',data.master_status==='normalized_d1'?'Registro normalizado en D1':'Archivo pendiente de normalización D1'],
+            ['Estado',publicationState],
             ['Revisión maestra',data.master_revision],
         ]);
         addEntityValues(more,'Dirección',attributes,'Sin dato','', {all:true,
@@ -451,7 +456,7 @@
         const links=data.identity_links||[];
         if(links.length){const linked=document.createElement('div');linked.className='master-identity-links';for(const link of links){const row=document.createElement('div');row.append(Object.assign(document.createElement('code'),{textContent:link.source_feature_id}),Object.assign(document.createElement('span'),{textContent:(link.layer||'')+' · '+(link.source_name||link.source_id||'')+' · '+(link.version_label||link.version_id||'')}));linked.append(row);}addEntitySection(provenance,'Identidad y versión de origen',linked);}
         addEntityRows(provenance,'Trazabilidad',[
-            ['Estado de publicación',data.master_status==='normalized_d1'?'Normalizado en D1':'Archivo durable pendiente de D1'],
+            ['Estado de publicación',publicationState],
             ['Revisión maestra',data.master_revision],
             ['Archivo de origen',data.source_manifest?.object_key],
             ['SHA-256 del archivo',data.source_manifest?.sha256],

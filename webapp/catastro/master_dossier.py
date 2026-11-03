@@ -270,6 +270,72 @@ def _from_archive(lot_id, record_id, surface, cloud=None):
     return _normalized_media_urls(value, lot_id, surface)
 
 
+def _from_vector(lot_id, surface):
+    """Publish a vector-only lot without inventing documents or owners."""
+    from . import vector_snapshots
+    feature = vector_snapshots.find_feature(
+        lot_id[:6], 'lotes', 'ID_LOTE', lot_id)
+    if not feature:
+        return None
+    properties = feature.get('properties') or {}
+    attributes = {
+        'ubigeo': lot_id[:6],
+        'sector': properties.get('COD_SECT'),
+        'block': properties.get('COD_MZNA'),
+        'lot': properties.get('COD_LOTE'),
+        'cadastral_year': properties.get('ANIO_CAT'),
+        'zoning': properties.get('ZONIFICACION'),
+        'gis_land_area': properties.get('AREA_TER'),
+        'gis_built_area': properties.get('AREA_CON'),
+        'floors': properties.get('NIVELES'),
+        'units': properties.get('NRO_UNIDADES'),
+    }
+    attributes = {key: value for key, value in attributes.items()
+                  if value not in (None, '')}
+    return {
+        'schema': SCHEMA,
+        'lot_id': lot_id,
+        'master_revision': None,
+        'source_origin': 'GeoLlaqta · COFOPRI · vector archivado',
+        'master_status': 'vector_snapshot',
+        'published_by': 'Catastro Maestro',
+        'attributes': attributes,
+        'units': [],
+        'unit_attributes': [],
+        'owners': [],
+        'media': [],
+        'gallery': [],
+        'documents': [],
+        'reports': [],
+        'selected_record_id': None,
+        'identity_links': [],
+        'relationships': [],
+        'provenance': {
+            key: {'source': 'vector archivado',
+                  'source_field': source}
+            for key, source in (
+                ('sector', 'COD_SECT'), ('block', 'COD_MZNA'),
+                ('lot', 'COD_LOTE'), ('cadastral_year', 'ANIO_CAT'),
+                ('zoning', 'ZONIFICACION'),
+                ('gis_land_area', 'AREA_TER'),
+                ('gis_built_area', 'AREA_CON'),
+                ('floors', 'NIVELES'), ('units', 'NRO_UNIDADES'))
+            if key in attributes},
+        'boundary_segments': [],
+        'registral_acts': [],
+        'catalog': {},
+        'missing': ['Ficha, titulares, fotografías y documentos pendientes de archivo R2.'],
+        'source_manifest': None,
+        'master': {
+            'entity_id': None,
+            'source_version_id': None,
+            'source_id': 'vectores-' + lot_id[:6],
+            'source_feature_id': lot_id,
+            'selected_entity_id': None,
+        },
+    }
+
+
 def load(lot_id, record_id=None, surface='master', cloud=None):
     lot_id = validate_lot(lot_id)
     surface = _surface(surface)
@@ -291,7 +357,16 @@ def load(lot_id, record_id=None, surface='master', cloud=None):
     if value is None:
         try:
             value = _from_archive(lot_id, record_id, surface, cloud)
-        except (ValueError, StorageError, json.JSONDecodeError):
+        except StorageError as error:
+            if error.http_status == 404:
+                value = _from_vector(lot_id, surface)
+                if value is not None:
+                    value['d1_warning'] = d1_error or None
+                    return value
+            if d1_error:
+                raise StorageError(d1_error) from None
+            raise
+        except (ValueError, json.JSONDecodeError):
             if d1_error:
                 raise StorageError(d1_error) from None
             raise
@@ -394,6 +469,8 @@ def summary(value, record_id=None):
         'document_status': 'available' if (media or reports) else 'unavailable',
         'source_label': ('Catastro Maestro · D1'
                          if value.get('master_status') == 'normalized_d1'
-                         else 'Catastro Maestro · archivo pendiente de normalización D1'),
+                         else ('Catastro Maestro · vector archivado'
+                               if value.get('master_status') == 'vector_snapshot'
+                               else 'Catastro Maestro · archivo pendiente de normalización D1')),
         'master': master,
     }

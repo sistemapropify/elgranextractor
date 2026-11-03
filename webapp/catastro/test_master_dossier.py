@@ -8,6 +8,7 @@ from django.test import RequestFactory, SimpleTestCase
 from django.urls import resolve
 
 from . import master_dossier, master_views
+from .storage import StorageError
 
 
 LOT = '04010206058015'
@@ -199,6 +200,31 @@ class MasterDossierTests(SimpleTestCase):
             master_dossier.archive_asset(LOT, '../datos.json', cloud=cloud)
         with self.assertRaises(ValueError):
             master_dossier.archive_asset(LOT, 'not-listed.jpg', cloud=cloud)
+
+    def test_vector_only_lot_opens_without_an_r2_manifest(self):
+        vector_value = {
+            'schema': master_dossier.SCHEMA, 'lot_id': LOT,
+            'master_status': 'vector_snapshot', 'attributes': {
+                'gis_land_area': 200, 'gis_built_area': 20.5},
+            'units': [], 'unit_attributes': [], 'owners': [], 'media': [],
+            'gallery': [], 'documents': [], 'reports': [],
+            'selected_record_id': None, 'identity_links': [],
+            'relationships': [], 'provenance': {}, 'boundary_segments': [],
+            'registral_acts': [], 'catalog': {}, 'missing': ['Ficha pendiente'],
+            'source_manifest': None,
+            'master': {'entity_id': None, 'source_feature_id': LOT},
+        }
+        with patch.object(master_dossier, '_from_d1', return_value=None), \
+                patch.object(master_dossier, '_from_archive',
+                             side_effect=StorageError('R2 respondió HTTP 404.', 404)), \
+                patch.object(master_dossier, '_from_vector',
+                             return_value=vector_value):
+            value = master_dossier.load(LOT)
+            summary = master_dossier.summary(value)
+        self.assertEqual(value['master_status'], 'vector_snapshot')
+        self.assertEqual(summary['source_label'],
+                         'Catastro Maestro · vector archivado')
+        self.assertEqual(summary['gis_metrics']['land_area'], 200)
 
     def test_canonical_routes_resolve_the_lot_and_archive_filename(self):
         dossier_match = resolve('/catastro/api/maestro/lotes/' + LOT + '/ficha/')
