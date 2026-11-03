@@ -65,7 +65,7 @@
             const image = document.createElement('img');
             image.alt = this.record.name;
             image.draggable = false;
-            image.src = this.record.image_url + '?ubigeo=' + encodeURIComponent(this.record.ubigeo) +
+            image.src = this.record.image_url +
                 '&v=' + encodeURIComponent(this.record.version_id);
             wrapper.append(image);
             this.image = image;
@@ -242,6 +242,10 @@
     }
 
     function editOverlay(id) {
+        if (district === 'all') {
+            say('Selecciona un distrito concreto para ajustar un parche satelital.');
+            return;
+        }
         active = overlays.find(item => item.id === id) || null;
         if (!active) return;
         draft = clone(active.state);
@@ -388,6 +392,8 @@
             const adjust = document.createElement('button');
             adjust.type = 'button';
             adjust.textContent = 'Ajustar';
+            adjust.disabled = district === 'all';
+            if (adjust.disabled) adjust.title = 'Selecciona un distrito concreto para ajustar este parche.';
             adjust.addEventListener('click', () => editOverlay(record.id));
             actions.append(adjust);
             row.append(label, actions);
@@ -398,21 +404,12 @@
 
     async function loadOverlays(focusId = null) {
         if (!district) return;
-        if (district === 'all') {
-            for (const view of views.values()) view.setMap(null);
-            views.clear();
-            overlays = [];
-            active = null;
-            draft = null;
-            editor.hidden = true;
-            renderList();
-            say('Selecciona un distrito concreto para consultar su mosaico satelital.');
-            return;
-        }
         const token = ++loadToken;
         try {
-            const query=district==='all'?'':'?ubigeo='+encodeURIComponent(district);
-            const response = await fetch('/catastro/api/maestro/raster/'+query,
+            const endpoint=district==='all'
+                ? '/catastro/api/maestro/raster/catalogo/'
+                : '/catastro/api/maestro/raster/?ubigeo='+encodeURIComponent(district);
+            const response = await fetch(endpoint,
                 {credentials: 'same-origin', headers: {Accept: 'application/json'}});
             const value = await response.json();
             if (!response.ok) throw Error(value.error || 'No se pudieron cargar las capas satelitales.');
@@ -425,7 +422,10 @@
             editor.hidden = true;
             renderList();
             useSatellitePatchMode();
-            if (focusId) editOverlay(focusId);
+            say(overlays.length
+                ? overlays.length + (overlays.length===1?' parche satelital visible.':' parches satelitales visibles.')
+                : 'Todavía no hay fotografías aéreas para este ámbito.');
+            if (focusId && district !== 'all') editOverlay(focusId);
         } catch (error) {
             say(error.message, true);
         }

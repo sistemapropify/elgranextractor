@@ -67,6 +67,8 @@ class RasterOverlayTests(SimpleTestCase):
         current = raster_overlays.list_overlays(self.store, '040126')
         self.assertEqual(current[0]['version_id'], adjusted['version_id'])
         self.assertEqual(len(raster_overlays.list_all_overlays(self.store)), 1)
+        self.assertIn('?ubigeo=040126',
+                      raster_overlays.list_all_overlays(self.store)[0]['image_url'])
 
     def test_image_without_center_is_rejected_before_any_write(self):
         with self.assertRaisesRegex(ValueError, 'GPS'):
