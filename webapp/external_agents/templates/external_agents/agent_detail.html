@@ -200,7 +200,17 @@
                 <div class="ea-profile-avatar">{{ agent.initials }}</div>
                 <div style="min-width:0;flex:1">
                     <h2>{{ agent.full_name }}</h2>
-                    <p>{{ agent.personal_document_type.name }} · {{ agent.document_number }}</p>
+                    <p>
+                        {% if agent.personal_document_type and agent.document_number %}
+                            {{ agent.personal_document_type.name }} · {{ agent.document_number }}
+                        {% elif agent.personal_document_type %}
+                            {{ agent.personal_document_type.name }}
+                        {% elif agent.document_number %}
+                            {{ agent.document_number }}
+                        {% else %}
+                            Sin documento registrado
+                        {% endif %}
+                    </p>
                 </div>
                 {% if agent.is_active %}
                 <span class="ea-badge green">Activo</span>
@@ -223,19 +233,29 @@
                 </div>
                 <div class="ea-data-block">
                     <span class="ea-data-label">Documento</span>
-                    <div class="ea-data-value">{{ agent.personal_document_type.name }} · {{ agent.document_number }}</div>
+                    <div class="ea-data-value">
+                        {% if agent.personal_document_type and agent.document_number %}
+                            {{ agent.personal_document_type.name }} · {{ agent.document_number }}
+                        {% elif agent.personal_document_type %}
+                            {{ agent.personal_document_type.name }}
+                        {% elif agent.document_number %}
+                            {{ agent.document_number }}
+                        {% else %}
+                            No registrado
+                        {% endif %}
+                    </div>
                 </div>
                 <div class="ea-data-block">
                     <span class="ea-data-label">Correo electrónico</span>
-                    <div class="ea-data-value"><a href="mailto:{{ agent.email }}">{{ agent.email }}</a></div>
+                    <div class="ea-data-value">{% if agent.email %}<a href="mailto:{{ agent.email }}">{{ agent.email }}</a>{% else %}No registrado{% endif %}</div>
                 </div>
                 <div class="ea-data-block">
                     <span class="ea-data-label">Celular</span>
-                    <div class="ea-data-value"><a href="tel:{{ agent.mobile }}">{{ agent.mobile }}</a></div>
+                    <div class="ea-data-value">{% if agent.mobile %}<a href="tel:{{ agent.mobile }}">{{ agent.mobile }}</a>{% else %}No registrado{% endif %}</div>
                 </div>
                 <div class="ea-data-block wide">
                     <span class="ea-data-label">Dirección</span>
-                    <div class="ea-data-value">{{ agent.address }}</div>
+                    <div class="ea-data-value">{{ agent.address|default:"No registrada" }}</div>
                 </div>
             </div>
             <div class="ea-audit">

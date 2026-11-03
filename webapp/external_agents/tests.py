@@ -170,6 +170,28 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('document_number', form.errors)
 
+    def test_all_agent_fields_are_optional(self):
+        form = ExternalAgentForm()
+        required = {
+            name: field.required
+            for name, field in form.fields.items()
+        }
+        self.assertFalse(any(required.values()), required)
+
+        self.authenticate_propify()
+        before = ExternalAgent.objects.count()
+        first = self.client.post(reverse('external_agents:agent_create'), {})
+        second = self.client.post(reverse('external_agents:agent_create'), {})
+        self.assertEqual(first.status_code, 302)
+        self.assertEqual(second.status_code, 302)
+        self.assertEqual(ExternalAgent.objects.count(), before + 2)
+        blank_agents = ExternalAgent.objects.filter(
+            first_name='',
+            paternal_last_name='',
+            document_number='',
+        )
+        self.assertGreaterEqual(blank_agents.count(), 2)
+
     def test_personal_and_attachment_catalogs_are_separate(self):
         self.authenticate_propify()
         response = self.client.post(

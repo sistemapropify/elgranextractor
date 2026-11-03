@@ -113,6 +113,10 @@ and relationships remain in SQL; binary documents live only in Azure Blob.
   attachment selector is usable before the administrator creates more types.
 - The registration form now uses multipart encoding; without it browsers sent
   the selected attachment type but omitted the file bytes.
+- Every external-agent data field is optional. The database accepts missing
+  identity/contact data, multiple blank records are allowed, and the empty
+  QueryDict is now treated as a valid submitted form. Duplicate identity is
+  checked only when both document type and number are supplied.
 - The Propify login submit button locks on the first valid submission, ignores
   repeated submits and restores after browser-history navigation.
 - Final CI/CD, production migration, public route, static assets, login redirect

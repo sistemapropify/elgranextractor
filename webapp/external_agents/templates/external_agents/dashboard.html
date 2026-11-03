@@ -244,7 +244,17 @@
             <div class="ea-avatar">{{ agent.initials }}</div>
             <div class="ea-card-heading">
                 <h2 title="{{ agent.full_name }}">{{ agent.full_name }}</h2>
-                <p>{{ agent.personal_document_type.name }} · {{ agent.document_number }}</p>
+                <p>
+                    {% if agent.personal_document_type and agent.document_number %}
+                        {{ agent.personal_document_type.name }} · {{ agent.document_number }}
+                    {% elif agent.personal_document_type %}
+                        {{ agent.personal_document_type.name }}
+                    {% elif agent.document_number %}
+                        {{ agent.document_number }}
+                    {% else %}
+                        Sin documento registrado
+                    {% endif %}
+                </p>
             </div>
             {% if agent.is_active %}
             <span class="ea-badge green">Activo</span>

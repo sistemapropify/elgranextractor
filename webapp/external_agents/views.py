@@ -154,7 +154,10 @@ def dashboard(request):
 
 @external_agent_access_required
 def agent_create(request):
-    form = ExternalAgentForm(request.POST or None, request.FILES or None)
+    form = ExternalAgentForm(
+        request.POST if request.method == 'POST' else None,
+        request.FILES if request.method == 'POST' else None,
+    )
     if request.method == 'POST' and form.is_valid():
         agent = form.save(commit=False)
         agent.created_by_username = _username(request)
@@ -174,8 +177,8 @@ def agent_create(request):
 def agent_edit(request, pk):
     agent = get_object_or_404(ExternalAgent, pk=pk)
     form = ExternalAgentForm(
-        request.POST or None,
-        request.FILES or None,
+        request.POST if request.method == 'POST' else None,
+        request.FILES if request.method == 'POST' else None,
         instance=agent,
     )
     if request.method == 'POST' and form.is_valid():

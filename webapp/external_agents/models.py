@@ -54,9 +54,14 @@ class DocumentType(models.Model):
 class ExternalAgent(models.Model):
     """Agente inmobiliario externo registrado por el equipo Propify."""
 
-    first_name = models.CharField(max_length=120, verbose_name='Nombre')
+    first_name = models.CharField(
+        max_length=120,
+        blank=True,
+        verbose_name='Nombre',
+    )
     paternal_last_name = models.CharField(
         max_length=120,
+        blank=True,
         verbose_name='Apellido paterno',
     )
     maternal_last_name = models.CharField(
@@ -69,16 +74,27 @@ class ExternalAgent(models.Model):
         on_delete=models.PROTECT,
         related_name='agents',
         limit_choices_to={'scope': DocumentType.Scope.PERSONAL},
+        null=True,
+        blank=True,
         verbose_name='Tipo de documento personal',
     )
     document_number = models.CharField(
         max_length=50,
+        blank=True,
         db_index=True,
         verbose_name='Número de documento',
     )
-    address = models.CharField(max_length=300, verbose_name='Dirección')
-    email = models.EmailField(verbose_name='Correo electrónico')
-    mobile = models.CharField(max_length=30, verbose_name='Celular')
+    address = models.CharField(
+        max_length=300,
+        blank=True,
+        verbose_name='Dirección',
+    )
+    email = models.EmailField(blank=True, verbose_name='Correo electrónico')
+    mobile = models.CharField(
+        max_length=30,
+        blank=True,
+        verbose_name='Celular',
+    )
     is_active = models.BooleanField(
         default=True,
         db_index=True,
@@ -102,22 +118,19 @@ class ExternalAgent(models.Model):
         ordering = ['paternal_last_name', 'maternal_last_name', 'first_name', 'pk']
         verbose_name = 'Agente externo'
         verbose_name_plural = 'Agentes externos'
-        constraints = [
-            models.UniqueConstraint(
-                fields=['personal_document_type', 'document_number'],
-                name='external_agents_unique_person_document',
-            ),
-        ]
 
     @property
     def full_name(self):
-        return ' '.join(
+        name = ' '.join(
             part for part in (
                 self.first_name,
                 self.paternal_last_name,
                 self.maternal_last_name,
             ) if part
         ).strip()
+        if name:
+            return name
+        return f'Agente externo #{self.pk}' if self.pk else 'Agente externo'
 
     @property
     def initials(self):

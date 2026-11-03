@@ -110,12 +110,12 @@
             {% endif %}
             <div class="ea-form-grid">
                 <div class="ea-field">
-                    <label class="ea-label" for="{{ form.first_name.id_for_label }}">Nombre <span class="ea-required">*</span></label>
+                    <label class="ea-label" for="{{ form.first_name.id_for_label }}">Nombre</label>
                     {{ form.first_name }}
                     {% if form.first_name.errors %}<div class="ea-errors">{{ form.first_name.errors }}</div>{% endif %}
                 </div>
                 <div class="ea-field">
-                    <label class="ea-label" for="{{ form.paternal_last_name.id_for_label }}">Apellido paterno <span class="ea-required">*</span></label>
+                    <label class="ea-label" for="{{ form.paternal_last_name.id_for_label }}">Apellido paterno</label>
                     {{ form.paternal_last_name }}
                     {% if form.paternal_last_name.errors %}<div class="ea-errors">{{ form.paternal_last_name.errors }}</div>{% endif %}
                 </div>
@@ -126,28 +126,28 @@
                     {% if form.maternal_last_name.errors %}<div class="ea-errors">{{ form.maternal_last_name.errors }}</div>{% endif %}
                 </div>
                 <div class="ea-field">
-                    <label class="ea-label" for="{{ form.personal_document_type.id_for_label }}">Tipo de documento personal <span class="ea-required">*</span></label>
+                    <label class="ea-label" for="{{ form.personal_document_type.id_for_label }}">Tipo de documento personal</label>
                     {{ form.personal_document_type }}
                     {% if form.personal_document_type.errors %}<div class="ea-errors">{{ form.personal_document_type.errors }}</div>{% endif %}
                 </div>
                 <div class="ea-field">
-                    <label class="ea-label" for="{{ form.document_number.id_for_label }}">Número de documento <span class="ea-required">*</span></label>
+                    <label class="ea-label" for="{{ form.document_number.id_for_label }}">Número de documento</label>
                     {{ form.document_number }}
                     <span class="ea-help">La combinación tipo + número no puede repetirse.</span>
                     {% if form.document_number.errors %}<div class="ea-errors">{{ form.document_number.errors }}</div>{% endif %}
                 </div>
                 <div class="ea-field">
-                    <label class="ea-label" for="{{ form.mobile.id_for_label }}">Celular <span class="ea-required">*</span></label>
+                    <label class="ea-label" for="{{ form.mobile.id_for_label }}">Celular</label>
                     {{ form.mobile }}
                     {% if form.mobile.errors %}<div class="ea-errors">{{ form.mobile.errors }}</div>{% endif %}
                 </div>
                 <div class="ea-field">
-                    <label class="ea-label" for="{{ form.email.id_for_label }}">Correo electrónico <span class="ea-required">*</span></label>
+                    <label class="ea-label" for="{{ form.email.id_for_label }}">Correo electrónico</label>
                     {{ form.email }}
                     {% if form.email.errors %}<div class="ea-errors">{{ form.email.errors }}</div>{% endif %}
                 </div>
                 <div class="ea-field ea-span-2">
-                    <label class="ea-label" for="{{ form.address.id_for_label }}">Dirección <span class="ea-required">*</span></label>
+                    <label class="ea-label" for="{{ form.address.id_for_label }}">Dirección</label>
                     {{ form.address }}
                     {% if form.address.errors %}<div class="ea-errors">{{ form.address.errors }}</div>{% endif %}
                 </div>
@@ -187,9 +187,9 @@
 
     <aside class="ea-panel ea-guide">
         <h2>Antes de guardar</h2>
-        <p>Los campos con <span class="ea-required">*</span> son obligatorios. El correo y el celular quedan disponibles para la gestión comercial.</p>
+        <p>Todos los campos son opcionales. Puedes completar la ficha progresivamente.</p>
         <ul>
-            <li>Verifica que el número coincida con el tipo elegido.</li>
+            <li>Si completas tipo y número, verifica que correspondan al mismo documento.</li>
             <li>El apellido materno puede quedar vacío.</li>
             <li>Puedes adjuntar un documento durante el alta; después podrás agregar más desde la ficha.</li>
         </ul>
