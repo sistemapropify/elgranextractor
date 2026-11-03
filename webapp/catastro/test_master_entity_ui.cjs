@@ -51,6 +51,8 @@ assert.match(master, /classificationVisible/);
 assert.match(masterCss, /master-dossier-hero>img\{[^}]*object-fit:contain/);
 assert.match(masterCss, /master-dossier-hero-copy\{position:static/);
 assert.doesNotMatch(masterCss, /master-detail-body\{[^}]*overflow:auto/);
+assert.match(masterCss, /master-detail-card\{[^}]*height:min\(500px,calc\(100% - 12px\)\)/);
+assert.match(masterCss, /master-detail-card\{[^}]*height:88%/);
 assert.match(raster, /raster\/catalogo\//);
 assert.match(raster, /district==='all'/);
 assert.doesNotMatch(raster, /image_url \+ '\?ubigeo='/);
