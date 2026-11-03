@@ -5,6 +5,7 @@ const path = require('node:path');
 const master = fs.readFileSync(path.join(__dirname, '../static/js/catastro-maestro.js'), 'utf8');
 const dashboard = fs.readFileSync(path.join(__dirname, '../static/js/catastro-dashboard.js'), 'utf8');
 const raster = fs.readFileSync(path.join(__dirname, '../static/js/catastro-raster-layers.js'), 'utf8');
+const masterCss = fs.readFileSync(path.join(__dirname, '../static/css/catastro-maestro.css'), 'utf8');
 
 assert.match(master, /LOTE-CM-/);
 assert.match(master, /Catastro Maestro · D1/);
@@ -47,6 +48,9 @@ assert.match(master, /toggleClassificationAt/);
 assert.match(master, /classificationColors/);
 assert.match(master, /faces_park/);
 assert.match(master, /classificationVisible/);
+assert.match(masterCss, /master-dossier-hero>img\{[^}]*object-fit:contain/);
+assert.match(masterCss, /master-dossier-hero-copy\{position:static/);
+assert.doesNotMatch(masterCss, /master-detail-body\{[^}]*overflow:auto/);
 assert.match(raster, /raster\/catalogo\//);
 assert.match(raster, /district==='all'/);
 assert.doesNotMatch(raster, /image_url \+ '\?ubigeo='/);
