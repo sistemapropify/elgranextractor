@@ -103,7 +103,7 @@
 {% block module_content %}
 <div class="ea-form-layout">
     <section class="ea-panel ea-form-panel">
-        <form method="post" novalidate>
+        <form method="post" enctype="multipart/form-data" novalidate>
             {% csrf_token %}
             {% if form.non_field_errors %}
             <div class="ea-errors ea-message error" style="margin-bottom:16px">{{ form.non_field_errors }}</div>

@@ -111,6 +111,8 @@ and relationships remain in SQL; binary documents live only in Azure Blob.
 - Registration now accepts one optional Azure-backed attachment with its own
   configured document type, and the application seeds `Documento general` so the
   attachment selector is usable before the administrator creates more types.
+- The registration form now uses multipart encoding; without it browsers sent
+  the selected attachment type but omitted the file bytes.
 - The Propify login submit button locks on the first valid submission, ignores
   repeated submits and restores after browser-history navigation.
 - Final CI/CD, production migration, public route, static assets, login redirect

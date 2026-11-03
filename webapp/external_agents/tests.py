@@ -65,6 +65,8 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(login_response, "button.disabled = true")
 
         self.authenticate_propify()
+        create_response = self.client.get(reverse('external_agents:agent_create'))
+        self.assertContains(create_response, 'enctype="multipart/form-data"')
         pages = [
             reverse('external_agents:agent_create'),
             reverse('external_agents:agent_detail', kwargs={'pk': self.agent.pk}),
