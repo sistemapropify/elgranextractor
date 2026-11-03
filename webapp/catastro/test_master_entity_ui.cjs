@@ -48,7 +48,7 @@ assert.match(master, /toggleClassificationAt/);
 assert.match(master, /classificationColors/);
 assert.match(master, /faces_park/);
 assert.match(master, /classificationVisible/);
-assert.match(masterCss, /master-dossier-hero>img\{[^}]*object-fit:contain/);
+assert.match(masterCss, /master-dossier-photo>img\{[^}]*object-fit:contain/);
 assert.match(masterCss, /master-dossier-hero-copy\{position:static/);
 assert.doesNotMatch(masterCss, /master-detail-body\{[^}]*overflow:auto/);
 assert.match(masterCss, /master-detail-card\{[^}]*height:min\(500px,calc\(100% - 12px\)\)/);

@@ -1,7 +1,7 @@
 {% extends 'propifai_base.html' %}
 {% load static %}
 {% block title %}Catastro maestro · Prometeo{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-maestro.css' %}?v=19">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catastro-maestro.css' %}?v=20">{% endblock %}
 {% block content %}
 <main class="master-workspace" id="master-workspace">
   <header class="master-heading">
@@ -172,7 +172,7 @@
 </dialog>
 {% endblock %}
 {% block extra_js %}
-<script src="{% static 'js/catastro-maestro.js' %}?v=32"></script>
+<script src="{% static 'js/catastro-maestro.js' %}?v=33"></script>
 <script src="{% static 'js/catastro-master-model.js' %}?v=1"></script>
 <script src="{% static 'js/catastro-raster-layers.js' %}?v=20"></script>
 {% if google_maps_api_key %}<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;callback=initCatastroMaster" async defer></script>{% else %}<script>document.getElementById('master-status').textContent='No se ha configurado la clave del mapa.';</script>{% endif %}
