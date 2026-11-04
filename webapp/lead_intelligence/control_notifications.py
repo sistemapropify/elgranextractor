@@ -52,7 +52,7 @@ def queue_notice(item, level, now):
             LeadControlNotice.objects.get_or_create(dedupe_key=f'{base}:push:{device.pk}', defaults={'obligation': item, 'recipient': person, 'level': level, 'channel': 'push', 'device_id': device.pk})
 
 
-def tick(now=None):
+def tick(now=None, lead_id=None):
     now, settings = now or timezone.now(), policy()
     count = 0
     # Batch unroutable notices while the initial directory is still empty.
@@ -69,6 +69,8 @@ def tick(now=None):
             pending_notices.append(LeadControlNotice(dedupe_key=key, obligation=item, level=level, channel='internal', status='unroutable', last_error='Configura un responsable y su ruta de supervisión/gerencia.'))
             existing.add(key)
     items = LeadObligation.objects.filter(action__status='pending', lead__active=True)
+    if lead_id is not None:
+        items = items.filter(lead__source_lead_id=lead_id)
     cutoff = active_since()
     if cutoff:
         items = items.filter(lead__entered_at__gte=cutoff)
@@ -142,13 +144,15 @@ def send_firebase(device, title, body, item_id):
     return message_id
 
 
-def send_pending(limit=100, push_sender=send_firebase, now=None):
+def send_pending(limit=100, push_sender=send_firebase, now=None, lead_id=None):
     """Never interprets SMTP/FCM acceptance as delivery or reading."""
     result = {'accepted': 0, 'uncertain': 0, 'cancelled': 0}
     now = now or timezone.now()
     stale_before = now-timedelta(minutes=policy().stale_minutes)
     channels = [channel for channel in ('email', 'push') if enabled(f'LEAD_CONTROL_{channel.upper()}_ENABLED')]
     queryset = LeadControlNotice.objects.filter(status='pending', channel__in=channels).order_by('created_at')
+    if lead_id is not None:
+        queryset = queryset.filter(obligation__lead__source_lead_id=lead_id)
     for item_id in list(queryset.values_list('pk', flat=True)[:limit]):
         with transaction.atomic():
             notice = LeadControlNotice.objects.select_for_update().select_related('obligation__action', 'obligation__lead', 'recipient').get(pk=item_id)

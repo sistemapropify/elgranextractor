@@ -49,6 +49,16 @@ class BoardTests(TestCase):
         self.assertEqual(summary['unverified'], 1)
         self.assertEqual(self.page('overdue=1', NOW+timedelta(minutes=10))['summary']['actions'], 0)
 
+    def test_stale_snapshot_does_not_claim_current_response_status(self):
+        self.state.quality = 'valid'
+        self.state.observed_at = NOW-timedelta(hours=2)
+        self.state.save(update_fields=['quality', 'observed_at'])
+        describe(self.item, NOW, NOW-timedelta(hours=1))
+        self.assertTrue(self.item.source_fresh is False)
+        self.assertIn('No se puede confirmar el estado actual', self.item.reason_text)
+        self.assertNotIn('No se ha registrado una primera respuesta', self.item.reason_text)
+        self.assertEqual(self.item.evidence_label, 'Evidencia de la última lectura')
+
     def test_pagination_preserves_all_filters(self):
         context = self.page('entry=today&order=priority&overdue=1&escalated=1&category=reply&page=2')
         query = QueryDict(context['page_query'])

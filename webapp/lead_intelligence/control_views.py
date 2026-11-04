@@ -1,5 +1,6 @@
 import hmac
 import json
+import threading
 import uuid
 from datetime import timedelta
 from django.contrib import messages
@@ -18,7 +19,7 @@ from .models import LeadControlState, LeadObligation, LeadControlMember, LeadCon
 from .control_access import control_required
 from .control_engine import observe, policy, intervene, create_obligation, change_owner, resolve, KINDS, active_since
 from .control_forms import PolicyForm, MemberForm
-from .control_notifications import enabled
+from .control_notifications import enabled, send_pending, tick
 from .control_digest import scope_key
 from .control_source import source_snapshot
 from .remarketing_engine import LIMA
@@ -256,3 +257,151 @@ def scheduled_process(request):
     except Exception as exc:
         return JsonResponse({'ok': False, 'error': str(exc)}, status=500)
     return JsonResponse({'ok': True, 'status': 'processed'})
+
+
+def _message_is_present(snapshot, message_id):
+    if message_id in (None, ''):
+        return True
+    raw = snapshot.get('messages') or []
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return False
+    if not isinstance(raw, list):
+        return False
+    expected = str(message_id)
+    return any(
+        isinstance(item, dict) and str(item.get('id')) == expected
+        for item in raw
+    )
+
+
+def _monitor_incomplete_context(state, snapshot, settings, now):
+    """Alert supervision without blocking conversation analysis."""
+    issues = []
+    if snapshot.get('agent_id') is None:
+        issues.append('Sin agente responsable')
+    if snapshot.get('pipeline_id') is None:
+        issues.append('Sin pipeline/embudo asignado')
+
+    existing = []
+    for item in state.obligations.filter(
+        kind='data',
+        action__status='pending',
+    ).select_related('action__diagnosis'):
+        evidence = item.action.diagnosis.evidence if item.action.diagnosis_id else {}
+        if isinstance(evidence, dict) and evidence.get('type') == 'incomplete_context':
+            existing.append(item)
+
+    if not state.active:
+        return
+    if issues:
+        if not existing:
+            create_obligation(
+                state,
+                'data',
+                now,
+                'incomplete-context',
+                settings,
+                {
+                    'type': 'incomplete_context',
+                    'issues': issues,
+                    'message': '; '.join(issues),
+                },
+            )
+    else:
+        for item in existing:
+            resolve(
+                item,
+                now,
+                {'type': 'context_completed'},
+                actor='system',
+            )
+
+
+@csrf_exempt
+@require_POST
+def refresh_lead(request):
+    """Refresh exactly one lead after a committed CRM message event.
+
+    The endpoint trusts only ``lead_id`` from the caller. It reads the source
+    conversation itself and requires the triggering message to already be
+    visible, so an early retry cannot produce an alert from stale data.
+    """
+    token = config('ANALYTICS_BRIDGE_API_KEY')
+    supplied = request.headers.get('X-Analytics-API-Key', '')
+    if not token or not hmac.compare_digest(supplied.encode(), token.encode()):
+        return HttpResponseForbidden()
+    try:
+        payload = json.loads(request.body or b'{}')
+        if not isinstance(payload, dict):
+            raise ValueError()
+        lead_id = int(payload.get('lead_id'))
+        if not 0 < lead_id < 2**63:
+            raise ValueError()
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({'error': 'lead_id inválido.'}, status=400)
+
+    message_id = payload.get('message_id')
+    try:
+        snapshot = source_snapshot(lead_id)
+    except Exception:
+        return JsonResponse(
+            {'ok': False, 'status': 'source_unavailable', 'retry': True},
+            status=503,
+        )
+    if not _message_is_present(snapshot, message_id):
+        return JsonResponse(
+            {'ok': False, 'status': 'message_not_visible', 'retry': True},
+            status=409,
+        )
+    try:
+        settings = policy()
+        state = observe(snapshot, settings)
+        _monitor_incomplete_context(state, snapshot, settings, timezone.now())
+        tick(lead_id=lead_id)
+    except Exception:
+        return JsonResponse(
+            {'ok': False, 'status': 'refresh_failed', 'retry': True},
+            status=503,
+        )
+
+    try:
+        from .conversation_identity import conversation_hash
+        from .durable_jobs import enqueue_durable_job, wake_durable_worker
+        from .models import DurableJob
+
+        history_hash = conversation_hash(snapshot.get('messages'))
+        job, created = enqueue_durable_job(
+            DurableJob.Kind.LEAD_ANALYSIS,
+            {'lead_id': lead_id, 'workers': 1},
+            f'lead-analysis:{lead_id}:{history_hash}',
+            max_attempts=3,
+        )
+        if created:
+            wake_durable_worker()
+    except Exception:
+        # Conversation analysis is independent of assignment, but a queue
+        # outage must be retryable by the CRM outbox.
+        return JsonResponse(
+            {'ok': False, 'status': 'analysis_not_queued', 'retry': True},
+            status=503,
+        )
+
+    if enabled('LEAD_CONTROL_NOTIFY_ENABLED'):
+        def deliver():
+            try:
+                send_pending(limit=20, lead_id=lead_id)
+            except Exception:
+                pass
+
+        threading.Thread(target=deliver, daemon=True).start()
+    return JsonResponse({
+        'ok': True,
+        'lead_id': lead_id,
+        'quality': state.quality,
+        'observed_at': state.observed_at.isoformat() if state.observed_at else None,
+        'analysis_job_id': job.pk,
+        'analysis_created': created,
+    })

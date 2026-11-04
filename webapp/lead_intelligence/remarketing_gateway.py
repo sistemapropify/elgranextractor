@@ -59,6 +59,7 @@ def crm_snapshot(lead_id):
                 COALESCE(l.date_entry, l.created_at) AS entered_at,
                 l.assigned_to_id AS agent_id, l.id_chatwoot,
                 c.phone, COALESCE(ls.name, '') AS status_name,
+                ls.pipeline_id, COALESCE(pl.name, '') AS pipeline_name,
                 COALESCE(cl.name, '') AS channel_name,
                 COALESCE(c.first_name, '') AS nombre,
                 COALESCE(u.first_name, '') AS agente,
@@ -69,6 +70,7 @@ def crm_snapshot(lead_id):
             LEFT JOIN dbo.contact c ON c.id = l.contact_id
             LEFT JOIN dbo.[user] u ON u.id = l.assigned_to_id
             LEFT JOIN dbo.lead_status ls ON ls.id = l.lead_status_id
+            LEFT JOIN dbo.pipeline pl ON pl.id = ls.pipeline_id
             LEFT JOIN dbo.canal_lead cl ON cl.id = l.canal_lead_id
             WHERE l.id = %s
         ''', [lead_id])

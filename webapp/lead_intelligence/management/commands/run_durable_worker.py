@@ -44,7 +44,12 @@ class Command(BaseCommand):
             from lead_intelligence.management.commands.analyze_lead_conversations import reset_cancel
             reset_cancel()
             kwargs = {"workers": int(payload.get("workers", 1)), "fail_on_error": True}
-            if payload.get("date_from") and payload.get("date_to"):
+            if payload.get("lead_id"):
+                kwargs.update(
+                    lead_id=int(payload["lead_id"]),
+                    force=bool(payload.get("force")) and job.attempts == 1,
+                )
+            elif payload.get("date_from") and payload.get("date_to"):
                 kwargs.update(
                     date_from=payload["date_from"],
                     date_to=payload["date_to"],

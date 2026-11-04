@@ -1,8 +1,6 @@
-name: Control de leads - barrido automático (cada 5 min)
+name: Control de leads - recuperación manual
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -12,7 +10,7 @@ jobs:
   procesar-control:
     runs-on: ubuntu-latest
     steps:
-      - name: Sincronizar cartera, plazos y avisos pendientes
+      - name: Forzar una sincronización de recuperación
         run: |
           curl -sS -f --max-time 180 -X POST \
             -H "X-Analytics-API-Key: ${{ secrets.ANALYTICS_BRIDGE_API_KEY }}" \

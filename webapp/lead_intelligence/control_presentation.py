@@ -52,6 +52,11 @@ def describe(item, now, stale_before):
     raw = evidence.get('message') or evidence.get('notes') or ''
     item.evidence_text = ' '.join(raw.split())[:240] if isinstance(raw, str) else ''
     item.evidence_label = 'Mensaje que originó el pendiente' if evidence.get('message') else 'Compromiso registrado'
+    if not fresh:
+        # A stale snapshot is evidence of an old state, not proof that the
+        # current conversation still has the same pending action.
+        item.reason_text = 'No se puede confirmar el estado actual: la última lectura del CRM está vencida.'
+        item.evidence_label = 'Evidencia de la última lectura'
     item.elapsed_text = f'Hace {duration(now-item.started_at)}' if item.started_at <= now else 'Inicio programado'
     due = item.action.due_at
     if not fresh:

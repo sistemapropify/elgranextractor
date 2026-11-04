@@ -14,5 +14,6 @@ urlpatterns = [path('', include(([
     path('rules/', views.rules, name='control_rules'),
     path('directory/', views.directory, name='control_directory'),
     path('directory/<int:member_id>/', views.directory, name='control_member'),
+    path('api/control/refresh-lead/', views.refresh_lead, name='control_refresh_lead'),
     path('remarketing/', lambda request: HttpResponse(), name='remarketing_campaigns'),
 ], 'analisis_crm')))]
