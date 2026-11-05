@@ -232,8 +232,39 @@
             details.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Cargando fachada, titulares, fichas y procedencia desde el Catastro Maestro…'}));
             loadLotDossier(item,String(p.ID_LOTE),details);
         }
+        else if(item.key==='lotes'&&['wgs84','psad56'].includes(item.source.source_key)&&p.ID_PREDIO_RPU&&Number.isSafeInteger(Number(p.OBJECTID))){
+            details.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Consultando la ficha formalizada y sus linderos…'}));
+            loadFormalizationDetail(item,p,details);
+        }
         else if(item.source.role==='draft'&&isUuid(p.ELEMENT_ID))loadEntityDetail(item,p.ELEMENT_ID,details);
         else if(item.source.role!=='draft')details.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Esta fuente es de referencia. Para ver la ficha completa debe estar vinculada como Registro Maestro de Lote.'}));
+    }
+    async function loadFormalizationDetail(item,properties,host) {
+        const request=++detailRequest;
+        try{
+            const url='/catastro/api/maestro/formalizacion/'+encodeURIComponent(item.source.source_key)+'/'+
+                encodeURIComponent(properties.ID_PREDIO_RPU)+'/'+encodeURIComponent(properties.OBJECTID)+
+                '/?ubigeo='+encodeURIComponent(sourceDistrict(item.source));
+            const data=await json(url);
+            if(request!==detailRequest)return;
+            host.replaceChildren();
+            addEntityRows(host,'Ficha del predio formalizado',[
+                ['Código de predio',data.FI_CODPRE||properties.ID_PREDIO_RPU],
+                ['Pueblo',data.NOMPJV],
+                ['Manzana',data.MZNA||properties.COD_MZNA],
+                ['Lote',data.LOTE||properties.COD_LOTE],
+                ['Área de terreno',data.PM_AREPRE],
+                ['Uso',data.TIPO_USO],
+                ['Fecha de titulación',data.FECHA_TITULO],
+                ['Estado del título',data.ESTADO_TITULO],
+                ['Frente',[data.FC_FRENTE,data.PM_LTEFRE].filter(Boolean).join(' · ')],
+                ['Derecha',[data.FC_DERECHA,data.PM_LTEDER].filter(Boolean).join(' · ')],
+                ['Izquierda',[data.FC_IZQUIERDA,data.PM_LTEIZQ].filter(Boolean).join(' · ')],
+                ['Fondo',[data.FC_FONDO,data.PM_LTEFON].filter(Boolean).join(' · ')]
+            ]);
+        }catch(error){
+            if(request===detailRequest)host.replaceChildren(Object.assign(document.createElement('p'),{className:'master-help',textContent:error.message}));
+        }
     }
     function addEntitySection(host,title,content,className='') {
         const section=document.createElement('section');section.className='master-entity-section '+className;

@@ -303,16 +303,36 @@ def formalization_details(predio, object_id):
     return {key: value for key, value in result.items() if value not in (None, '')}
 
 
-def formalization_detail(source, predio, object_id):
+def formalization_detail(source, predio, object_id, ubigeo=''):
     """Return and cache one safe formalization detail payload."""
     source = _source_key(source)
     if source not in ('wgs84', 'psad56'):
         raise ValueError('La ficha formalizada no corresponde a esta fuente.')
-    cache_key = 'cofopri-formalization-detail-v1:%s:%s:%s' % (
-        source, predio, object_id)
+    ubigeo = str(ubigeo or '').strip()
+    if ubigeo and not re.fullmatch(r'\d{6}', ubigeo):
+        raise ValueError('Distrito no válido para la ficha formalizada.')
+    cache_key = 'cofopri-formalization-detail-v2:%s:%s:%s:%s' % (
+        ubigeo, source, predio, object_id)
     saved = cache.get(cache_key)
     if saved is not None:
         return saved
+    storage = None
+    object_key = None
+    if ubigeo:
+        storage = R2(timeout=30)
+        object_key = ('geollaqta/formalizacion/' + ubigeo + '/' +
+                      source + '/' + predio + '.json')
+        try:
+            body, _ = storage.get_manifest(object_key)
+            saved = json.loads(body)
+            if (saved.get('ID_PREDIO_RPU') == predio
+                    and saved.get('OBJECTID') == int(object_id)
+                    and saved.get('source') == source):
+                cache.set(cache_key, saved, 3600)
+                return saved
+        except StorageError as error:
+            if error.http_status != 404:
+                raise
     value = {
         'source': source,
         'source_name': _source_profile(source)['name'],
@@ -320,6 +340,11 @@ def formalization_detail(source, predio, object_id):
         'OBJECTID': int(object_id),
         **formalization_details(predio, object_id),
     }
+    if storage is not None:
+        payload = json.dumps(
+            value, ensure_ascii=False, separators=(',', ':')).encode()
+        storage.put_verified(object_key, payload, 'application/json')
+        value['PERSISTED_OBJECT_KEY'] = object_key
     cache.set(cache_key, value, 3600)
     return value
 

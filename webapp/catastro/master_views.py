@@ -109,7 +109,7 @@ def vector_snapshot_manifest(request, ubigeo, layer_key):
 def formalization_detail(request, source, predio, object_id):
     try:
         value = vector_snapshots.formalization_detail(
-            source, predio, object_id)
+            source, predio, object_id, request.GET.get('ubigeo', ''))
         response = JsonResponse(value, json_dumps_params={'ensure_ascii': False})
         response['Cache-Control'] = 'private, max-age=3600'
         return response
