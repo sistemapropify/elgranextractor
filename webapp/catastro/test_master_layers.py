@@ -303,10 +303,7 @@ class MasterGeometryTests(SimpleTestCase):
                      for item in master.configuration()['providers']
                      if item.get('transport') == 'master'
                      and 'revision' in item.get('placement', {})}
-        self.assertEqual(revisions['cayma-pud-2006-eu03'],
-                         providers['cayma-pud-2006-eu03'])
-        self.assertEqual(revisions['cayma-sector-32-provisional'],
-                         providers['cayma-sector-32-provisional'])
+        self.assertEqual(revisions, providers)
 
     def test_acm_configuration_has_no_primary_cadastral_provider(self):
         from . import master
@@ -322,6 +319,8 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertEqual(snapshot['bbox'],
                          [-71.57235497, -16.41116467,
                           -71.53480113, -16.3797898])
+        self.assertEqual(snapshot['revision'],
+                         master_layers.revisions()['vectores-040126'])
 
     def test_snapshot_radius_is_the_shared_acm_geometry_contract(self):
         source = {

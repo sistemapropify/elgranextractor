@@ -317,23 +317,34 @@ def catalog_sources(cloud=None):
         saved_bounds = json.loads(LOCAL_BOUNDS.read_text(encoding='utf8')).get('bounds') or {}
     except (OSError, TypeError, ValueError):
         saved_bounds = {}
-    return [{
-        'id': 'vectores-' + ubigeo,
-        'name': 'Catastro Maestro · vectores del distrito',
-        'ubigeo': ubigeo,
-        'districts': [ubigeo],
-        'active': True,
-        'default_visible': True,
-        'contributes': False,
-        'reference_only': False,
-        'role': 'snapshot',
-        'status': 'available_vectors',
-        'transport': 'snapshot',
-        'crs': 'EPSG:4326',
-        'bbox': saved_bounds.get(ubigeo),
-        'layers': {
-            layer: {'count': int(item.get('features') or 0), 'kind': 'polygon'}
+    sources = []
+    for ubigeo, layers in sorted(grouped.items()):
+        revision = hashlib.sha256(json.dumps({
+            layer: {'captured_at': item.get('captured_at'),
+                    'chunks': item.get('chunks') or [
+                        {'sha256': item.get('sha256')}]}
             for layer, item in layers.items()
-        },
-        'snapshot_schema': 'prometeo-vector-snapshots-v1',
-    } for ubigeo, layers in sorted(grouped.items())]
+        }, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        sources.append({
+            'id': 'vectores-' + ubigeo,
+            'name': 'Catastro Maestro · vectores del distrito',
+            'ubigeo': ubigeo,
+            'districts': [ubigeo],
+            'active': True,
+            'default_visible': True,
+            'contributes': False,
+            'reference_only': False,
+            'role': 'snapshot',
+            'status': 'available_vectors',
+            'transport': 'snapshot',
+            'crs': 'EPSG:4326',
+            'bbox': saved_bounds.get(ubigeo),
+            'revision': revision,
+            'layers': {
+                layer: {'count': int(item.get('features') or 0),
+                        'kind': 'polygon'}
+                for layer, item in layers.items()
+            },
+            'snapshot_schema': 'prometeo-vector-snapshots-v1',
+        })
+    return sources

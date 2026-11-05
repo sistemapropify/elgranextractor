@@ -143,6 +143,12 @@ def revisions():
     if source_manager.enabled() or source_manager.durable():
         for district, summary in source_manager.district_summaries().items():
             value['borrador-'+district] = summary['revision']
+    from . import vector_snapshots
+    try:
+        for source in vector_snapshots.catalog_sources():
+            value[source['id']] = source['revision']
+    except StorageError:
+        pass
     return value
 
 

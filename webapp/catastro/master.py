@@ -169,6 +169,8 @@ def configuration():
         source['placement'] = {k: v for k, v in
                                (source.get('placement') or {}).items()
                                if k != 'blocks'}
+        if source.get('role') == 'snapshot' and source.get('revision') is not None:
+            source['placement']['revision'] = source['revision']
     return {'revision': 5, 'scope': 'radius', 'batch_size': 500,
             'providers': references}
 

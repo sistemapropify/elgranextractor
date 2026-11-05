@@ -94,8 +94,20 @@
         });
         const views = new Map();
         let loading = null;
+        let renderedSignature = '';
 
         function render(records) {
+            const signature = JSON.stringify(records.map(record => [
+                record.id, record.version_id, record.state?.visible,
+                record.state?.center, record.state?.width_m,
+                record.state?.height_m, record.state?.rotation_deg,
+                record.state?.opacity,
+            ]));
+            if (signature === renderedSignature) {
+                controller.redraw();
+                return;
+            }
+            renderedSignature = signature;
             for (const view of views.values()) view.setMap(null);
             views.clear();
             const PatchLayer = patchLayerClass();
