@@ -108,6 +108,65 @@ class MasterGeometryTests(SimpleTestCase):
             4000)
         self.assertIn('geollaqta/vectores/index.json', cloud.objects)
 
+    def test_source_snapshots_are_namespaced_without_breaking_pcdpi_compatibility(self):
+        cache.clear()
+        cloud = FakeSnapshotCloud()
+        for source, count in (('pcdpi', 1), ('wgs84', 2), ('psad56', 3)):
+            collection = {
+                'type': 'FeatureCollection', 'ubigeo': '040105',
+                'layer': 'lotes', 'source_key': source,
+                'features': [
+                    {'type': 'Feature', 'id': index,
+                     'properties': {'ID_PREDIO_RPU': 'P' + str(index)},
+                     'geometry': {'type': 'Polygon', 'coordinates': []}}
+                    for index in range(count)
+                ],
+            }
+            vector_snapshots.save_snapshot(
+                '040105', 'lotes', collection, cloud=cloud, source=source)
+        self.assertEqual(
+            vector_snapshots.read_snapshot(
+                '040105', 'lotes', cloud=cloud,
+                source='pcdpi')['total_features'], 1)
+        self.assertEqual(
+            vector_snapshots.read_snapshot(
+                '040105', 'lotes', cloud=cloud,
+                source='wgs84')['total_features'], 2)
+        sources = vector_snapshots.catalog_sources(cloud=cloud)
+        self.assertEqual({item['id'] for item in sources}, {
+            'vectores-040105',
+            'vectores-wgs84-040105',
+            'vectores-psad56-040105',
+        })
+        self.assertIn(
+            'geollaqta/vectores/040105/psad56/lotes.part-0001.json.gz',
+            cloud.objects)
+
+    def test_psad56_service_output_is_not_transformed_twice_and_fields_are_normalized(self):
+        geometry = {
+            'type': 'Polygon',
+            'coordinates': [[
+                [-71.481261617, -16.464889133],
+                [-71.481402742, -16.464889758],
+                [-71.481396117, -16.465073508],
+                [-71.481261617, -16.464889133],
+            ]],
+        }
+        transformed = vector_snapshots._transform_geometry(geometry, 'psad56')
+        self.assertEqual(transformed['type'], 'Polygon')
+        self.assertAlmostEqual(
+            transformed['coordinates'][0][0][0], -71.481261617, places=7)
+        self.assertAlmostEqual(
+            transformed['coordinates'][0][0][1], -16.464889133, places=7)
+        properties = vector_snapshots._normalized_properties(
+            'psad56', 'lotes',
+            {'ID_PREDIO_RPU': 'P06121499', 'NRO_MZNA': 'Y',
+             'NRO_LOTE': '12', 'AREA_INSCRITA': 555.44})
+        self.assertEqual(properties['COD_MZNA'], 'Y')
+        self.assertEqual(properties['COD_LOTE'], '12')
+        self.assertEqual(properties['AREA_TER'], 555.44)
+        self.assertEqual(properties['SOURCE_PROFILE'], 'psad56')
+
     def test_vector_feature_lookup_uses_the_archived_snapshot(self):
         collection = {'features': [
             {'type': 'Feature', 'id': 1,
@@ -123,16 +182,33 @@ class MasterGeometryTests(SimpleTestCase):
 
     def test_vector_manifest_url_passes_the_layer_parameter_to_the_view(self):
         request = RequestFactory().get(
-            '/catastro/api/maestro/vectores/040102/manzanas/manifiesto/')
+            '/catastro/api/maestro/vectores/040102/manzanas/manifiesto/?source=wgs84')
         request.current_user = SimpleNamespace(
             is_authenticated=True, is_active=True, is_staff=True, is_superuser=True)
         match = resolve(request.path)
         self.assertEqual(match.kwargs, {'ubigeo': '040102', 'layer_key': 'manzanas'})
         with patch('catastro.vector_snapshots.snapshot_manifest',
                    return_value={'ubigeo': '040102', 'layer': 'manzanas',
-                                 'parts': 1, 'features': 1}):
+                                 'source': 'wgs84', 'parts': 1,
+                                 'features': 1}) as snapshot:
             response = match.func(request, **match.kwargs)
         self.assertEqual(response.status_code, 200)
+        snapshot.assert_called_once_with(
+            '040102', 'manzanas', source='wgs84')
+
+    def test_formalization_detail_route_fetches_one_authenticated_parcel(self):
+        request = RequestFactory().get(
+            '/catastro/api/maestro/formalizacion/psad56/P06121499/1409300/')
+        request.current_user = SimpleNamespace(
+            is_authenticated=True, is_active=True, is_staff=True,
+            is_superuser=False)
+        match = resolve(request.path)
+        with patch('catastro.vector_snapshots.formalization_detail',
+                   return_value={'FI_CODPRE': 'P06121499',
+                                 'ESTADO_TITULO': 'INSCRITO'}) as detail:
+            response = match.func(request, **match.kwargs)
+        self.assertEqual(response.status_code, 200)
+        detail.assert_called_once_with('psad56', 'P06121499', 1409300)
 
     def test_manual_park_lots_are_saved_independently_by_district(self):
         cloud = FakeSnapshotCloud()
@@ -401,4 +477,4 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertNotIn('geollaqta-data.js', html)
         self.assertNotIn('geollaqta-district.js', html)
         self.assertNotIn('collection-form', html)
-        self.assertIn('catastro-maestro.js?v=34', html)
+        self.assertIn('catastro-maestro.js?v=35', html)

@@ -205,6 +205,17 @@
             ['Distrito',p.DISTRICT_NAME||districtLabel(itemDistrict)],
             ['Fuente',item.source.name],['Manzana',p.COD_MZNA||'Sin numeración en la fuente']];
         if(item.key==='lotes')values.push(['Lote',p.COD_LOTE||'Sin numeración en la fuente']);
+        if(item.key==='lotes'&&['wgs84','psad56'].includes(item.source.source_key)){
+            values.push(
+                ['Código de predio formalizado',p.ID_PREDIO_RPU||'Sin código'],
+                ['Titulación',p.TITULO_FECHA||p.FECHA_TITULO||'Sin fecha'],
+                ['Estado del título',p.TITULO_ESTADO||p.ESTADO_TITULO||'Sin estado'],
+                ['Frente',[p.LINDERO_FRENTE||p.FC_FRENTE,p.MEDIDA_FRENTE||p.PM_LTEFRE].filter(Boolean).join(' · ')||'Sin lindero'],
+                ['Derecha',[p.LINDERO_DERECHA||p.FC_DERECHA,p.MEDIDA_DERECHA||p.PM_LTEDER].filter(Boolean).join(' · ')||'Sin lindero'],
+                ['Izquierda',[p.LINDERO_IZQUIERDA||p.FC_IZQUIERDA,p.MEDIDA_IZQUIERDA||p.PM_LTEIZQ].filter(Boolean).join(' · ')||'Sin lindero'],
+                ['Fondo',[p.LINDERO_FONDO||p.FC_FONDO,p.MEDIDA_FONDO||p.PM_LTEFON].filter(Boolean).join(' · ')||'Sin lindero']
+            );
+        }
         values.push(['Código catastral',p.ID_LOTE||p.ID_MZNA||'No disponible'],
             ['ID Maestro',isUuid(p.ELEMENT_ID)?p.ELEMENT_ID:recordId(item.source,item.key,item.feature)]);
         if(displayEntityId(entityKind,p.ELEMENT_ID))values.push(['Alias de pantalla',displayEntityId(entityKind,p.ELEMENT_ID)]);
@@ -617,8 +628,9 @@
                     if(scope===district&&!signal.aborted)
                         loading(source.name+' · '+key+'…',loadDone,loadTotal);
                     if(source.transport==='snapshot'){
-                        const base='/catastro/api/maestro/vectores/'+encodeURIComponent(current)+'/'+key+'/';
-                        const manifest=await snapshotJson(base+'manifiesto/',signal);
+                        const sourceQuery='?source='+encodeURIComponent(source.source_key||'pcdpi');
+                        const base='/catastro/api/maestro/vectores/'+encodeURIComponent(current)+'/'+key+'/'+sourceQuery;
+                        const manifest=await snapshotJson('/catastro/api/maestro/vectores/'+encodeURIComponent(current)+'/'+key+'/manifiesto/'+sourceQuery,signal);
                         collection={source,key,district:current,records:[]};
                         collections.set(id,collection);
                         for(let part=1;part<=manifest.parts;part++){
@@ -626,7 +638,7 @@
                             if(scope===district)
                                 loading(source.name+' · '+key+' · parte '+part+'/'+manifest.parts,
                                     loadDone+(part-1)/Math.max(1,manifest.parts),loadTotal);
-                            const data=await snapshotJson(base+'?part='+part,signal);
+                            const data=await snapshotJson(base+'&part='+part,signal);
                             const records=(data.features||[]).map(f=>record(f,source,key)).filter(Boolean);
                             collection.records.push(...records);
                             if(vectorLayer&&records.length)

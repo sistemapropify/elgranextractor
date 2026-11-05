@@ -65,15 +65,19 @@ def layer(request, source_id, layer_key):
 @admin_required
 def vector_snapshot(request, ubigeo, layer_key):
     layer = layer_key
+    source = request.GET.get('source', vector_snapshots.DEFAULT_SOURCE)
     try:
         part = request.GET.get('part')
         if part is not None:
-            value = vector_snapshots.read_snapshot_part(ubigeo, layer, int(part))
+            value = vector_snapshots.read_snapshot_part(
+                ubigeo, layer, int(part), source=source)
         else:
-            value = vector_snapshots.read_snapshot(ubigeo, layer)
+            value = vector_snapshots.read_snapshot(
+                ubigeo, layer, source=source)
         response = JsonResponse(value, json_dumps_params={'separators': (',', ':')})
         response['Cache-Control'] = 'private, max-age=86400'
-        fingerprint = vector_snapshots.snapshot_fingerprint(ubigeo, layer)
+        fingerprint = vector_snapshots.snapshot_fingerprint(
+            ubigeo, layer, source=source)
         if fingerprint:
             response['ETag'] = '"' + fingerprint + '"'
         return response
@@ -87,8 +91,10 @@ def vector_snapshot(request, ubigeo, layer_key):
 @admin_required
 def vector_snapshot_manifest(request, ubigeo, layer_key):
     layer = layer_key
+    source = request.GET.get('source', vector_snapshots.DEFAULT_SOURCE)
     try:
-        value = vector_snapshots.snapshot_manifest(ubigeo, layer)
+        value = vector_snapshots.snapshot_manifest(
+            ubigeo, layer, source=source)
         response = JsonResponse(value)
         response['Cache-Control'] = 'private, max-age=3600'
         return response
@@ -96,6 +102,21 @@ def vector_snapshot_manifest(request, ubigeo, layer_key):
         return JsonResponse({'error': str(error)}, status=503)
     except ValueError as error:
         return JsonResponse({'error': str(error)}, status=404)
+
+
+@require_GET
+@admin_required
+def formalization_detail(request, source, predio, object_id):
+    try:
+        value = vector_snapshots.formalization_detail(
+            source, predio, object_id)
+        response = JsonResponse(value, json_dumps_params={'ensure_ascii': False})
+        response['Cache-Control'] = 'private, max-age=3600'
+        return response
+    except (ValueError, KeyError, TypeError) as error:
+        return JsonResponse({'error': str(error)}, status=400)
+    except (RuntimeError, OSError) as error:
+        return JsonResponse({'error': str(error)}, status=502)
 
 
 @require_GET

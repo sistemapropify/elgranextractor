@@ -203,15 +203,17 @@ def catalogue():
     }
     for source in snapshots:
         existing = d1_layers.get(source['ubigeo'], {})
-        source['layers'] = {
-            key: value for key, value in source.get('layers', {}).items()
-            if not int(existing.get(key, {}).get('count') or 0)
-        }
+        if source.get('source_key', 'pcdpi') == 'pcdpi':
+            source['layers'] = {
+                key: value for key, value in source.get('layers', {}).items()
+                if not int(existing.get(key, {}).get('count') or 0)
+            }
         if not source['layers']:
             continue
         district_name = (geo.DISTRICTS.get(source['ubigeo']) or {}).get(
             'name', source['ubigeo'])
-        source['name'] = 'Catastro Maestro · ' + district_name + ' · vectores'
+        source['name'] = ('Catastro Maestro · ' + district_name + ' · ' +
+                          (source.get('source_name') or 'vectores'))
         sources.append(source)
     districts = [{**d} for d in geo.DISTRICTS.values()]
     for district in districts:
@@ -326,23 +328,28 @@ def radius(source_id, lat, lng, metres):
     return _radius(source_id, lat, lng, metres)
 
 
-@lru_cache(maxsize=6)
-def _snapshot_collection(ubigeo, layer, fingerprint):
+@lru_cache(maxsize=12)
+def _snapshot_collection(ubigeo, layer, fingerprint, source='pcdpi'):
     """Keep bounded immutable chunks warm inside each app process."""
     from . import vector_snapshots
-    return vector_snapshots.read_snapshot(ubigeo, layer)
+    return vector_snapshots.read_snapshot(ubigeo, layer, source=source)
 
 
 def _snapshot_radius(source_id, lat, lng, metres):
     """Publish an archived district snapshot through the same radius contract."""
     from . import vector_snapshots
-    ubigeo = source_id.removeprefix('vectores-')
-    if not re.fullmatch(r'\d{6}', ubigeo):
-        raise ValueError('Fuente vectorial no válida.')
     source = next((item for item in vector_snapshots.catalog_sources()
                    if item.get('id') == source_id), None)
     if not source or not source.get('active'):
         raise ValueError('La capa vectorial todavía no está disponible.')
+    ubigeo = source.get('ubigeo')
+    if not ubigeo:
+        legacy = source_id.removeprefix('vectores-')
+        if re.fullmatch(r'\d{6}', legacy):
+            ubigeo = legacy
+    if not ubigeo:
+        raise ValueError('Fuente vectorial no válida.')
+    source_key = source.get('source_key', 'pcdpi')
     lat, lng, metres = float(lat), float(lng), float(metres)
     if (not all(math.isfinite(v) for v in (lat, lng, metres))
             or not -85 <= lat <= 85 or not -180 <= lng <= 180
@@ -385,9 +392,10 @@ def _snapshot_radius(source_id, lat, lng, metres):
             features = []
             source_total = 0
         else:
-            fingerprint = vector_snapshots.snapshot_fingerprint(ubigeo, layer)
+            fingerprint = vector_snapshots.snapshot_fingerprint(
+                ubigeo, layer, source=source_key)
             collection = _snapshot_collection(
-                ubigeo, layer, fingerprint or 'missing')
+                ubigeo, layer, fingerprint or 'missing', source_key)
             source_total = len(collection.get('features') or [])
             features = []
             for feature in collection.get('features') or []:

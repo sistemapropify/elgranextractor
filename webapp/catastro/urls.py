@@ -43,6 +43,7 @@ urlpatterns = [
     path('api/maestro/fuentes/<slug:source_id>/posicion/', master_views.placement, name='maestro_placement'),
     path('api/maestro/vectores/<str:ubigeo>/<slug:layer_key>/manifiesto/', master_views.vector_snapshot_manifest, name='maestro_vector_snapshot_manifest'),
     path('api/maestro/vectores/<str:ubigeo>/<slug:layer_key>/', master_views.vector_snapshot, name='maestro_vector_snapshot'),
+    path('api/maestro/formalizacion/<slug:source>/<str:predio>/<int:object_id>/', master_views.formalization_detail, name='maestro_formalization_detail'),
     path('api/maestro/lotes/<str:lot_id>/galeria/', master_views.lot_gallery, name='maestro_lot_gallery'),
     path('api/maestro/lotes/<str:lot_id>/ficha/', master_views.lot_dossier, name='maestro_lot_dossier'),
     path('api/maestro/lotes/<str:lot_id>/archivos/<str:filename>/', master_views.lot_archive_asset, name='maestro_lot_archive_asset'),
