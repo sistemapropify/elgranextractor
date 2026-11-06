@@ -6,7 +6,7 @@ import uuid
 
 from . import geollaqta_bulk
 from . import cofopri_vector_migration
-from .master_d1 import Gateway, D1Store
+from .master_d1 import Gateway
 from .migration_audit import audit_district
 from .master_store import Conflict
 from .storage import R2, StorageError
@@ -106,7 +106,8 @@ def _claim(gateway, ubigeo, actor, batch_size):
     raise StorageError('No se pudo reservar la migración en segundo plano.')
 
 
-def start(ubigeo='040126', actor='sistema-geollaqta', batch_size=20):
+def start(ubigeo='040126', actor='sistema-geollaqta',
+          batch_size=SAFE_BATCH_SIZE):
     gateway = Gateway()
     batch_size = max(1, min(int(batch_size), SAFE_BATCH_SIZE))
     claimed, value = _claim(gateway, ubigeo, actor, batch_size)
@@ -174,12 +175,19 @@ def _run(ubigeo, actor, batch_size, job_id):
         ids, truncated = geollaqta_bulk.lot_ids(ubigeo, cloud)
         if truncated:
             raise ValueError('El inventario R2 está truncado; divide el ámbito antes de migrar.')
+        try:
+            formal_lots = cofopri_vector_migration.merged_formalization_lots(
+                ubigeo, cloud)
+        except (ValueError, StorageError, AttributeError):
+            formal_lots = []
+        inventory = (ids, truncated)
         while _owns(gateway, ubigeo, job_id):
             status = geollaqta_bulk.migration_status(
-                gateway, ubigeo, cloud)
+                gateway, ubigeo, cloud, inventory=inventory,
+                formal_lots=formal_lots)
             if status['formalization_pending_lots']:
-                formal = cofopri_vector_migration.migrate_district(
-                    D1Store(gateway=gateway, scope=ubigeo),
+                formal = cofopri_vector_migration.migrate_direct(
+                    gateway,
                     ubigeo, geollaqta.DISTRICTS[ubigeo]['name'],
                     batch_size=min(batch_size, 200),
                     limit=min(batch_size, 200), actor=actor)
@@ -198,7 +206,8 @@ def _run(ubigeo, actor, batch_size, job_id):
                 batch_revision = None
             total += processed
             status = geollaqta_bulk.migration_status(
-                gateway, ubigeo, cloud)
+                gateway, ubigeo, cloud, inventory=inventory,
+                formal_lots=formal_lots)
             current = _read_job(gateway, ubigeo)
             value = {
                 **current,

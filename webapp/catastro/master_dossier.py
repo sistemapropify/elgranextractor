@@ -81,14 +81,29 @@ def _from_d1(lot_id, record_id, surface):
     for field in (
             'department', 'province', 'district', 'urbanization',
             'street_type', 'street_name', 'municipal_number',
-            'cadastral_use', 'zoning'):
-        if attributes.get(field) not in (None, ''):
+            'cadastral_use', 'zoning', 'land_area', 'built_area',
+            'front', 'back', 'left', 'right'):
+        current = attributes.get(field)
+        if isinstance(current, str) and ' | ' in current:
+            parts = {part.strip() for part in current.split(' | ') if part.strip()}
+            if len(parts) == 1:
+                attributes[field] = parts.pop()
+                current = attributes[field]
+        if current not in (None, ''):
             continue
-        values = {
-            str(unit.get(field)).strip()
-            for unit in units
-            if unit.get(field) not in (None, '')
-        }
+        values = set()
+        for unit in units:
+            value = unit.get(field)
+            if value in (None, ''):
+                continue
+            value = str(value).strip()
+            if ' | ' in value:
+                alternatives = {
+                    part.strip() for part in value.split(' | ') if part.strip()
+                }
+                if len(alternatives) == 1:
+                    value = alternatives.pop()
+            values.add(value)
         if len(values) == 1:
             attributes[field] = values.pop()
     if record_id and record_id not in choices:

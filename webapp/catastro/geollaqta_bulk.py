@@ -269,16 +269,19 @@ def linked_lot_ids(gateway, ubigeo):
     return {str(row['source_feature_id']) for row in rows}
 
 
-def migration_status(gateway, ubigeo='040126', cloud=None):
+def migration_status(gateway, ubigeo='040126', cloud=None, inventory=None,
+                     formal_lots=None):
+    """Return migration progress without forcing repeated R2 inventories."""
     cloud = cloud or R2(timeout=20)
-    ids, truncated = lot_ids(ubigeo, cloud)
+    ids, truncated = inventory or lot_ids(ubigeo, cloud)
     linked = linked_lot_ids(gateway, ubigeo)
-    from . import cofopri_vector_migration
-    try:
-        formal_lots = cofopri_vector_migration.merged_formalization_lots(
-            ubigeo, cloud)
-    except (ValueError, StorageError, AttributeError):
-        formal_lots = []
+    if formal_lots is None:
+        from . import cofopri_vector_migration
+        try:
+            formal_lots = cofopri_vector_migration.merged_formalization_lots(
+                ubigeo, cloud)
+        except (ValueError, StorageError, AttributeError):
+            formal_lots = []
     formal_ids = {str(lot['id']) for lot in formal_lots}
     formal_rows = gateway.read(
         '''SELECT DISTINCT i.source_feature_id

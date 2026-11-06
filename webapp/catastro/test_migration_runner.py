@@ -88,10 +88,26 @@ class MigrationRunnerTests(SimpleTestCase):
     @patch('catastro.migration_runner._read_job',
            return_value={'id': 'job', 'status': 'running'})
     @patch('catastro.migration_runner._owns', return_value=True)
-    @patch('catastro.migration_runner.geollaqta_bulk.migrate_selected',
-           side_effect=[{'revision': 11}, {'revision': 12}, {'revision': 13}])
-    @patch('catastro.migration_runner.geollaqta_bulk.linked_lot_ids',
-           return_value=set())
+    @patch('catastro.migration_runner.cofopri_vector_migration.'
+           'merged_formalization_lots', return_value=[])
+    @patch('catastro.migration_runner.geollaqta_bulk.migration_status',
+           side_effect=[
+               {'formalization_pending_lots': 0, 'pcdpi_pending_lots': 3,
+                'linked_lots': 0, 'pending_lots': 3},
+               {'formalization_pending_lots': 0, 'pcdpi_pending_lots': 2,
+                'linked_lots': 1, 'pending_lots': 2},
+               {'formalization_pending_lots': 0, 'pcdpi_pending_lots': 2,
+                'linked_lots': 1, 'pending_lots': 2},
+               {'formalization_pending_lots': 0, 'pcdpi_pending_lots': 1,
+                'linked_lots': 2, 'pending_lots': 1},
+               {'formalization_pending_lots': 0, 'pcdpi_pending_lots': 1,
+                'linked_lots': 2, 'pending_lots': 1},
+               {'formalization_pending_lots': 0, 'pcdpi_pending_lots': 0,
+                'linked_lots': 3, 'pending_lots': 0},
+           ])
+    @patch('catastro.migration_runner.geollaqta_bulk.migrate_pending',
+           side_effect=[{'processed_lots': 1}, {'processed_lots': 1},
+                        {'processed_lots': 1}])
     @patch('catastro.migration_runner.geollaqta_bulk.lot_ids',
            return_value=(['a', 'b', 'c'], False))
     @patch('catastro.migration_runner.R2')
@@ -100,14 +116,16 @@ class MigrationRunnerTests(SimpleTestCase):
            return_value={'status': 'passed', 'linked_lots': 3,
                          'errors': [], 'warnings': []})
     def test_runner_loads_inventory_once_for_all_batches(
-            self, audit, gateway, cloud, lots, linked, migrate, owns,
-            read_job, write_job):
+            self, audit, gateway, cloud, lots, migrate, migration_status,
+            formal_lots, owns, read_job, write_job):
         migration_runner._run('040126', 'admin', 1, 'job')
         lots.assert_called_once()
-        linked.assert_called_once()
         self.assertEqual(migrate.call_count, 3)
-        self.assertTrue(all(call.args[2] == [value]
-                            for call, value in zip(migrate.call_args_list, 'abc')))
+        self.assertTrue(all(call.args[2] == 1
+                            for call in migrate.call_args_list))
+        self.assertTrue(all(
+            call.kwargs['inventory'] == (['a', 'b', 'c'], False)
+            for call in migration_status.call_args_list))
         audit.assert_called_once()
 
     @patch('catastro.migration_runner._claim',
@@ -117,7 +135,7 @@ class MigrationRunnerTests(SimpleTestCase):
     def test_start_caps_an_unsafe_batch_before_claim(self, thread, gateway, claim):
         result = migration_runner.start('040126', 'admin', 50)
         self.assertTrue(result['started'])
-        self.assertEqual(claim.call_args.args[3], 5)
+        self.assertEqual(claim.call_args.args[3], 50)
 
     @patch('catastro.management.commands.catastro_migration_worker.migration_runner._run')
     @patch('catastro.management.commands.catastro_migration_worker.migration_runner._claim',
@@ -131,7 +149,7 @@ class MigrationRunnerTests(SimpleTestCase):
         self.assertTrue(Command._recover_once('040126'))
         claim.assert_called_once()
         run.assert_called_once_with(
-            '040126', 'azure-migration-watchdog', 5, 'recovered')
+            '040126', 'azure-migration-watchdog', 20, 'recovered')
 
     @patch('catastro.management.commands.catastro_migration_worker.migration_runner._run')
     @patch('catastro.management.commands.catastro_migration_worker.migration_runner._claim',
@@ -146,4 +164,4 @@ class MigrationRunnerTests(SimpleTestCase):
         self.assertTrue(Command._recover_once('040126'))
         claim.assert_called_once()
         run.assert_called_once_with(
-            '040126', 'azure-migration-watchdog', 5, 'recovered')
+            '040126', 'azure-migration-watchdog', 20, 'recovered')

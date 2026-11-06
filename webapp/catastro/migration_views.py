@@ -81,7 +81,7 @@ def start(request):
             raise ValueError('Solicitud no válida.')
         ubigeo = registry_cloud.validate_district(
             str(payload.get('ubigeo') or '040126'))
-        batch_size = payload.get('batch_size', 20)
+        batch_size = payload.get('batch_size', 200)
         if type(batch_size) is not int or not 1 <= batch_size <= 200:
             raise ValueError('El tamaño de tanda no es válido.')
         user = getattr(request, 'current_user', None) or request.user

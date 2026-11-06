@@ -6,6 +6,7 @@ protect independent app processes. No local database or download cache is used.
 import json
 import os
 from pathlib import Path
+import time
 import uuid
 from urllib.request import Request, build_opener
 from urllib.error import HTTPError, URLError
@@ -27,6 +28,8 @@ TABLES = {'meta':('key',),'projects':('id',),'sources':('id',),'versions':('id',
           'catalog_review_events':('id',),
           'plan_workspace':('document_key',),'plan_notes':('id',),
           'current_attributes':('entity_id',),'journal':('revision',)}
+MAX_SCOPE_ROWS = 800_000
+MAX_SCOPE_BYTES = 384 * 1024 * 1024
 
 # Pagination order must follow a D1 index. These tuples are only cursors for
 # loading the same scoped rows; primary keys in TABLES still identify rows.
@@ -82,7 +85,7 @@ class Gateway:
         if len(body)>12*1024*1024:raise ValueError('Divide el cambio en ámbitos menores: supera 12 MB.')
         request=Request(self.url+'/v1/database',data=body,method='POST',headers={
             'Content-Type':'application/json','Authorization':'Bearer '+self.token,'User-Agent':'PrometeoCatastro/1.0'})
-        for attempt in range(2):
+        for attempt in range(6):
             try:
                 with self.opener.open(request,timeout=30) as response:
                     raw=response.read(24*1024*1024+1)
@@ -95,11 +98,18 @@ class Gateway:
                     detail=''
                 if error.code==409:raise Conflict('El maestro cambió. Actualiza y vuelve a comparar.') from None
                 if error.code==413:raise StorageError('Divide la versión o el ámbito del cambio: excede los límites de la base actual.') from None
-                if error.code not in (429,500,502,503,504) or attempt:
+                overloaded = (
+                    error.code == 400
+                    and 'overloaded' in str(detail).lower()
+                )
+                if (error.code not in (429,500,502,503,504)
+                        and not overloaded) or attempt == 5:
                     raise StorageError('El Catastro Maestro respondió HTTP '+str(error.code)+
                                        (': '+str(detail) if detail else '')+'.') from None
             except (URLError,OSError,TimeoutError):
-                if attempt:raise StorageError('No se pudo confirmar el guardado en D1. Reintenta la misma operación.') from None
+                if attempt == 5:
+                    raise StorageError('No se pudo confirmar el guardado en D1. Reintenta la misma operación.') from None
+            time.sleep(min(20, 1.5 * (2 ** attempt)))
         raise StorageError('No se pudo contactar con D1.')
 
     def read(self,sql,params=()):
@@ -454,7 +464,7 @@ class D1ReadModel:
 class D1Store(MasterStore):
     """RAM working copy with a row-level, atomic and revision-guarded D1 commit.
 
-The initial authoring cache is bounded to 64 MB/250k rows; exceeding it fails
+The initial authoring cache is bounded to 384 MB/800k rows; exceeding it fails
 explicitly and requires partitioned authoring. User query results stay bounded.
 This is a correctness limit, never a silent subset of the master database.
 """
@@ -547,7 +557,7 @@ This is a correctness limit, never a silent subset of the master database.
                         page=self.gateway.read(sql+' LIMIT 1000',
                                                [*queries[table][1],*params])
                     total+=len(page);size+=len(encoded(page).encode())
-                    if total>250000 or size>64*1024*1024:
+                    if total > MAX_SCOPE_ROWS or size > MAX_SCOPE_BYTES:
                         raise StorageError('El ámbito excede el límite de edición en memoria; requiere particionar la carga antes de continuar.')
                     rows[table].extend(page)
                     if len(page)<1000:break
@@ -705,8 +715,8 @@ This is a correctness limit, never a silent subset of the master database.
             # Publik map reads are bounded keyset queries. Do not materialize
             # the mutable authoring scope, whose migration journal can be much
             # larger than one viewport/district payload.
-            return Gateway.collection(
-                self.gateway, ubigeo, kind, revision=revision)
+            return D1ReadModel(self.gateway).collection(
+                ubigeo, kind, revision=revision)
     def active_districts(self):
         return [r['ubigeo'] for r in self.gateway.read("""SELECT DISTINCT e.ubigeo FROM entities e
             JOIN selections s ON s.entity_id=e.id WHERE e.kind IN ('lote','manzana') AND s.field='$geometry'""")]

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from datetime import datetime, timezone
 
 from shapely.geometry import shape
@@ -16,6 +17,24 @@ from .storage import R2
 
 SOURCE_PREFIX = 'cofopri-formalizacion-'
 IDENTIFIER_SCHEME = 'COFOPRI_RPU'
+CURRENT_ATTRIBUTE_COLUMNS = (
+    'entity_id', 'country_code', 'ubigeo', 'postal_code', 'department',
+    'province', 'district', 'zone', 'sector', 'urbanization', 'block',
+    'lot', 'building', 'entrance', 'floor', 'unit', 'address',
+    'address_block', 'address_lot', 'street_type', 'street_name',
+    'municipal_number', 'condition', 'registry_office',
+    'registry_entry_type', 'notary_name', 'notary_kardex', 'deed_date',
+    'registry_folios', 'registry_seat', 'property_registration_date',
+    'construction_declaration', 'construction_registration_seat',
+    'construction_registration_date', 'cuc', 'cadastral_reference',
+    'cadastral_use', 'observed_use', 'zoning', 'use_category',
+    'business_category', 'business_subcategory', 'ciiu_code',
+    'ciiu_version', 'commercial_name', 'registry_entry_number',
+    'land_area', 'built_area', 'geometric_land_area', 'gis_land_area',
+    'gis_built_area', 'front', 'back', 'left', 'right', 'perimeter',
+    'bedrooms', 'bathrooms', 'half_bathrooms', 'parking_spaces',
+    'floors', 'units', 'is_corner', 'is_through', 'faces_park',
+)
 
 
 def _text(value):
@@ -244,6 +263,181 @@ def migrate_district(store, ubigeo, district, batch_size=100, limit=None,
         'already_linked': len(linked),
         'unique_formalization_lots': len(lots),
         'batches': batches,
+    }
+
+
+def migrate_direct(gateway, ubigeo, district, batch_size=200, limit=None,
+                   actor='cofopri-formalizacion', progress=None):
+    """Commit vector batches directly through D1 without loading the district."""
+    source_id = SOURCE_PREFIX + ubigeo
+    lots = merged_formalization_lots(ubigeo)
+    linked_rows = gateway.read(
+        '''SELECT DISTINCT i.source_feature_id FROM identities i
+           JOIN versions v ON v.id=i.version_id
+           WHERE v.source_id=? AND i.layer='lote' ''',
+        [source_id])
+    linked = {str(row['source_feature_id']) for row in linked_rows}
+    available = len(lots)
+    lots = [lot for lot in lots if str(lot['id']) not in linked]
+    if limit is not None:
+        lots = lots[:int(limit)]
+    if not lots:
+        return {
+            'ubigeo': ubigeo,
+            'district': district,
+            'available_unique_lots': available,
+            'already_linked': len(linked),
+            'unique_formalization_lots': 0,
+            'batches': [],
+            'direct': True,
+        }
+    columns = list(CURRENT_ATTRIBUTE_COLUMNS)
+    source_exists = bool(gateway.read(
+        'SELECT id FROM sources WHERE id=?', [source_id]))
+    created_at = master_store.now()
+    batches = []
+    for offset in range(0, len(lots), batch_size):
+        chunk = lots[offset:offset + batch_size]
+        payload = batch_payload(
+            ubigeo, district, chunk, offset // batch_size + 1)
+        version = payload['version']
+        changes = []
+        if not source_exists:
+            changes.append({
+                'table': 'sources',
+                'upserts': [[source_id, None, payload['source']['name'],
+                             ubigeo, None, 'contributing']],
+                'deletes': [],
+            })
+        changes.append({
+            'table': 'versions',
+            'upserts': [[
+                version['id'], source_id, version['label'],
+                version['source_date'], version['crs'],
+                master_store.encoded(version['georeferencing']),
+                version['original']['name'],
+                version['original']['canonical_sha256'],
+                version['original']['canonical_sha256'], created_at,
+                str(actor)[:160], master_store.encoded(payload),
+            ]],
+            'deletes': [],
+        })
+        entity_rows, contribution_rows, identity_rows = [], [], []
+        selection_rows, attribute_rows, identifier_rows = [], [], []
+        for feature in payload['features']:
+            feature_id = str(feature['id'])
+            entity_id = str(uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                master_store.encoded([
+                    'catastro-maestro', 'PE', source_id, 'lote', feature_id])))
+            entity_rows.append([entity_id, 'lote', 'PE', ubigeo, created_at])
+            attributes = {column: None for column in columns}
+            attributes.update(feature.get('fields') or {})
+            attributes['entity_id'] = entity_id
+            attribute_rows.append([attributes.get(column) for column in columns])
+            for field, value in (feature.get('fields') or {}).items():
+                contribution_id = str(uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    master_store.encoded([
+                        version['id'], 'lote', feature_id, field])))
+                evidence = (feature.get('provenance') or {}).get(
+                    field, {'status': 'source_observation'})
+                contribution_rows.append([
+                    contribution_id, version['id'], feature_id, 'lote',
+                    field, master_store.encoded(value),
+                    master_store.encoded(evidence)])
+                selection_rows.append([entity_id, field, contribution_id])
+            if feature.get('geometry'):
+                contribution_id = str(uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    master_store.encoded([
+                        version['id'], 'lote', feature_id, '$geometry'])))
+                evidence = (feature.get('provenance') or {}).get(
+                    '$geometry', {'status': 'source_observation'})
+                contribution_rows.append([
+                    contribution_id, version['id'], feature_id, 'lote',
+                    '$geometry', master_store.encoded(feature['geometry']),
+                    master_store.encoded(evidence)])
+                selection_rows.append([entity_id, '$geometry', contribution_id])
+            identity_rows.append([version['id'], 'lote', feature_id, entity_id])
+            for identifier in payload.get('identifiers') or []:
+                if identifier.get('target_ref') != 'lote:' + feature_id:
+                    continue
+                identifier_rows.append([
+                    str(uuid.uuid5(uuid.NAMESPACE_URL, master_store.encoded([
+                        version['id'], entity_id, identifier['scheme'],
+                        identifier['value']]))),
+                    entity_id, identifier['target_ref'], identifier['scheme'],
+                    identifier['value'], identifier.get('authority'), None,
+                    identifier.get('status') or 'candidate', created_at,
+                    version['id'], master_store.encoded({
+                        'status': identifier.get('status') or 'candidate'}),
+                ])
+        for table, rows in (
+                ('entities', entity_rows),
+                ('contributions', contribution_rows),
+                ('identities', identity_rows),
+                ('selections', selection_rows),
+                ('current_attributes', attribute_rows),
+                ('external_identifiers', identifier_rows)):
+            if rows:
+                changes.append({'table': table, 'upserts': rows, 'deletes': []})
+        for attempt in range(5):
+            revision = gateway.revision()
+            next_revision = revision + 1
+            journal = [
+                next_revision, 'migration_batch', str(actor)[:160],
+                created_at, 'Migrar formalización COFOPRI en tanda directa.',
+                master_store.encoded({
+                    'scope_ubigeo': ubigeo,
+                    'version_id': version['id'],
+                    'features': len(chunk),
+                }),
+                '{}',
+            ]
+            commit_changes = [
+                *changes,
+                {'table': 'journal', 'upserts': [journal], 'deletes': []},
+                {'table': 'meta', 'upserts': [
+                    ['revision', str(next_revision)]], 'deletes': []},
+            ]
+            try:
+                gateway.call({
+                    'action': 'commit',
+                    'id': str(uuid.uuid4()),
+                    'revision': revision,
+                    'changes': commit_changes,
+                    'result': {
+                        'revision': next_revision,
+                        'version_id': version['id'],
+                        'features': len(chunk),
+                    },
+                })
+                source_exists = True
+                break
+            except master_store.Conflict:
+                if attempt == 4:
+                    raise
+        item = {
+            'batch': offset // batch_size + 1,
+            'features': len(chunk),
+            'version_id': version['id'],
+            'revision': next_revision,
+            'processed': min(offset + len(chunk), len(lots)),
+            'total': len(lots),
+            'remaining': max(0, len(lots) - offset - len(chunk)),
+        }
+        batches.append(item)
+        if progress:
+            progress(item)
+    return {
+        'ubigeo': ubigeo,
+        'district': district,
+        'available_unique_lots': available,
+        'already_linked': len(linked),
+        'unique_formalization_lots': len(lots),
+        'batches': batches,
+        'direct': True,
     }
 
 
