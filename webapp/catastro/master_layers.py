@@ -287,8 +287,18 @@ def _layer(source_id, key, district, bounds=None, *, original=False, metadata=No
                      'GEOMETRY_VERSION_ID':feature['provenance'].get('$geometry',{}).get('version_id')}
             attrs.update({target:attrs.get(source) for source,target in aliases.items()})
             source_feature_id = attrs.pop('source_feature_id', None)
+            formalization_rpu = attrs.pop('FORMALIZATION_RPU', None)
+            identity_source_id = attrs.pop('IDENTITY_SOURCE_ID', '') or ''
             if source_feature_id:
-                attrs['ID_LOTE' if key=='lotes' else 'ID_MZNA'] = str(source_feature_id)
+                if str(identity_source_id).startswith('cofopri-formalizacion-'):
+                    if key == 'lotes':
+                        attrs['ID_PREDIO_RPU'] = str(source_feature_id)
+                    else:
+                        attrs['ID_MZNA'] = str(source_feature_id)
+                else:
+                    attrs['ID_LOTE' if key=='lotes' else 'ID_MZNA'] = str(source_feature_id)
+            if formalization_rpu:
+                attrs['ID_PREDIO_RPU'] = str(formalization_rpu)
             features.append({**feature,'id':source_id+':'+feature['id'],'properties':attrs})
         return {**data,'features':features,'total':len(features),'source_total':len(data['features']),
                 'complete':True,'reference_only':False,'bbox':meta['bbox'],'original_bbox':meta['bbox'],

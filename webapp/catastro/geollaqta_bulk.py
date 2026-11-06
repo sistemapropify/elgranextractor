@@ -273,16 +273,38 @@ def migration_status(gateway, ubigeo='040126', cloud=None):
     cloud = cloud or R2(timeout=20)
     ids, truncated = lot_ids(ubigeo, cloud)
     linked = linked_lot_ids(gateway, ubigeo)
+    from . import cofopri_vector_migration
+    try:
+        formal_lots = cofopri_vector_migration.merged_formalization_lots(
+            ubigeo, cloud)
+    except (ValueError, StorageError, AttributeError):
+        formal_lots = []
+    formal_ids = {str(lot['id']) for lot in formal_lots}
+    formal_rows = gateway.read(
+        '''SELECT DISTINCT i.source_feature_id
+           FROM identities i JOIN versions v ON v.id=i.version_id
+           WHERE v.source_id=? AND i.layer='lote' ''',
+        ['cofopri-formalizacion-' + ubigeo])
+    linked_formal = {str(row['source_feature_id']) for row in formal_rows}
     pending = sorted(set(ids) - linked)
+    formal_pending = sorted(formal_ids - linked_formal)
     revision = None
     if ids:
         body, _ = cloud.get('geollaqta/' + ubigeo + '/' + ids[0] + '/datos.json')
         revision = json.loads(body).get('extraction_revision')
     return {
         'ubigeo': ubigeo,
-        'source_lots': len(ids),
-        'linked_lots': len(linked.intersection(ids)),
-        'pending_lots': len(pending),
+        'source_lots': len(ids) + len(formal_ids),
+        'linked_lots': len(linked.intersection(ids)) + len(
+            linked_formal.intersection(formal_ids)),
+        'pending_lots': len(pending) + len(formal_pending),
+        'pcdpi_source_lots': len(ids),
+        'pcdpi_linked_lots': len(linked.intersection(ids)),
+        'pcdpi_pending_lots': len(pending),
+        'formalization_source_lots': len(formal_ids),
+        'formalization_linked_lots': len(
+            linked_formal.intersection(formal_ids)),
+        'formalization_pending_lots': len(formal_pending),
         'listing_truncated': truncated,
         'manifest_revision': revision,
         'source_format': 'JSON por lote + PDF/fotos',

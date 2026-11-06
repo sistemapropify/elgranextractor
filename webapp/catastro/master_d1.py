@@ -386,8 +386,22 @@ class D1ReadModel:
             rows = self.gateway.read(
                 """SELECT e.id,e.kind,
                           (SELECT i.source_feature_id FROM identities i
+                           JOIN versions iv ON iv.id=i.version_id
                            WHERE i.entity_id=e.id AND i.layer=e.kind
-                           ORDER BY i.version_id DESC LIMIT 1) AS source_feature_id,
+                           ORDER BY CASE WHEN iv.source_id LIKE
+                             'cofopri-formalizacion-%' THEN 1 ELSE 0 END,
+                             iv.created_at DESC LIMIT 1) AS source_feature_id,
+                          (SELECT i.source_feature_id FROM identities i
+                           JOIN versions iv ON iv.id=i.version_id
+                           WHERE i.entity_id=e.id AND i.layer=e.kind
+                             AND iv.source_id LIKE 'cofopri-formalizacion-%'
+                           ORDER BY iv.created_at DESC LIMIT 1) AS formalization_rpu,
+                          (SELECT iv.source_id FROM identities i
+                           JOIN versions iv ON iv.id=i.version_id
+                           WHERE i.entity_id=e.id AND i.layer=e.kind
+                           ORDER BY CASE WHEN iv.source_id LIKE
+                             'cofopri-formalizacion-%' THEN 1 ELSE 0 END,
+                             iv.created_at DESC LIMIT 1) AS identity_source_id,
                           c.version_id AS geometry_version_id,
                           c.value_json AS geometry_json,
                           a.ubigeo,a.sector,a.block,a.lot,a.floors,a.units,
@@ -412,9 +426,12 @@ class D1ReadModel:
                     key: value for key, value in row.items()
                     if key not in ('id', 'kind', 'source_feature_id',
                                    'geometry_version_id', 'geometry_json',
-                                   'entity_id')
+                                   'entity_id', 'formalization_rpu',
+                                   'identity_source_id')
                 }
                 properties['source_feature_id'] = row.get('source_feature_id')
+                properties['FORMALIZATION_RPU'] = row.get('formalization_rpu')
+                properties['IDENTITY_SOURCE_ID'] = row.get('identity_source_id')
                 features.append({
                     'type': 'Feature', 'id': row['id'], 'geometry': geometry,
                     'properties': properties,
@@ -682,8 +699,14 @@ This is a correctness limit, never a silent subset of the master database.
         return self.gateway.read(query,params)
     def collection(self,*args,**kwargs):
         with self.lock:
-            self._select_scope(args[0] if args else kwargs.get('ubigeo'))
-            self.refresh();return super().collection(*args,**kwargs)
+            ubigeo = args[0] if args else kwargs.get('ubigeo')
+            kind = args[1] if len(args) > 1 else kwargs.get('kind')
+            revision = kwargs.get('revision')
+            # Publik map reads are bounded keyset queries. Do not materialize
+            # the mutable authoring scope, whose migration journal can be much
+            # larger than one viewport/district payload.
+            return Gateway.collection(
+                self.gateway, ubigeo, kind, revision=revision)
     def active_districts(self):
         return [r['ubigeo'] for r in self.gateway.read("""SELECT DISTINCT e.ubigeo FROM entities e
             JOIN selections s ON s.entity_id=e.id WHERE e.kind IN ('lote','manzana') AND s.field='$geometry'""")]

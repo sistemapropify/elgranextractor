@@ -75,6 +75,22 @@ def _from_d1(lot_id, record_id, surface):
             continue
         choices.append(record)
         units.append({**unit, 'record_id': record})
+    # Report headers may be stored on the documentary unit while the lot row
+    # contains only GIS fields. Promote a value only when all non-empty unit
+    # values agree; conflicting observations remain at unit level.
+    for field in (
+            'department', 'province', 'district', 'urbanization',
+            'street_type', 'street_name', 'municipal_number',
+            'cadastral_use', 'zoning'):
+        if attributes.get(field) not in (None, ''):
+            continue
+        values = {
+            str(unit.get(field)).strip()
+            for unit in units
+            if unit.get(field) not in (None, '')
+        }
+        if len(values) == 1:
+            attributes[field] = values.pop()
     if record_id and record_id not in choices:
         raise ValueError('La ficha no pertenece al lote vinculado.')
     selected = record_id or (choices[0] if choices else '')

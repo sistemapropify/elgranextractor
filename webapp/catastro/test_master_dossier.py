@@ -190,6 +190,33 @@ class MasterDossierTests(SimpleTestCase):
         self.assertEqual(second['attributes']['land_area'], 102)
         self.assertEqual(len(calls), 2)
 
+    def test_common_unit_headers_are_exposed_on_the_lot_dossier(self):
+        entity_id = '11111111-2222-4333-8444-555555555555'
+        model = SimpleNamespace(
+            lot_identity=lambda lot: {
+                'entity_id': entity_id,
+                'version_id': 'v1',
+                'source_id': 'geollaqta-040126',
+            },
+            entity=lambda value: {
+                'attributes': {'block': '011', 'lot': '016'},
+                'owners': [],
+                'unit_attributes': [
+                    {'source_feature_id': RECORD,
+                     'urbanization': 'URB PRIMAVERA',
+                     'street_name': 'CALLE SAN JOSE'},
+                ],
+                'media': [], 'identity_links': [], 'relationships': [],
+                'provenance': {}, 'boundary_segments': [],
+                'registral_acts': [], 'catalog': {},
+            })
+        with patch.object(master_dossier, 'D1ReadModel', return_value=model):
+            value = master_dossier.load(LOT)
+        self.assertEqual(
+            value['attributes']['urbanization'], 'URB PRIMAVERA')
+        self.assertEqual(
+            value['attributes']['street_name'], 'CALLE SAN JOSE')
+
     def test_archive_asset_is_whitelisted_and_integrity_checked(self):
         cloud = archive_cloud()
         body, content_type = master_dossier.archive_asset(

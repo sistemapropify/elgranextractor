@@ -82,7 +82,7 @@ def start(request):
         ubigeo = registry_cloud.validate_district(
             str(payload.get('ubigeo') or '040126'))
         batch_size = payload.get('batch_size', 20)
-        if type(batch_size) is not int or not 1 <= batch_size <= 50:
+        if type(batch_size) is not int or not 1 <= batch_size <= 200:
             raise ValueError('El tamaño de tanda no es válido.')
         user = getattr(request, 'current_user', None) or request.user
         actor = (getattr(user, 'username', '') or

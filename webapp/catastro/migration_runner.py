@@ -5,14 +5,15 @@ import time
 import uuid
 
 from . import geollaqta_bulk
-from .master_d1 import Gateway
+from . import cofopri_vector_migration
+from .master_d1 import Gateway, D1Store
 from .migration_audit import audit_district
 from .master_store import Conflict
 from .storage import R2, StorageError
 
 LEASE_PREFIX = 'migration:geollaqta:'
 LEASE_SECONDS = 300
-SAFE_BATCH_SIZE = 5
+SAFE_BATCH_SIZE = 200
 _threads = {}
 _threads_lock = threading.RLock()
 
@@ -169,37 +170,53 @@ def _run(ubigeo, actor, batch_size, job_id):
     cloud = R2(timeout=20)
     total = 0
     try:
+        from cuadrantizacion import geollaqta
         ids, truncated = geollaqta_bulk.lot_ids(ubigeo, cloud)
         if truncated:
             raise ValueError('El inventario R2 está truncado; divide el ámbito antes de migrar.')
-        linked = geollaqta_bulk.linked_lot_ids(gateway, ubigeo)
-        pending = sorted(set(ids) - linked)
-        linked_count = len(linked.intersection(ids))
-        while pending and _owns(gateway, ubigeo, job_id):
-            selected = pending[:batch_size]
-            result = geollaqta_bulk.migrate_selected(
-                gateway, ubigeo, selected, actor, cloud)
-            total += len(selected)
-            linked_count += len(selected)
-            pending = pending[len(selected):]
+        while _owns(gateway, ubigeo, job_id):
+            status = geollaqta_bulk.migration_status(
+                gateway, ubigeo, cloud)
+            if status['formalization_pending_lots']:
+                formal = cofopri_vector_migration.migrate_district(
+                    D1Store(gateway=gateway, scope=ubigeo),
+                    ubigeo, geollaqta.DISTRICTS[ubigeo]['name'],
+                    batch_size=min(batch_size, 200),
+                    limit=min(batch_size, 200), actor=actor)
+                processed = int(formal['unique_formalization_lots'])
+                batch_revision = (
+                    formal['batches'][-1]['revision']
+                    if formal.get('batches') else None)
+            elif status['pcdpi_pending_lots']:
+                selected = min(batch_size, 50)
+                result = geollaqta_bulk.migrate_pending(
+                    gateway, ubigeo, selected, actor, cloud)
+                processed = int(result.get('processed_lots', 0))
+                batch_revision = result.get('batch_revision')
+            else:
+                processed = 0
+                batch_revision = None
+            total += processed
+            status = geollaqta_bulk.migration_status(
+                gateway, ubigeo, cloud)
             current = _read_job(gateway, ubigeo)
             value = {
                 **current,
                 'processed_lots': total,
-                'linked_lots': linked_count,
-                'pending_lots': len(pending),
-                'last_batch_revision': result.get('revision'),
-                'message': ('Vínculos completos; ejecutando auditoría de integridad.' if not pending
+                'linked_lots': status['linked_lots'],
+                'pending_lots': status['pending_lots'],
+                'last_batch_revision': batch_revision,
+                'message': ('Vinculación terminada.' if not status['pending_lots']
                             else 'Migrando en tandas de ' + str(batch_size) + ' lotes.'),
-                'status': 'running',
+                'status': 'done' if not status['pending_lots'] else 'running',
             }
             _write_job(gateway, ubigeo, value)
-        if not pending:
-            current = _read_job(gateway, ubigeo)
-            _audit_job(gateway, ubigeo, ids, current)
-            return
-        if pending and _owns(gateway, ubigeo, job_id):
-            raise ValueError('La migración no pudo avanzar; revisa el siguiente manifiesto.')
+            if not status['pending_lots']:
+                if ids:
+                    _audit_job(gateway, ubigeo, ids, value)
+                return
+            if not processed:
+                raise ValueError('La migración no pudo avanzar; revisa los vectores archivados.')
     except Exception as error:
         current = _read_job(gateway, ubigeo)
         try:
