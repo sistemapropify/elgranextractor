@@ -467,7 +467,8 @@ def master_layer_page(source_id, key, district, cursor='', limit=2000,
         'features': features,
         'total': len(features),
         'source_total': int(
-            meta.get('layers', {}).get(key, {}).get('count') or 0),
+            data.get('source_total')
+            or meta.get('layers', {}).get(key, {}).get('count') or 0),
         'complete': data.get('next_cursor') is None,
         'next_cursor': data.get('next_cursor'),
         'reference_only': False,

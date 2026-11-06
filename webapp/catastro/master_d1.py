@@ -30,7 +30,6 @@ TABLES = {'meta':('key',),'projects':('id',),'sources':('id',),'versions':('id',
           'current_attributes':('entity_id',),'journal':('revision',)}
 MAX_SCOPE_ROWS = 800_000
 MAX_SCOPE_BYTES = 384 * 1024 * 1024
-
 # Pagination order must follow a D1 index. These tuples are only cursors for
 # loading the same scoped rows; primary keys in TABLES still identify rows.
 PAGE_KEYS = {
@@ -450,6 +449,55 @@ class D1ReadModel:
             'catalog': catalog,
         }
 
+    def canonical_source_info(self, ubigeo, kind):
+        """Select one authoritative source family and its feature count."""
+        priorities = [
+            'cofopri-formalizacion-' + ubigeo,
+            'cofopri-psad56-' + ubigeo,
+            'cofopri-wgs84-' + ubigeo,
+            'geollaqta-' + ubigeo,
+            'cofopri-pcdpi-' + ubigeo,
+        ]
+        rows = self.gateway.read(
+            '''SELECT v.source_id,COUNT(*) AS count
+               FROM identities i
+               JOIN versions v ON v.id=i.version_id
+               JOIN entities e ON e.id=i.entity_id
+               WHERE e.ubigeo=? AND i.layer=?
+                 AND v.source_id IN (SELECT value FROM json_each(?))
+               GROUP BY v.source_id''',
+            [ubigeo, kind, encoded(priorities)],
+        )
+        available = {
+            str(row['source_id']): int(row['count']) for row in rows
+        }
+        for source_id in priorities:
+            if source_id in available:
+                return {
+                    'source_id': source_id,
+                    'count': available[source_id],
+                }
+        fallback = self.gateway.read(
+            '''SELECT v.source_id,COUNT(*) AS count
+               FROM identities i
+               JOIN versions v ON v.id=i.version_id
+               JOIN entities e ON e.id=i.entity_id
+               WHERE e.ubigeo=? AND i.layer=?
+               GROUP BY v.source_id
+               ORDER BY count DESC,v.source_id
+               LIMIT 1''',
+            [ubigeo, kind],
+        )
+        if fallback:
+            return {
+                'source_id': str(fallback[0]['source_id']),
+                'count': int(fallback[0]['count']),
+            }
+        return {'source_id': None, 'count': 0}
+
+    def canonical_source(self, ubigeo, kind):
+        return self.canonical_source_info(ubigeo, kind)['source_id']
+
     def collection_page(self, ubigeo, kind, revision=None, cursor='',
                         limit=2000):
         """Read one bounded keyset page of current entities from D1."""
@@ -459,6 +507,16 @@ class D1ReadModel:
             raise ValueError('Capa no válida.')
         if type(limit) is not int or not 100 <= limit <= 10000:
             raise ValueError('Tamaño de página no válido.')
+        canonical_info = self.canonical_source_info(ubigeo, kind)
+        canonical = canonical_info['source_id']
+        if not canonical:
+            return {
+                'type': 'FeatureCollection', 'features': [],
+                'revision': revision if revision is not None
+                            else self.gateway.revision(),
+                'crs': 'EPSG:4326', 'next_cursor': None,
+                'source_total': 0,
+            }
         rows = self.gateway.read(
             """SELECT e.id,e.kind,
                           (SELECT i.source_feature_id FROM identities i
@@ -483,13 +541,15 @@ class D1ReadModel:
                           a.ubigeo,a.sector,a.block,a.lot,a.floors,a.units,
                           a.is_corner,a.is_through,a.faces_park,a.address,a.zoning
                    FROM entities e
+               JOIN identities ci ON ci.entity_id=e.id AND ci.layer=e.kind
+               JOIN versions cv ON cv.id=ci.version_id AND cv.source_id=?
                    JOIN selections s ON s.entity_id=e.id AND s.field='$geometry'
                    JOIN contributions c ON c.id=s.contribution_id
                    LEFT JOIN current_attributes a ON a.entity_id=e.id
                    WHERE e.ubigeo=? AND e.kind=? AND e.id>?
                    ORDER BY e.id
                    LIMIT """ + str(limit),
-            [ubigeo, kind, str(cursor or '')],
+            [canonical, ubigeo, kind, str(cursor or '')],
         )
         features = []
         for row in rows:
@@ -524,6 +584,7 @@ class D1ReadModel:
             'revision': revision if revision is not None else self.gateway.revision(),
             'crs': 'EPSG:4326',
             'next_cursor': rows[-1]['id'] if len(rows) == limit else None,
+            'source_total': canonical_info['count'],
         }
 
     def collection(self, ubigeo, kind, revision=None):
@@ -558,6 +619,13 @@ class D1ReadModel:
                 or not -85 <= lat <= 85 or not -180 <= lng <= 180
                 or not 100 <= metres <= 2000):
             raise ValueError('Ubicación o radio no válido.')
+        canonical = self.canonical_source(ubigeo, kind)
+        if not canonical:
+            return {
+                'type': 'FeatureCollection', 'features': [],
+                'revision': self.gateway.revision(),
+                'crs': 'EPSG:4326',
+            }
         sy = 6371008.8 * math.pi / 180
         sx = sy * math.cos(math.radians(lat))
         west, east = lng - metres / sx, lng + metres / sx
@@ -649,6 +717,10 @@ class D1ReadModel:
                           a.floors,a.units,a.is_corner,a.is_through,
                           a.faces_park
                    FROM entities e
+                   JOIN identities ci ON ci.entity_id=e.id
+                    AND ci.layer=e.kind
+                   JOIN versions cv ON cv.id=ci.version_id
+                    AND cv.source_id=?
                    JOIN selections s ON s.entity_id=e.id
                     AND s.field='$geometry'
                    JOIN contributions c ON c.id=s.contribution_id
@@ -687,7 +759,8 @@ class D1ReadModel:
                         ))
                      )
                    ORDER BY e.id LIMIT """ + str(page_size),
-                [ubigeo, kind, cursor, west, east, south, north,
+                [canonical, ubigeo, kind, cursor,
+                 west, east, south, north,
                  west, east, south, north,
                  west, east, south, north],
             )
