@@ -18,6 +18,7 @@
     <form class="pli-filter" method="get">
       {% if cohort_date %}<input type="hidden" name="cohort" value="{{ cohort_date|date:'Y-m-d' }}">{% else %}<input type="hidden" name="from" value="{{ date_from|date:'Y-m-d' }}"><input type="hidden" name="to" value="{{ date_to|date:'Y-m-d' }}">{% endif %}
       <div><label for="stage">Etapa</label><select id="stage" name="stage">{% for value,label in stage_options.items %}<option value="{{ value }}"{% if value == stage %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+      <div><label for="recontact">Prioridad de recontacto</label><select id="recontact" name="recontact"><option value="">Todas</option>{% for option in recontact_options %}<option value="{{ option.value }}"{% if option.value == recontact %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></div>
       <button class="pli-submit" type="submit">Ver resultados</button>
     </form>
   </div>
@@ -45,6 +46,7 @@
           {% if lead.never_contacted %}<span class="pli-badge red">Sin primera respuesta</span>{% endif %}
           {% if lead.attention_overdue %}<span class="pli-badge red">Atención vencida · {{ lead.unattended_label }}</span>{% elif lead.unattended %}<span class="pli-badge amber">Esperando al agente</span>{% endif %}
           {% if lead.context_analysis_pending %}<span class="pli-badge amber">Análisis contextual pendiente</span>{% endif %}
+          {% if lead.recontact %}<span class="pli-badge">{{ lead.recontact.label }} · {{ lead.recontact.score }}/100 · {{ lead.recontact.channel_label }}</span>{% endif %}
         </div>
         <span class="pli-card-action">Ver conversación completa →</span>
       </a>

@@ -1,4 +1,5 @@
 import json
+import re
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone as datetime_timezone
 
@@ -22,6 +23,7 @@ from .conversation_analysis import (
     LIMA_TIMEZONE,
     analyze_chat_history,
     milestone_within_days,
+    normalize_text,
 )
 from .models import (
     AnalysisRun,
@@ -47,6 +49,28 @@ LEAD_RESULT_STAGES = {
     "unattended": "Esperando al agente",
     "attention_overdue": "Atención vencida >24 h",
 }
+
+RECONTACT_GROUPS = {
+    "call_now": "1 · Llamar ahora",
+    "message_now": "2 · Escribir ahora",
+    "follow_up": "3 · Seguimiento",
+    "nurture": "4 · Nutrición",
+    "waiting_response": "Atender primero",
+    "pending_analysis": "Evaluación pendiente",
+    "do_not_contact": "No contactar",
+}
+
+RECONTACT_EXCLUSION_STATUSES = (
+    "perdido",
+    "no interesado",
+    "descartado",
+    "cerrado",
+    "ganado",
+)
+RECONTACT_OPT_OUT = re.compile(
+    r"\b(no\s+me\s+interesa|no\s+me\s+escribas|"
+    r"no\s+contactar|numero\s+equivocado|se\s+equivoc[oa]|stop)\b"
+)
 
 ATTENTION_OVERDUE_SECONDS = 24 * 60 * 60
 
@@ -617,6 +641,192 @@ def _apply_contextual_assessment(analysis, assessment):
     return analysis
 
 
+def _recontact_assessment(analysis, assessment, row, now=None):
+    """Derive one explainable recontact decision from the existing assessment.
+
+    This is intentionally a view over ``LeadConversationAssessment`` and the
+    same conversation analysis, not a second AI system. No new LLM call is
+    needed for the priority.
+    """
+    now = now or timezone.now()
+    base = {
+        "status": "pending_analysis",
+        "label": RECONTACT_GROUPS["pending_analysis"],
+        "score": 0,
+        "channel": "none",
+        "channel_label": "Sin canal",
+        "reason": "La conversación todavía no tiene una evaluación contextual vigente.",
+        "next_action": "Completar la evaluación contextual antes de recontactar.",
+        "confidence": 0,
+        "factors": [],
+    }
+    messages = analysis.get("messages") or []
+    if not messages:
+        base.update(
+            status="do_not_contact",
+            label=RECONTACT_GROUPS["do_not_contact"],
+            reason="No hay mensajes válidos para justificar un recontacto.",
+            next_action="No contactar hasta recuperar el historial.",
+        )
+        return base
+    if assessment is None:
+        return base
+
+    status_name = normalize_text(row.get("status_name"))
+    if any(term in status_name for term in RECONTACT_EXCLUSION_STATUSES):
+        base.update(
+            status="do_not_contact",
+            label=RECONTACT_GROUPS["do_not_contact"],
+            reason="El estado comercial del CRM indica que no debe reactivarse.",
+            next_action="No recontactar.",
+        )
+        return base
+
+    lead_text = " ".join(
+        message["text"] for message in messages if message["sender"] == "lead"
+    )
+    if RECONTACT_OPT_OUT.search(normalize_text(lead_text)):
+        base.update(
+            status="do_not_contact",
+            label=RECONTACT_GROUPS["do_not_contact"],
+            reason="El lead pidió no ser contactado o indicó un número equivocado.",
+            next_action="Excluir de remarketing.",
+        )
+        return base
+
+    if analysis.get("last_sender") == "lead":
+        base.update(
+            status="waiting_response",
+            label=RECONTACT_GROUPS["waiting_response"],
+            channel="none",
+            channel_label="Responder primero",
+            reason="El último mensaje es del lead y todavía requiere respuesta humana.",
+            next_action="Responder la consulta pendiente antes de cualquier remarketing.",
+        )
+        return base
+
+    last_at = analysis.get("last_message_at")
+    if not last_at:
+        return base
+    age_days = max(0, (now - last_at).total_seconds() / 86400)
+    if age_days <= 3:
+        recency, recency_label = 25, "Últimos 3 días"
+    elif age_days <= 7:
+        recency, recency_label = 20, "Última semana"
+    elif age_days <= 14:
+        recency, recency_label = 15, "Últimas 2 semanas"
+    elif age_days <= 30:
+        recency, recency_label = 10, "Últimos 30 días"
+    elif age_days <= 60:
+        recency, recency_label = 5, "Entre 30 y 60 días"
+    else:
+        recency, recency_label = 0, "Más de 60 días"
+
+    qualified = assessment.qualified_status
+    visit = assessment.visit_intent_status
+    lead_messages = int(analysis.get("lead_messages") or 0)
+    agent_messages = int(analysis.get("agent_messages") or 0)
+    engagement = min(lead_messages, 5) * 2
+    if analysis.get("bidirectional"):
+        engagement += 8
+    engagement += 5 if analysis.get("last_sender") in ("agent", "bot") else 0
+
+    semantic = 0
+    factors = [recency_label, f"{lead_messages} mensajes del lead"]
+    if qualified == LeadConversationAssessment.Decision.CONFIRMED:
+        semantic += 25
+        factors.append("Interés comercial confirmado")
+    elif qualified == LeadConversationAssessment.Decision.AMBIGUOUS:
+        semantic += 8
+        factors.append("Interés ambiguo")
+    if visit == LeadConversationAssessment.Decision.CONFIRMED:
+        semantic += 15
+        factors.append("Intención de visita")
+    elif visit == LeadConversationAssessment.Decision.AMBIGUOUS:
+        semantic += 5
+        factors.append("Intención de visita ambigua")
+
+    stage_score = 15 if any(
+        term in status_name
+        for term in (
+            "interesado",
+            "requerimiento",
+            "visita",
+            "reunion",
+            "negociacion",
+        )
+    ) else 10 if any(
+        term in status_name for term in ("contactado", "seguimiento")
+    ) else 5
+    if stage_score >= 10:
+        factors.append(f"Estado CRM: {row.get('status_name')}")
+    completeness = 5 if row.get("budget") or row.get("timeline") else 0
+    if completeness:
+        factors.append("Presupuesto o plazo registrado")
+
+    score = min(100, recency + engagement + semantic + stage_score + completeness)
+    if semantic == 0 and qualified == LeadConversationAssessment.Decision.NOT_CONFIRMED:
+        status = "nurture"
+        reason = (
+            "La conversación no confirma interés comercial concreto; "
+            "solo corresponde un mensaje de nutrición."
+        )
+        next_action = (
+            "Enviar información concreta y preguntar por zona, presupuesto y plazo."
+        )
+    elif visit == LeadConversationAssessment.Decision.CONFIRMED:
+        status = "call_now" if age_days <= 30 else "follow_up"
+        reason = (
+            "Hay intención de visita y la conversación está activa."
+            if age_days <= 30
+            else "Hubo intención de visita, pero la conversación ya es antigua."
+        )
+        next_action = (
+            "Llamar para confirmar fecha, hora y disponibilidad."
+            if age_days <= 30
+            else "Escribir para comprobar si la intención de visita sigue vigente."
+        )
+    elif qualified == LeadConversationAssessment.Decision.CONFIRMED:
+        status = "call_now" if score >= 60 else "message_now"
+        reason = "Existe interés comercial confirmado y conversación previa."
+        next_action = "Llamar para validar presupuesto, plazo y propiedad."
+    elif score >= 35:
+        status = "follow_up"
+        reason = "Hay conversación bidireccional, pero el interés aún es parcial."
+        next_action = "Escribir con una opción concreta y una pregunta simple."
+    else:
+        status = "nurture"
+        reason = "La evidencia de interés es débil o la conversación es antigua."
+        next_action = "Mantener en nutrición; no priorizar una llamada."
+
+    channel = (
+        "call"
+        if status == "call_now"
+        else "whatsapp"
+        if status in ("message_now", "follow_up", "nurture")
+        else "none"
+    )
+    confidence = max(
+        float(assessment.qualified_confidence or 0),
+        float(assessment.visit_intent_confidence or 0),
+    )
+    return {
+        "status": status,
+        "label": RECONTACT_GROUPS[status],
+        "score": score,
+        "channel": channel,
+        "channel_label": {
+            "call": "Llamada",
+            "whatsapp": "WhatsApp",
+            "none": "Sin canal",
+        }[channel],
+        "reason": reason,
+        "next_action": next_action,
+        "confidence": round(confidence, 2),
+        "factors": factors,
+    }
+
+
 def _prepare_lead_result(row, assessment=None, assignment_timeline=None):
     assignment_timeline = assignment_timeline or []
     analysis = _apply_contextual_assessment(
@@ -683,10 +893,19 @@ def _prepare_lead_result(row, assessment=None, assignment_timeline=None):
     row["attention_grounding_issue"] = bool(unsupported_items)
     row.update(analysis)
     row.update(_waiting_attention(analysis))
+    row["recontact"] = _recontact_assessment(analysis, assessment, row)
+    row["recontact_status"] = row["recontact"]["status"]
     return row
 
 
-def get_lead_results(date_from, date_to, stage, segment=None, source=None):
+def get_lead_results(
+    date_from,
+    date_to,
+    stage,
+    segment=None,
+    source=None,
+    recontact=None,
+):
     """Return lead cards for one dashboard stage using SELECT-only CRM access."""
     if stage not in LEAD_RESULT_STAGES:
         stage = "entered"
@@ -717,6 +936,23 @@ def get_lead_results(date_from, date_to, stage, segment=None, source=None):
         ]
     if stage != "entered":
         leads = [lead for lead in leads if lead.get(stage)]
+    recontact_counts = Counter(
+        lead.get("recontact_status") for lead in leads
+    )
+    if recontact in RECONTACT_GROUPS:
+        leads = [
+            lead for lead in leads
+            if lead.get("recontact_status") == recontact
+        ]
+        leads.sort(
+            key=lambda lead: (
+                -int(lead.get("recontact", {}).get("score") or 0),
+                -(lead.get("last_message_at").timestamp() if lead.get("last_message_at") else 0),
+                lead.get("id") or 0,
+            )
+        )
+    else:
+        recontact = None
     return {
         "leads": leads,
         "stage": stage,
@@ -724,6 +960,9 @@ def get_lead_results(date_from, date_to, stage, segment=None, source=None):
         "segment": segment,
         "source": source,
         "source_label": dict(SOURCE_LABELS).get(source, ""),
+        "recontact": recontact,
+        "recontact_label": RECONTACT_GROUPS.get(recontact, ""),
+        "recontact_counts": dict(recontact_counts),
     }
 
 

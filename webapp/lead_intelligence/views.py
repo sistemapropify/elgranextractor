@@ -19,6 +19,7 @@ from .property_dashboard import get_property_dashboard
 from .remarketing import get_remarketing_dashboard
 from .services import (
     LEAD_RESULT_STAGES,
+    RECONTACT_GROUPS,
     get_analysis_quality_dashboard,
     get_attention_quality_dashboard,
     get_hourly_agent_matrix,
@@ -698,7 +699,14 @@ def lead_results(request):
         origin = "overview"
     stage = request.GET.get("stage", "entered")
     segment = request.GET.get("segment", "").strip() or None
-    result = get_lead_results(date_from, date_to, stage, segment=segment)
+    recontact = request.GET.get("recontact", "").strip() or None
+    result = get_lead_results(
+        date_from,
+        date_to,
+        stage,
+        segment=segment,
+        recontact=recontact,
+    )
     page_obj = Paginator(result.pop("leads"), 24).get_page(request.GET.get("page"))
     query = request.GET.copy()
     query.pop("page", None)
@@ -709,6 +717,18 @@ def lead_results(request):
         if segment == "compradores"
         else "Sin campaña · "
         if segment == "otros"
+        else ""
+    )
+    recontact_options = [
+        {
+            "value": key,
+            "label": f"{label} ({result['recontact_counts'].get(key, 0)})",
+        }
+        for key, label in RECONTACT_GROUPS.items()
+    ]
+    group_title = (
+        f"{result['recontact_label']} · "
+        if result.get("recontact_label")
         else ""
     )
     return render(
@@ -724,7 +744,8 @@ def lead_results(request):
             "query_without_page": query.urlencode(),
             "current_query": request.GET.urlencode(),
             "stage_options": LEAD_RESULT_STAGES,
-            "title": f"{segment_title}{result['stage_label']} · Leads",
+            "recontact_options": recontact_options,
+            "title": f"{group_title}{segment_title}{result['stage_label']} · Leads",
         },
     )
 

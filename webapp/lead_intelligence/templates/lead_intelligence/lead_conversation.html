@@ -55,36 +55,43 @@
         </div>
       {% endif %}
       {% if lead.context_assessment %}
-        <div class="pli-note" style="margin-bottom:16px">
+        <div class="pli-note pli-context-assessment" style="margin-bottom:16px">
           <strong>Evaluación contextual IA</strong><br>
           Calificación: {{ lead.context_assessment.get_qualified_status_display }}
           ({{ lead.context_assessment.qualified_confidence|floatformat:2 }}) ·
           Intención de visita: {{ lead.context_assessment.get_visit_intent_status_display }}
           ({{ lead.context_assessment.visit_intent_confidence|floatformat:2 }}).
           {% if lead.context_assessment.reason %}<br>{{ lead.context_assessment.reason }}{% endif %}
-        </div>
-        {% if lead.context_assessment.first_response_status %}
-          <div class="pli-note pli-note-info" style="margin-bottom:16px">
-            {% if lead.media_gap_risk %}
-              <strong>Calidad de la primera respuesta: no concluyente</strong><br>
-              La evaluación textual se conserva para auditoría, pero no se usa como veredicto mientras falte la multimedia.
-            {% elif lead.attention_grounding_issue %}
-              <strong>Calidad de la primera respuesta: no concluyente</strong><br>
-              La IA infirió solicitudes que el lead no expresó en su bloque inicial:
-              {{ lead.attention_unsupported_items|join:", " }}.
-              Este veredicto queda fuera de las métricas de calidad y se envía a revisión.
-            {% else %}
-              <strong>Calidad de la primera respuesta: {{ lead.context_assessment.get_first_response_status_display }}</strong>
-              · confianza {% widthratio lead.context_assessment.first_response_confidence 1 100 %}%<br>
-              Pertinencia {% widthratio lead.context_assessment.relevance_score 1 100 %}% ·
-              cobertura {% widthratio lead.context_assessment.coverage_score 1 100 %}% ·
-              respuesta directa {% widthratio lead.context_assessment.directness_score 1 100 %}% ·
-              personalización {% widthratio lead.context_assessment.personalization_score 1 100 %}%.
-              {% if lead.context_assessment.attention_reason %}<br>{{ lead.context_assessment.attention_reason }}{% endif %}
-              {% if lead.attention_unanswered_items %}<br><strong>No cubierto en la primera respuesta:</strong> {{ lead.attention_unanswered_items|join:", " }}{% endif %}
-            {% endif %}
+          <div class="pli-context-divider">
+            <strong>Recontacto: {{ lead.recontact.label }}</strong>
+            · {{ lead.recontact.score }}/100
+            · {{ lead.recontact.channel_label }}<br>
+            {{ lead.recontact.reason }}<br>
+            <strong>Próximo paso:</strong> {{ lead.recontact.next_action }}
           </div>
-        {% endif %}
+          {% if lead.context_assessment.first_response_status %}
+            <div class="pli-context-divider">
+              {% if lead.media_gap_risk %}
+                <strong>Calidad de la primera respuesta: no concluyente</strong><br>
+                La evaluación textual se conserva para auditoría, pero no se usa como veredicto mientras falte la multimedia.
+              {% elif lead.attention_grounding_issue %}
+                <strong>Calidad de la primera respuesta: no concluyente</strong><br>
+                La IA infirió solicitudes que el lead no expresó en su bloque inicial:
+                {{ lead.attention_unsupported_items|join:", " }}.
+                Este veredicto queda fuera de las métricas de calidad y se envía a revisión.
+              {% else %}
+                <strong>Calidad de la primera respuesta: {{ lead.context_assessment.get_first_response_status_display }}</strong>
+                · confianza {% widthratio lead.context_assessment.first_response_confidence 1 100 %}%<br>
+                Pertinencia {% widthratio lead.context_assessment.relevance_score 1 100 %}% ·
+                cobertura {% widthratio lead.context_assessment.coverage_score 1 100 %}% ·
+                respuesta directa {% widthratio lead.context_assessment.directness_score 1 100 %}% ·
+                personalización {% widthratio lead.context_assessment.personalization_score 1 100 %}%.
+                {% if lead.context_assessment.attention_reason %}<br>{{ lead.context_assessment.attention_reason }}{% endif %}
+                {% if lead.attention_unanswered_items %}<br><strong>No cubierto en la primera respuesta:</strong> {{ lead.attention_unanswered_items|join:", " }}{% endif %}
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
       {% else %}
         <div class="pli-note" style="margin-bottom:16px"><strong>Evaluación contextual pendiente.</strong> Este chat todavía no tiene una clasificación IA vigente para su contenido actual.</div>
       {% endif %}
