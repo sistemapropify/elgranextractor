@@ -42,7 +42,7 @@ assert.match(master, /closeDetailCard/);
 assert.match(master, /role','tab'/);
 assert.match(master, /Todos los distritos D1/);
 assert.match(master, /ALL_DISTRICTS/);
-assert.match(master, /source\.role==='draft'\|\|source\.role==='snapshot'/);
+assert.match(master, /\['master','draft','snapshot'\]\.includes\(source\.role\)/);
 assert.match(master, /maestro\/vectores\//);
 assert.match(master, /maestro\/clasificaciones\//);
 assert.match(master, /toggleClassificationAt/);

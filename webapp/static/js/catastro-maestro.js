@@ -49,7 +49,7 @@
     const classificationVisible={parks:true,corners:true,faces_park:true};
     const classificationKinds=['parks','corners','faces_park'];
     const ALL_DISTRICTS='all';
-    const masterRole=source=>source.role==='draft'||source.role==='snapshot';
+    const masterRole=source=>['master','draft','snapshot'].includes(source.role);
     const districtLabel=code=>code===ALL_DISTRICTS?'Todos los distritos D1':
         (catalog?.districts.find(d=>d.ubigeo===code)?.name||code||'Sin distrito');
     const sourceDistrict=source=>source.ubigeo||source.districts?.[0]||district;
