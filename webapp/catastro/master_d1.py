@@ -471,12 +471,18 @@ class D1ReadModel:
         available = {
             str(row['source_id']): int(row['count']) for row in rows
         }
-        for source_id in priorities:
-            if source_id in available:
-                return {
-                    'source_id': source_id,
-                    'count': available[source_id],
-                }
+        if available:
+            source_id = max(
+                available,
+                key=lambda value: (
+                    available[value],
+                    -priorities.index(value),
+                ),
+            )
+            return {
+                'source_id': source_id,
+                'count': available[source_id],
+            }
         fallback = self.gateway.read(
             '''SELECT v.source_id,COUNT(*) AS count
                FROM identities i
@@ -507,16 +513,6 @@ class D1ReadModel:
             raise ValueError('Capa no válida.')
         if type(limit) is not int or not 100 <= limit <= 10000:
             raise ValueError('Tamaño de página no válido.')
-        canonical_info = self.canonical_source_info(ubigeo, kind)
-        canonical = canonical_info['source_id']
-        if not canonical:
-            return {
-                'type': 'FeatureCollection', 'features': [],
-                'revision': revision if revision is not None
-                            else self.gateway.revision(),
-                'crs': 'EPSG:4326', 'next_cursor': None,
-                'source_total': 0,
-            }
         rows = self.gateway.read(
             """SELECT e.id,e.kind,
                           (SELECT i.source_feature_id FROM identities i
@@ -541,15 +537,13 @@ class D1ReadModel:
                           a.ubigeo,a.sector,a.block,a.lot,a.floors,a.units,
                           a.is_corner,a.is_through,a.faces_park,a.address,a.zoning
                    FROM entities e
-               JOIN identities ci ON ci.entity_id=e.id AND ci.layer=e.kind
-               JOIN versions cv ON cv.id=ci.version_id AND cv.source_id=?
                    JOIN selections s ON s.entity_id=e.id AND s.field='$geometry'
                    JOIN contributions c ON c.id=s.contribution_id
                    LEFT JOIN current_attributes a ON a.entity_id=e.id
                    WHERE e.ubigeo=? AND e.kind=? AND e.id>?
                    ORDER BY e.id
                    LIMIT """ + str(limit),
-            [canonical, ubigeo, kind, str(cursor or '')],
+            [ubigeo, kind, str(cursor or '')],
         )
         features = []
         for row in rows:
@@ -584,7 +578,6 @@ class D1ReadModel:
             'revision': revision if revision is not None else self.gateway.revision(),
             'crs': 'EPSG:4326',
             'next_cursor': rows[-1]['id'] if len(rows) == limit else None,
-            'source_total': canonical_info['count'],
         }
 
     def collection(self, ubigeo, kind, revision=None):
@@ -619,13 +612,6 @@ class D1ReadModel:
                 or not -85 <= lat <= 85 or not -180 <= lng <= 180
                 or not 100 <= metres <= 2000):
             raise ValueError('Ubicación o radio no válido.')
-        canonical = self.canonical_source(ubigeo, kind)
-        if not canonical:
-            return {
-                'type': 'FeatureCollection', 'features': [],
-                'revision': self.gateway.revision(),
-                'crs': 'EPSG:4326',
-            }
         sy = 6371008.8 * math.pi / 180
         sx = sy * math.cos(math.radians(lat))
         west, east = lng - metres / sx, lng + metres / sx
@@ -717,10 +703,6 @@ class D1ReadModel:
                           a.floors,a.units,a.is_corner,a.is_through,
                           a.faces_park
                    FROM entities e
-                   JOIN identities ci ON ci.entity_id=e.id
-                    AND ci.layer=e.kind
-                   JOIN versions cv ON cv.id=ci.version_id
-                    AND cv.source_id=?
                    JOIN selections s ON s.entity_id=e.id
                     AND s.field='$geometry'
                    JOIN contributions c ON c.id=s.contribution_id
@@ -759,8 +741,7 @@ class D1ReadModel:
                         ))
                      )
                    ORDER BY e.id LIMIT """ + str(page_size),
-                [canonical, ubigeo, kind, cursor,
-                 west, east, south, north,
+                [ubigeo, kind, cursor, west, east, south, north,
                  west, east, south, north,
                  west, east, south, north],
             )
