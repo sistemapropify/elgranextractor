@@ -691,6 +691,24 @@
                                 await addVectorFeatures({source,key,district:current,records});
                             counts();
                         }
+                    }else if(source.role==='master'){
+                        collection={source,key,district:current,records:[]};
+                        collections.set(id,collection);
+                        let cursor='';
+                        do{
+                            if(signal.aborted)return;
+                            const pageUrl='/catastro/api/maestro/fuentes/'+
+                                encodeURIComponent(source.id)+'/'+key+'/pagina/?'+
+                                new URLSearchParams({ubigeo:current,limit:'1000',cursor});
+                            const page=await json(pageUrl,signal,45000);
+                            const pageRecords=(page.features||[]).map(f=>record(f,source,key)).filter(Boolean);
+                            collection.records.push(...pageRecords);
+                            if(vectorLayer&&pageRecords.length)
+                                await addVectorFeatures({source,key,district:current,records:pageRecords});
+                            cursor=page.next_cursor||'';
+                            if(scope===district&&!signal.aborted)
+                                loading(source.name+' · '+key+': '+fmt(collection.records.length)+' de '+fmt(page.source_total),loadDone,loadTotal);
+                        }while(cursor);
                     }else{
                         let result;
                         if(client)result=await client.load({ubigeo:current,layers:source.layers,service_base:source.service_base},key,{signal,onBatch:(_,snapshot)=>{

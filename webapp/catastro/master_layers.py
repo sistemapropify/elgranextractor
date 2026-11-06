@@ -404,6 +404,79 @@ def _master_layer(source_id, key, district, bounds=None, *, original=False,
     }
 
 
+def master_layer_page(source_id, key, district, cursor='', limit=2000,
+                      metadata=None):
+    """Read one browser-sized page from the current D1 source."""
+    from .master_d1 import D1ReadModel
+    if key not in ('lotes', 'manzanas', 'vias'):
+        raise ValueError('Fuente, capa o distrito no válido.')
+    meta = metadata if metadata is not None else _master_metadata(source_id)
+    if district != meta['ubigeo']:
+        raise ValueError('La fuente no está activa para este distrito.')
+    kind = {'lotes': 'lote', 'manzanas': 'manzana', 'vias': 'via'}[key]
+    data = D1ReadModel().collection_page(
+        district, kind, revision=meta.get('revision'),
+        cursor=cursor, limit=limit)
+    aliases = {
+        'ubigeo': 'ID_DIST',
+        'sector': 'COD_SECT',
+        'block': 'COD_MZNA',
+        'lot': 'COD_LOTE',
+    }
+    features = []
+    for feature in data['features']:
+        attrs = {
+            **feature['properties'],
+            'ELEMENT_ID': feature['id'],
+            'SOURCE_ID': source_id,
+            'SOURCE_NAME': meta['name'],
+            'MASTER_LAYER': key,
+            'REFERENCE_ONLY': False,
+            'GEOMETRY_VERSION_ID': (
+                feature['provenance'].get('$geometry', {}).get(
+                    'version_id')),
+        }
+        attrs.update({
+            target: attrs.get(source)
+            for source, target in aliases.items()
+        })
+        source_feature_id = attrs.pop('source_feature_id', None)
+        formalization_rpu = attrs.pop('FORMALIZATION_RPU', None)
+        identity_source_id = attrs.pop('IDENTITY_SOURCE_ID', '') or ''
+        if source_feature_id:
+            if str(identity_source_id).startswith(
+                    'cofopri-formalizacion-'):
+                if key == 'lotes':
+                    attrs['ID_PREDIO_RPU'] = str(source_feature_id)
+                else:
+                    attrs['ID_MZNA'] = str(source_feature_id)
+            elif key == 'vias':
+                attrs['ID_VIA'] = str(source_feature_id)
+            else:
+                attrs['ID_LOTE' if key == 'lotes' else 'ID_MZNA'] = str(
+                    source_feature_id)
+        if formalization_rpu:
+            attrs['ID_PREDIO_RPU'] = str(formalization_rpu)
+        features.append({
+            **feature,
+            'id': source_id + ':' + feature['id'],
+            'properties': attrs,
+        })
+    return {
+        **data,
+        'features': features,
+        'total': len(features),
+        'source_total': int(
+            meta.get('layers', {}).get(key, {}).get('count') or 0),
+        'complete': data.get('next_cursor') is None,
+        'next_cursor': data.get('next_cursor'),
+        'reference_only': False,
+        'bbox': meta.get('bbox'),
+        'placement': meta['placement'],
+        'schema': SCHEMA,
+    }
+
+
 def _layer(source_id, key, district, bounds=None, *, original=False, metadata=None):
     if source_id.startswith('borrador-'):
         if key not in ('lotes','manzanas') or district != source_id[-6:] or original:

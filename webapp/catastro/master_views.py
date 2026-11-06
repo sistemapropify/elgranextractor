@@ -63,6 +63,29 @@ def layer(request, source_id, layer_key):
 
 @require_GET
 @admin_required
+def layer_page(request, source_id, layer_key):
+    try:
+        value = master_layers.master_layer_page(
+            source_id,
+            layer_key,
+            request.GET.get('ubigeo', ''),
+            cursor=request.GET.get('cursor', ''),
+            limit=int(request.GET.get('limit', '2000')),
+        )
+        response = JsonResponse(
+            value, json_dumps_params={'separators': (',', ':')})
+        response['Cache-Control'] = 'private, no-store'
+        return response
+    except StorageError:
+        return JsonResponse({
+            'error': 'No se pudo consultar la capa del Catastro Maestro.'
+        }, status=503)
+    except (TypeError, ValueError, OSError) as error:
+        return JsonResponse({'error': str(error)}, status=400)
+
+
+@require_GET
+@admin_required
 def vector_snapshot(request, ubigeo, layer_key):
     layer = layer_key
     source = request.GET.get('source', vector_snapshots.DEFAULT_SOURCE)

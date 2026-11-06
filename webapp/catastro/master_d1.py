@@ -450,17 +450,17 @@ class D1ReadModel:
             'catalog': catalog,
         }
 
-    def collection(self, ubigeo, kind, revision=None):
-        """Read selected fields and geometry directly from D1 with keyset pages."""
+    def collection_page(self, ubigeo, kind, revision=None, cursor='',
+                        limit=2000):
+        """Read one bounded keyset page of current entities from D1."""
         from .master_contract import validate_field
         validate_field('ubigeo', ubigeo)
         if kind not in ('lote', 'manzana', 'via'):
             raise ValueError('Capa no válida.')
-        features = []
-        cursor = ''
-        while True:
-            rows = self.gateway.read(
-                """SELECT e.id,e.kind,
+        if type(limit) is not int or not 100 <= limit <= 10000:
+            raise ValueError('Tamaño de página no válido.')
+        rows = self.gateway.read(
+            """SELECT e.id,e.kind,
                           (SELECT i.source_feature_id FROM identities i
                            JOIN versions iv ON iv.id=i.version_id
                            WHERE i.entity_id=e.id AND i.layer=e.kind
@@ -488,41 +488,61 @@ class D1ReadModel:
                    LEFT JOIN current_attributes a ON a.entity_id=e.id
                    WHERE e.ubigeo=? AND e.kind=? AND e.id>?
                    ORDER BY e.id
-                   LIMIT """ + str(self.PAGE_SIZE),
-                [ubigeo, kind, cursor],
-            )
-            for row in rows:
-                try:
-                    geometry = json.loads(row.get('geometry_json') or 'null')
-                except (TypeError, ValueError):
-                    raise StorageError('D1 devolvió una geometría no válida.') from None
-                if not isinstance(geometry, dict):
-                    continue
-                properties = {
-                    key: value for key, value in row.items()
-                    if key not in ('id', 'kind', 'source_feature_id',
-                                   'geometry_version_id', 'geometry_json',
-                                   'entity_id', 'formalization_rpu',
-                                   'identity_source_id')
-                }
-                properties['source_feature_id'] = row.get('source_feature_id')
-                properties['FORMALIZATION_RPU'] = row.get('formalization_rpu')
-                properties['IDENTITY_SOURCE_ID'] = row.get('identity_source_id')
-                features.append({
-                    'type': 'Feature', 'id': row['id'], 'geometry': geometry,
-                    'properties': properties,
-                    'provenance': {
-                        '$geometry': {
-                            'version_id': row.get('geometry_version_id'),
-                        },
+                   LIMIT """ + str(limit),
+            [ubigeo, kind, str(cursor or '')],
+        )
+        features = []
+        for row in rows:
+            try:
+                geometry = json.loads(row.get('geometry_json') or 'null')
+            except (TypeError, ValueError):
+                raise StorageError('D1 devolvió una geometría no válida.') from None
+            if not isinstance(geometry, dict):
+                continue
+            properties = {
+                key: value for key, value in row.items()
+                if key not in ('id', 'kind', 'source_feature_id',
+                               'geometry_version_id', 'geometry_json',
+                               'entity_id', 'formalization_rpu',
+                               'identity_source_id')
+            }
+            properties['source_feature_id'] = row.get('source_feature_id')
+            properties['FORMALIZATION_RPU'] = row.get('formalization_rpu')
+            properties['IDENTITY_SOURCE_ID'] = row.get('identity_source_id')
+            features.append({
+                'type': 'Feature', 'id': row['id'], 'geometry': geometry,
+                'properties': properties,
+                'provenance': {
+                    '$geometry': {
+                        'version_id': row.get('geometry_version_id'),
                     },
-                })
-            if len(rows) < self.PAGE_SIZE:
-                break
-            cursor = rows[-1]['id']
+                },
+            })
         return {
-            'type': 'FeatureCollection', 'features': features,
+            'type': 'FeatureCollection',
+            'features': features,
             'revision': revision if revision is not None else self.gateway.revision(),
+            'crs': 'EPSG:4326',
+            'next_cursor': rows[-1]['id'] if len(rows) == limit else None,
+        }
+
+    def collection(self, ubigeo, kind, revision=None):
+        """Read all current entities using bounded keyset pages."""
+        features = []
+        cursor = ''
+        revision = revision if revision is not None else self.gateway.revision()
+        while True:
+            page = self.collection_page(
+                ubigeo, kind, revision=revision,
+                cursor=cursor, limit=self.PAGE_SIZE)
+            features.extend(page['features'])
+            cursor = page.get('next_cursor')
+            if not cursor:
+                break
+        return {
+            'type': 'FeatureCollection',
+            'features': features,
+            'revision': revision,
             'crs': 'EPSG:4326',
         }
 

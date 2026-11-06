@@ -50,6 +50,7 @@ urlpatterns = [
     path('api/maestro/clasificaciones/', master_views.park_lots, name='maestro_lot_classifications'),
     path('api/maestro/parques/', master_views.park_lots, name='maestro_park_lots'),
     path('api/maestro/fuentes/<slug:source_id>/<slug:layer_key>/', master_views.layer, name='maestro_layer'),
+    path('api/maestro/fuentes/<slug:source_id>/<slug:layer_key>/pagina/', master_views.layer_page, name='maestro_layer_page'),
     path('visor-planos/', planos_views.viewer, name='visor_planos'),
     path('api/planos/importar/', planos_views.upload, name='planos_upload'),
     path('api/planos/<str:job_id>/', planos_views.import_status, name='planos_status'),
