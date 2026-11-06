@@ -707,7 +707,8 @@
                                 await addVectorFeatures({source,key,district:current,records:pageRecords});
                             cursor=page.next_cursor||'';
                             if(scope===district&&!signal.aborted)
-                                loading(source.name+' · '+key+': '+fmt(collection.records.length)+' de '+fmt(page.source_total),loadDone,loadTotal);
+                                loading(source.name+' · '+key+': '+fmt(collection.records.length)+' de '+fmt(page.source_total),
+                                    loadDone+Math.min(1,collection.records.length/Math.max(1,page.source_total)),loadTotal);
                         }while(cursor);
                     }else{
                         let result;
@@ -753,7 +754,7 @@
                         status('Catastro Maestro · '+finished+' de '+sources.length+' distritos cargados…');
                 }
             }
-            const concurrency=district===ALL_DISTRICTS?2:4;
+            const concurrency=4;
             await Promise.all(Array.from({length:Math.min(concurrency,sources.length)},()=>worker()));
             if(signal.aborted)return;
             loading(null);

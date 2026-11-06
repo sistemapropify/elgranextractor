@@ -81,6 +81,7 @@ def main():
                 )
                 offset += len(chunk)
                 batch_size = 5
+                time.sleep(1)
             except Exception as error:
                 if isinstance(error, Conflict):
                     print(
