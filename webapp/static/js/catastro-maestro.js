@@ -76,6 +76,10 @@
         if(done==null){
             host.hidden=true;return;
         }
+        if(district===ALL_DISTRICTS&&loadDone>0){
+            host.hidden=true;
+            return;
+        }
         host.hidden=false;
         const value=Math.max(0,Math.min(1,(done||0)/(total||1)));
         if(title)title.textContent='Cargando Catastro Maestro';
