@@ -18,6 +18,8 @@ from .models import AnalysisRun
 from .property_dashboard import get_property_dashboard
 from .remarketing import get_remarketing_dashboard
 from .services import (
+    FUNNEL_STAGE_LABELS,
+    FUNNEL_STAGE_ORDER,
     LEAD_RESULT_STAGES,
     RECONTACT_GROUPS,
     get_analysis_quality_dashboard,
@@ -751,6 +753,87 @@ def lead_results(request):
 
 
 @management_access_required
+def lead_funnel_queue(request):
+    """List leads with their official funnel stage and independent priority."""
+    date_from, date_to, _ = _parameters(request)
+    stage = request.GET.get("stage", "entered").strip()
+    if stage not in FUNNEL_STAGE_ORDER:
+        stage = "entered"
+    priority = request.GET.get("priority", "").strip() or None
+    if priority not in RECONTACT_GROUPS:
+        priority = None
+    segment = request.GET.get("segment", "").strip() or None
+    if segment not in ("captaciones", "compradores", "otros"):
+        segment = None
+
+    result = get_lead_results(
+        date_from,
+        date_to,
+        stage,
+        segment=segment,
+        recontact=priority,
+        order="funnel",
+    )
+    leads = result.pop("leads")
+    page_obj = Paginator(leads, 30).get_page(request.GET.get("page"))
+    query = request.GET.copy()
+    query.pop("page", None)
+    priority_order = (
+        "waiting_response",
+        "call_now",
+        "message_now",
+        "follow_up",
+        "nurture",
+        "pending_analysis",
+        "do_not_contact",
+    )
+    priority_options = []
+    for value in priority_order:
+        option_query = query.copy()
+        option_query["priority"] = value
+        priority_options.append(
+            {
+                "value": value,
+                "label": RECONTACT_GROUPS[value],
+                "count": result["recontact_counts"].get(value, 0),
+                "query": option_query.urlencode(),
+            }
+        )
+    all_priority_query = query.copy()
+    all_priority_query.pop("priority", None)
+    segment_options = [
+        {"value": "captaciones", "label": "Captaciones"},
+        {"value": "compradores", "label": "Compradores"},
+        {"value": "otros", "label": "Sin campaña"},
+    ]
+    stage_options = [
+        {"value": value, "label": FUNNEL_STAGE_LABELS[value]}
+        for value in reversed(FUNNEL_STAGE_ORDER)
+    ]
+    return render(
+        request,
+        "lead_intelligence/lead_funnel_queue.html",
+        {
+            **result,
+            "leads": leads,
+            "page_obj": page_obj,
+            "date_from": date_from,
+            "date_to": date_to,
+            "stage": stage,
+            "priority": priority,
+            "query_without_page": query.urlencode(),
+            "current_query": request.GET.urlencode(),
+            "priority_options": priority_options,
+            "all_priority_query": all_priority_query.urlencode(),
+            "segment_options": segment_options,
+            "stage_options": stage_options,
+            "active_tab": "lead_funnel",
+            "title": "Leads por etapa",
+        },
+    )
+
+
+@management_access_required
 def lead_conversation(request, lead_id):
     lead = get_lead_conversation(lead_id)
     if lead is None:
@@ -762,6 +845,30 @@ def lead_conversation(request, lead_id):
             "lead": lead,
             "back_query": request.GET.urlencode(),
             "title": f"Conversación · {lead['display_name']}",
+        },
+    )
+
+
+@management_access_required
+def lead_conversation_panel(request, lead_id):
+    """Compact conversation fragment for the right-side lead drawer."""
+    lead = get_lead_conversation(lead_id)
+    if lead is None:
+        raise Http404("Lead no encontrado")
+    stage_key = next(
+        (
+            candidate
+            for candidate in FUNNEL_STAGE_ORDER
+            if lead.get(candidate)
+        ),
+        "entered",
+    )
+    return render(
+        request,
+        "lead_intelligence/_lead_conversation_panel.html",
+        {
+            "lead": lead,
+            "funnel_stage_label": FUNNEL_STAGE_LABELS[stage_key],
         },
     )
 

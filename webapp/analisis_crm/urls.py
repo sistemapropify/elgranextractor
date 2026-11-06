@@ -84,6 +84,16 @@ urlpatterns = [
         name='analysis_progress',
     ),
     path('resultados/', intelligence_views.lead_results, name='lead_results'),
+    path(
+        'embudo-leads/',
+        intelligence_views.lead_funnel_queue,
+        name='lead_funnel_queue',
+    ),
+    path(
+        'resultados/<int:lead_id>/panel/',
+        intelligence_views.lead_conversation_panel,
+        name='lead_conversation_panel',
+    ),
     path('resultados/<int:lead_id>/', intelligence_views.lead_conversation, name='lead_conversation'),
     path('api/management/summary/', intelligence_views.management_summary_api, name='management_summary_api'),
     path('api/hourly-agent-matrix/', lead_analytics_api.hourly_agent_matrix_api, name='hourly_agent_matrix_api'),

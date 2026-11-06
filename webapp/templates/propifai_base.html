@@ -805,6 +805,7 @@
                         <a href="/analisis-crm/" class="submenu-item {% if request.path == '/analisis-crm/' or '/analisis-crm/control/' in request.path %}active{% endif %}"><span>Centro de control</span></a>
                         <a href="{% url 'analisis_crm:remarketing_campaigns' %}" class="submenu-item {% if '/remarketing/campanas/' in request.path %}active{% endif %}"><span>Campa&ntilde;as y plantillas</span></a>
                         <a href="{% url 'analisis_crm:dashboard' %}" class="submenu-item {% if '/analisis-crm/resumen/' in request.path %}active{% endif %}"><span>Resultados y embudo</span></a>
+                        <a href="{% url 'analisis_crm:lead_funnel_queue' %}" class="submenu-item {% if '/analisis-crm/embudo-leads/' in request.path %}active{% endif %}"><span>Leads por etapa</span></a>
                         <a href="{% url 'analisis_crm:mobile_updates' %}" class="submenu-item {% if '/analisis-crm/control/apk/' in request.path %}active{% endif %}"><span>APK y alertas</span></a>
                         <a href="/analisis-crm/cohortes/" class="submenu-item {% if '/cohortes/' in request.path %}active{% endif %}"><span>Cohortes</span></a>
                         <a href="/analisis-crm/agenda/" class="submenu-item {% if '/analisis-crm/agenda/' in request.path %}active{% endif %}"><span>Análisis de agenda</span></a>

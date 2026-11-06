@@ -50,6 +50,26 @@ LEAD_RESULT_STAGES = {
     "attention_overdue": "Atención vencida >24 h",
 }
 
+FUNNEL_STAGE_ORDER = (
+    "capture_registered",
+    "visit_registered",
+    "visit_intent",
+    "qualified",
+    "bidirectional",
+    "contacted",
+    "entered",
+)
+
+FUNNEL_STAGE_LABELS = {
+    "entered": "Ingresaron",
+    "contacted": "Contactados",
+    "bidirectional": "Bidireccionales",
+    "qualified": "Calificados por IA",
+    "visit_intent": "Intención de visita confirmada en chat",
+    "visit_registered": "Visita registrada",
+    "capture_registered": "Cita de captación registrada",
+}
+
 RECONTACT_GROUPS = {
     "call_now": "1 · Llamar ahora",
     "message_now": "2 · Escribir ahora",
@@ -456,6 +476,7 @@ def _lead_result_rows(date_from, date_to, lead_id=None, segment=None, activity_s
                 l.score,
                 l.notes,
                 COALESCE(l.date_entry, l.created_at) AS entered_at,
+                l.created_at AS lead_created_at,
                 c.first_name,
                 c.last_name,
                 c.business_name,
@@ -835,6 +856,7 @@ def _prepare_lead_result(row, assessment=None, assignment_timeline=None):
     # El cursor de pyodbc devuelve entered_at como naive (UTC). Se marca como
     # aware-UTC para que el filtro |localtime lo convierta a hora de Perú.
     row["entered_at"] = _utc_datetime(row.get("entered_at"))
+    row["lead_created_at"] = _utc_datetime(row.get("lead_created_at"))
     first_name = (row.pop("first_name") or "").strip()
     last_name = (row.pop("last_name") or "").strip()
     business_name = (row.pop("business_name") or "").strip()
@@ -905,6 +927,7 @@ def get_lead_results(
     segment=None,
     source=None,
     recontact=None,
+    order=None,
 ):
     """Return lead cards for one dashboard stage using SELECT-only CRM access."""
     if stage not in LEAD_RESULT_STAGES:
@@ -953,16 +976,51 @@ def get_lead_results(
         )
     else:
         recontact = None
+
+    if order == "funnel":
+        leads.sort(
+            key=lambda lead: (
+                next(
+                    (
+                        index
+                        for index, stage_key in enumerate(FUNNEL_STAGE_ORDER)
+                        if lead.get(stage_key)
+                    ),
+                    len(FUNNEL_STAGE_ORDER),
+                ),
+                -(
+                    lead.get("last_message_at").timestamp()
+                    if lead.get("last_message_at")
+                    else 0
+                ),
+                lead.get("id") or 0,
+            )
+        )
+        for position, lead in enumerate(leads, start=1):
+            stage_key = next(
+                (
+                    candidate
+                    for candidate in FUNNEL_STAGE_ORDER
+                    if lead.get(candidate)
+                ),
+                "entered",
+            )
+            lead["queue_rank"] = position
+            lead["funnel_stage_key"] = stage_key
+            lead["funnel_stage_label"] = FUNNEL_STAGE_LABELS[stage_key]
     return {
         "leads": leads,
         "stage": stage,
-        "stage_label": LEAD_RESULT_STAGES[stage],
+        "stage_label": FUNNEL_STAGE_LABELS.get(
+            stage, LEAD_RESULT_STAGES[stage]
+        ),
         "segment": segment,
         "source": source,
         "source_label": dict(SOURCE_LABELS).get(source, ""),
         "recontact": recontact,
         "recontact_label": RECONTACT_GROUPS.get(recontact, ""),
         "recontact_counts": dict(recontact_counts),
+        "order": order,
     }
 
 

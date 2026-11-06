@@ -129,3 +129,55 @@ class RecontactPriorityTests(SimpleTestCase):
         self.assertEqual([lead["id"] for lead in result["leads"]], [1])
         self.assertEqual(result["recontact"], "call_now")
 
+    @patch("lead_intelligence.services._prepare_lead_result")
+    @patch("lead_intelligence.services._assessment_map", return_value={})
+    @patch(
+        "lead_intelligence.services._lead_result_rows",
+        return_value=[
+            {"id": 1, "chat_history": "[]"},
+            {"id": 2, "chat_history": "[]"},
+            {"id": 3, "chat_history": "[]"},
+        ],
+    )
+    def test_funnel_queue_uses_official_stages_and_numbers_results(
+        self, _rows, _assessments, prepare
+    ):
+        prepare.side_effect = [
+            {
+                "id": 1,
+                "entered": True,
+                "contacted": True,
+            },
+            {
+                "id": 2,
+                "entered": True,
+                "contacted": True,
+                "bidirectional": True,
+            },
+            {
+                "id": 3,
+                "entered": True,
+                "contacted": True,
+                "bidirectional": True,
+                "qualified": True,
+            },
+        ]
+        result = get_lead_results(
+            date(2026, 11, 1),
+            date(2026, 11, 6),
+            "entered",
+            order="funnel",
+        )
+        self.assertEqual(
+            [lead["id"] for lead in result["leads"]],
+            [3, 2, 1],
+        )
+        self.assertEqual(
+            [lead["queue_rank"] for lead in result["leads"]],
+            [1, 2, 3],
+        )
+        self.assertEqual(
+            [lead["funnel_stage_label"] for lead in result["leads"]],
+            ["Calificados por IA", "Bidireccionales", "Contactados"],
+        )
+

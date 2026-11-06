@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% load tz humanize %}
+{% block title %}Leads por etapa | PROMETEO{% endblock %}
+{% block extra_css %}
+<style>
+{% include "lead_intelligence/_dashboard_styles.html" %}
+.lfq-filter{grid-template-columns:minmax(120px,1fr) minmax(120px,1fr) minmax(190px,1.2fr) minmax(140px,1fr) auto;min-width:760px}
+.lfq-priority-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin:0 0 18px}
+.lfq-priority-card{background:#161b22;border:1px solid var(--pli-line);border-radius:12px;color:#c9d1d9;display:block;min-height:76px;padding:12px 13px;text-decoration:none}
+.lfq-priority-card:hover{border-color:#58a6ff;background:#1b222c}.lfq-priority-card small{color:var(--pli-muted);display:block;font-size:.64rem;font-weight:800;line-height:1.25;min-height:2.5em;text-transform:uppercase}.lfq-priority-card strong{color:#f0f6fc;display:block;font-size:1.42rem;letter-spacing:-.04em;margin-top:5px}.lfq-priority-card.active{background:rgba(88,166,255,.13);border-color:#1f6feb}.lfq-priority-card.active small{color:#79c0ff}
+.lfq-clear{color:#79c0ff;display:inline-flex;font-size:.7rem;font-weight:750;margin:-8px 0 14px;text-decoration:none}
+.lfq-list{display:grid;gap:9px}.lfq-row{display:grid;grid-template-columns:72px minmax(0,1fr) 220px;overflow:hidden;text-decoration:none;color:inherit}.lfq-row:hover{border-color:#58a6ff}.lfq-rank{align-items:center;background:#0d1117;border-right:1px solid var(--pli-line);display:flex;flex-direction:column;justify-content:center;padding:12px 8px}.lfq-rank small{color:var(--pli-muted);font-size:.57rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.lfq-rank strong{color:#f0f6fc;font-size:1.45rem;letter-spacing:-.05em;margin-top:2px}.lfq-main{min-width:0;padding:14px 16px}.lfq-main h2{color:#f0f6fc;font-size:.96rem;margin:3px 0 7px}.lfq-id{color:var(--pli-muted);font-size:.64rem;font-weight:700}.lfq-meta{color:var(--pli-muted);display:flex;flex-wrap:wrap;font-size:.68rem;gap:5px 14px}.lfq-meta b{color:#c9d1d9}.lfq-side{align-items:flex-end;border-left:1px solid var(--pli-line);display:flex;flex-direction:column;gap:4px;justify-content:center;padding:12px 15px;text-align:right}.lfq-type{font-size:.82rem;font-weight:850}.lfq-eyebrow{font-size:.55rem;font-weight:850;letter-spacing:.1em;opacity:.72;text-transform:uppercase}.lfq-stage{font-size:.76rem;font-weight:780;line-height:1.3}.lfq-side-compradores{background:rgba(240,136,62,.14);color:#ffbd7a;border-left-color:rgba(240,136,62,.45)}.lfq-side-captaciones{background:rgba(88,166,255,.13);color:#8ecbff;border-left-color:rgba(88,166,255,.42)}.lfq-side-otros{background:rgba(139,148,158,.13);color:#c3cbd4;border-left-color:rgba(139,148,158,.4)}
+.lfq-row[aria-expanded="true"]{border-color:#58a6ff;box-shadow:0 0 0 1px #1f6feb inset}
+.lcp-drawer{background:#0d1117;border-left:1px solid #30363d;bottom:0;box-shadow:-18px 0 45px rgba(0,0,0,.4);display:flex;flex-direction:column;max-width:100vw;position:fixed;right:0;top:0;transform:translateX(105%);transition:transform .22s ease;width:520px;z-index:1200}
+.lcp-drawer.open{transform:translateX(0)}
+.lcp-header{align-items:center;background:#161b22;border-bottom:1px solid #30363d;display:flex;gap:12px;justify-content:space-between;padding:14px 16px}
+.lcp-header strong{color:#f0f6fc;font-size:.88rem}.lcp-close{background:#21262d;border:1px solid #30363d;border-radius:8px;color:#c9d1d9;cursor:pointer;font-size:1rem;height:32px;line-height:1;width:32px}.lcp-close:hover{border-color:#58a6ff;color:#fff}
+.lcp-body{flex:1;overflow-y:auto;padding:16px}.lcp-loading,.lcp-empty{color:#8b949e;font-size:.76rem;padding:28px 10px;text-align:center}.lcp-lead{border-bottom:1px solid #30363d;margin-bottom:15px;padding-bottom:13px}.lcp-lead-id{color:#8b949e;font-size:.62rem;font-weight:750}.lcp-lead h2{color:#f0f6fc;font-size:1.02rem;margin:3px 0 7px}.lcp-lead-meta{display:flex;flex-wrap:wrap;gap:4px 12px}.lcp-lead-meta span{color:#8b949e;font-size:.65rem}.lcp-lead-meta b{color:#c9d1d9}.lcp-stream{display:flex;flex-direction:column;gap:9px}.lcp-message{display:flex;max-width:88%}.lcp-message-lead{align-self:flex-start}.lcp-message-agent{align-self:flex-end}.lcp-bubble{background:#161b22;border:1px solid #30363d;border-radius:4px 13px 13px 13px;padding:8px 10px}.lcp-message-agent .lcp-bubble{background:#172b4d;border-color:#234a7a;border-radius:13px 4px 13px 13px}.lcp-role{color:#8b949e;display:block;font-size:.56rem;font-weight:850;letter-spacing:.05em;margin-bottom:3px;text-transform:uppercase}.lcp-message-agent .lcp-role{color:#8ecbff}.lcp-text{color:#c9d1d9;font-size:.74rem;line-height:1.42;overflow-wrap:anywhere}.lcp-time{color:#8b949e;display:block;font-size:.56rem;margin-top:5px;text-align:right}
+@media(max-width:1100px){.lfq-priority-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:760px){.lfq-filter{grid-template-columns:1fr 1fr;min-width:0}.lfq-priority-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.lfq-row{grid-template-columns:56px minmax(0,1fr)}.lfq-side{align-items:flex-start;border-left:0;border-top:1px solid var(--pli-line);grid-column:2;padding:9px 14px;text-align:left}}
+</style>
+{% endblock %}
+{% block content %}
+<main class="pli-page">
+  {% include "lead_intelligence/_analysis_tabs.html" %}
+  <div class="pli-result-head">
+    <div>
+      <div class="pli-kicker">Embudo comercial</div>
+      <h1>Leads por etapa</h1>
+      <p>{{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }} · {{ page_obj.paginator.count|intcomma }} leads</p>
+    </div>
+    <form class="pli-filter lfq-filter" method="get">
+      <div><label for="from">Desde</label><input id="from" type="date" name="from" value="{{ date_from|date:'Y-m-d' }}"></div>
+      <div><label for="to">Hasta</label><input id="to" type="date" name="to" value="{{ date_to|date:'Y-m-d' }}"></div>
+      <div><label for="stage">Etapa</label><select id="stage" name="stage"><option value="entered">Todas</option>{% for option in stage_options %}<option value="{{ option.value }}"{% if option.value == stage %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></div>
+      <div><label for="segment">Tipo</label><select id="segment" name="segment"><option value="">Todos</option>{% for option in segment_options %}<option value="{{ option.value }}"{% if option.value == segment %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></div>
+      {% if priority %}<input type="hidden" name="priority" value="{{ priority }}">{% endif %}
+      <button class="pli-submit" type="submit">Aplicar</button>
+    </form>
+  </div>
+
+  <section class="lfq-priority-grid" aria-label="Grupos prioritarios">
+    {% for option in priority_options %}
+      <a class="lfq-priority-card{% if option.value == priority %} active{% endif %}" href="?{{ option.query }}"><small>{{ option.label }}</small><strong>{{ option.count|intcomma }}</strong></a>
+    {% endfor %}
+  </section>
+  {% if priority %}<a class="lfq-clear" href="?{{ all_priority_query }}">Quitar filtro de prioridad ×</a>{% endif %}
+
+  <section class="lfq-list" aria-label="Leads">
+    {% for lead in page_obj %}
+      <a class="pli-card lfq-row" href="{% url 'analisis_crm:lead_conversation' lead.id %}?{{ query_without_page }}" data-conversation-url="{% url 'analisis_crm:lead_conversation_panel' lead.id %}?{{ query_without_page }}" aria-expanded="false">
+        <div class="lfq-rank"><small>Puesto</small><strong>{{ lead.queue_rank|default:forloop.counter }}</strong></div>
+        <div class="lfq-main">
+          <span class="lfq-id">LEAD #{{ lead.id }}</span>
+          <h2>{{ lead.display_name }}</h2>
+          <div class="lfq-meta">
+            <span>Agente: <b>{{ lead.agent_name|default:"Sin asignar" }}</b></span>
+            <span>Mensajes: <b>{{ lead.total_messages }}</b></span>
+            <span>Lead creado: <b>{% if lead.lead_created_at %}{{ lead.lead_created_at|localtime|date:"d/m/Y H:i" }}{% else %}No registrado{% endif %}</b></span>
+            <span>Primer mensaje: <b>{% if lead.first_lead_at %}{{ lead.first_lead_at|localtime|date:"d/m/Y H:i" }}{% else %}No registrado{% endif %}</b></span>
+            <span>Último mensaje: <b>{% if lead.last_message_at %}{{ lead.last_message_at|localtime|date:"d/m/Y H:i" }}{% else %}No registrado{% endif %}</b></span>
+          </div>
+        </div>
+        <div class="lfq-side lfq-side-{{ lead.campaign_segment|default:'otros' }}">
+          <strong class="lfq-type">{% if lead.campaign_segment == "captaciones" %}Captaciones{% elif lead.campaign_segment == "compradores" %}Compradores{% else %}Sin campaña{% endif %}</strong>
+          <span class="lfq-eyebrow">Embudo</span>
+          <span class="lfq-stage">{{ lead.funnel_stage_label }}</span>
+        </div>
+      </a>
+    {% empty %}
+      <article class="pli-card pli-section"><h2>Sin leads</h2><p>No hay leads para esta etapa y tipo.</p></article>
+    {% endfor %}
+  </section>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="pli-pagination" aria-label="Paginación">
+      {% if page_obj.has_previous %}<a href="?{{ query_without_page }}&amp;page={{ page_obj.previous_page_number }}">← Anterior</a>{% endif %}
+      <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a href="?{{ query_without_page }}&amp;page={{ page_obj.next_page_number }}">Siguiente →</a>{% endif %}
+    </nav>
+  {% endif %}
+
+  <aside class="lcp-drawer" id="leadConversationDrawer" aria-hidden="true" aria-label="Conversación del lead">
+    <header class="lcp-header"><strong>Conversación</strong><button class="lcp-close" type="button" aria-label="Cerrar conversación">×</button></header>
+    <div class="lcp-body" id="leadConversationBody"><div class="lcp-loading">Selecciona un lead para ver su conversación.</div></div>
+  </aside>
+</main>
+<script>
+(function () {
+  var drawer = document.getElementById('leadConversationDrawer');
+  var body = document.getElementById('leadConversationBody');
+  var closeButton = drawer ? drawer.querySelector('.lcp-close') : null;
+  var activeRow = null;
+  var requestController = null;
+
+  function setActive(row) {
+    if (activeRow) activeRow.setAttribute('aria-expanded', 'false');
+    activeRow = row;
+    if (activeRow) activeRow.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeDrawer() {
+    if (!drawer) return;
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+    setActive(null);
+    if (requestController) requestController.abort();
+  }
+
+  function openDrawer(row) {
+    if (!drawer || !body) return;
+    var url = row.getAttribute('data-conversation-url');
+    if (!url) return;
+    setActive(row);
+    drawer.classList.add('open');
+    drawer.setAttribute('aria-hidden', 'false');
+    body.innerHTML = '<div class="lcp-loading">Cargando conversación…</div>';
+    if (requestController) requestController.abort();
+    requestController = new AbortController();
+    fetch(url, {
+      credentials: 'same-origin',
+      headers: {'X-Requested-With': 'XMLHttpRequest'},
+      signal: requestController.signal
+    }).then(function (response) {
+      if (!response.ok) throw new Error('No se pudo cargar la conversación.');
+      return response.text();
+    }).then(function (html) {
+      body.innerHTML = html;
+      body.scrollTop = 0;
+    }).catch(function (error) {
+      if (error.name === 'AbortError') return;
+      body.innerHTML = '<div class="lcp-empty">No se pudo cargar la conversación. Inténtalo nuevamente.</div>';
+    });
+  }
+
+  document.addEventListener('click', function (event) {
+    var row = event.target.closest('.lfq-row');
+    if (!row || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    openDrawer(row);
+  });
+  if (closeButton) closeButton.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') closeDrawer();
+  });
+})();
+</script>
+{% endblock %}

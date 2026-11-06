@@ -1,0 +1,25 @@
+{% load tz %}
+<div class="lcp-lead">
+  <span class="lcp-lead-id">LEAD #{{ lead.id }}</span>
+  <h2>{{ lead.display_name }}</h2>
+  <div class="lcp-lead-meta">
+    <span><b>Embudo:</b> {{ funnel_stage_label }}</span>
+    <span><b>Tipo:</b> {% if lead.campaign_segment == "captaciones" %}Captaciones{% elif lead.campaign_segment == "compradores" %}Compradores{% else %}Sin campaña{% endif %}</span>
+    <span><b>Primer mensaje:</b> {% if lead.first_lead_at %}{{ lead.first_lead_at|localtime|date:"d/m/Y H:i" }}{% else %}No registrado{% endif %}</span>
+    <span><b>Último mensaje:</b> {% if lead.last_message_at %}{{ lead.last_message_at|localtime|date:"d/m/Y H:i" }}{% else %}No registrado{% endif %}</span>
+  </div>
+</div>
+
+<div class="lcp-stream" aria-label="Conversación">
+  {% for message in lead.messages %}
+    <div class="lcp-message lcp-message-{{ message.sender }}">
+      <div class="lcp-bubble">
+        <span class="lcp-role">{% if message.sender == "lead" %}Lead{% else %}Agente{% endif %}</span>
+        <div class="lcp-text">{{ message.text|urlize|linebreaksbr }}</div>
+        <time class="lcp-time">{{ message.timestamp|localtime|date:"d/m/Y H:i" }}</time>
+      </div>
+    </div>
+  {% empty %}
+    <div class="lcp-empty">Este lead no tiene mensajes válidos en la conversación.</div>
+  {% endfor %}
+</div>
