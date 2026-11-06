@@ -4,6 +4,7 @@ D1 remains authoritative. Optimistic revision guards and idempotent commits
 protect independent app processes. No local database or download cache is used.
 """
 import json
+import math
 import os
 from pathlib import Path
 import time
@@ -35,6 +36,84 @@ MAX_SCOPE_BYTES = 384 * 1024 * 1024
 PAGE_KEYS = {
     'contributions': ('version_id', 'id'),
 }
+
+
+def _rings(geometry):
+    if not isinstance(geometry, dict):
+        return []
+    if geometry.get('type') == 'Polygon':
+        return [geometry.get('coordinates') or []]
+    if geometry.get('type') == 'MultiPolygon':
+        return geometry.get('coordinates') or []
+    return []
+
+
+def _geometry_metrics(geometry):
+    """Estimate parcel area/perimeter from WGS84 without changing source values."""
+    polygons = _rings(geometry)
+    points = [
+        point
+        for rings in polygons
+        for ring in rings[:1]
+        for point in ring
+        if (isinstance(point, (list, tuple)) and len(point) == 2
+            and all(isinstance(value, (int, float)) for value in point))
+    ]
+    if len(points) < 4:
+        return None
+    latitude = sum(float(point[1]) for point in points) / len(points)
+    longitude = sum(float(point[0]) for point in points) / len(points)
+    if not (-85 <= latitude <= 85 and -180 <= longitude <= 180):
+        return None
+
+    radius = 6371008.8
+    x_scale = math.cos(math.radians(latitude))
+
+    def projected(point):
+        return (
+            math.radians(float(point[0]) - longitude) * radius * x_scale,
+            math.radians(float(point[1]) - latitude) * radius,
+        )
+
+    def ring_area(ring):
+        if len(ring) < 4:
+            return 0.0
+        coordinates = [projected(point) for point in ring]
+        return abs(sum(
+            left[0] * right[1] - right[0] * left[1]
+            for left, right in zip(coordinates, coordinates[1:])
+        )) / 2
+
+    def distance(left, right):
+        lon1, lat1 = map(math.radians, left)
+        lon2, lat2 = map(math.radians, right)
+        dlon, dlat = lon2 - lon1, lat2 - lat1
+        amount = (
+            math.sin(dlat / 2) ** 2
+            + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+        )
+        return 2 * radius * math.asin(min(1, math.sqrt(amount)))
+
+    area = 0.0
+    perimeter = 0.0
+    for rings in polygons:
+        if not rings:
+            continue
+        area += ring_area(rings[0])
+        area -= sum(ring_area(ring) for ring in rings[1:])
+        for ring in rings:
+            perimeter += sum(
+                distance(left, right)
+                for left, right in zip(ring, ring[1:])
+            )
+    if not math.isfinite(area) or not math.isfinite(perimeter):
+        return None
+    return {
+        'area_m2': round(max(0.0, area), 2),
+        'perimeter_m': round(max(0.0, perimeter), 2),
+        'method': 'shoelace_local_projection',
+        'crs': 'EPSG:4326',
+    }
 
 
 def _page_query(sql, keys, cursor):
@@ -350,6 +429,11 @@ class D1ReadModel:
             ('development_links', '''SELECT d.id,d.name,d.status,d.expected_start,
                 d.expected_end,l.role,l.source_version FROM development_lots l
                 JOIN developments d ON d.id=l.development_id WHERE l.entity_id=?'''),
+            ('geometry', '''SELECT c.version_id,c.value_json
+                FROM selections s
+                JOIN contributions c ON c.id=s.contribution_id
+                WHERE s.entity_id=? AND s.field='$geometry'
+                ORDER BY c.version_id DESC LIMIT 1'''),
             ('unit_attributes', '''SELECT e.id,e.kind,
                 (SELECT i.source_feature_id FROM identities i
                  WHERE i.entity_id=e.id AND i.layer='unidad'
@@ -363,6 +447,7 @@ class D1ReadModel:
         parameter_counts = [
             0, 1, 1, 2, 2, 3, 1, 2, 2, 2, 2,
             1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1,
         ]
         results = []
         for offset in range(0, len(queries), 10):
@@ -418,6 +503,15 @@ class D1ReadModel:
             ],
             'development_links': values['development_links'],
         }
+        geometry = None
+        geometry_version_id = None
+        if values['geometry']:
+            geometry_version_id = values['geometry'][0].get('version_id')
+            try:
+                geometry = json.loads(
+                    values['geometry'][0].get('value_json') or 'null')
+            except (TypeError, ValueError):
+                geometry = None
         return {
             'master_revision': (
                 int(values['revision'][0]['value'])
@@ -447,7 +541,139 @@ class D1ReadModel:
             ],
             'unit_attributes': values['unit_attributes'],
             'catalog': catalog,
+            'geometry': geometry,
+            'geometry_version_id': geometry_version_id,
+            'geometry_metrics': _geometry_metrics(geometry),
         }
+
+    def overlapping_lot_entities(self, entity_id, limit=5):
+        """Resolve duplicate master entities that represent the same polygon."""
+        try:
+            uuid.UUID(entity_id)
+        except (AttributeError, TypeError, ValueError):
+            raise ValueError('Identificador maestro no válido.') from None
+        target_rows = self.gateway.read(
+            '''SELECT e.ubigeo,c.value_json AS geometry_json
+               FROM entities e
+               JOIN selections s ON s.entity_id=e.id AND s.field='$geometry'
+               JOIN contributions c ON c.id=s.contribution_id
+               WHERE e.id=? AND e.kind='lote'
+               LIMIT 1''',
+            [entity_id],
+        )
+        if not target_rows:
+            return []
+        try:
+            target_geometry = json.loads(
+                target_rows[0].get('geometry_json') or 'null')
+        except (TypeError, ValueError):
+            return []
+        target_points = [
+            point
+            for rings in _rings(target_geometry)
+            for ring in rings
+            for point in ring
+        ]
+        if not target_points:
+            return []
+        west = min(float(point[0]) for point in target_points)
+        east = max(float(point[0]) for point in target_points)
+        south = min(float(point[1]) for point in target_points)
+        north = max(float(point[1]) for point in target_points)
+        padding = max(east - west, north - south, .000001) * .1
+        west, east = west - padding, east + padding
+        south, north = south - padding, north + padding
+        candidates = self.gateway.read(
+            '''SELECT e.id,c.value_json AS geometry_json,
+                      a.sector,a.block,a.lot,
+                      (SELECT i.source_feature_id
+                       FROM identities i JOIN versions v ON v.id=i.version_id
+                       WHERE i.entity_id=e.id AND i.layer='lote'
+                       ORDER BY CASE
+                         WHEN v.source_id LIKE 'cofopri-formalizacion-%' THEN 0
+                         WHEN v.source_id LIKE 'geollaqta-%' THEN 1
+                         ELSE 2 END, v.created_at DESC LIMIT 1)
+                         AS source_feature_id,
+                      (SELECT v.source_id
+                       FROM identities i JOIN versions v ON v.id=i.version_id
+                       WHERE i.entity_id=e.id AND i.layer='lote'
+                       ORDER BY CASE
+                         WHEN v.source_id LIKE 'cofopri-formalizacion-%' THEN 0
+                         WHEN v.source_id LIKE 'geollaqta-%' THEN 1
+                         ELSE 2 END, v.created_at DESC LIMIT 1)
+                         AS identity_source_id
+               FROM entities e
+               JOIN selections s ON s.entity_id=e.id AND s.field='$geometry'
+               JOIN contributions c ON c.id=s.contribution_id
+               LEFT JOIN current_attributes a ON a.entity_id=e.id
+               WHERE e.ubigeo=? AND e.kind='lote' AND e.id<>?
+                 AND (
+                   (json_extract(c.value_json,'$.type')='Polygon'
+                    AND EXISTS (
+                      SELECT 1
+                      FROM json_each(c.value_json,'$.coordinates[0]') point
+                      WHERE json_extract(point.value,'$[0]') BETWEEN ? AND ?
+                        AND json_extract(point.value,'$[1]') BETWEEN ? AND ?))
+                   OR
+                   (json_extract(c.value_json,'$.type')='MultiPolygon'
+                    AND EXISTS (
+                      SELECT 1
+                      FROM json_each(c.value_json,'$.coordinates') polygon
+                      JOIN json_each(polygon.value,'$[0]') point
+                      WHERE json_extract(point.value,'$[0]') BETWEEN ? AND ?
+                        AND json_extract(point.value,'$[1]') BETWEEN ? AND ?))
+                 )
+               LIMIT 200''',
+            [target_rows[0]['ubigeo'], entity_id,
+             west, east, south, north,
+             west, east, south, north],
+        )
+        if not candidates:
+            return []
+        from shapely.geometry import shape
+        target_shape = shape(target_geometry)
+        matches = []
+        for row in candidates:
+            try:
+                candidate_geometry = json.loads(
+                    row.get('geometry_json') or 'null')
+                candidate_shape = shape(candidate_geometry)
+            except (TypeError, ValueError, KeyError):
+                continue
+            if (candidate_shape.is_empty or not candidate_shape.is_valid
+                    or target_shape.is_empty or not target_shape.is_valid):
+                continue
+            intersection = target_shape.intersection(candidate_shape).area
+            smaller = min(target_shape.area, candidate_shape.area)
+            overlap = intersection / smaller if smaller else 0.0
+            same_center = (
+                target_shape.centroid.within(candidate_shape)
+                or candidate_shape.centroid.within(target_shape)
+            )
+            if overlap < .75 and not same_center:
+                continue
+            source_id = str(row.get('identity_source_id') or '')
+            source_priority = (
+                0 if source_id.startswith('cofopri-formalizacion-')
+                else 1 if source_id.startswith('geollaqta-')
+                else 2
+            )
+            matches.append({
+                'entity_id': str(row['id']),
+                'source_feature_id': row.get('source_feature_id'),
+                'source_id': source_id,
+                'sector': row.get('sector'),
+                'block': row.get('block'),
+                'lot': row.get('lot'),
+                'overlap_ratio': round(overlap, 6),
+                'same_centroid': bool(same_center),
+                '_priority': source_priority,
+            })
+        matches.sort(key=lambda item: (
+            item['_priority'], -item['overlap_ratio'], item['entity_id']))
+        for item in matches:
+            item.pop('_priority', None)
+        return matches[:max(0, int(limit))]
 
     def canonical_source_info(self, ubigeo, kind):
         """Select one authoritative source family and its feature count."""

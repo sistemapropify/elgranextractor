@@ -47,7 +47,7 @@
         function status(text,error=false){$('status').textContent=text;$('status').hidden=!text;$('status').dataset.error=String(error);}
         function clearFields(){
             if(photoLookup)clearTimeout(photoLookup.timer);photoLookup=null;
-            ['code','master-id','address','year','floors','units','land-gis','built-gis','perimeter'].forEach(k=>$(k).textContent=k==='code'?'Sin lote seleccionado':k==='master-id'?'Sin vínculo':'Sin dato');
+            ['code','master-id','address','year','floors','units','land-gis','built-gis','land-calculated','perimeter','perimeter-calculated'].forEach(k=>$(k).textContent=k==='code'?'Sin lote seleccionado':k==='master-id'?'Sin vínculo':'Sin dato');
             if($('source'))$('source').textContent='Sin dato';
             if($('adjust'))$('adjust').hidden=true;
             ['land','built',...sides].forEach(k=>$(k).textContent='Sin dato');
@@ -142,7 +142,7 @@
         function metrics(value,stamp){
             pdfLink(value);
             const data=value.metrics||{};
-            const gis=value.gis_metrics||{},master=value.master||{};
+            const gis=value.gis_metrics||{},calculated=value.calculated_metrics||{},master=value.master||{};
             if($('source')&&value.source_label)$('source').textContent=value.source_label;
             if($('master-id')){
                 const uuid=String(master.entity_id||'').replaceAll('-','');
@@ -153,7 +153,9 @@
             $('built').textContent=data.built_area==null&&gis.built_area!=null?'Sin dato documental':metric(data.built_area);
             $('floors').textContent=metric(data.floors??gis.floors);$('units').textContent=metric(data.units??gis.units);
             $('land-gis').textContent=metric(gis.land_area);$('built-gis').textContent=metric(gis.built_area);
+            $('land-calculated').textContent=metric(calculated.land_area);
             $('perimeter').textContent=metric(data.perimeter);
+            $('perimeter-calculated').textContent=metric(calculated.perimeter);
             sides.forEach(k=>$(k).textContent=metric(data.boundaries?.[k]));
             $('report').replaceChildren();
             (value.reports||[]).forEach(r=>{const o=document.createElement('option');o.value=r.record_id;o.textContent='Reporte '+(r.form_number||r.record_id);$('report').append(o);});
@@ -163,7 +165,10 @@
                 ['land','built','floors','units','land-gis','built-gis','perimeter',...sides].forEach(k=>$(k).textContent='Consulta no disponible');
                 status('No se pudo consultar el documento. Vuelve a intentarlo.',true);$('retry').hidden=false;
             }else if(value.document_status==='master_data_only'){
-                status('Datos del Catastro Maestro disponibles; ficha documental pendiente de archivo.');$('retry').hidden=true;
+                status(calculated.land_area!=null
+                    ?'Datos vectoriales y mediciones calculadas disponibles; la fuente no publica ficha documental.'
+                    :'Datos vectoriales disponibles; la fuente no publica ficha documental para este lote.');
+                $('retry').hidden=true;
             }else status(value.source_label?'Vinculado al Catastro Maestro · datos normalizados con procedencia.':'');
         }
         async function details(stamp,record=''){

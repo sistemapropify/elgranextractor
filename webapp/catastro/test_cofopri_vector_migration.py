@@ -27,6 +27,21 @@ def _feature(object_id, rpu, block='A', lot='1'):
 
 
 class CofopriVectorMigrationTests(SimpleTestCase):
+    def test_pcdpi_cartographic_areas_are_not_labeled_documentary(self):
+        feature = _feature(1, '04012902032033', block='032', lot='033')
+        feature['properties'].update({
+            'ID_LOTE': '04012902032033',
+            'AREA_TER': 321.5,
+            'AREA_CON': 180,
+        })
+        value = cofopri_vector_migration._snapshot_feature(
+            feature, '040129', 'José Luis Bustamante y Rivero',
+            'pcdpi', 'lotes')
+        self.assertEqual(value['fields']['gis_land_area'], 321.5)
+        self.assertEqual(value['fields']['gis_built_area'], 180)
+        self.assertNotIn('land_area', value['fields'])
+        self.assertNotIn('built_area', value['fields'])
+
     def test_wgs84_and_psad56_are_merged_by_rpu_before_staging(self):
         snapshots = {
             'psad56': [_feature(1, 'P06121499')],

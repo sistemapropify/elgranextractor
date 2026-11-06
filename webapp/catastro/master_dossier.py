@@ -6,6 +6,7 @@ has not yet been normalized, without querying the original cadastral service.
 """
 import hashlib
 import json
+import math
 import re
 from pathlib import PurePosixPath
 from urllib.parse import quote
@@ -60,24 +61,38 @@ def _normalized_media_urls(value, lot_id, surface):
     return value
 
 
-def _from_d1(lot_id, record_id, surface):
-    model = D1ReadModel()
-    identity = model.lot_identity(lot_id)
-    if not identity:
-        return None
-    data = model.entity(identity['entity_id'])
-    attributes = dict(data.get('attributes') or {})
-    units = []
-    choices = []
-    for unit in data.get('unit_attributes') or []:
-        record = str(unit.get('source_feature_id') or '')
-        if not record:
+def _unique_rows(rows, key):
+    result = []
+    seen = set()
+    for row in rows:
+        value = key(row)
+        if value in seen:
             continue
-        choices.append(record)
-        units.append({**unit, 'record_id': record})
-    # Report headers may be stored on the documentary unit while the lot row
-    # contains only GIS fields. Promote a value only when all non-empty unit
-    # values agree; conflicting observations remain at unit level.
+        seen.add(value)
+        result.append(row)
+    return result
+
+
+def _merge_missing_attributes(attributes, data):
+    for field, value in (data.get('attributes') or {}).items():
+        if value in (None, '') or attributes.get(field) not in (None, ''):
+            continue
+        attributes[field] = value
+
+
+def _merge_catalog(target, source):
+    for key, values in (source or {}).items():
+        if not isinstance(values, list):
+            target.setdefault(key, values)
+            continue
+        target[key] = _unique_rows(
+            [*(target.get(key) or []), *values],
+            lambda row: json.dumps(row, sort_keys=True, ensure_ascii=False),
+        )
+
+
+def _promote_shared_unit_values(attributes, units):
+    """Promote a unit header only when every non-empty observation agrees."""
     for field in (
             'department', 'province', 'district', 'urbanization',
             'street_type', 'street_name', 'municipal_number',
@@ -106,6 +121,155 @@ def _from_d1(lot_id, record_id, surface):
             values.add(value)
         if len(values) == 1:
             attributes[field] = values.pop()
+
+
+def _source_missing(attributes, owners, media, units):
+    missing = []
+    if attributes.get('urbanization') in (None, ''):
+        missing.append('Urbanización no publicada por la fuente vectorial.')
+    if (attributes.get('land_area') in (None, '')
+            and attributes.get('gis_land_area') in (None, '')
+            and attributes.get('geometric_land_area') in (None, '')):
+        missing.append('Área de terreno no publicada; no se infiere un dato registral.')
+    if attributes.get('built_area') in (None, '') and attributes.get('gis_built_area') in (None, ''):
+        missing.append('Área construida no publicada por la fuente.')
+    if not units:
+        missing.append('Sin ficha documental o unidad registral vinculada.')
+    if not owners:
+        missing.append('Sin titulares publicados para este predio.')
+    if not media:
+        missing.append('Sin fotografía o documento catastral archivado.')
+    return missing
+
+
+def _measurement_total(value):
+    """Sum official comma-separated side segments without treating them as one."""
+    parts = [
+        part.strip().replace(',', '.')
+        for part in re.split(r'[;,|]', str(value or ''))
+        if part.strip()
+    ]
+    try:
+        numbers = [float(part) for part in parts]
+    except ValueError:
+        return None
+    if not numbers or any(not math.isfinite(number) or number < 0
+                          for number in numbers):
+        return None
+    return round(sum(numbers), 4), numbers
+
+
+def _from_d1(lot_id, record_id, surface):
+    model = D1ReadModel()
+    identity = model.lot_identity(lot_id)
+    if not identity:
+        return None
+    data = model.entity(identity['entity_id'])
+    attributes = dict(data.get('attributes') or {})
+    # PCDPI publishes cartographic measurements, not documentary areas.
+    if str(identity.get('source_id') or '').startswith('cofopri-pcdpi-'):
+        for documentary, source_value in (
+                ('land_area', 'gis_land_area'),
+                ('built_area', 'gis_built_area')):
+            if (attributes.get(source_value) in (None, '')
+                    and attributes.get(documentary) not in (None, '')):
+                attributes[source_value] = attributes[documentary]
+                attributes[documentary] = None
+
+    related_entities = []
+    related_loader = getattr(model, 'overlapping_lot_entities', None)
+    primary_units = data.get('unit_attributes') or []
+    primary_records = {
+        str(unit.get('source_feature_id') or '')
+        for unit in primary_units
+        if unit.get('source_feature_id')
+    }
+    needs_related = (
+        record_id and record_id not in primary_records
+    ) or any(
+        attributes.get(field) in (None, '')
+        for field in (
+            'urbanization', 'land_area', 'built_area',
+            'street_name', 'municipal_number')
+    ) or not data.get('owners') or not data.get('media')
+    if related_loader and needs_related:
+        try:
+            matches = related_loader(identity['entity_id'], limit=4)
+        except (StorageError, ValueError, TypeError):
+            matches = []
+        for match in matches:
+            try:
+                candidate = model.entity(match['entity_id'])
+            except (StorageError, ValueError, TypeError):
+                continue
+            identity_link = next((
+                link for link in (candidate.get('identity_links') or [])
+                if link.get('layer') == 'lote'
+            ), {})
+            related_entities.append({
+                **match,
+                'source_feature_id': (
+                    identity_link.get('source_feature_id')
+                    or match.get('source_feature_id')),
+            })
+            _merge_missing_attributes(attributes, candidate)
+            data['unit_attributes'] = _unique_rows(
+                [*(data.get('unit_attributes') or []),
+                 *(candidate.get('unit_attributes') or [])],
+                lambda unit: str(
+                    unit.get('id') or unit.get('record_id')
+                    or unit.get('source_feature_id') or ''),
+            )
+            data['owners'] = _unique_rows(
+                [*(data.get('owners') or []), *(candidate.get('owners') or [])],
+                lambda owner: (
+                    str(owner.get('id') or ''),
+                    str(owner.get('name') or ''),
+                    str(owner.get('document_type') or ''),
+                    str(owner.get('document_number') or ''),
+                    str(owner.get('source_record_id') or ''),
+                ),
+            )
+            data['media'] = _unique_rows(
+                [*(data.get('media') or []), *(candidate.get('media') or [])],
+                lambda item: str(
+                    item.get('id') or item.get('object_key')
+                    or item.get('url') or ''),
+            )
+            for key in (
+                    'relationships', 'boundary_segments', 'registral_acts',
+                    'raw_fields', 'identity_links'):
+                data[key] = _unique_rows(
+                    [*(data.get(key) or []), *(candidate.get(key) or [])],
+                    lambda row: json.dumps(
+                        row, sort_keys=True, ensure_ascii=False, default=str),
+                )
+            for field, evidence in (candidate.get('provenance') or {}).items():
+                data.setdefault('provenance', {}).setdefault(field, evidence)
+            _merge_catalog(
+                data.setdefault('catalog', {}),
+                candidate.get('catalog') or {},
+            )
+
+    units = []
+    choices = []
+    for unit in data.get('unit_attributes') or []:
+        record = str(unit.get('source_feature_id') or '')
+        if not record:
+            continue
+        choices.append(record)
+        units.append({**unit, 'record_id': record})
+    _promote_shared_unit_values(attributes, units)
+    geometry_metrics = data.get('geometry_metrics') or {}
+    if (attributes.get('geometric_land_area') in (None, '')
+            and geometry_metrics.get('area_m2') is not None):
+        attributes['geometric_land_area'] = geometry_metrics['area_m2']
+        data.setdefault('provenance', {})['geometric_land_area'] = {
+            'source': 'Catastro Maestro · geometría D1',
+            'status': 'calculated',
+            'method': geometry_metrics.get('method'),
+            'version_id': data.get('geometry_version_id'),
+        }
     if record_id and record_id not in choices:
         raise ValueError('La ficha no pertenece al lote vinculado.')
     selected = record_id or (choices[0] if choices else '')
@@ -113,12 +277,18 @@ def _from_d1(lot_id, record_id, surface):
     for segment in data.get('boundary_segments') or []:
         side = str(segment.get('side') or '')
         if side in ('front', 'back', 'left', 'right'):
+            evidence = json.loads(segment.get('evidence_json') or '{}')
+            measurement = segment.get('length_m')
+            segment_total = _measurement_total(evidence.get('raw_measure'))
+            if measurement in (None, '') and segment_total:
+                measurement = segment_total[0]
+                evidence['segments_m'] = segment_total[1]
             if attributes.get(side) in (None, ''):
-                attributes[side] = segment.get('length_m')
+                attributes[side] = measurement
             boundary_details[side] = {
                 **segment,
-                'evidence': json.loads(
-                    segment.get('evidence_json') or '{}'),
+                'length_m': measurement,
+                'evidence': evidence,
             }
     media = []
     for item in data.get('media') or []:
@@ -169,8 +339,14 @@ def _from_d1(lot_id, record_id, surface):
         'boundary_segments': data.get('boundary_segments') or [],
         'registral_acts': data.get('registral_acts') or [],
         'catalog': data.get('catalog') or {},
-        'missing': [],
+        'missing': _source_missing(
+            attributes, data.get('owners') or [],
+            data.get('media') or [], units),
         'source_manifest': None,
+        'geometry': data.get('geometry'),
+        'geometry_version_id': data.get('geometry_version_id'),
+        'geometry_metrics': geometry_metrics,
+        'related_entities': related_entities,
         'master': {
             'entity_id': identity['entity_id'],
             'source_version_id': identity.get('version_id'),
@@ -544,6 +720,12 @@ def summary(value, record_id=None):
             'built_area': metric(attributes.get('gis_built_area')),
             'floors': metric(attributes.get('floors')),
             'units': metric(attributes.get('units')),
+        },
+        'calculated_metrics': {
+            'land_area': metric(
+                (value.get('geometry_metrics') or {}).get('area_m2')),
+            'perimeter': metric(
+                (value.get('geometry_metrics') or {}).get('perimeter_m')),
         },
         'verified': bool(value.get('master_status') == 'normalized_d1' or
                          any(item not in (None, '') for item in boundaries.values())),

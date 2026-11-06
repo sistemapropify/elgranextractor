@@ -383,6 +383,7 @@
             if(length!=null)boundaryFallback[side]=length;
         }
         const measureValues={...boundaryFallback,...attributes,...selectedUnit};
+        const geometryMetrics=data.geometry_metrics||{};
         const galleryItems=[...new Map([...(data.gallery||[]),...media.filter(entry=>/facade|photo|image|foto/i.test(String(entry.kind||'')))].filter(entry=>entry.url).map(entry=>[entry.url,entry])).values()];
         const hero=document.createElement('section');hero.className='master-dossier-hero';
         const photoBox=document.createElement('div');photoBox.className='master-dossier-photo';
@@ -428,11 +429,13 @@
             [['Esquina',attributes.is_corner],['Frente a parque',attributes.faces_park]],
         ]);
         addEntityColumnGroups(summary,'Áreas principales',[
-            [['Terreno',measured(measureValues.land_area,' m²')],['Terreno SIG',measured(measureValues.gis_land_area,' m²')]],
-            [['Construida',measured(measureValues.built_area,' m²')],['Construida SIG',measured(measureValues.gis_built_area,' m²')]],
+            [['Terreno documental',measured(measureValues.land_area,' m²')],['Terreno SIG fuente',measured(measureValues.gis_land_area,' m²')]],
+            [['Construida documental',measured(measureValues.built_area,' m²')],['Construida SIG fuente',measured(measureValues.gis_built_area,' m²')]],
+            [['Área geométrica calculada',measured(measureValues.geometric_land_area,' m²')],['Perímetro geométrico calculado',measured(geometryMetrics.perimeter_m,' m')]],
         ]);
         addEntityRows(summary,'Perímetros',[
             ['Perímetro total',measured(measureValues.perimeter,' m')],
+            ['Perímetro calculado por geometría',measured(geometryMetrics.perimeter_m,' m')],
             ['Frente',measured(measureValues.front,' m')],
             ['Derecha',measured(measureValues.right,' m')],
             ['Izquierda',measured(measureValues.left,' m')],
@@ -525,6 +528,7 @@
         ]);
         if(data.missing?.length)addEntitySection(provenance,'Datos faltantes en la fuente',Object.assign(document.createElement('p'),{className:'master-help',textContent:data.missing.join(' · ')}));
         if((data.registral_acts||[]).length)addEntitySection(provenance,'Actos registrales',Object.assign(document.createElement('pre'),{className:'master-dossier-raw',textContent:JSON.stringify(data.registral_acts,null,2)}));
+        if((data.related_entities||[]).length)addEntitySection(provenance,'Entidades reunidas por la misma geometría',Object.assign(document.createElement('pre'),{className:'master-dossier-raw',textContent:JSON.stringify(data.related_entities,null,2)}));
         if(Object.keys(data.provenance||{}).length)addEntitySection(provenance,'Evidencia por campo',Object.assign(document.createElement('pre'),{className:'master-dossier-raw',textContent:JSON.stringify(data.provenance,null,2)}));
         addEntityValues(provenance,'Cobertura del registro',{campos_con_valor:Object.values(attributes).filter(value=>value!==null&&value!==undefined&&value!=='').length,unidades:unitRows.length,titulares:(data.owners||[]).length,medios:media.length,evidencias:Object.keys(data.provenance||{}).length},'Sin métricas de cobertura.','master-entity-metrics');
         activate(tabs[0].button);

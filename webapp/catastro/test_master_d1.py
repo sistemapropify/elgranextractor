@@ -4,7 +4,9 @@ from pathlib import Path
 from unittest.mock import patch
 import os
 from unittest import TestCase
-from .master_d1 import D1ReadModel,D1Store,TABLES,configuration
+from .master_d1 import (
+    D1ReadModel, D1Store, TABLES, _geometry_metrics, configuration,
+)
 from .master_store import Conflict
 from .storage import StorageError
 from .source_manager import enabled
@@ -137,6 +139,42 @@ class DurableMasterTests(TestCase):
         self.assertEqual(value['identity_links'][0]['source_feature_id'],'a')
         self.assertIsInstance(value['owners'],list)
         self.assertIsInstance(value['catalog'],dict)
+        self.assertEqual(value['geometry']['type'],'Polygon')
+        self.assertGreater(value['geometry_metrics']['area_m2'],10000)
+        self.assertGreater(value['geometry_metrics']['perimeter_m'],400)
+
+    def test_overlapping_lot_entities_requires_the_same_parcel_footprint(self):
+        self.store.stage(candidate(),0,'admin')
+        plan={'revision':1,'mode':'fill','version_id':'v1',
+              'scope':{'ubigeo':'040103','kind':'lote'},
+              'reason':'polígono principal'}
+        self.store.apply(plan,self.store.preview(plan)['token'],'admin')
+        first=self.gateway.read('SELECT id FROM entities')[0]['id']
+
+        self.store.stage(
+            candidate(source='formal',version='v-formal',fid='b'),
+            self.gateway.revision(),'admin')
+        plan={'revision':self.gateway.revision(),'mode':'fill',
+              'version_id':'v-formal','scope':{'ubigeo':'040103','kind':'lote'},
+              'reason':'duplicado físico'}
+        self.store.apply(plan,self.store.preview(plan)['token'],'admin')
+
+        matches=D1ReadModel(self.gateway).overlapping_lot_entities(
+            first,limit=5)
+        self.assertEqual(len(matches),1)
+        self.assertGreaterEqual(matches[0]['overlap_ratio'],.99)
+        self.assertEqual(matches[0]['source_feature_id'],'b')
+
+    def test_geometry_metrics_are_computed_without_overwriting_source_values(self):
+        value=_geometry_metrics({'type':'Polygon','coordinates':[[
+            [-71.55,-16.36],[-71.549,-16.36],
+            [-71.549,-16.359],[-71.55,-16.359],[-71.55,-16.36],
+        ]]})
+        self.assertGreater(value['area_m2'],10000)
+        self.assertLess(value['area_m2'],13000)
+        self.assertGreater(value['perimeter_m'],400)
+        self.assertLess(value['perimeter_m'],500)
+
     def test_catalog_review_and_environment_layer_survive_restart(self):
         payload=candidate()
         payload['identifiers']=[{'target_ref':'lote:a','scheme':'referencia_catastral',

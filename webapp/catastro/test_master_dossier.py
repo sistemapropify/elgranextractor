@@ -217,6 +217,68 @@ class MasterDossierTests(SimpleTestCase):
         self.assertEqual(
             value['attributes']['street_name'], 'CALLE SAN JOSE')
 
+    def test_related_entity_is_merged_only_through_polygon_resolution(self):
+        entity_id = '11111111-2222-4333-8444-555555555555'
+        related_id = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+        primary = {
+            'attributes': {'sector': '02', 'block': '032', 'lot': '033',
+                           'floors': 1},
+            'owners': [], 'unit_attributes': [], 'media': [],
+            'identity_links': [], 'relationships': [], 'provenance': {},
+            'boundary_segments': [], 'registral_acts': [], 'catalog': {},
+        }
+        related = {
+            'attributes': {'urbanization': 'URBANIZACIÓN DOCUMENTADA',
+                           'land_area': 250},
+            'owners': [{'id': 'person-1', 'name': 'Titular documentado'}],
+            'unit_attributes': [], 'media': [],
+            'identity_links': [{'entity_id': related_id, 'layer': 'lote',
+                                'source_feature_id': 'P06120000'}],
+            'relationships': [], 'provenance': {},
+            'boundary_segments': [], 'registral_acts': [], 'catalog': {},
+        }
+        model = SimpleNamespace(
+            lot_identity=lambda lot: {
+                'entity_id': entity_id, 'version_id': 'pcdpi-v1',
+                'source_id': 'cofopri-pcdpi-040129',
+            },
+            entity=lambda value: primary if value == entity_id else related,
+            overlapping_lot_entities=lambda value, limit=5: [{
+                'entity_id': related_id,
+                'source_feature_id': 'P06120000',
+                'source_id': 'cofopri-formalizacion-040129',
+                'overlap_ratio': .99,
+            }],
+        )
+        with patch.object(master_dossier, 'D1ReadModel', return_value=model):
+            value = master_dossier.load('04012902032033')
+        self.assertEqual(value['attributes']['urbanization'],
+                         'URBANIZACIÓN DOCUMENTADA')
+        self.assertEqual(value['attributes']['land_area'], 250)
+        self.assertEqual(value['owners'][0]['name'], 'Titular documentado')
+        self.assertEqual(value['related_entities'][0]['entity_id'], related_id)
+
+    def test_pcdpi_areas_are_classified_as_source_gis_values(self):
+        entity_id = '11111111-2222-4333-8444-555555555555'
+        model = SimpleNamespace(
+            lot_identity=lambda lot: {
+                'entity_id': entity_id, 'version_id': 'pcdpi-v1',
+                'source_id': 'cofopri-pcdpi-040129',
+            },
+            entity=lambda value: {
+                'attributes': {'land_area': 321.5, 'built_area': 180},
+                'owners': [], 'unit_attributes': [], 'media': [],
+                'identity_links': [], 'relationships': [], 'provenance': {},
+                'boundary_segments': [], 'registral_acts': [], 'catalog': {},
+            },
+        )
+        with patch.object(master_dossier, 'D1ReadModel', return_value=model):
+            value = master_dossier.load('04012902032033')
+        self.assertIsNone(value['attributes']['land_area'])
+        self.assertIsNone(value['attributes']['built_area'])
+        self.assertEqual(value['attributes']['gis_land_area'], 321.5)
+        self.assertEqual(value['attributes']['gis_built_area'], 180)
+
     def test_formalization_dossier_exposes_raw_fields_and_boundaries(self):
         entity_id = '11111111-2222-4333-8444-555555555555'
         model = SimpleNamespace(
@@ -238,6 +300,11 @@ class MasterDossierTests(SimpleTestCase):
                     'side': 'front', 'length_m': 15.08,
                     'evidence_json': json.dumps({
                         'boundary': 'CALLE AMARGURA'}),
+                }, {
+                    'side': 'right', 'length_m': None,
+                    'evidence_json': json.dumps({
+                        'boundary': 'LOTE 8, LOTE 9, LOTES 10,11',
+                        'raw_measure': '8.35, 8.15, 20.36'}),
                 }],
                 'registral_acts': [], 'catalog': {},
             },
@@ -250,6 +317,10 @@ class MasterDossierTests(SimpleTestCase):
             value['boundary_details']['front']['evidence']['boundary'],
             'CALLE AMARGURA')
         self.assertEqual(summary['metrics']['boundaries']['frente'], 15.08)
+        self.assertEqual(summary['metrics']['boundaries']['derecha'], 36.86)
+        self.assertEqual(
+            value['boundary_details']['right']['evidence']['segments_m'],
+            [8.35, 8.15, 20.36])
 
     def test_archive_asset_is_whitelisted_and_integrity_checked(self):
         cloud = archive_cloud()

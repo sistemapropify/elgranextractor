@@ -22,6 +22,18 @@ def _number(value):
     return number if number >= 0 else None
 
 
+def _measurement(value):
+    parts = [
+        part.strip().replace(',', '.')
+        for part in str(value or '').replace(';', ',').replace('|', ',').split(',')
+        if part.strip()
+    ]
+    numbers = [_number(part) for part in parts]
+    if not numbers or any(number is None for number in numbers):
+        return None, []
+    return round(sum(numbers), 4), numbers
+
+
 def _detail_object_key(ubigeo, source, predio):
     return ('geollaqta/formalizacion/' + ubigeo + '/' + source + '/' +
             predio + '.json')
@@ -63,7 +75,7 @@ def _boundary_rows(detail, entity_id, version_id, observed_at):
             ('back', 'FC_FONDO', 'PM_LTEFON')):
         boundary = str(detail.get(label) or '').strip()
         raw_measure = str(detail.get(measure) or '').strip()
-        length = _number(raw_measure)
+        length, segments = _measurement(raw_measure)
         if not boundary and length is None:
             continue
         rows.append([
@@ -77,6 +89,7 @@ def _boundary_rows(detail, entity_id, version_id, observed_at):
             master_store.encoded({
                 'boundary': boundary,
                 'raw_measure': raw_measure,
+                'segments_m': segments,
                 'source': 'COFOPRI formalización',
                 'observed_at': observed_at,
             }),

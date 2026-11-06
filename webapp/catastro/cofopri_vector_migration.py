@@ -449,6 +449,13 @@ def _snapshot_feature(feature, ubigeo, district, source, layer):
     if layer == 'lotes':
         feature_id = str(
             properties.get('ID_LOTE') or feature.get('id') or '').strip()
+        area_fields = (
+            {'gis_land_area': _number(properties.get('AREA_TER')),
+             'gis_built_area': _number(properties.get('AREA_CON'))}
+            if source == 'pcdpi' else
+            {'land_area': _number(properties.get('AREA_TER')),
+             'built_area': _number(properties.get('AREA_CON'))}
+        )
         fields = {
             'country_code': 'PE',
             'ubigeo': ubigeo,
@@ -462,8 +469,7 @@ def _snapshot_feature(feature, ubigeo, district, source, layer):
                 'NRO_MZNA')),
             'lot': _text(properties.get('COD_LOTE') or properties.get(
                 'NRO_LOTE')),
-            'land_area': _number(properties.get('AREA_TER')),
-            'built_area': _number(properties.get('AREA_CON')),
+            **area_fields,
             'floors': _integer(properties.get('NIVELES')),
             'units': _integer(properties.get('NRO_UNIDADES')),
             'cadastral_use': _text(
@@ -810,8 +816,8 @@ def _pcdpi_payload(ubigeo, district, matches, features, index):
             'sector': _text(properties.get('COD_SECT')),
             'block': _text(properties.get('COD_MZNA')),
             'lot': _text(properties.get('COD_LOTE')),
-            'land_area': _number(properties.get('AREA_TER')),
-            'built_area': _number(properties.get('AREA_CON')),
+            'gis_land_area': _number(properties.get('AREA_TER')),
+            'gis_built_area': _number(properties.get('AREA_CON')),
             'floors': _integer(properties.get('NIVELES')),
             'units': _integer(properties.get('NRO_UNIDADES')),
         }
