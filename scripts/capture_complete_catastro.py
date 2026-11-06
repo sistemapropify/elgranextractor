@@ -25,11 +25,24 @@ from catastro.formalization_detail_migration import (
 from catastro.jobs import run_job, start_job
 from catastro.master_d1 import Gateway
 from catastro.state import State
+from catastro.storage import StorageError
 from cuadrantizacion.geollaqta import DISTRICTS
 
 
 def seed_existing(district):
     ids, truncated = geollaqta_bulk.lot_ids(district)
+    object_by_lot = {}
+    try:
+        snapshot = vector_snapshots.read_snapshot(
+            district, 'lotes', source='pcdpi')
+        for feature in snapshot.get('features') or []:
+            properties = feature.get('properties') or {}
+            lot_id = str(properties.get('ID_LOTE') or '').strip()
+            object_id = properties.get('OBJECTID')
+            if (lot_id and type(object_id) is int and object_id > 0):
+                object_by_lot[lot_id] = object_id
+    except (ValueError, StorageError):
+        pass
     state = State()
     try:
         for lot_id in ids:
@@ -38,6 +51,7 @@ def seed_existing(district):
             state.save_lot(
                 lot_id,
                 district,
+                object_id=object_by_lot.get(lot_id),
                 status='complete',
                 uploaded=1,
                 missing=0,
