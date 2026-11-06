@@ -2,9 +2,12 @@
 <div class="lcp-lead">
   <span class="lcp-lead-id">LEAD #{{ lead.id }}</span>
   <h2>{{ lead.display_name }}</h2>
+  <div class="lcp-funnel lcp-funnel-{{ lead.campaign_segment|default:'otros' }}">
+    <strong>{% if lead.campaign_segment == "captaciones" %}Captaciones{% elif lead.campaign_segment == "compradores" %}Compradores{% else %}Sin campaña{% endif %}</strong>
+    <small>Embudo</small>
+    <span>{{ funnel_stage_label }}</span>
+  </div>
   <div class="lcp-lead-meta">
-    <span><b>Embudo:</b> {{ funnel_stage_label }}</span>
-    <span><b>Tipo:</b> {% if lead.campaign_segment == "captaciones" %}Captaciones{% elif lead.campaign_segment == "compradores" %}Compradores{% else %}Sin campaña{% endif %}</span>
     <span><b>Primer mensaje:</b> {% if lead.first_lead_at %}{{ lead.first_lead_at|localtime|date:"d/m/Y H:i" }}{% else %}No registrado{% endif %}</span>
     <span><b>Último mensaje:</b> {% if lead.last_message_at %}{{ lead.last_message_at|localtime|date:"d/m/Y H:i" }}{% else %}No registrado{% endif %}</span>
   </div>
