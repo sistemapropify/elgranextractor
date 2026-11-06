@@ -195,7 +195,7 @@
             window.dispatchEvent(new CustomEvent('catastro-master-raster-focus',{detail:{ubigeo:itemDistrict}}));
         const p=item.feature.properties,dl=document.createElement('dl');
         dl.className='master-basic-grid';
-        const entityKind=item.key==='manzanas'?'manzana':'lote';
+        const entityKind=item.key==='manzanas'?'manzana':item.key==='vias'?'via':'lote';
         const values=item.key==='vias'?[
             ['Distrito',p.DISTRICT_NAME||districtLabel(itemDistrict)],
             ['Fuente',item.source.name],
@@ -220,7 +220,7 @@
             ['ID Maestro',isUuid(p.ELEMENT_ID)?p.ELEMENT_ID:recordId(item.source,item.key,item.feature)]);
         if(displayEntityId(entityKind,p.ELEMENT_ID))values.push(['Alias de pantalla',displayEntityId(entityKind,p.ELEMENT_ID)]);
         if(p.BLOCK_REF)values.push(['Manzana vinculada (ID interno)',p.BLOCK_REF]);
-        if(item.source.role==='draft')values.push(['Vinculación','Consultando identidades del maestro…'],['Versión geométrica',p.GEOMETRY_VERSION_ID||'Sin dato']);
+        if(item.source.role==='draft'||item.source.role==='master')values.push(['Vinculación','Registro actual del Catastro Maestro'],['Versión geométrica',p.GEOMETRY_VERSION_ID||'Sin dato']);
         else if(item.source.role==='snapshot')values.push(['Estado','Vector extraído y conservado en el Catastro Maestro'],['Ficha maestra','Pendiente de vincular; no impide mostrar la geometría']);
         else if(item.source.reference_only)values.push(['Estado','Contorno recuperado; pendiente de contraste con otros mapas'],
             ['Fecha del plano','Agosto de 2006'],['Ubicación','PSAD56 / UTM 19S inferido; transformado a WGS84']);
@@ -236,8 +236,8 @@
             details.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Consultando la ficha formalizada y sus linderos…'}));
             loadFormalizationDetail(item,p,details);
         }
-        else if(item.source.role==='draft'&&isUuid(p.ELEMENT_ID))loadEntityDetail(item,p.ELEMENT_ID,details);
-        else if(item.source.role!=='draft')details.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Esta fuente es de referencia. Para ver la ficha completa debe estar vinculada como Registro Maestro de Lote.'}));
+        else if(['draft','master'].includes(item.source.role)&&isUuid(p.ELEMENT_ID))loadEntityDetail(item,p.ELEMENT_ID,details);
+        else if(!['draft','master'].includes(item.source.role))details.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Esta fuente es de referencia. Para ver la ficha completa debe estar vinculada como Registro Maestro de Lote.'}));
     }
     async function loadFormalizationDetail(item,properties,host) {
         const request=++detailRequest;

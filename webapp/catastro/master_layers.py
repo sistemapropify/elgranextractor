@@ -124,6 +124,7 @@ def _master_metadata(source_id, summary=None):
         'layers': {
             'lotes': {'count': summary['lotes'], 'kind': 'polygon'},
             'manzanas': {'count': summary['manzanas'], 'kind': 'polygon'},
+            'vias': {'count': summary.get('vias', 0), 'kind': 'line'},
         },
     }
 
@@ -331,14 +332,16 @@ def layer(source_id, key, district, bounds=None, *, original=False, metadata=Non
 def _master_layer(source_id, key, district, bounds=None, *, original=False,
                   metadata=None):
     from .master_d1 import D1ReadModel
-    if (key not in ('lotes', 'manzanas') or district != source_id[-6:]
+    if (key not in ('lotes', 'manzanas', 'vias')
+            or district != source_id[-6:]
             or original):
         raise ValueError('Fuente, capa o distrito no válido.')
     meta = metadata if metadata is not None else _master_metadata(source_id)
     if district != meta['ubigeo']:
         raise ValueError('La fuente no está activa para este distrito.')
     data = D1ReadModel().collection(
-        district, 'lote' if key == 'lotes' else 'manzana',
+        district,
+        {'lotes': 'lote', 'manzanas': 'manzana', 'vias': 'via'}[key],
         revision=meta.get('revision'))
     features = []
     aliases = {
@@ -374,6 +377,8 @@ def _master_layer(source_id, key, district, bounds=None, *, original=False,
                     attrs['ID_PREDIO_RPU'] = str(source_feature_id)
                 else:
                     attrs['ID_MZNA'] = str(source_feature_id)
+            elif key == 'vias':
+                attrs['ID_VIA'] = str(source_feature_id)
             else:
                 attrs['ID_LOTE' if key == 'lotes' else 'ID_MZNA'] = str(
                     source_feature_id)
@@ -486,7 +491,8 @@ def _master_radius(source_id, lat, lng, metres):
     result = {}
     for key, label, kind in (
             ('lotes', 'lots', 'lote'),
-            ('manzanas', 'blocks', 'manzana')):
+            ('manzanas', 'blocks', 'manzana'),
+            ('vias', 'roads', 'via')):
         data = model.radius(meta['ubigeo'], lat, lng, metres, kind=kind)
         features = []
         for feature in data['features']:
@@ -515,6 +521,8 @@ def _master_radius(source_id, lat, lng, metres):
                         attrs['ID_PREDIO_RPU'] = str(source_feature_id)
                     else:
                         attrs['ID_MZNA'] = str(source_feature_id)
+                elif key == 'vias':
+                    attrs['ID_VIA'] = str(source_feature_id)
                 else:
                     attrs['ID_LOTE' if key == 'lotes' else 'ID_MZNA'] = str(
                         source_feature_id)

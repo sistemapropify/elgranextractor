@@ -139,7 +139,7 @@ class D1ReadModel:
         query = """SELECT e.ubigeo,e.kind,COUNT(*) AS count
                    FROM entities e
                    JOIN selections s ON s.entity_id=e.id AND s.field='$geometry'
-                   WHERE e.kind IN ('lote','manzana')
+                   WHERE e.kind IN ('lote','manzana','via')
                    GROUP BY e.ubigeo,e.kind
                    ORDER BY e.ubigeo,e.kind"""
         bounds_query = """SELECT ubigeo,kind,MIN(lng) AS west,MIN(lat) AS south,
@@ -186,12 +186,14 @@ class D1ReadModel:
         for row in count_rows:
             item = summaries.setdefault(row['ubigeo'], {
                 'ubigeo': row['ubigeo'], 'revision': revision,
-                'lotes': 0, 'manzanas': 0,
+                'lotes': 0, 'manzanas': 0, 'vias': 0,
             })
             if row['kind'] == 'lote':
                 item['lotes'] = int(row['count'])
             elif row['kind'] == 'manzana':
                 item['manzanas'] = int(row['count'])
+            elif row['kind'] == 'via':
+                item['vias'] = int(row['count'])
         for row in bounds_rows:
             item = summaries.get(row['ubigeo'])
             if not item:
@@ -211,7 +213,7 @@ class D1ReadModel:
         query = """SELECT e.ubigeo,e.kind,COUNT(*) AS count
                    FROM entities e
                    JOIN selections s ON s.entity_id=e.id AND s.field='$geometry'
-                   WHERE e.kind IN ('lote','manzana')
+                   WHERE e.kind IN ('lote','manzana','via')
                    GROUP BY e.ubigeo,e.kind
                    ORDER BY e.ubigeo,e.kind"""
         if revision is None:
@@ -228,12 +230,14 @@ class D1ReadModel:
         for row in count_rows:
             item = summaries.setdefault(row['ubigeo'], {
                 'ubigeo': row['ubigeo'], 'revision': revision,
-                'lotes': 0, 'manzanas': 0,
+                'lotes': 0, 'manzanas': 0, 'vias': 0,
             })
             if row['kind'] == 'lote':
                 item['lotes'] = int(row['count'])
             elif row['kind'] == 'manzana':
                 item['manzanas'] = int(row['count'])
+            elif row['kind'] == 'via':
+                item['vias'] = int(row['count'])
         return summaries
 
     def lot_identity(self, source_feature_id):
@@ -450,7 +454,7 @@ class D1ReadModel:
         """Read selected fields and geometry directly from D1 with keyset pages."""
         from .master_contract import validate_field
         validate_field('ubigeo', ubigeo)
-        if kind not in ('lote', 'manzana'):
+        if kind not in ('lote', 'manzana', 'via'):
             raise ValueError('Capa no válida.')
         features = []
         cursor = ''
@@ -527,7 +531,7 @@ class D1ReadModel:
         import math
         from .master_contract import validate_field
         validate_field('ubigeo', ubigeo)
-        if kind not in ('lote', 'manzana'):
+        if kind not in ('lote', 'manzana', 'via'):
             raise ValueError('Capa no válida.')
         lat, lng, metres = float(lat), float(lng), float(metres)
         if (not all(math.isfinite(value) for value in (lat, lng, metres))
@@ -549,6 +553,23 @@ class D1ReadModel:
             return hit
 
         def touches(geometry):
+            if geometry.get('type') == 'LineString':
+                for left, right in zip(
+                        geometry.get('coordinates') or [],
+                        (geometry.get('coordinates') or [])[1:]):
+                    ax, ay = ((left[0] - lng) * sx,
+                              (left[1] - lat) * sy)
+                    bx, by = ((right[0] - lng) * sx,
+                              (right[1] - lat) * sy)
+                    dx, dy = bx - ax, by - ay
+                    amount = max(0, min(
+                        1, -(ax * dx + ay * dy) /
+                        (dx * dx + dy * dy or 1)))
+                    if ((ax + amount * dx) ** 2 +
+                            (ay + amount * dy) ** 2
+                            <= (metres + 0.1) ** 2):
+                        return True
+                return False
             polygons = ([geometry['coordinates']]
                         if geometry.get('type') == 'Polygon'
                         else geometry.get('coordinates') or [])
@@ -602,7 +623,8 @@ class D1ReadModel:
                           c.version_id AS geometry_version_id,
                           c.value_json AS geometry_json,
                           a.ubigeo,a.district,a.urbanization,a.sector,
-                          a.block,a.lot,a.address,a.zoning,
+                          a.block,a.lot,a.address,
+                          a.street_type,a.street_name,a.zoning,
                           a.cadastral_use,a.land_area,a.built_area,
                           a.floors,a.units,a.is_corner,a.is_through,
                           a.faces_park
@@ -623,6 +645,16 @@ class D1ReadModel:
                               BETWEEN ? AND ?
                         ))
                        OR
+                       (json_extract(c.value_json,'$.type')='LineString'
+                        AND EXISTS (
+                          SELECT 1
+                          FROM json_each(c.value_json,'$.coordinates') point
+                          WHERE json_extract(point.value,'$[0]')
+                              BETWEEN ? AND ?
+                            AND json_extract(point.value,'$[1]')
+                              BETWEEN ? AND ?
+                        ))
+                       OR
                        (json_extract(c.value_json,'$.type')='MultiPolygon'
                         AND EXISTS (
                           SELECT 1
@@ -636,6 +668,7 @@ class D1ReadModel:
                      )
                    ORDER BY e.id LIMIT """ + str(page_size),
                 [ubigeo, kind, cursor, west, east, south, north,
+                 west, east, south, north,
                  west, east, south, north],
             )
             for row in rows:

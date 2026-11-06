@@ -139,7 +139,7 @@ def plans_portfolio(request):
 @csrf_protect
 @admin_required
 def workspace(request):
-    if not source_manager.enabled():
+    if not (source_manager.enabled() or source_manager.durable()):
         return unavailable()
     response = None
     try:
