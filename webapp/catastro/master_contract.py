@@ -3,7 +3,8 @@ import math
 import re
 
 VERSION = 'catastro-maestro-v1'
-KINDS = ('lote', 'manzana', 'edificio', 'unidad', 'establecimiento', 'registro_documental')
+KINDS = ('lote', 'manzana', 'via', 'edificio', 'unidad',
+         'establecimiento', 'registro_documental')
 TEXT_FIELDS = {
     'country_code': 'País', 'department': 'Departamento', 'province': 'Provincia',
     'district': 'Distrito', 'ubigeo': 'UBIGEO', 'postal_code': 'Código postal',

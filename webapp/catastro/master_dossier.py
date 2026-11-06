@@ -21,7 +21,7 @@ SCHEMA = 'prometeo-catastro-master-dossier-v1'
 
 
 def validate_lot(lot_id):
-    if not re.fullmatch(r'\d{14}', str(lot_id or '')):
+    if not re.fullmatch(r'[A-Za-z0-9-]{5,40}', str(lot_id or '')):
         raise ValueError('Código catastral no válido.')
     return str(lot_id)
 
@@ -109,6 +109,17 @@ def _from_d1(lot_id, record_id, surface):
     if record_id and record_id not in choices:
         raise ValueError('La ficha no pertenece al lote vinculado.')
     selected = record_id or (choices[0] if choices else '')
+    boundary_details = {}
+    for segment in data.get('boundary_segments') or []:
+        side = str(segment.get('side') or '')
+        if side in ('front', 'back', 'left', 'right'):
+            if attributes.get(side) in (None, ''):
+                attributes[side] = segment.get('length_m')
+            boundary_details[side] = {
+                **segment,
+                'evidence': json.loads(
+                    segment.get('evidence_json') or '{}'),
+            }
     media = []
     for item in data.get('media') or []:
         details = item.get('details') or {}
@@ -153,6 +164,8 @@ def _from_d1(lot_id, record_id, surface):
         'identity_links': data.get('identity_links') or [],
         'relationships': data.get('relationships') or [],
         'provenance': data.get('provenance') or {},
+        'raw_fields': data.get('raw_fields') or [],
+        'boundary_details': boundary_details,
         'boundary_segments': data.get('boundary_segments') or [],
         'registral_acts': data.get('registral_acts') or [],
         'catalog': data.get('catalog') or {},
@@ -470,6 +483,13 @@ def summary(value, record_id=None):
         'izquierda': metric(selected.get('left')),
         'fondo': metric(selected.get('back')),
     }
+    boundary_details = value.get('boundary_details') or {}
+    for label, side in (
+            ('frente', 'front'), ('derecha', 'right'),
+            ('izquierda', 'left'), ('fondo', 'back')):
+        if boundaries[label] in (None, ''):
+            boundaries[label] = metric(
+                (boundary_details.get(side) or {}).get('length_m'))
     master = value.get('master') or {}
     return {
         'lot_id': value['lot_id'],

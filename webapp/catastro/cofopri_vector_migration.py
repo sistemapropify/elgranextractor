@@ -441,6 +441,354 @@ def migrate_direct(gateway, ubigeo, district, batch_size=200, limit=None,
     }
 
 
+def _snapshot_feature(feature, ubigeo, district, source, layer):
+    properties = feature.get('properties') or {}
+    kind = {'lotes': 'lote', 'manzanas': 'manzana', 'vias': 'via'}[layer]
+    if layer == 'lotes':
+        feature_id = str(
+            properties.get('ID_LOTE') or feature.get('id') or '').strip()
+        fields = {
+            'country_code': 'PE',
+            'ubigeo': ubigeo,
+            'department': 'Arequipa',
+            'province': 'Arequipa',
+            'district': district,
+            'urbanization': _text(
+                properties.get('NOMPJV') or properties.get('HAB_URBANA')),
+            'sector': _text(properties.get('COD_SECT')),
+            'block': _text(properties.get('COD_MZNA') or properties.get(
+                'NRO_MZNA')),
+            'lot': _text(properties.get('COD_LOTE') or properties.get(
+                'NRO_LOTE')),
+            'land_area': _number(properties.get('AREA_TER')),
+            'built_area': _number(properties.get('AREA_CON')),
+            'floors': _integer(properties.get('NIVELES')),
+            'units': _integer(properties.get('NRO_UNIDADES')),
+            'cadastral_use': _text(
+                properties.get('TIPO_USO') or properties.get('TIP_USO')),
+            'zoning': _text(properties.get('ZONIFICACION')),
+        }
+    elif layer == 'manzanas':
+        feature_id = str(
+            properties.get('ID_MZNA') or feature.get('id') or '').strip()
+        fields = {
+            'country_code': 'PE',
+            'ubigeo': ubigeo,
+            'department': 'Arequipa',
+            'province': 'Arequipa',
+            'district': district,
+            'sector': _text(properties.get('COD_SECT')),
+            'block': _text(properties.get('COD_MZNA') or properties.get(
+                'NRO_MZNA')),
+        }
+    else:
+        feature_id = str(feature.get('id') or '').strip()
+        fields = {
+            'country_code': 'PE',
+            'ubigeo': ubigeo,
+            'department': 'Arequipa',
+            'province': 'Arequipa',
+            'district': district,
+            'street_type': _text(
+                properties.get('TIPO_VIA') or properties.get('TIP_VIA')),
+            'street_name': _text(
+                properties.get('NOM_VIA') or properties.get('NOM_CALLE')),
+        }
+    fields = {
+        key: master_contract.validate_field(key, value)
+        for key, value in fields.items() if value not in (None, '')
+    }
+    provenance = {
+        key: {
+            'source': 'COFOPRI ' + source.upper(),
+            'status': 'source_observation',
+        }
+        for key in fields
+    }
+    result = {
+        'id': feature_id,
+        'kind': kind,
+        'fields': fields,
+        'provenance': provenance,
+    }
+    if feature.get('geometry'):
+        result['geometry'] = feature['geometry']
+        provenance['$geometry'] = {
+            'source': 'COFOPRI ' + source.upper(),
+            'status': 'reprojected_by_arcgis_to_wgs84',
+            'source_crs': 'EPSG:4248' if source == 'psad56' else 'EPSG:4326',
+        }
+    return result
+
+
+def _snapshot_payload(ubigeo, district, source, layer, features, index):
+    source_id = 'cofopri-%s-%s' % (source, ubigeo)
+    items = [
+        _snapshot_feature(feature, ubigeo, district, source, layer)
+        for feature in features
+    ]
+    digest = hashlib.sha256(json.dumps(
+        [(item['id'], item.get('geometry')) for item in items],
+        ensure_ascii=False, sort_keys=True,
+        separators=(',', ':')).encode()).hexdigest()
+    identifiers = []
+    for item, raw in zip(items, features):
+        properties = raw.get('properties') or {}
+        if layer == 'lotes':
+            value = str(properties.get('ID_PREDIO_RPU') or '').strip()
+            scheme = IDENTIFIER_SCHEME
+        elif layer == 'vias':
+            value = str(properties.get('COD_VIA') or '').strip()
+            scheme = 'COFOPRI_VIA'
+        else:
+            value = str(properties.get('ID_MZNA') or '').strip()
+            scheme = 'COFOPRI_MANZANA'
+        if value:
+            identifiers.append({
+                'target_ref': item['kind'] + ':' + item['id'],
+                'scheme': scheme,
+                'value': value,
+                'status': 'candidate',
+                'authority': 'COFOPRI',
+            })
+    version_id = source_id + ':' + digest[:24]
+    return {
+        'schema': master_contract.VERSION,
+        'source': {
+            'id': source_id,
+            'name': 'COFOPRI · %s · %s · %s' % (
+                source.upper(), layer, district),
+            'ubigeo': ubigeo,
+            'role': 'contributing',
+        },
+        'version': {
+            'id': version_id,
+            'label': '%s %s · %s · %s' % (
+                layer, index, items[0]['id'] if items else '', digest[:10]),
+            'source_date': None,
+            'crs': 'EPSG:4326',
+            'georeferencing': {
+                'status': 'verified',
+                'method': 'ArcGIS entregó la capa en EPSG:4326.',
+                'evidence': {
+                    'service': 'Catastro_PCDPI/MapServer',
+                    'out_sr': 4326,
+                },
+            },
+            'original': {
+                'name': 'Capa %s · %s · %s' % (source, layer, ubigeo),
+                'canonical_sha256': digest,
+                'archive_status': 'verified_vector_snapshot_r2',
+            },
+        },
+        'features': items,
+        'identifiers': identifiers,
+        'warnings': [],
+        'missing': [],
+    }
+
+
+def migrate_snapshot_direct(gateway, ubigeo, district, source='pcdpi',
+                            layer='lotes', batch_size=100, limit=None,
+                            actor='cofopri-vector-import', progress=None,
+                            cloud=None):
+    """Commit any archived COFOPRI vector layer directly to D1."""
+    source_id = 'cofopri-%s-%s' % (source, ubigeo)
+    kind = {'lotes': 'lote', 'manzanas': 'manzana', 'vias': 'via'}[layer]
+    collection = vector_snapshots.read_snapshot(
+        ubigeo, layer, source=source, cloud=cloud)
+    features = list(collection.get('features') or [])
+    linked_rows = gateway.read(
+        '''SELECT DISTINCT i.source_feature_id
+           FROM identities i JOIN versions v ON v.id=i.version_id
+           WHERE v.source_id=? AND i.layer=? ''',
+        [source_id, kind],
+    )
+    linked = {str(row['source_feature_id']) for row in linked_rows}
+    available = len(features)
+    normalized = [
+        (_snapshot_feature(feature, ubigeo, district, source, layer), feature)
+        for feature in features
+    ]
+    pending = [
+        (item, feature) for item, feature in normalized
+        if str(item['id']) not in linked
+    ]
+    if limit is not None:
+        pending = pending[:int(limit)]
+    if not pending:
+        return {
+            'ubigeo': ubigeo, 'district': district, 'source': source,
+            'layer': layer, 'available': available,
+            'already_linked': len(linked), 'processed': 0,
+            'batches': [],
+        }
+    source_exists = bool(gateway.read(
+        'SELECT id FROM sources WHERE id=?', [source_id]))
+    created_at = master_store.now()
+    columns = list(CURRENT_ATTRIBUTE_COLUMNS)
+    batches = []
+    for offset in range(0, len(pending), batch_size):
+        chunk = pending[offset:offset + batch_size]
+        raw_features = [feature for _, feature in chunk]
+        payload = _snapshot_payload(
+            ubigeo, district, source, layer, raw_features,
+            offset // batch_size + 1)
+        version = payload['version']
+        changes = []
+        if not source_exists:
+            changes.append({
+                'table': 'sources',
+                'upserts': [[source_id, None, payload['source']['name'],
+                             ubigeo, None, 'contributing']],
+                'deletes': [],
+            })
+        changes.append({
+            'table': 'versions',
+            'upserts': [[
+                version['id'], source_id, version['label'],
+                version['source_date'], version['crs'],
+                master_store.encoded(version['georeferencing']),
+                version['original']['name'],
+                version['original']['canonical_sha256'],
+                version['original']['canonical_sha256'], created_at,
+                str(actor)[:160], master_store.encoded(payload),
+            ]],
+            'deletes': [],
+        })
+        entity_rows, contribution_rows, identity_rows = [], [], []
+        selection_rows, attribute_rows, identifier_rows = [], [], []
+        for feature in payload['features']:
+            feature_id = str(feature['id'])
+            entity_id = str(uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                master_store.encoded([
+                    'catastro-maestro', 'PE', source_id, kind, feature_id])))
+            entity_rows.append([entity_id, kind, 'PE', ubigeo, created_at])
+            attributes = {column: None for column in columns}
+            attributes.update(feature.get('fields') or {})
+            attributes['entity_id'] = entity_id
+            attribute_rows.append([
+                attributes.get(column) for column in columns])
+            for field, value in (feature.get('fields') or {}).items():
+                contribution_id = str(uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    master_store.encoded([
+                        version['id'], kind, feature_id, field])))
+                contribution_rows.append([
+                    contribution_id, version['id'], feature_id, kind,
+                    field, master_store.encoded(value),
+                    master_store.encoded({
+                        k: v for k, v in (
+                            feature.get('provenance') or {}).get(
+                                field, {}).items()
+                    }),
+                ])
+                selection_rows.append([
+                    entity_id, field, contribution_id])
+            if feature.get('geometry'):
+                contribution_id = str(uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    master_store.encoded([
+                        version['id'], kind, feature_id, '$geometry'])))
+                contribution_rows.append([
+                    contribution_id, version['id'], feature_id, kind,
+                    '$geometry', master_store.encoded(feature['geometry']),
+                    master_store.encoded(
+                        feature.get('provenance', {}).get(
+                            '$geometry', {})),
+                ])
+                selection_rows.append([
+                    entity_id, '$geometry', contribution_id])
+            identity_rows.append([
+                version['id'], kind, feature_id, entity_id])
+            for identifier in payload.get('identifiers') or []:
+                if identifier.get('target_ref') != kind + ':' + feature_id:
+                    continue
+                identifier_rows.append([
+                    str(uuid.uuid5(uuid.NAMESPACE_URL, master_store.encoded([
+                        version['id'], entity_id, identifier['scheme'],
+                        identifier['value']]))),
+                    entity_id, identifier['target_ref'],
+                    identifier['scheme'], identifier['value'],
+                    identifier.get('authority'), None,
+                    identifier.get('status') or 'candidate', created_at,
+                    version['id'],
+                    master_store.encoded({
+                        'status': identifier.get('status') or 'candidate'}),
+                ])
+        for table, rows_for_table in (
+                ('entities', entity_rows),
+                ('contributions', contribution_rows),
+                ('identities', identity_rows),
+                ('selections', selection_rows),
+                ('current_attributes', attribute_rows),
+                ('external_identifiers', identifier_rows)):
+            if rows_for_table:
+                changes.append({
+                    'table': table,
+                    'upserts': rows_for_table,
+                    'deletes': [],
+                })
+        for attempt in range(5):
+            revision = gateway.revision()
+            next_revision = revision + 1
+            journal = [
+                next_revision, 'migration_batch', str(actor)[:160],
+                created_at, 'Importar capa COFOPRI desde R2.',
+                master_store.encoded({
+                    'scope_ubigeo': ubigeo,
+                    'version_id': version['id'],
+                    'features': len(chunk),
+                    'layer': layer,
+                }),
+                '{}',
+            ]
+            commit_changes = [
+                *changes,
+                {'table': 'journal', 'upserts': [journal],
+                 'deletes': []},
+                {'table': 'meta', 'upserts': [
+                    ['revision', str(next_revision)]], 'deletes': []},
+            ]
+            try:
+                gateway.call({
+                    'action': 'commit',
+                    'id': str(uuid.uuid4()),
+                    'revision': revision,
+                    'changes': commit_changes,
+                    'result': {
+                        'revision': next_revision,
+                        'version_id': version['id'],
+                        'features': len(chunk),
+                    },
+                })
+                source_exists = True
+                break
+            except master_store.Conflict:
+                if attempt == 4:
+                    raise
+        item = {
+            'batch': offset // batch_size + 1,
+            'features': len(chunk),
+            'source': source,
+            'layer': layer,
+            'revision': next_revision,
+            'processed': min(offset + len(chunk), len(pending)),
+            'total': len(pending),
+            'remaining': max(0, len(pending) - offset - len(chunk)),
+        }
+        batches.append(item)
+        if progress:
+            progress(item)
+    return {
+        'ubigeo': ubigeo, 'district': district, 'source': source,
+        'layer': layer, 'available': available,
+        'already_linked': len(linked), 'processed': len(pending),
+        'batches': batches,
+    }
+
+
 def _pcdpi_payload(ubigeo, district, matches, features, index):
     source_id = 'cofopri-pcdpi-' + ubigeo
     items = []

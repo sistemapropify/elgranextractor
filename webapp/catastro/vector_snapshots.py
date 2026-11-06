@@ -285,9 +285,11 @@ def formalization_details(predio, object_id):
         'FORMALIZATION_DETAIL_SOURCE': 'COFOPRI · reporte/lote.php',
         'FORMALIZATION_DETAIL_STATUS': 'available',
     }
-    for field in FORMALIZATION_DETAIL_FIELDS:
-        if row.get(field) not in (None, ''):
-            result[field] = row[field]
+    # Preserve every official field returned by COFOPRI, including new fields
+    # that may be added without another code release.
+    for field, value in row.items():
+        if value not in (None, ''):
+            result[field] = value
     result.update({
         'TITULO_FECHA': row.get('FECHA_TITULO'),
         'TITULO_ESTADO': row.get('ESTADO_TITULO'),

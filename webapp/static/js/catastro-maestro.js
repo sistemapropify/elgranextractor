@@ -372,7 +372,13 @@
         const media=data.media||[],unitRows=data.unit_attributes||data.units||[];
         const selectedRecord=data.selected_record_id||unitRows[0]?.source_feature_id||unitRows[0]?.record_id||'';
         const selectedUnit=unitRows.find(unit=>String(unit.source_feature_id||unit.record_id||'')===String(selectedRecord))||unitRows[0]||{};
-        const measureValues={...attributes,...selectedUnit};
+        const boundaryDetails=data.boundary_details||{};
+        const boundaryFallback={};
+        for(const side of ['front','back','left','right']){
+            const length=boundaryDetails[side]?.length_m;
+            if(length!=null)boundaryFallback[side]=length;
+        }
+        const measureValues={...boundaryFallback,...attributes,...selectedUnit};
         const galleryItems=[...new Map([...(data.gallery||[]),...media.filter(entry=>/facade|photo|image|foto/i.test(String(entry.kind||'')))].filter(entry=>entry.url).map(entry=>[entry.url,entry])).values()];
         const hero=document.createElement('section');hero.className='master-dossier-hero';
         const photoBox=document.createElement('div');photoBox.className='master-dossier-photo';
@@ -428,6 +434,12 @@
             ['Izquierda',measured(measureValues.left,' m')],
             ['Fondo',measured(measureValues.back,' m')],
         ]);
+        const boundaryLabels={front:'Frente',right:'Derecha',left:'Izquierda',back:'Fondo'};
+        const boundaryRows=Object.entries(boundaryDetails).map(([side,detail])=>[
+            boundaryLabels[side]||side,
+            [detail.evidence?.boundary||detail.evidence?.boundary_label,detail.length_m!=null?valueText(detail.length_m)+' m':detail.evidence?.raw_measure].filter(Boolean).join(' · ')
+        ]);
+        if(boundaryRows.length)addEntityRows(summary,'Linderos documentales',boundaryRows);
         const shown=new Set(['district','ubigeo','sector','block','lot','address','street_type','street_name','municipal_number','urbanization','postal_code','cadastral_reference','cuc','land_area','built_area','gis_land_area','gis_built_area','perimeter','front','back','left','right','floors','units','is_corner','is_through','faces_park','condition','cadastral_use','observed_use','zoning']);
         const catalog=data.catalog||{};
         const measures=addTab('medidas','Medidas');
@@ -494,6 +506,9 @@
         const other=Object.fromEntries(Object.entries(attributes).filter(([key])=>!shown.has(key)));
         if(Object.keys(other).length)addEntityValues(more,'Otros campos extraídos',other,'Sin otros campos extraídos.');
         if((catalog.identifiers||[]).length)addEntityValues(more,'Identificadores externos',Object.fromEntries(catalog.identifiers.map((row,index)=>[(row.scheme+' · '+(row.authority||'sin autoridad'))+(index?' #'+(index+1):''),row.value])),'Sin identificadores externos.');
+        if((data.raw_fields||[]).length)addEntitySection(more,'Todos los campos originales',Object.assign(document.createElement('pre'),{className:'master-dossier-raw',textContent:JSON.stringify(data.raw_fields,null,2)}));
+        if(Object.keys(catalog).length)addEntitySection(more,'Catálogo documental completo',Object.assign(document.createElement('pre'),{className:'master-dossier-raw',textContent:JSON.stringify(catalog,null,2)}));
+        if((data.owners||[]).length)addEntitySection(more,'Titulares completos',Object.assign(document.createElement('pre'),{className:'master-dossier-raw',textContent:JSON.stringify(data.owners,null,2)}));
         const provenance=addTab('procedencia','Origen');
         const links=data.identity_links||[];
         if(links.length){const linked=document.createElement('div');linked.className='master-identity-links';for(const link of links){const row=document.createElement('div');row.append(Object.assign(document.createElement('code'),{textContent:link.source_feature_id}),Object.assign(document.createElement('span'),{textContent:(link.layer||'')+' · '+(link.source_name||link.source_id||'')+' · '+(link.version_label||link.version_id||'')}));linked.append(row);}addEntitySection(provenance,'Identidad y versión de origen',linked);}

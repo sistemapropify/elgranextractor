@@ -217,6 +217,40 @@ class MasterDossierTests(SimpleTestCase):
         self.assertEqual(
             value['attributes']['street_name'], 'CALLE SAN JOSE')
 
+    def test_formalization_dossier_exposes_raw_fields_and_boundaries(self):
+        entity_id = '11111111-2222-4333-8444-555555555555'
+        model = SimpleNamespace(
+            lot_identity=lambda lot: {
+                'entity_id': entity_id,
+                'version_id': 'formal-v1',
+                'source_id': 'cofopri-formalizacion-040105',
+            },
+            entity=lambda value: {
+                'attributes': {'urbanization': 'PUEBLO TRADICIONAL'},
+                'owners': [], 'unit_attributes': [], 'media': [],
+                'identity_links': [], 'relationships': [], 'provenance': {},
+                'raw_fields': [{
+                    'field': '$raw:formal:0000',
+                    'value': {'label': 'ESTADO_TITULO', 'value': 'INSCRITO'},
+                    'evidence': {'object_key': 'formal/P06121499.json'},
+                }],
+                'boundary_segments': [{
+                    'side': 'front', 'length_m': 15.08,
+                    'evidence_json': json.dumps({
+                        'boundary': 'CALLE AMARGURA'}),
+                }],
+                'registral_acts': [], 'catalog': {},
+            },
+        )
+        with patch.object(master_dossier, 'D1ReadModel', return_value=model):
+            value = master_dossier.load('P06121499')
+            summary = master_dossier.summary(value)
+        self.assertEqual(value['raw_fields'][0]['value']['value'], 'INSCRITO')
+        self.assertEqual(
+            value['boundary_details']['front']['evidence']['boundary'],
+            'CALLE AMARGURA')
+        self.assertEqual(summary['metrics']['boundaries']['frente'], 15.08)
+
     def test_archive_asset_is_whitelisted_and_integrity_checked(self):
         cloud = archive_cloud()
         body, content_type = master_dossier.archive_asset(

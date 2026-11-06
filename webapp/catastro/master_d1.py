@@ -239,7 +239,8 @@ class D1ReadModel:
     def lot_identity(self, source_feature_id):
         """Resolve a source lot code to the stable Catastro Maestro UUID."""
         try:
-            valid = len(source_feature_id) == 14 and source_feature_id.isdigit()
+            value = str(source_feature_id or '').strip()
+            valid = bool(value) and len(value) <= 40
         except TypeError:
             valid = False
         if not valid:
@@ -254,7 +255,7 @@ class D1ReadModel:
                  AND (v.source_id LIKE 'geollaqta-%'
                       OR v.source_id LIKE 'cofopri-%')
                ORDER BY v.created_at DESC LIMIT 1''',
-            [source_feature_id])
+            [value])
         return rows[0] if rows else None
 
     def entity(self, entity_id):
@@ -297,6 +298,17 @@ class D1ReadModel:
                     SELECT entity_id FROM relationships
                     WHERE related_entity_id=? AND kind='unidad_en_lote')
                 ORDER BY i.layer,v.created_at DESC'''),
+            ('raw_fields', '''SELECT c.version_id,c.layer,c.source_feature_id,
+                c.field,c.value_json,c.evidence_json
+                FROM contributions c
+                JOIN identities i ON i.version_id=c.version_id
+                 AND i.layer=c.layer
+                 AND i.source_feature_id=c.source_feature_id
+                WHERE (i.entity_id=? OR i.entity_id IN (
+                    SELECT entity_id FROM relationships
+                    WHERE related_entity_id=? AND kind='unidad_en_lote'))
+                  AND c.field LIKE '$raw:%'
+                ORDER BY c.version_id,c.source_feature_id,c.field'''),
             ('boundary_segments', '''SELECT * FROM boundary_segments
                 WHERE entity_id=? OR entity_id IN (
                     SELECT entity_id FROM relationships
@@ -345,11 +357,20 @@ class D1ReadModel:
                 WHERE r.related_entity_id=? AND r.kind='unidad_en_lote'
                   AND e.kind='unidad' ORDER BY e.id'''),
         ]
-        parameter_counts = [0, 1, 1, 2, 2, 3, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-        results = self.gateway.read_many([
-            {'sql': sql, 'params': [entity_id] * parameter_counts[index]}
-            for index, (_, sql) in enumerate(queries)
-        ])
+        parameter_counts = [
+            0, 1, 1, 2, 2, 3, 1, 2, 2, 2, 2,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        ]
+        results = []
+        for offset in range(0, len(queries), 10):
+            results.extend(self.gateway.read_many([
+                {
+                    'sql': sql,
+                    'params': [entity_id] * parameter_counts[index],
+                }
+                for index, (_, sql) in enumerate(
+                    queries[offset:offset + 10], start=offset)
+            ]))
         values = {name: rows for (name, _), rows in zip(queries, results)}
         if not values['entity']:
             raise ValueError('Inmueble no disponible.')
@@ -405,6 +426,17 @@ class D1ReadModel:
             'relationships': values['relationships'],
             'provenance': provenance,
             'identity_links': values['identity_links'],
+            'raw_fields': [
+                {
+                    **{key: row[key] for key in (
+                        'version_id', 'layer', 'source_feature_id', 'field')},
+                    'value': decoded(
+                        row, 'value_json', 'decoded')['decoded'],
+                    'evidence': decoded(
+                        row, 'evidence_json', 'decoded')['decoded'],
+                }
+                for row in values['raw_fields']
+            ],
             'boundary_segments': values['boundary_segments'],
             'registral_acts': [
                 decoded(row, 'details_json', 'details')

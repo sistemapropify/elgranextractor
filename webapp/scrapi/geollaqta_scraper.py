@@ -339,10 +339,19 @@ def _archive_lot(feature, ubigeo, state, source, r2, upload, keep_local, checkpo
             path = folder / filename
             if filename not in existing_files and path.is_file():
                 disk_bytes -= path.stat().st_size
-                path.unlink()
+                try:
+                    path.unlink()
+                except OSError:
+                    # A scanner may briefly hold the just-uploaded file. The
+                    # authoritative original is already in R2.
+                    pass
         state.set_lot_bytes(code, sum(p.stat().st_size for p in folder.iterdir() if p.is_file()))
         if not any(folder.iterdir()):
-            folder.rmdir()
+            try:
+                folder.rmdir()
+            except OSError:
+                # Windows can briefly refuse removal after archive upload.
+                pass
     return {'lot_id': code, 'uploaded': int(cloud_ok), 'partial': int(status == 'partial'),
             'failed': int(status == 'failed'), 'fatal': fatal, 'disk_bytes': disk_bytes}
 
@@ -363,7 +372,13 @@ def collect(ubigeo, max_lotes=None, lot_id=None, retry_missing=False, upload=Tru
     if gate:
         source.gate = gate
     r2 = (r2 or R2()) if upload else None
-    keep_local = bool(not os.environ.get('WEBSITE_SITE_NAME')) if keep_local is None else keep_local
+    if keep_local is None:
+        configured_keep_local = os.environ.get('CATASTRO_KEEP_LOCAL')
+        keep_local = (
+            configured_keep_local == '1'
+            if configured_keep_local is not None
+            else bool(not os.environ.get('WEBSITE_SITE_NAME'))
+        )
     keep_local = keep_local or not upload
     summary = {'ubigeo': ubigeo, 'processed': 0, 'uploaded': 0, 'partial': 0,
                'failed': 0, 'skipped': 0, 'complete': False, 'stop_reason': 'batch_limit', 'scope': 'lot' if lot_id else 'district'}
