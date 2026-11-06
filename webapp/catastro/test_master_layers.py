@@ -51,7 +51,7 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertTrue(data['districts'])
         self.assertTrue(any(source['id'] == 'geollaqta' for source in data['sources']))
 
-    def test_d1_catalogue_uses_bounded_reads_without_loading_the_authoring_store(self):
+    def test_d1_catalogue_replaces_snapshots_with_current_master_entities(self):
         summaries = {'040126': {'ubigeo': '040126', 'revision': 4114,
                                 'lotes': 5240, 'manzanas': 0}}
         snapshots = [{
@@ -59,12 +59,13 @@ class MasterGeometryTests(SimpleTestCase):
             'districts': ['040126'], 'active': True, 'default_visible': True,
             'contributes': False, 'reference_only': False, 'role': 'snapshot',
             'transport': 'snapshot', 'crs': 'EPSG:4326',
+            'bbox': [-71.58, -16.42, -71.53, -16.37],
             'layers': {'lotes': {'count': 5240, 'kind': 'polygon'},
                        'manzanas': {'count': 319, 'kind': 'polygon'}},
         }]
         with patch.dict(os.environ, {'CATASTRO_MASTER_STORAGE': 'd1',
                                      'CATASTRO_MASTER_ENABLED': '1'}), \
-                patch('catastro.source_manager.district_summaries',
+                patch('catastro.source_manager.district_catalog',
                       return_value=summaries), \
                 patch('catastro.vector_snapshots.catalog_sources',
                       return_value=snapshots), \
@@ -72,16 +73,19 @@ class MasterGeometryTests(SimpleTestCase):
                       side_effect=AssertionError('No debe cargar D1Store')):
             data = master_layers.catalogue()
 
-        source = next(item for item in data['sources'] if item['id'] == 'borrador-040126')
+        source = next(item for item in data['sources']
+                      if item['id'] == 'maestro-040126')
         self.assertEqual(source['revision'], 4114)
+        self.assertEqual(source['role'], 'master')
+        self.assertTrue(source['contributes'])
         self.assertEqual(source['layers']['lotes']['count'], 5240)
+        self.assertEqual(source['layers']['manzanas']['count'], 0)
+        self.assertEqual(source['bbox'],
+                         [-71.58, -16.42, -71.53, -16.37])
         self.assertFalse(source['reference_only'])
         yanahuara = next(item for item in data['districts'] if item['ubigeo'] == '040126')
-        self.assertIn('borrador-040126', yanahuara['sources'])
-        self.assertIn('vectores-040126', yanahuara['sources'])
-        snapshot = next(item for item in data['sources'] if item['id'] == 'vectores-040126')
-        self.assertNotIn('lotes', snapshot['layers'])
-        self.assertEqual(snapshot['layers']['manzanas']['count'], 319)
+        self.assertIn('maestro-040126', yanahuara['sources'])
+        self.assertNotIn('vectores-040126', yanahuara['sources'])
 
     def test_vector_snapshot_chunks_are_reassembled_independently(self):
         cache.clear()
@@ -429,6 +433,42 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertEqual(feature['id'], 'vectores-040126:lote:7')
         self.assertEqual(feature['properties']['SOURCE_ID'],
                          'vectores-040126')
+
+    def test_master_radius_reads_current_d1_entities(self):
+        summary = {'ubigeo': '040104', 'revision': 5781,
+                   'lotes': 22910, 'manzanas': 0}
+        collection = {
+            'type': 'FeatureCollection',
+            'features': [{
+                'type': 'Feature', 'id': 'entity-current',
+                'properties': {'ubigeo': '040104', 'block': '15',
+                               'lot': '7', 'land_area': 80.94,
+                               'source_feature_id': 'psad56-652738'},
+                'geometry': {'type': 'Polygon', 'coordinates': [[
+                    [-71.55, -16.36], [-71.549, -16.36],
+                    [-71.549, -16.359], [-71.55, -16.359],
+                    [-71.55, -16.36]]]},
+                'provenance': {'$geometry': {'version_id': 'current-v1'}},
+            }],
+            'revision': 5781,
+        }
+        model = SimpleNamespace(
+            radius=lambda *args, **kwargs: collection)
+        with patch.dict(os.environ, {'CATASTRO_MASTER_STORAGE': 'd1',
+                                     'CATASTRO_MASTER_ENABLED': '1'}), \
+                patch('catastro.source_manager.district_catalog',
+                      return_value={'040104': summary}), \
+                patch('catastro.master_d1.D1ReadModel',
+                      return_value=model):
+            value = master_layers.radius(
+                'maestro-040104', '-16.36', '-71.55', '500')
+        self.assertEqual(value['source_id'], 'maestro-040104')
+        self.assertEqual(value['lots']['total'], 1)
+        feature = value['lots']['features'][0]
+        self.assertEqual(feature['properties']['SOURCE_ID'],
+                         'maestro-040104')
+        self.assertEqual(feature['properties']['ID_LOTE'],
+                         'psad56-652738')
 
     def test_invalid_source_district_and_bbox_are_rejected(self):
         for args in [('../secret', 'lotes', '040103'), ('cayma-pud-2006-eu03', '../metadata', '040103'),

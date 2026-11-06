@@ -88,6 +88,46 @@ def _draft_metadata(source_id, summary=None):
                       'manzanas':{'count':summary['manzanas'],'kind':'polygon'}}}
 
 
+def _master_metadata(source_id, summary=None):
+    """Expose the durable D1 entities as the authoritative map source."""
+    from . import source_manager
+    if not source_id.startswith('maestro-') or not source_manager.durable():
+        raise ValueError('Fuente maestra no disponible.')
+    district = source_id[-6:]
+    summary = summary or source_manager.district_catalog().get(district)
+    if not summary or not (summary.get('lotes') or summary.get('manzanas')):
+        raise ValueError('El Catastro Maestro no tiene geometrías activas.')
+    district_name = (geo.DISTRICTS.get(district) or {}).get(
+        'name', district)
+    return {
+        'id': source_id,
+        'name': 'Catastro Maestro · ' + district_name,
+        'ubigeo': district,
+        'districts': [district],
+        'active': True,
+        'default_visible': True,
+        'contributes': True,
+        'reference_only': False,
+        'role': 'master',
+        'status': 'active_master',
+        'transport': 'master',
+        'crs': 'EPSG:4326',
+        'bbox': summary.get('bbox'),
+        'original_bbox': summary.get('bbox'),
+        'revision': summary['revision'],
+        'placement': {
+            'revision': summary['revision'],
+            'east_m': 0.,
+            'north_m': 0.,
+            'locked': True,
+        },
+        'layers': {
+            'lotes': {'count': summary['lotes'], 'kind': 'polygon'},
+            'manzanas': {'count': summary['manzanas'], 'kind': 'polygon'},
+        },
+    }
+
+
 @lru_cache(maxsize=4)
 def _read(path, modified):
     return json.loads(Path(path).read_text(encoding='utf8'))
@@ -140,13 +180,19 @@ def revisions():
         else:
             value[source_id] = source_placement.read(folder)['revision']
     from . import source_manager
-    if source_manager.enabled() or source_manager.durable():
+    mastered = set()
+    if source_manager.durable():
+        for district, summary in source_manager.district_catalog().items():
+            value['maestro-' + district] = summary['revision']
+            mastered.add(district)
+    elif source_manager.enabled():
         for district, summary in source_manager.district_summaries().items():
             value['borrador-'+district] = summary['revision']
     from . import vector_snapshots
     try:
         for source in vector_snapshots.catalog_sources():
-            value[source['id']] = source['revision']
+            if source['ubigeo'] not in mastered:
+                value[source['id']] = source['revision']
     except StorageError:
         pass
     return value
@@ -189,7 +235,10 @@ def catalogue():
             sources.append({**source_metadata(source_id), 'transport': 'master',
                             'districts': [read(folder/'metadata.json')['ubigeo']]})
     from . import source_manager
-    if source_manager.enabled() or source_manager.durable():
+    if source_manager.durable():
+        for district, summary in source_manager.district_catalog().items():
+            sources.append(_master_metadata('maestro-' + district, summary))
+    elif source_manager.enabled():
         for district, summary in source_manager.district_summaries().items():
             sources.append(_draft_metadata('borrador-'+district, summary))
     from . import vector_snapshots
@@ -197,18 +246,25 @@ def catalogue():
         snapshots = vector_snapshots.catalog_sources()
     except StorageError:
         snapshots = []
-    d1_layers = {
+    snapshot_bounds = {
+        source['ubigeo']: source.get('bbox')
+        for source in snapshots if source.get('bbox')
+    }
+    for source in sources:
+        if source.get('role') != 'master' or source.get('bbox'):
+            continue
+        bounds = snapshot_bounds.get(source['ubigeo'])
+        if bounds:
+            source['bbox'] = bounds
+            source['original_bbox'] = bounds
+    master_layers = {
         source['ubigeo']: source.get('layers', {})
-        for source in sources if source.get('role') == 'draft'
+        for source in sources if source.get('role') in ('master', 'draft')
     }
     for source in snapshots:
-        existing = d1_layers.get(source['ubigeo'], {})
-        if source.get('source_key', 'pcdpi') == 'pcdpi':
-            source['layers'] = {
-                key: value for key, value in source.get('layers', {}).items()
-                if not int(existing.get(key, {}).get('count') or 0)
-            }
-        if not source['layers']:
+        # A district with normalized entities uses D1 as its only cadastral
+        # provider. Immutable snapshots remain a fallback for uncovered areas.
+        if source['ubigeo'] in master_layers:
             continue
         district_name = (geo.DISTRICTS.get(source['ubigeo']) or {}).get(
             'name', source['ubigeo'])
@@ -260,12 +316,87 @@ def public_draft_layer(value):
 
 
 def layer(source_id, key, district, bounds=None, *, original=False, metadata=None):
+    if source_id.startswith('maestro-'):
+        return _master_layer(
+            source_id, key, district, bounds, original=original,
+            metadata=metadata)
     if source_id.startswith('borrador-'):
         from . import source_manager
         if not (source_manager.enabled() or source_manager.durable()):
             raise ValueError('Fuente no disponible.')
         return _layer(source_id, key, district, bounds, original=original, metadata=metadata)
     return _layer(source_id, key, district, bounds, original=original, metadata=metadata)
+
+
+def _master_layer(source_id, key, district, bounds=None, *, original=False,
+                  metadata=None):
+    from .master_d1 import D1ReadModel
+    if (key not in ('lotes', 'manzanas') or district != source_id[-6:]
+            or original):
+        raise ValueError('Fuente, capa o distrito no válido.')
+    meta = metadata if metadata is not None else _master_metadata(source_id)
+    if district != meta['ubigeo']:
+        raise ValueError('La fuente no está activa para este distrito.')
+    data = D1ReadModel().collection(
+        district, 'lote' if key == 'lotes' else 'manzana',
+        revision=meta.get('revision'))
+    features = []
+    aliases = {
+        'ubigeo': 'ID_DIST',
+        'sector': 'COD_SECT',
+        'block': 'COD_MZNA',
+        'lot': 'COD_LOTE',
+    }
+    for feature in data['features']:
+        if bounds and not intersects(feature['geometry'], bounds):
+            continue
+        attrs = {
+            **feature['properties'],
+            'ELEMENT_ID': feature['id'],
+            'SOURCE_ID': source_id,
+            'REFERENCE_ONLY': False,
+            'MASTER_LAYER': key,
+            'GEOMETRY_VERSION_ID': (
+                feature['provenance'].get('$geometry', {}).get(
+                    'version_id')),
+        }
+        attrs.update({
+            target: attrs.get(source)
+            for source, target in aliases.items()
+        })
+        source_feature_id = attrs.pop('source_feature_id', None)
+        formalization_rpu = attrs.pop('FORMALIZATION_RPU', None)
+        identity_source_id = attrs.pop('IDENTITY_SOURCE_ID', '') or ''
+        if source_feature_id:
+            if str(identity_source_id).startswith(
+                    'cofopri-formalizacion-'):
+                if key == 'lotes':
+                    attrs['ID_PREDIO_RPU'] = str(source_feature_id)
+                else:
+                    attrs['ID_MZNA'] = str(source_feature_id)
+            else:
+                attrs['ID_LOTE' if key == 'lotes' else 'ID_MZNA'] = str(
+                    source_feature_id)
+        if formalization_rpu:
+            attrs['ID_PREDIO_RPU'] = str(formalization_rpu)
+        features.append({
+            **feature,
+            'id': source_id + ':' + feature['id'],
+            'properties': attrs,
+        })
+    return {
+        **data,
+        'features': features,
+        'total': len(features),
+        'source_total': len(data['features']),
+        'complete': True,
+        'reference_only': False,
+        'bbox': meta.get('bbox'),
+        'original_bbox': meta.get('bbox'),
+        'original': False,
+        'placement': meta['placement'],
+        'schema': SCHEMA,
+    }
 
 
 def _layer(source_id, key, district, bounds=None, *, original=False, metadata=None):
@@ -328,6 +459,8 @@ def _layer(source_id, key, district, bounds=None, *, original=False, metadata=No
 
 
 def radius(source_id, lat, lng, metres):
+    if source_id.startswith('maestro-'):
+        return _master_radius(source_id, lat, lng, metres)
     if source_id.startswith('vectores-'):
         return _snapshot_radius(source_id, lat, lng, metres)
     if source_id.startswith('borrador-'):
@@ -336,6 +469,80 @@ def radius(source_id, lat, lng, metres):
             raise ValueError('Fuente no disponible.')
         return _radius(source_id, lat, lng, metres)
     return _radius(source_id, lat, lng, metres)
+
+
+def _master_radius(source_id, lat, lng, metres):
+    """Read the current D1 entities for the requested radius."""
+    from .master_d1 import D1ReadModel
+    meta = _master_metadata(source_id)
+    model = D1ReadModel()
+    lat, lng, metres = float(lat), float(lng), float(metres)
+    aliases = {
+        'ubigeo': 'ID_DIST',
+        'sector': 'COD_SECT',
+        'block': 'COD_MZNA',
+        'lot': 'COD_LOTE',
+    }
+    result = {}
+    for key, label, kind in (
+            ('lotes', 'lots', 'lote'),
+            ('manzanas', 'blocks', 'manzana')):
+        data = model.radius(meta['ubigeo'], lat, lng, metres, kind=kind)
+        features = []
+        for feature in data['features']:
+            attrs = {
+                **feature['properties'],
+                'ELEMENT_ID': feature['id'],
+                'SOURCE_ID': source_id,
+                'SOURCE_NAME': meta['name'],
+                'MASTER_LAYER': key,
+                'REFERENCE_ONLY': False,
+                'GEOMETRY_VERSION_ID': (
+                    feature['provenance'].get('$geometry', {}).get(
+                        'version_id')),
+            }
+            attrs.update({
+                target: attrs.get(source)
+                for source, target in aliases.items()
+            })
+            source_feature_id = attrs.pop('source_feature_id', None)
+            formalization_rpu = attrs.pop('FORMALIZATION_RPU', None)
+            identity_source_id = attrs.pop('IDENTITY_SOURCE_ID', '') or ''
+            if source_feature_id:
+                if str(identity_source_id).startswith(
+                        'cofopri-formalizacion-'):
+                    if key == 'lotes':
+                        attrs['ID_PREDIO_RPU'] = str(source_feature_id)
+                    else:
+                        attrs['ID_MZNA'] = str(source_feature_id)
+                else:
+                    attrs['ID_LOTE' if key == 'lotes' else 'ID_MZNA'] = str(
+                        source_feature_id)
+            if formalization_rpu:
+                attrs['ID_PREDIO_RPU'] = str(formalization_rpu)
+            features.append({
+                **feature,
+                'id': source_id + ':' + kind + ':' + feature['id'],
+                'properties': attrs,
+            })
+        result[label] = {
+            'type': 'FeatureCollection',
+            'features': features,
+            'total': len(features),
+            'source_total': int(
+                meta.get('layers', {}).get(key, {}).get('count') or 0),
+            'complete': True,
+        }
+    return {
+        **result,
+        'source_id': source_id,
+        'source': meta,
+        'reference_only': False,
+        'complete': True,
+        'center': {'lat': lat, 'lng': lng},
+        'radius': metres,
+        'schema': SCHEMA,
+    }
 
 
 @lru_cache(maxsize=12)

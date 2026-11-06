@@ -129,7 +129,7 @@
     }
     function create(config,fetcher=fetch){
         const references=config.providers.filter(p=>p.active&&p.transport==='master');
-        const masterProviders=references.filter(p=>p.role==='draft'||p.role==='snapshot');
+        const masterProviders=references.filter(p=>['master','draft','snapshot'].includes(p.role));
         const direct=config.providers.some(p=>p.id==='geollaqta'&&p.active&&p.transport!=='master');
         let primary=null;
         const primaryProvider=()=>primary||(primary=createGeollaqta(config,fetcher));

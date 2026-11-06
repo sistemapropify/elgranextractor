@@ -100,6 +100,27 @@ class DurableMasterTests(TestCase):
         self.assertEqual(feature['properties']['block'],'001')
         self.assertEqual(feature['geometry']['type'],'Polygon')
 
+    def test_map_catalog_and_radius_read_current_d1_entities(self):
+        self.store.stage(candidate(), 0, 'admin')
+        plan = {
+            'revision': 1, 'mode': 'fill', 'version_id': 'v1',
+            'scope': {'ubigeo': '040103', 'kind': 'lote'},
+            'reason': 'radio desde D1',
+        }
+        self.store.apply(plan, self.store.preview(plan)['token'], 'admin')
+
+        model = D1ReadModel(self.gateway)
+        catalog = model.district_catalog()
+        radius = model.radius(
+            '040103', -16.3595, -71.5495, 500, kind='lote')
+
+        self.assertEqual(catalog['040103']['lotes'], 1)
+        self.assertEqual(catalog['040103']['manzanas'], 0)
+        self.assertEqual(len(radius['features']), 1)
+        self.assertEqual(
+            radius['features'][0]['id'],
+            self.gateway.read('SELECT id FROM entities')[0]['id'])
+
     def test_bounded_read_model_returns_complete_entity_without_full_store(self):
         self.store.stage(candidate(),0,'admin')
         plan={'revision':1,'mode':'fill','version_id':'v1',

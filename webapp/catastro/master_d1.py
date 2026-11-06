@@ -206,6 +206,36 @@ class D1ReadModel:
     def district_summary(self, ubigeo):
         return self.district_summaries().get(ubigeo)
 
+    def district_catalog(self, revision=None):
+        """Return current master inventory without scanning geometry bounds."""
+        query = """SELECT e.ubigeo,e.kind,COUNT(*) AS count
+                   FROM entities e
+                   JOIN selections s ON s.entity_id=e.id AND s.field='$geometry'
+                   WHERE e.kind IN ('lote','manzana')
+                   GROUP BY e.ubigeo,e.kind
+                   ORDER BY e.ubigeo,e.kind"""
+        if revision is None:
+            revision_rows, count_rows = self.gateway.read_many([
+                {'sql': "SELECT value FROM meta WHERE key='revision'", 'params': []},
+                {'sql': query, 'params': []},
+            ])
+            if len(revision_rows) != 1:
+                raise StorageError('El esquema de D1 no está inicializado.')
+            revision = int(revision_rows[0]['value'])
+        else:
+            count_rows = self.gateway.read(query)
+        summaries = {}
+        for row in count_rows:
+            item = summaries.setdefault(row['ubigeo'], {
+                'ubigeo': row['ubigeo'], 'revision': revision,
+                'lotes': 0, 'manzanas': 0,
+            })
+            if row['kind'] == 'lote':
+                item['lotes'] = int(row['count'])
+            elif row['kind'] == 'manzana':
+                item['manzanas'] = int(row['count'])
+        return summaries
+
     def lot_identity(self, source_feature_id):
         """Resolve a source lot code to the stable Catastro Maestro UUID."""
         try:
@@ -457,6 +487,162 @@ class D1ReadModel:
         return {
             'type': 'FeatureCollection', 'features': features,
             'revision': revision if revision is not None else self.gateway.revision(),
+            'crs': 'EPSG:4326',
+        }
+
+    def radius(self, ubigeo, lat, lng, metres, kind='lote'):
+        """Read only current D1 lots/blocks whose polygons can touch a radius."""
+        import math
+        from .master_contract import validate_field
+        validate_field('ubigeo', ubigeo)
+        if kind not in ('lote', 'manzana'):
+            raise ValueError('Capa no válida.')
+        lat, lng, metres = float(lat), float(lng), float(metres)
+        if (not all(math.isfinite(value) for value in (lat, lng, metres))
+                or not -85 <= lat <= 85 or not -180 <= lng <= 180
+                or not 100 <= metres <= 2000):
+            raise ValueError('Ubicación o radio no válido.')
+        sy = 6371008.8 * math.pi / 180
+        sx = sy * math.cos(math.radians(lat))
+        west, east = lng - metres / sx, lng + metres / sx
+        south, north = lat - metres / sy, lat + metres / sy
+
+        def inside(ring):
+            hit = False
+            for left, right in zip(ring, ring[1:]):
+                if ((left[1] > lat) != (right[1] > lat)
+                        and lng < (right[0] - left[0]) * (
+                            lat - left[1]) / (right[1] - left[1]) + left[0]):
+                    hit = not hit
+            return hit
+
+        def touches(geometry):
+            polygons = ([geometry['coordinates']]
+                        if geometry.get('type') == 'Polygon'
+                        else geometry.get('coordinates') or [])
+            for rings in polygons:
+                if not rings:
+                    continue
+                if inside(rings[0]) and not any(
+                        inside(ring) for ring in rings[1:]):
+                    return True
+                for ring in rings:
+                    for left, right in zip(ring, ring[1:]):
+                        ax, ay = ((left[0] - lng) * sx,
+                                  (left[1] - lat) * sy)
+                        bx, by = ((right[0] - lng) * sx,
+                                  (right[1] - lat) * sy)
+                        dx, dy = bx - ax, by - ay
+                        amount = max(0, min(
+                            1, -(ax * dx + ay * dy) /
+                            (dx * dx + dy * dy or 1)))
+                        if ((ax + amount * dx) ** 2 +
+                                (ay + amount * dy) ** 2
+                                <= (metres + 0.1) ** 2):
+                            return True
+            return False
+
+        features = []
+        cursor = ''
+        page_size = 1000
+        while True:
+            rows = self.gateway.read(
+                """SELECT e.id,e.kind,
+                          (SELECT i.source_feature_id FROM identities i
+                           JOIN versions iv ON iv.id=i.version_id
+                           WHERE i.entity_id=e.id AND i.layer=e.kind
+                           ORDER BY CASE WHEN iv.source_id LIKE
+                             'cofopri-formalizacion-%' THEN 1 ELSE 0 END,
+                             iv.created_at DESC LIMIT 1) AS source_feature_id,
+                          (SELECT i.source_feature_id FROM identities i
+                           JOIN versions iv ON iv.id=i.version_id
+                           WHERE i.entity_id=e.id AND i.layer=e.kind
+                             AND iv.source_id LIKE 'cofopri-formalizacion-%'
+                           ORDER BY iv.created_at DESC LIMIT 1)
+                             AS formalization_rpu,
+                          (SELECT iv.source_id FROM identities i
+                           JOIN versions iv ON iv.id=i.version_id
+                           WHERE i.entity_id=e.id AND i.layer=e.kind
+                           ORDER BY CASE WHEN iv.source_id LIKE
+                             'cofopri-formalizacion-%' THEN 1 ELSE 0 END,
+                             iv.created_at DESC LIMIT 1)
+                             AS identity_source_id,
+                          c.version_id AS geometry_version_id,
+                          c.value_json AS geometry_json,
+                          a.ubigeo,a.district,a.urbanization,a.sector,
+                          a.block,a.lot,a.address,a.zoning,
+                          a.cadastral_use,a.land_area,a.built_area,
+                          a.floors,a.units,a.is_corner,a.is_through,
+                          a.faces_park
+                   FROM entities e
+                   JOIN selections s ON s.entity_id=e.id
+                    AND s.field='$geometry'
+                   JOIN contributions c ON c.id=s.contribution_id
+                   LEFT JOIN current_attributes a ON a.entity_id=e.id
+                   WHERE e.ubigeo=? AND e.kind=? AND e.id>?
+                     AND (
+                       (json_extract(c.value_json,'$.type')='Polygon'
+                        AND EXISTS (
+                          SELECT 1
+                          FROM json_each(c.value_json,'$.coordinates[0]') point
+                          WHERE json_extract(point.value,'$[0]')
+                              BETWEEN ? AND ?
+                            AND json_extract(point.value,'$[1]')
+                              BETWEEN ? AND ?
+                        ))
+                       OR
+                       (json_extract(c.value_json,'$.type')='MultiPolygon'
+                        AND EXISTS (
+                          SELECT 1
+                          FROM json_each(c.value_json,'$.coordinates') polygon
+                          JOIN json_each(polygon.value,'$[0]') point
+                          WHERE json_extract(point.value,'$[0]')
+                              BETWEEN ? AND ?
+                            AND json_extract(point.value,'$[1]')
+                              BETWEEN ? AND ?
+                        ))
+                     )
+                   ORDER BY e.id LIMIT """ + str(page_size),
+                [ubigeo, kind, cursor, west, east, south, north,
+                 west, east, south, north],
+            )
+            for row in rows:
+                try:
+                    geometry = json.loads(row.get('geometry_json') or 'null')
+                except (TypeError, ValueError):
+                    raise StorageError(
+                        'D1 devolvió una geometría no válida.') from None
+                if not isinstance(geometry, dict) or not touches(geometry):
+                    continue
+                properties = {
+                    key: value for key, value in row.items()
+                    if key not in ('id', 'kind', 'source_feature_id',
+                                   'geometry_version_id', 'geometry_json',
+                                   'entity_id', 'formalization_rpu',
+                                   'identity_source_id')
+                }
+                properties['source_feature_id'] = row.get('source_feature_id')
+                properties['FORMALIZATION_RPU'] = row.get('formalization_rpu')
+                properties['IDENTITY_SOURCE_ID'] = row.get(
+                    'identity_source_id')
+                features.append({
+                    'type': 'Feature',
+                    'id': row['id'],
+                    'geometry': geometry,
+                    'properties': properties,
+                    'provenance': {
+                        '$geometry': {
+                            'version_id': row.get('geometry_version_id'),
+                        },
+                    },
+                })
+            if len(rows) < page_size:
+                break
+            cursor = rows[-1]['id']
+        return {
+            'type': 'FeatureCollection',
+            'features': features,
+            'revision': self.gateway.revision(),
             'crs': 'EPSG:4326',
         }
 

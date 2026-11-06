@@ -125,6 +125,24 @@ def district_summaries():
         return result
 
 
+def district_catalog():
+    """Return fast D1 counts for map provider discovery."""
+    if durable():
+        from .master_d1 import D1ReadModel
+        model = D1ReadModel()
+        revision = model.revision()
+        with _lock:
+            cached = _read_cache.get(('catalog', revision))
+        if cached is not None:
+            return cached
+        result = model.district_catalog(revision)
+        with _lock:
+            _read_cache[('catalog', revision)] = result
+            _trim_read_cache()
+        return result
+    return district_summaries()
+
+
 def district_summary(ubigeo):
     return district_summaries().get(ubigeo)
 
