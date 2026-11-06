@@ -56,6 +56,7 @@
             pdfLink();
         }
         function clearMap(){layer.forEach(f=>layer.remove(f));layer.setMap(null);labels?.setData([],[]);drawnKey=null;drawnCount=0;drawnBlockCount=0;highlighted=null;}
+        const lotIdentifier=()=>String(lot?.properties?.ID_LOTE||lot?.properties?.ID_PREDIO_RPU||'').trim();
         async function api(path,signal){
             const stop=new AbortController(),abort=()=>stop.abort(),deadline=setTimeout(abort,path.startsWith('lotes/')?30000:25000);
             signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
@@ -93,10 +94,22 @@
                 status('Geometría de referencia; ubicación provisional y numeración pendiente.');$('retry').hidden=true;return;
             }
             if($('source'))$('source').textContent=p.SOURCE_NAME||'Catastro Maestro · D1';
-            $('code').textContent=p.ID_LOTE;$('address').textContent=p.COD_SECT+' / '+p.COD_MZNA+' / '+String(p.COD_LOTE??'').padStart(3,'0');
+            const identifier=lotIdentifier();
+            $('code').textContent=identifier||'Sin código catastral';
+            if($('master-id')){
+                const uuid=String(p.ELEMENT_ID||'').replaceAll('-','');
+                $('master-id').textContent=uuid?'LOTE-CM-'+uuid.slice(0,12).toUpperCase():'Sin vínculo';
+            }
+            $('address').textContent=p.COD_SECT+' / '+p.COD_MZNA+' / '+String(p.COD_LOTE??'').padStart(3,'0');
             const year=Number(p.ANIO_CAT);$('year').textContent=Number.isInteger(year)&&year>=1900&&year<=2100?String(year):'Sin dato';
             $('hint').textContent=(p.DISTRICT_NAME||result.district)+' · lote '+p.COD_LOTE;
-            if(detailsId!==p.ID_LOTE){detailsId=p.ID_LOTE;['land','built','floors','units','land-gis','built-gis','perimeter',...sides].forEach(k=>$(k).textContent='Cargando…');photo(null,serial);details(serial);}
+            if(identifier&&detailsId!==identifier){
+                detailsId=identifier;
+                ['land','built','floors','units','land-gis','built-gis','perimeter',...sides].forEach(k=>$(k).textContent='Cargando…');
+                photo(null,serial);details(serial);
+            }else if(!identifier){
+                status('El lote no tiene código catastral ni RPU en el Catastro Maestro.',true);
+            }
         }
         function progress(value){
             result=value;draw();select();
@@ -105,7 +118,7 @@
             if(result.complete)finish();
         }
         function photo(url,stamp){
-            const image=$('photo'),id=lot?.properties.ID_LOTE;
+            const image=$('photo'),id=lotIdentifier();
             if(!id)return;
             if(photoLookup?.id===id&&photoLookup.stamp===stamp){
                 if(!url||photoLookup.urls.includes(url)||photoLookup.loaded)return;
@@ -114,7 +127,7 @@
             if(photoLookup)clearTimeout(photoLookup.timer);
             const urls=[...new Set([url].filter(Boolean))];
             const lookup=photoLookup={id,stamp,urls,timer:null,loaded:false};let next=0;
-            const current=()=>photoLookup===lookup&&stamp===serial&&lot?.properties.ID_LOTE===id;
+            const current=()=>photoLookup===lookup&&stamp===serial&&lotIdentifier()===id;
             $('photo-status').textContent='Cargando fachada…';$('photo-status').hidden=false;
             function attempt(){
                 clearTimeout(lookup.timer);if(!current())return;
@@ -155,14 +168,15 @@
             if(!lot||lot.properties.REFERENCE_ONLY)return;
             pdfLink();
             detailLoading=true;
-            const id=lot.properties.ID_LOTE,key=id+':'+record;
+            const id=lotIdentifier(),key=id+':'+record;
+            if(!id)throw Error('El lote no tiene código catastral ni RPU.');
             try {
                 const saved=cache.get(key),value=saved&&saved.until>Date.now()?saved.data:await api('lotes/'+id+'/'+(record?'?record_id='+encodeURIComponent(record):''),controller.signal);
-                if(stamp!==serial||lot?.properties.ID_LOTE!==id)return;
+                if(stamp!==serial||lotIdentifier()!==id)return;
                 if(value.lot_id!==id)throw Error('La información recibida no corresponde al lote del pin.');
                 if(value.document_status!=='unavailable')cache.set(key,{data:value,until:Date.now()+60000});if(cache.size>30)cache.delete(cache.keys().next().value);
                 metrics(value,stamp);
-            } catch(error){if(stamp===serial&&lot?.properties.ID_LOTE===id){['land','built','floors','units','land-gis','built-gis','perimeter',...sides].forEach(k=>$(k).textContent='Consulta no disponible');status(error.name==='AbortError'?'La consulta tardó demasiado. Vuelve a consultar.':error.message||'No se pudieron consultar los datos catastrales.',true);$('retry').hidden=false;}}
+            } catch(error){if(stamp===serial&&lotIdentifier()===id){['land','built','floors','units','land-gis','built-gis','perimeter',...sides].forEach(k=>$(k).textContent='Consulta no disponible');status(error.name==='AbortError'?'La consulta tardó demasiado. Vuelve a consultar.':error.message||'No se pudieron consultar los datos catastrales.',true);$('retry').hidden=false;}}
             finally {if(stamp===serial){detailLoading=false;card.setAttribute('aria-busy',String(!!result&&!result.complete));}}
         }
         function finish(){
