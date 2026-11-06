@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 import uuid
 
 from . import geollaqta_bulk
@@ -421,6 +422,7 @@ def migrate_manifests_direct(gateway, ubigeo, district, lot_ids,
             })
             break
         except master_store.Conflict:
+            time.sleep(attempt + 1)
             if attempt == 4:
                 raise
     return {

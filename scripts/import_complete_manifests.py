@@ -25,7 +25,9 @@ sys.path.insert(0, str(ROOT / 'webapp'))
 
 from catastro.manifest_migration import migrate_manifests_direct
 from catastro.master_d1 import Gateway
+from catastro.master_store import Conflict
 from catastro.state import State
+from catastro.storage import StorageError
 from cuadrantizacion.geollaqta import DISTRICTS
 
 OUTPUT = Path(
@@ -54,8 +56,10 @@ def main():
         flush=True,
     )
     for district, district_lots in sorted(by_district.items()):
-        for offset in range(0, len(district_lots), 20):
-            chunk = district_lots[offset:offset + 20]
+        offset = 0
+        batch_size = 5
+        while offset < len(district_lots):
+            chunk = district_lots[offset:offset + batch_size]
             started = time.monotonic()
             try:
                 result = migrate_manifests_direct(
@@ -70,11 +74,30 @@ def main():
                     'seconds': round(time.monotonic() - started, 1),
                 })
                 print(
-                    'DONE', district, min(offset + 20, len(district_lots)),
+                    'DONE', district,
+                    min(offset + len(chunk), len(district_lots)),
                     len(district_lots), result['revision'],
                     flush=True,
                 )
+                offset += len(chunk)
+                batch_size = 5
             except Exception as error:
+                if isinstance(error, Conflict):
+                    print(
+                        'RETRY_CONFLICT', district, offset,
+                        flush=True,
+                    )
+                    time.sleep(3)
+                    continue
+                if (isinstance(error, StorageError)
+                        and 'excede los límites' in str(error)
+                        and batch_size > 1):
+                    batch_size = max(1, batch_size // 2)
+                    print(
+                        'RETRY_SMALLER', district, offset, batch_size,
+                        flush=True,
+                    )
+                    continue
                 failures.append({
                     'ubigeo': district,
                     'lots': chunk,
@@ -84,6 +107,7 @@ def main():
                     'ERROR', district, offset, type(error).__name__,
                     str(error), flush=True,
                 )
+                offset += len(chunk)
             OUTPUT.write_text(
                 json.dumps(
                     {'results': results, 'failures': failures},

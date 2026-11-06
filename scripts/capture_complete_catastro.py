@@ -69,6 +69,17 @@ def capture_gallery_district(district, report):
     print('GALLERY_START', district, metadata['name'], flush=True)
     try:
         archived, truncated = seed_existing(district)
+        state = State()
+        try:
+            for row in state.db.execute(
+                    '''SELECT id FROM jobs
+                       WHERE ubigeo=? AND status IN ('queued','running')''',
+                    (district,)):
+                state.update_job(
+                    row['id'], status='stopped',
+                    message='Reanudado por la carga completa del Catastro Maestro.')
+        finally:
+            state.close()
         job_id = start_job(
             district,
             launch=False,

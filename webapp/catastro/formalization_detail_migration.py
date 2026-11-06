@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 import uuid
 
 from . import master_contract
@@ -350,6 +351,7 @@ def migrate_formalization_details(gateway, ubigeo, district, lots, cloud=None,
                 source_exists = True
                 break
             except master_store.Conflict:
+                time.sleep(attempt + 1)
                 if attempt == 4:
                     raise
         processed += len(chunk)

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -416,6 +417,7 @@ def migrate_direct(gateway, ubigeo, district, batch_size=200, limit=None,
                 source_exists = True
                 break
             except master_store.Conflict:
+                time.sleep(attempt + 1)
                 if attempt == 4:
                     raise
         item = {
@@ -766,6 +768,7 @@ def migrate_snapshot_direct(gateway, ubigeo, district, source='pcdpi',
                 source_exists = True
                 break
             except master_store.Conflict:
+                time.sleep(attempt + 1)
                 if attempt == 4:
                     raise
         item = {
