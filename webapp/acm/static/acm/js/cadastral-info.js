@@ -162,6 +162,8 @@
             if(value.document_status==='unavailable'){
                 ['land','built','floors','units','land-gis','built-gis','perimeter',...sides].forEach(k=>$(k).textContent='Consulta no disponible');
                 status('No se pudo consultar el documento. Vuelve a intentarlo.',true);$('retry').hidden=false;
+            }else if(value.document_status==='master_data_only'){
+                status('Datos del Catastro Maestro disponibles; ficha documental pendiente de archivo.');$('retry').hidden=true;
             }else status(value.source_label?'Vinculado al Catastro Maestro · datos normalizados con procedencia.':'');
         }
         async function details(stamp,record=''){

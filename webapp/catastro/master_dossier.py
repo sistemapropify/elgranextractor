@@ -478,10 +478,22 @@ def summary(value, record_id=None):
                                        selected.get('source_feature_id') or '')
                                     if selected else '')
     boundaries = {
-        'frente': metric(selected.get('front')),
-        'derecha': metric(selected.get('right')),
-        'izquierda': metric(selected.get('left')),
-        'fondo': metric(selected.get('back')),
+        'frente': metric(
+            selected.get('front')
+            if selected.get('front') is not None
+            else attributes.get('front')),
+        'derecha': metric(
+            selected.get('right')
+            if selected.get('right') is not None
+            else attributes.get('right')),
+        'izquierda': metric(
+            selected.get('left')
+            if selected.get('left') is not None
+            else attributes.get('left')),
+        'fondo': metric(
+            selected.get('back')
+            if selected.get('back') is not None
+            else attributes.get('back')),
     }
     boundary_details = value.get('boundary_details') or {}
     for label, side in (
@@ -491,20 +503,42 @@ def summary(value, record_id=None):
             boundaries[label] = metric(
                 (boundary_details.get(side) or {}).get('length_m'))
     master = value.get('master') or {}
+    master_metrics = {
+        'land_area': metric(
+            selected.get('land_area')
+            if selected.get('land_area') is not None
+            else attributes.get('land_area')),
+        'built_area': metric(
+            selected.get('built_area')
+            if selected.get('built_area') is not None
+            else attributes.get('built_area')),
+        'floors': metric(
+            selected.get('floors')
+            if selected.get('floors') is not None
+            else attributes.get('floors')),
+        'units': metric(
+            selected.get('units')
+            if selected.get('units') is not None
+            else attributes.get('units')),
+        'perimeter': metric(
+            selected.get('perimeter')
+            if selected.get('perimeter') is not None
+            else attributes.get('perimeter')),
+        'boundaries': boundaries,
+    }
+    document_status = (
+        'available' if (media or reports)
+        else 'master_data_only'
+        if any(
+            item not in (None, '')
+            for key, item in master_metrics.items()
+            if key != 'boundaries'
+        ) or any(item not in (None, '') for item in boundaries.values())
+        else 'unavailable'
+    )
     return {
         'lot_id': value['lot_id'],
-        'metrics': {
-            'land_area': metric(selected.get('land_area')),
-            'built_area': metric(selected.get('built_area')),
-            'floors': metric(selected.get('floors')
-                             if selected.get('floors') is not None
-                             else attributes.get('floors')),
-            'units': metric(selected.get('units')
-                            if selected.get('units') is not None
-                            else attributes.get('units')),
-            'perimeter': metric(selected.get('perimeter')),
-            'boundaries': boundaries,
-        },
+        'metrics': master_metrics,
         'gis_metrics': {
             'land_area': metric(attributes.get('gis_land_area')),
             'built_area': metric(attributes.get('gis_built_area')),
@@ -517,7 +551,7 @@ def summary(value, record_id=None):
         'reports': reports,
         'selected_record_id': selected_record,
         'report_pdf_url': pdf.get('url') if pdf else None,
-        'document_status': 'available' if (media or reports) else 'unavailable',
+        'document_status': document_status,
         'source_label': ('Catastro Maestro · D1'
                          if value.get('master_status') == 'normalized_d1'
                          else ('Catastro Maestro · vector archivado'
