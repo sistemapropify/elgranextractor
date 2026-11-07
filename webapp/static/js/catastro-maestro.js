@@ -387,11 +387,13 @@
         const galleryItems=[...new Map([...(data.gallery||[]),...media.filter(entry=>/facade|photo|image|foto/i.test(String(entry.kind||'')))].filter(entry=>entry.url).map(entry=>[entry.url,entry])).values()];
         const hero=document.createElement('section');hero.className='master-dossier-hero';
         const photoBox=document.createElement('div');photoBox.className='master-dossier-photo';
-        const emptyHero=document.createElement('div');emptyHero.className='master-dossier-hero-empty';emptyHero.textContent='Sin fotografía de fachada publicada en el Catastro Maestro';photoBox.append(emptyHero);
+        const emptyHero=document.createElement('div');emptyHero.className='master-dossier-hero-empty';emptyHero.textContent='No hay fotografía catastral publicada para este lote';
+        const showEmptyHero=()=>{if(!photoBox.querySelector('.master-dossier-hero-empty'))photoBox.append(emptyHero);};
         if(galleryItems[0]){
             const photo=document.createElement('img');photo.loading='eager';photo.alt='Fotografía de fachada del lote '+data.lot_id;
-            photo.addEventListener('error',()=>photo.remove());photo.src=galleryItems[0].url;photoBox.append(photo);
-        }
+            photo.addEventListener('error',()=>{photo.remove();showEmptyHero();},{once:true});
+            photo.src=galleryItems[0].url;photoBox.append(photo);
+        }else showEmptyHero();
         const heroCopy=document.createElement('div');heroCopy.className='master-dossier-hero-copy';
         const heroTitle=document.createElement('h2');heroTitle.textContent='Lote '+(attributes.lot||item.feature?.properties?.COD_LOTE||data.lot_id.slice(-3));
         const heroLine=document.createElement('p');heroLine.textContent=[attributes.district||districtLabel(sourceDistrict(item.source)),attributes.sector&&('Sector '+attributes.sector),attributes.block&&('Mz. '+attributes.block),'Lote '+(attributes.lot||data.lot_id.slice(-3))].filter(Boolean).join(' · ');
