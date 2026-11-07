@@ -240,8 +240,13 @@
         for(const [label,value] of values){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;dl.append(dt,dd);}
         panel.append(dl);
         const details=document.createElement('div');details.className='master-entity-data';details.setAttribute('aria-live','polite');panel.append(details);
+        const fullLotDossier=item.key==='lotes'&&(
+            /^\d{14}$/.test(String(p.ID_LOTE||''))
+            ||(['wgs84','psad56'].includes(item.source.source_key)&&p.ID_PREDIO_RPU&&Number.isSafeInteger(Number(p.OBJECTID)))
+            ||(['draft','master'].includes(item.source.role)&&isUuid(p.ELEMENT_ID))
+        );
+        if(fullLotDossier)dl.hidden=true;
         if(item.key==='lotes'&&/^\d{14}$/.test(String(p.ID_LOTE||''))){
-            dl.hidden=true;
             details.append(Object.assign(document.createElement('p'),{className:'master-help',textContent:'Cargando fachada, titulares, fichas y procedencia desde el Catastro Maestro…'}));
             loadLotDossier(item,String(p.ID_LOTE),details);
         }

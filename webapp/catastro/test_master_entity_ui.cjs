@@ -28,6 +28,8 @@ assert.match(master, /\/ficha\//);
 assert.match(master, /master-lot-gallery/);
 assert.match(master, /detail-card/);
 assert.match(master, /master-dossier-hero/);
+assert.match(master, /const fullLotDossier=item\.key==='lotes'&&/);
+assert.match(master, /if\(fullLotDossier\)dl\.hidden=true/);
 assert.match(master, /showEmptyHero=\(\)=>/);
 assert.match(master, /else showEmptyHero\(\)/);
 assert.doesNotMatch(master, /textContent='No hay fotografía catastral publicada para este lote';photoBox\.append\(emptyHero\)/);
