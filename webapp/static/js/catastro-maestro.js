@@ -775,7 +775,15 @@
                 status((map?'Catastro Maestro · ':'Catastro Maestro sin Google Maps · ')+totalLabel);
                 el('map-note').textContent=totalLabel;
             }
-        }catch(error){if(error.name!=='AbortError'&&!signal.aborted)status(error.message,true);}
+        }catch(error){
+            if(error.name!=='AbortError'&&!signal.aborted){
+                controller.abort();
+                loading(null);
+                const message='Carga incompleta · '+error.message;
+                status(message,true);
+                el('map-note').textContent=message;
+            }
+        }
     }
     function showCaymaReference(updateUrl=true) {
         if(!catalog||!el('district'))return;
