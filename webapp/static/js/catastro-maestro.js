@@ -718,7 +718,7 @@
                             if(signal.aborted)return;
                             const pageUrl='/catastro/api/maestro/fuentes/'+
                                 encodeURIComponent(source.id)+'/'+key+'/pagina/?'+
-                                new URLSearchParams({ubigeo:current,limit:'1000',cursor});
+                                new URLSearchParams({ubigeo:current,limit:'5000',cursor});
                             const page=await json(pageUrl,signal,45000);
                             const pageRecords=(page.features||[]).map(f=>record(f,source,key)).filter(Boolean);
                             collection.records.push(...pageRecords);
