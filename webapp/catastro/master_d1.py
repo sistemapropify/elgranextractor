@@ -295,14 +295,12 @@ class D1ReadModel:
                    GROUP BY e.ubigeo,e.kind
                    ORDER BY e.ubigeo,e.kind"""
         source_query = """SELECT e.ubigeo,e.kind,v.source_id,
-                                 COUNT(DISTINCT i.source_feature_id) AS count
+                                 COUNT(DISTINCT e.id) AS count
                           FROM entities e
-                          JOIN selections s ON s.entity_id=e.id
-                           AND s.field='$geometry'
                           JOIN identities i ON i.entity_id=e.id
                            AND i.layer=e.kind
                           JOIN versions v ON v.id=i.version_id
-                          WHERE e.kind IN ('lote','manzana','via')
+                          WHERE e.kind='via'
                           GROUP BY e.ubigeo,e.kind,v.source_id
                           ORDER BY e.ubigeo,e.kind,v.source_id"""
         if revision is None:
