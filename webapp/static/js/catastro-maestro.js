@@ -76,13 +76,11 @@
         if(done==null){
             host.hidden=true;return;
         }
-        if(district===ALL_DISTRICTS&&loadDone>0){
-            host.hidden=true;
-            return;
-        }
         host.hidden=false;
         const value=Math.max(0,Math.min(1,(done||0)/(total||1)));
-        if(title)title.textContent='Cargando Catastro Maestro';
+        if(title)title.textContent=district===ALL_DISTRICTS
+            ?'Cargando los 29 distritos del Catastro Maestro'
+            :'Cargando Catastro Maestro';
         if(bar)bar.value=value;
         if(percent)percent.textContent=Math.round(value*100)+'%';
         if(label)label.textContent=text;
@@ -769,7 +767,14 @@
             if(signal.aborted)return;
             loading(null);
             counts();if(fitAfter)fit();
-            if(sources.length)status((map?'Catastro Maestro cargado · ':'Catastro Maestro cargado sin Google Maps · ')+districtLabel(district)+' · fuente de verdad D1.');
+            if(sources.length){
+                const totals=['lotes','manzanas','vias'].map(key=>
+                    visible().filter(c=>c.key===key).reduce((sum,c)=>sum+c.records.length,0));
+                const totalLabel='Carga completa · '+districtLabel(district)+' · '+
+                    fmt(totals[0])+' lotes · '+fmt(totals[1])+' manzanas · '+fmt(totals[2])+' vías · fuente de verdad D1.';
+                status((map?'Catastro Maestro · ':'Catastro Maestro sin Google Maps · ')+totalLabel);
+                el('map-note').textContent=totalLabel;
+            }
         }catch(error){if(error.name!=='AbortError'&&!signal.aborted)status(error.message,true);}
     }
     function showCaymaReference(updateUrl=true) {
