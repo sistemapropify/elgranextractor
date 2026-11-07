@@ -45,7 +45,9 @@
     const collections=new Map(),enabled=new Map(),pending=new Map();
     const dataFeatures=new Map();
     const parkFeatures=new Map();
-    const layerOn={manzanas:true,lotes:true,vias:true};
+    const layerOn={manzanas:true,lotes:true,vias:true,vias_formalizacion:false};
+    const isFormalizationVia=source=>String(source?.id||'').startsWith('cofopri-psad56-')
+        ||String(source?.id||'').startsWith('cofopri-wgs84-');
     const classificationVisible={parks:true,corners:true,faces_park:true};
     const classificationKinds=['parks','corners','faces_park'];
     const ALL_DISTRICTS='all';
@@ -152,15 +154,17 @@
         classificationControls();
     }
     function visible() {
-        return scoped().filter(c=>enabled.get(c.source.id)&&layerOn[c.key]);
+        return scoped().filter(c=>enabled.get(c.source.id)
+            &&(c.key==='vias'?isFormalizationVia(c.source)?layerOn.vias_formalizacion:layerOn.vias:layerOn[c.key]));
     }
     function availableCounts() {
-        const values={manzanas:0,lotes:0,vias:0};
+        const values={manzanas:0,lotes:0,vias:0,vias_formalizacion:0};
         for(const source of catalog?.sources||[]){
             if(!source.active||!masterRole(source)||!enabled.get(source.id)
                 ||(district!==ALL_DISTRICTS&&!source.districts.includes(district)))continue;
-            for(const key of Object.keys(values))
+            for(const key of ['manzanas','lotes'])
                 values[key]+=Number(source.layers?.[key]?.count||0);
+            values[isFormalizationVia(source)?'vias_formalizacion':'vias']+=Number(source.layers?.vias?.count||0);
         }
         return values;
     }
@@ -170,9 +174,14 @@
             const n=visible().filter(c=>c.key===key).reduce((sum,c)=>sum+c.records.length,0);
             el('count-'+key).textContent=fmt(n)+(available[key]>n?' / '+fmt(available[key]):'');
         }
-        el('map-note').textContent=!visible().length?'Sin registros maestros visibles en el ámbito seleccionado.':district===ALL_DISTRICTS
+        el('map-note').textContent=!district?'Selecciona un distrito para cargar sus registros.':!visible().length?'Sin registros maestros visibles en el ámbito seleccionado.':district===ALL_DISTRICTS
             ?'Catastro Maestro · todos los distritos con registros D1 · procedencia conservada por entidad.'
             :'Catastro Maestro · registros vinculados por UUID; cada campo conserva su fuente y versión.';
+        const formalization=visible().filter(c=>c.key==='vias'&&isFormalizationVia(c.source))
+            .reduce((sum,c)=>sum+c.records.length,0);
+        const formalizationAvailable=available.vias_formalizacion;
+        if(el('count-vias-formalizacion'))el('count-vias-formalizacion').textContent=fmt(formalization)
+            +(formalizationAvailable>formalization?' / '+fmt(formalizationAvailable):'');
     }
     function fit() {
         if(!map)return;
@@ -610,8 +619,12 @@
     function vectorStyle(feature) {
         const key=feature.getProperty('MASTER_LAYER');
         const sourceId=feature.getProperty('SOURCE_ID');
+        const layerVisible=key==='vias'
+            ?(String(sourceId||'').startsWith('cofopri-psad56-')||String(sourceId||'').startsWith('cofopri-wgs84-')
+                ?layerOn.vias_formalizacion:layerOn.vias)
+            :layerOn[key];
         return {
-            visible:Boolean((district===ALL_DISTRICTS||feature.getProperty('DISTRICT')===district)&&layerOn[key]&&enabled.get(sourceId)!==false),
+            visible:Boolean((district===ALL_DISTRICTS||feature.getProperty('DISTRICT')===district)&&layerVisible&&enabled.get(sourceId)!==false),
             clickable:false,fillOpacity:0,
             strokeColor:key==='vias'?'#63b8ff':key==='manzanas'?'#06d7af':'#efb140',
             strokeOpacity:key==='vias'?.9:key==='manzanas'?.95:.8,
@@ -816,6 +829,10 @@
     }
     function sourcesPanel() {
         el('sources').replaceChildren();
+        if(!district){
+            const p=document.createElement('p');p.className='master-help';p.textContent='Selecciona un distrito para consultar sus capas y fuentes.';el('sources').append(p);
+            counts();return;
+        }
         const sources=catalog.sources.filter(s=>s.active&&masterRole(s)&&
             (district===ALL_DISTRICTS||s.districts.includes(district)));
         if(!sources.length){const p=document.createElement('p');p.className='master-help';p.textContent='Este distrito todavía no tiene registros activos en el Catastro Maestro.';el('sources').append(p);}
@@ -837,6 +854,14 @@
             classificationStatus('Guarda o cancela las clasificaciones antes de cambiar de distrito.',true);
             return;
         }
+        if(!requested){
+            controller?.abort();district='';selected=null;selectedFeature=null;
+            const url=new URL(location.href);url.searchParams.delete('ubigeo');history.replaceState(null,'',url);
+            closeDetailCard(false);sourcesPanel();counts();loading(null);
+            status('Selecciona un distrito para cargar sus registros.');
+            window.dispatchEvent(new CustomEvent('catastro-master-district',{detail:{ubigeo:''}}));
+            return;
+        }
         district=requested;selected=null;closeDetailCard(false);
         const url=new URL(location.href);url.searchParams.set('ubigeo',district);history.replaceState(null,'',url);sourcesPanel();loadClassifications();refresh(fitAfter);
         window.dispatchEvent(new CustomEvent('catastro-master-district',{detail:{ubigeo:district}}));
@@ -856,12 +881,12 @@
             catalog=await json('/catastro/api/maestro/catalogo/');
             const districtSelect=el('district');districtSelect.replaceChildren();
             const masterDistricts=new Set(catalog.sources.filter(s=>s.active&&masterRole(s)).flatMap(s=>s.districts));
+            const prompt=document.createElement('option');prompt.value='';prompt.textContent='Selecciona un distrito';districtSelect.append(prompt);
             if(masterDistricts.size){const option=document.createElement('option');option.value=ALL_DISTRICTS;option.textContent='Todos los distritos D1 · '+masterDistricts.size+' con registros';districtSelect.append(option);}
             for(const d of catalog.districts){const option=document.createElement('option');option.value=d.ubigeo;option.textContent=d.name+(masterDistricts.has(d.ubigeo)?'':' · sin registros maestros');districtSelect.append(option);}
             const requested=new URL(location.href).searchParams.get('ubigeo');
-            const fallback=catalog.districts.find(d=>masterDistricts.has(d.ubigeo));
             districtSelect.value=requested===ALL_DISTRICTS&&masterDistricts.size?ALL_DISTRICTS:
-                (masterDistricts.has(requested)?requested:(fallback?.ubigeo||catalog.districts[0]?.ubigeo||''));
+                (masterDistricts.has(requested)?requested:'');
             districtSelect.disabled=false;
             if(!districtSelect.dataset.ready){districtSelect.addEventListener('change',()=>changeDistrict(true));districtSelect.dataset.ready='true';}
             if(caymaRequested())enabled.set('cayma-pud-2006-eu03',true);
@@ -934,6 +959,11 @@
         el('satellite').addEventListener('click',()=>{const value=map.getMapTypeId()!=='satellite';map.setMapTypeId(value?'satellite':'roadmap');el('satellite').setAttribute('aria-pressed',String(value));});
         for(const key of ['manzanas','lotes','vias'])el(key).addEventListener('change',()=>{
             layerOn[key]=el(key).checked;
+            if(selectedFeature){vectorLayer.revertStyle(selectedFeature);selected=null;selectedFeature=null;}
+            counts();vectorLayer.setStyle(vectorStyle);
+        });
+        el('vias-formalizacion')?.addEventListener('change',()=>{
+            layerOn.vias_formalizacion=el('vias-formalizacion').checked;
             if(selectedFeature){vectorLayer.revertStyle(selectedFeature);selected=null;selectedFeature=null;}
             counts();vectorLayer.setStyle(vectorStyle);
         });
