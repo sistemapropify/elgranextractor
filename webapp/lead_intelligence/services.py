@@ -70,6 +70,12 @@ FUNNEL_STAGE_LABELS = {
     "capture_registered": "Cita de captación registrada",
 }
 
+GOAL_COMPLETED_STAGES = (
+    "visit_registered",
+    "capture_registered",
+    "appointment_registered",
+)
+
 RECONTACT_GROUPS = {
     "call_now": "1 · Llamar ahora",
     "message_now": "2 · Escribir ahora",
@@ -927,6 +933,7 @@ def get_lead_results(
     segment=None,
     source=None,
     recontact=None,
+    exclude_completed=False,
     order=None,
 ):
     """Return lead cards for one dashboard stage using SELECT-only CRM access."""
@@ -959,6 +966,12 @@ def get_lead_results(
         ]
     if stage != "entered":
         leads = [lead for lead in leads if lead.get(stage)]
+    if exclude_completed:
+        leads = [
+            lead
+            for lead in leads
+            if not any(lead.get(stage_key) for stage_key in GOAL_COMPLETED_STAGES)
+        ]
     recontact_counts = Counter(
         lead.get("recontact_status") for lead in leads
     )

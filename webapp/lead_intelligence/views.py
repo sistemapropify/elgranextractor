@@ -772,6 +772,7 @@ def lead_funnel_queue(request):
         stage,
         segment=segment,
         recontact=priority,
+        exclude_completed=True,
         order="funnel",
     )
     leads = result.pop("leads")

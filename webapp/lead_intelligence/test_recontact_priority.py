@@ -181,3 +181,53 @@ class RecontactPriorityTests(SimpleTestCase):
             ["Calificados por IA", "Bidireccionales", "Contactados"],
         )
 
+    @patch("lead_intelligence.services._prepare_lead_result")
+    @patch("lead_intelligence.services._assessment_map", return_value={})
+    @patch(
+        "lead_intelligence.services._lead_result_rows",
+        return_value=[
+            {"id": 1, "chat_history": "[]"},
+            {"id": 2, "chat_history": "[]"},
+            {"id": 3, "chat_history": "[]"},
+            {"id": 4, "chat_history": "[]"},
+        ],
+    )
+    def test_funnel_queue_excludes_leads_that_completed_the_objective(
+        self, _rows, _assessments, prepare
+    ):
+        prepare.side_effect = [
+            {
+                "id": 1,
+                "entered": True,
+                "visit_intent": True,
+                "recontact_status": "nurture",
+            },
+            {
+                "id": 2,
+                "entered": True,
+                "visit_registered": True,
+                "recontact_status": "call_now",
+            },
+            {
+                "id": 3,
+                "entered": True,
+                "capture_registered": True,
+                "recontact_status": "call_now",
+            },
+            {
+                "id": 4,
+                "entered": True,
+                "appointment_registered": True,
+                "recontact_status": "call_now",
+            },
+        ]
+        result = get_lead_results(
+            date(2026, 11, 1),
+            date(2026, 11, 6),
+            "entered",
+            exclude_completed=True,
+            order="funnel",
+        )
+        self.assertEqual([lead["id"] for lead in result["leads"]], [1])
+        self.assertEqual(result["recontact_counts"], {"nurture": 1})
+
