@@ -124,7 +124,12 @@ def _master_metadata(source_id, summary=None):
         'layers': {
             'lotes': {'count': summary['lotes'], 'kind': 'polygon'},
             'manzanas': {'count': summary['manzanas'], 'kind': 'polygon'},
-            'vias': {'count': summary.get('vias', 0), 'kind': 'line'},
+            'vias': {
+                'count': summary.get('vias', 0),
+                'kind': 'line',
+                'sources': (
+                    summary.get('source_counts', {}).get('via') or {}),
+            },
         },
     }
 
@@ -370,6 +375,7 @@ def _master_layer(source_id, key, district, bounds=None, *, original=False,
         source_feature_id = attrs.pop('source_feature_id', None)
         formalization_rpu = attrs.pop('FORMALIZATION_RPU', None)
         identity_source_id = attrs.pop('IDENTITY_SOURCE_ID', '') or ''
+        attrs['IDENTITY_SOURCE_ID'] = identity_source_id
         if source_feature_id:
             if str(identity_source_id).startswith(
                     'cofopri-formalizacion-'):
@@ -443,6 +449,7 @@ def master_layer_page(source_id, key, district, cursor='', limit=2000,
         source_feature_id = attrs.pop('source_feature_id', None)
         formalization_rpu = attrs.pop('FORMALIZATION_RPU', None)
         identity_source_id = attrs.pop('IDENTITY_SOURCE_ID', '') or ''
+        attrs['IDENTITY_SOURCE_ID'] = identity_source_id
         if source_feature_id:
             if str(identity_source_id).startswith(
                     'cofopri-formalizacion-'):
@@ -499,6 +506,7 @@ def _layer(source_id, key, district, bounds=None, *, original=False, metadata=No
             source_feature_id = attrs.pop('source_feature_id', None)
             formalization_rpu = attrs.pop('FORMALIZATION_RPU', None)
             identity_source_id = attrs.pop('IDENTITY_SOURCE_ID', '') or ''
+            attrs['IDENTITY_SOURCE_ID'] = identity_source_id
             if source_feature_id:
                 if str(identity_source_id).startswith('cofopri-formalizacion-'):
                     if key == 'lotes':
@@ -588,6 +596,7 @@ def _master_radius(source_id, lat, lng, metres):
             source_feature_id = attrs.pop('source_feature_id', None)
             formalization_rpu = attrs.pop('FORMALIZATION_RPU', None)
             identity_source_id = attrs.pop('IDENTITY_SOURCE_ID', '') or ''
+            attrs['IDENTITY_SOURCE_ID'] = identity_source_id
             if source_feature_id:
                 if str(identity_source_id).startswith(
                         'cofopri-formalizacion-'):

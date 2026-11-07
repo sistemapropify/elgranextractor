@@ -46,8 +46,10 @@
     const dataFeatures=new Map();
     const parkFeatures=new Map();
     const layerOn={manzanas:true,lotes:true,vias:true,vias_formalizacion:false};
-    const isFormalizationVia=source=>String(source?.id||'').startsWith('cofopri-psad56-')
-        ||String(source?.id||'').startsWith('cofopri-wgs84-');
+    const isFormalizationSourceId=sourceId=>String(sourceId||'').startsWith('cofopri-psad56-')
+        ||String(sourceId||'').startsWith('cofopri-wgs84-');
+    const recordSourceId=item=>item?.feature?.properties?.IDENTITY_SOURCE_ID||item?.source?.id||'';
+    const isFormalizationRecord=item=>isFormalizationSourceId(recordSourceId(item));
     const classificationVisible={parks:true,corners:true,faces_park:true};
     const classificationKinds=['parks','corners','faces_park'];
     const ALL_DISTRICTS='all';
@@ -155,7 +157,11 @@
     }
     function visible() {
         return scoped().filter(c=>enabled.get(c.source.id)
-            &&(c.key==='vias'?isFormalizationVia(c.source)?layerOn.vias_formalizacion:layerOn.vias:layerOn[c.key]));
+            &&(c.key==='vias'?(layerOn.vias||layerOn.vias_formalizacion):layerOn[c.key]));
+    }
+    function recordVisible(collection,item) {
+        if(collection.key!=='vias')return layerOn[collection.key];
+        return isFormalizationRecord(item)?layerOn.vias_formalizacion:layerOn.vias;
     }
     function availableCounts() {
         const values={manzanas:0,lotes:0,vias:0,vias_formalizacion:0};
@@ -164,21 +170,28 @@
                 ||(district!==ALL_DISTRICTS&&!source.districts.includes(district)))continue;
             for(const key of ['manzanas','lotes'])
                 values[key]+=Number(source.layers?.[key]?.count||0);
-            values[isFormalizationVia(source)?'vias_formalizacion':'vias']+=Number(source.layers?.vias?.count||0);
+            const breakdown=source.layers?.vias?.sources||{};
+            if(Object.keys(breakdown).length){
+                for(const [sourceId,count] of Object.entries(breakdown))
+                    values[isFormalizationSourceId(sourceId)?'vias_formalizacion':'vias']+=Number(count||0);
+            }else{
+                values[isFormalizationSourceId(source.id)?'vias_formalizacion':'vias']+=Number(source.layers?.vias?.count||0);
+            }
         }
         return values;
     }
     function counts() {
         const available=availableCounts();
         for(const key of ['manzanas','lotes','vias']) {
-            const n=visible().filter(c=>c.key===key).reduce((sum,c)=>sum+c.records.length,0);
+            const n=visible().filter(c=>c.key===key)
+                .reduce((sum,c)=>sum+c.records.filter(r=>recordVisible(c,r)).length,0);
             el('count-'+key).textContent=fmt(n)+(available[key]>n?' / '+fmt(available[key]):'');
         }
         el('map-note').textContent=!district?'Selecciona un distrito para cargar sus registros.':!visible().length?'Sin registros maestros visibles en el ámbito seleccionado.':district===ALL_DISTRICTS
             ?'Catastro Maestro · todos los distritos con registros D1 · procedencia conservada por entidad.'
             :'Catastro Maestro · registros vinculados por UUID; cada campo conserva su fuente y versión.';
-        const formalization=visible().filter(c=>c.key==='vias'&&isFormalizationVia(c.source))
-            .reduce((sum,c)=>sum+c.records.length,0);
+        const formalization=scoped().filter(c=>c.key==='vias'&&enabled.get(c.source.id))
+            .reduce((sum,c)=>sum+c.records.filter(isFormalizationRecord).length,0);
         const formalizationAvailable=available.vias_formalizacion;
         if(el('count-vias-formalizacion'))el('count-vias-formalizacion').textContent=fmt(formalization)
             +(formalizationAvailable>formalization?' / '+fmt(formalizationAvailable):'');
@@ -584,6 +597,7 @@
     function selectAt(point) {
         const target=world(point),matches=[];
         visible().forEach(c=>c.records.forEach(r=>{
+            if(!recordVisible(c,r))return;
             if(target[0]>=r.bbox[0]&&target[0]<=r.bbox[2]&&target[1]>=r.bbox[1]&&target[1]<=r.bbox[3]&&contains(r.feature.geometry,point))matches.push(r);
         }));
         matches.sort((a,b)=>{
@@ -619,8 +633,9 @@
     function vectorStyle(feature) {
         const key=feature.getProperty('MASTER_LAYER');
         const sourceId=feature.getProperty('SOURCE_ID');
+        const identitySourceId=feature.getProperty('IDENTITY_SOURCE_ID')||sourceId;
         const layerVisible=key==='vias'
-            ?(String(sourceId||'').startsWith('cofopri-psad56-')||String(sourceId||'').startsWith('cofopri-wgs84-')
+            ?(isFormalizationSourceId(identitySourceId)
                 ?layerOn.vias_formalizacion:layerOn.vias)
             :layerOn[key];
         return {

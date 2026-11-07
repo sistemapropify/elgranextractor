@@ -294,21 +294,39 @@ class D1ReadModel:
                    WHERE e.kind IN ('lote','manzana','via')
                    GROUP BY e.ubigeo,e.kind
                    ORDER BY e.ubigeo,e.kind"""
+        source_query = """SELECT e.ubigeo,e.kind,v.source_id,
+                                 COUNT(DISTINCT i.source_feature_id) AS count
+                          FROM entities e
+                          JOIN selections s ON s.entity_id=e.id
+                           AND s.field='$geometry'
+                          JOIN identities i ON i.entity_id=e.id
+                           AND i.layer=e.kind
+                          JOIN versions v ON v.id=i.version_id
+                          WHERE e.kind IN ('lote','manzana','via')
+                          GROUP BY e.ubigeo,e.kind,v.source_id
+                          ORDER BY e.ubigeo,e.kind,v.source_id"""
         if revision is None:
-            revision_rows, count_rows = self.gateway.read_many([
+            revision_rows, count_rows, source_rows = self.gateway.read_many([
                 {'sql': "SELECT value FROM meta WHERE key='revision'", 'params': []},
                 {'sql': query, 'params': []},
+                {'sql': source_query, 'params': []},
             ])
             if len(revision_rows) != 1:
                 raise StorageError('El esquema de D1 no está inicializado.')
             revision = int(revision_rows[0]['value'])
         else:
-            count_rows = self.gateway.read(query)
+            count_rows, source_rows = self.gateway.read_many([
+                {'sql': query, 'params': []},
+                {'sql': source_query, 'params': []},
+            ])
         summaries = {}
         for row in count_rows:
             item = summaries.setdefault(row['ubigeo'], {
                 'ubigeo': row['ubigeo'], 'revision': revision,
                 'lotes': 0, 'manzanas': 0, 'vias': 0,
+                'source_counts': {
+                    'lote': {}, 'manzana': {}, 'via': {},
+                },
             })
             if row['kind'] == 'lote':
                 item['lotes'] = int(row['count'])
@@ -316,6 +334,11 @@ class D1ReadModel:
                 item['manzanas'] = int(row['count'])
             elif row['kind'] == 'via':
                 item['vias'] = int(row['count'])
+        for row in source_rows:
+            item = summaries.get(row['ubigeo'])
+            if item:
+                item['source_counts'][row['kind']][row['source_id']] = int(
+                    row['count'])
         return summaries
 
     def lot_identity(self, source_feature_id):

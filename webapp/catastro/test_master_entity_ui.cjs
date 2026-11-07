@@ -51,6 +51,8 @@ assert.match(master, /prompt\.textContent='Selecciona un distrito'/);
 assert.doesNotMatch(master, /fallback\?\.ubigeo/);
 assert.match(master, /if\(!requested\)\{/);
 assert.match(master, /vias_formalizacion:false/);
+assert.match(master, /IDENTITY_SOURCE_ID/);
+assert.match(master, /source\.layers\?\.vias\?\.sources/);
 assert.doesNotMatch(master, /district===ALL_DISTRICTS&&loadDone>0/);
 assert.match(master, /Cargando los 29 distritos del Catastro Maestro/);
 assert.match(master, /Carga completa · /);

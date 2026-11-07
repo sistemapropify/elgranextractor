@@ -118,6 +118,8 @@ class DurableMasterTests(TestCase):
 
         self.assertEqual(catalog['040103']['lotes'], 1)
         self.assertEqual(catalog['040103']['manzanas'], 0)
+        self.assertEqual(
+            catalog['040103']['source_counts']['lote']['old'], 1)
         self.assertEqual(len(radius['features']), 1)
         self.assertEqual(
             radius['features'][0]['id'],
