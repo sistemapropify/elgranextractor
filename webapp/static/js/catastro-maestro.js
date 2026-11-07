@@ -154,10 +154,21 @@
     function visible() {
         return scoped().filter(c=>enabled.get(c.source.id)&&layerOn[c.key]);
     }
+    function availableCounts() {
+        const values={manzanas:0,lotes:0,vias:0};
+        for(const source of catalog?.sources||[]){
+            if(!source.active||!masterRole(source)||!enabled.get(source.id)
+                ||(district!==ALL_DISTRICTS&&!source.districts.includes(district)))continue;
+            for(const key of Object.keys(values))
+                values[key]+=Number(source.layers?.[key]?.count||0);
+        }
+        return values;
+    }
     function counts() {
+        const available=availableCounts();
         for(const key of ['manzanas','lotes','vias']) {
             const n=visible().filter(c=>c.key===key).reduce((sum,c)=>sum+c.records.length,0);
-            el('count-'+key).textContent=fmt(n);
+            el('count-'+key).textContent=fmt(n)+(available[key]>n?' / '+fmt(available[key]):'');
         }
         el('map-note').textContent=!visible().length?'Sin registros maestros visibles en el ámbito seleccionado.':district===ALL_DISTRICTS
             ?'Catastro Maestro · todos los distritos con registros D1 · procedencia conservada por entidad.'

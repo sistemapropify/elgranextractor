@@ -49,6 +49,7 @@ assert.doesNotMatch(master, /district===ALL_DISTRICTS&&loadDone>0/);
 assert.match(master, /Cargando los 29 distritos del Catastro Maestro/);
 assert.match(master, /Carga completa · /);
 assert.match(master, /Carga incompleta · /);
+assert.match(master, /available\[key\]>n\?' \/ '\+fmt\(available\[key\]\)/);
 assert.match(master, /\['master','draft','snapshot'\]\.includes\(source\.role\)/);
 assert.match(master, /maestro\/vectores\//);
 assert.match(master, /maestro\/clasificaciones\//);
