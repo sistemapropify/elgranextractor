@@ -1,24 +1,21 @@
-# Canal PROGRAMADA de evaluación IA de leads (entrantes + contactados).
-# Corre a las 09:00 y 21:00 hora de Perú (UTC-5) -> cron en UTC: 0 2,14 * * *.
-# Dispara el endpoint protegido del App Service (donde viven las credenciales
-# del CRM y DeepSeek) vía POST con X-Analytics-API-Key. La evaluación corre en
-# segundo plano dentro de la app; solo re-evalúa leads cuyo history_hash cambió
-# (regla de oro, sin gasto DeepSeek innecesario).
-name: Evaluar leads - programada (09:00/21:00)
+# Reconciliación diaria de seguridad para recuperar eventos perdidos del CRM.
+# La atención normal se evalúa por evento en /api/control/refresh-lead/.
+# Corre a las 09:00 hora de Perú (UTC-5) -> 14:00 UTC.
+name: Evaluar leads - reconciliación diaria (09:00 Lima)
 
 on:
   schedule:
-    - cron: '0 2,14 * * *'
+    - cron: '0 14 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  evaluar-leads-programada:
+  evaluar-leads-reconciliacion-diaria:
     runs-on: ubuntu-latest
     steps:
-      - name: Disparar evaluacion programada (entrantes + contactados, 24h)
+      - name: Disparar reconciliación diaria (entrantes, 24 h)
         run: |
           # -f falla si el endpoint no responde 2xx (no oculta errores). La URL
           # azurewebsites.net evita la proteccion anti-hotlink del dominio
