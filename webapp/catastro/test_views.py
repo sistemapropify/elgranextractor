@@ -124,7 +124,7 @@ class DashboardTests(TestCase):
             state.update_job(job['id'], status='stopped')
             state.close()
             spawn.reset_mock()
-            for workers in (0, 11, True, 2.5):
+            for workers in (0, 31, True, 2.5):
                 response = self.client.post('/catastro/api/start/', data=json.dumps({'ubigeo':'040117','workers':workers}), content_type='application/json')
                 self.assertEqual(response.status_code, 400)
             spawn.assert_not_called()
