@@ -117,9 +117,16 @@ class GalleryLinks(HTMLParser):
 
 
 class Source:
-    def __init__(self, checkpoint=lambda: None, delay=1, timeout=25, gate=None):
+    def __init__(self, checkpoint=lambda: None, delay=None, timeout=25, gate=None):
         self.checkpoint = checkpoint
-        self.delay = max(1, delay)
+        configured = (
+            os.environ.get('CATASTRO_REQUEST_INTERVAL', '1')
+            if delay is None else delay)
+        try:
+            configured = float(configured)
+        except (TypeError, ValueError):
+            configured = 1
+        self.delay = max(.1, min(configured, 25))
         self.last_request = 0
         self.timeout = max(1, min(float(timeout), 25))
         self.opener = build_opener(NoRedirect())

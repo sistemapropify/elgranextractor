@@ -42,10 +42,15 @@ def _detail_object_key(ubigeo, source, predio):
 def _detail_fields(detail):
     mapping = (
         ('NOMPJV', 'urbanization'),
+        ('SECTOR', 'sector'),
         ('MZNA', 'block'),
         ('LOTE', 'lot'),
         ('TIPO_USO', 'cadastral_use'),
         ('PM_AREPRE', 'land_area'),
+        ('PM_LTEFRE', 'front'),
+        ('PM_LTEDER', 'right'),
+        ('PM_LTEIZQ', 'left'),
+        ('PM_LTEFON', 'back'),
         ('EDI_PISO', 'floor'),
         ('EDI_DPTO', 'unit'),
         ('FECHA_TITULO', 'property_registration_date'),
@@ -55,7 +60,8 @@ def _detail_fields(detail):
         value = detail.get(source)
         if value in (None, ''):
             continue
-        if target == 'land_area':
+        if target in (
+                'land_area', 'front', 'right', 'left', 'back'):
             value = _number(value)
         if value in (None, ''):
             continue

@@ -15,7 +15,8 @@ os.environ['CATASTRO_STATE_DB'] = str(WORK / 'estado.sqlite3')
 os.environ['CATASTRO_KEEP_LOCAL'] = '0'
 os.environ['CATASTRO_MASTER_COLLECTION_ENABLED'] = '1'
 os.environ['CATASTRO_MASTER_STORAGE'] = 'd1'
-os.environ.setdefault('CATASTRO_MAX_WORKERS', '4')
+os.environ.setdefault('CATASTRO_REQUEST_INTERVAL', '0.1')
+os.environ.setdefault('CATASTRO_MAX_WORKERS', '10')
 sys.path.insert(0, str(ROOT / 'webapp'))
 
 from catastro import cofopri_vector_migration, geollaqta_bulk, vector_snapshots

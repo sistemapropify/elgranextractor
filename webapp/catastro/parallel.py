@@ -22,7 +22,7 @@ def worker_count(value=None):
 class RequestGate:
     """Share request spacing and server-requested cooldown across source clients."""
     def __init__(self, interval=1, clock=time.monotonic, sleep=time.sleep):
-        self.interval = max(1, interval)
+        self.interval = max(.1, float(interval))
         self.clock, self.sleep = clock, sleep
         self.next_request = 0
         self.lock = threading.Lock()
