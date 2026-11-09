@@ -461,7 +461,8 @@ class MasterGeometryTests(SimpleTestCase):
                 patch('catastro.master_d1.D1ReadModel',
                       return_value=model):
             value = master_layers.radius(
-                'maestro-040104', '-16.36', '-71.55', '500')
+                'maestro-040104', '-16.36', '-71.55', '500',
+                layers='lotes')
         self.assertEqual(value['source_id'], 'maestro-040104')
         self.assertEqual(value['lots']['total'], 1)
         feature = value['lots']['features'][0]
@@ -469,6 +470,8 @@ class MasterGeometryTests(SimpleTestCase):
                          'maestro-040104')
         self.assertEqual(feature['properties']['ID_LOTE'],
                          'psad56-652738')
+        self.assertEqual(value['blocks']['features'], [])
+        self.assertEqual(value['roads']['features'], [])
 
     def test_invalid_source_district_and_bbox_are_rejected(self):
         for args in [('../secret', 'lotes', '040103'), ('cayma-pud-2006-eu03', '../metadata', '040103'),

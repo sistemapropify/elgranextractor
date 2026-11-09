@@ -126,8 +126,11 @@ def revisions(request):
 def reference_geometry(request, source_id):
     from catastro import master_layers
     try:
-        value = master_layers.radius(source_id, request.GET.get('lat', ''),
-            request.GET.get('lng', ''), request.GET.get('radius', ''))
+        value = master_layers.radius(
+            source_id, request.GET.get('lat', ''),
+            request.GET.get('lng', ''), request.GET.get('radius', ''),
+            layers=request.GET.get('layers', ''),
+        )
         if source_id.startswith('borrador-'):
             value = {**value, **{key:master_layers.public_draft_layer(value[key]) for key in ('lots','blocks')}}
         response = JsonResponse(value,

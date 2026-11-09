@@ -180,6 +180,7 @@
                     if(entry.refs.has(source.id))continue;
                     tasks.push((async()=>{
                         const query=new URLSearchParams({lat:center.lat,lng:center.lng,radius});
+                        if(source.transport==='master')query.set('layers','lotes');
                         const response=await fetcher(source.geometry_url+'?'+query,{credentials:'same-origin',signal,headers:{Accept:'application/json'}});
                         if(!response.headers.get('content-type')?.includes('application/json'))throw Error('Inicia sesión para consultar las capas de Cayma.');
                         const data=await response.json();

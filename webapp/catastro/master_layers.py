@@ -545,9 +545,9 @@ def _layer(source_id, key, district, bounds=None, *, original=False, metadata=No
             'placement': placement, 'schema': SCHEMA}
 
 
-def radius(source_id, lat, lng, metres):
+def radius(source_id, lat, lng, metres, layers=''):
     if source_id.startswith('maestro-'):
-        return _master_radius(source_id, lat, lng, metres)
+        return _master_radius(source_id, lat, lng, metres, layers=layers)
     if source_id.startswith('vectores-'):
         return _snapshot_radius(source_id, lat, lng, metres)
     if source_id.startswith('borrador-'):
@@ -558,7 +558,7 @@ def radius(source_id, lat, lng, metres):
     return _radius(source_id, lat, lng, metres)
 
 
-def _master_radius(source_id, lat, lng, metres):
+def _master_radius(source_id, lat, lng, metres, layers=''):
     """Read the current D1 entities for the requested radius."""
     from .master_d1 import D1ReadModel
     meta = _master_metadata(source_id)
@@ -570,11 +570,27 @@ def _master_radius(source_id, lat, lng, metres):
         'block': 'COD_MZNA',
         'lot': 'COD_LOTE',
     }
+    selected = {
+        value.strip() for value in str(layers or '').split(',')
+        if value.strip()
+    }
+    if selected - {'lotes', 'manzanas', 'vias'}:
+        raise ValueError('Capa de radio no válida.')
     result = {}
     for key, label, kind in (
             ('lotes', 'lots', 'lote'),
             ('manzanas', 'blocks', 'manzana'),
             ('vias', 'roads', 'via')):
+        if selected and key not in selected:
+            result[label] = {
+                'type': 'FeatureCollection',
+                'features': [],
+                'total': 0,
+                'source_total': int(
+                    meta.get('layers', {}).get(key, {}).get('count') or 0),
+                'complete': True,
+            }
+            continue
         data = model.radius(meta['ubigeo'], lat, lng, metres, kind=kind)
         features = []
         for feature in data['features']:
