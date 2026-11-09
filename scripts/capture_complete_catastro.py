@@ -408,6 +408,7 @@ def capture_formalization_details(district, report):
     try:
         imported = migrate_formalization_details(
             Gateway(), district, metadata['name'], lots,
+            batch_size=5,
             actor='carga-completa-catastro-maestro')
         item['d1_import'] = {
             'available': imported.get('available', 0),
