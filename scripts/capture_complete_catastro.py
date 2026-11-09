@@ -509,24 +509,61 @@ def main():
         daemon=False,
     )
     formalization.start()
+    state = State()
+    try:
+        for row in state.db.execute(
+                "SELECT id FROM jobs WHERE status IN ('queued','running')"):
+            state.update_job(
+                row['id'], status='stopped',
+                message='Reanudado por la captura completa del catastro.')
+    finally:
+        state.close()
     districts = sorted(DISTRICTS)
     retry = list(districts)
     for attempt in range(4):
         retry_next = []
         for district in retry:
-            completed = capture_gallery_district(
-                district, report, retry_missing=attempt > 0)
-            if INCREMENTAL_FAILED.get(district):
-                report['d1_import_failures'].append({
-                    'ubigeo': district,
-                    'lots': sorted(INCREMENTAL_FAILED[district]),
-                    'error': 'Manifiestos R2 faltantes; lotes marcados para recaptura.',
-                })
-            import_gallery_district(
-                district, report,
-                skip=INCREMENTAL_IMPORTED.get(district, ()))
-            if not completed:
-                retry_next.append(district)
+            local_attempt = 0
+            previous_remaining = None
+            stalled = 0
+            while True:
+                completed = capture_gallery_district(
+                    district, report,
+                    retry_missing=attempt > 0 or local_attempt > 0)
+                if INCREMENTAL_FAILED.get(district):
+                    report['d1_import_failures'].append({
+                        'ubigeo': district,
+                        'lots': sorted(INCREMENTAL_FAILED[district]),
+                        'error': (
+                            'Manifiestos R2 faltantes; '
+                            'lotes marcados para recaptura.'),
+                    })
+                import_gallery_district(
+                    district, report,
+                    skip=INCREMENTAL_IMPORTED.get(district, ()))
+                if completed:
+                    break
+                latest = next(
+                    (value for value in reversed(report['gallery_results'])
+                     if value.get('ubigeo') == district),
+                    None)
+                remaining = int(
+                    (latest or {}).get('result', {}).get(
+                        'remaining_objects', previous_remaining or 0))
+                if previous_remaining is not None and remaining >= previous_remaining:
+                    stalled += 1
+                else:
+                    stalled = 0
+                previous_remaining = remaining
+                if stalled >= 5:
+                    retry_next.append(district)
+                    break
+                local_attempt += 1
+                delay = min(30 * local_attempt, 180)
+                print(
+                    'GALLERY_RESUME', district, local_attempt,
+                    'remaining', remaining, 'wait', delay, flush=True)
+                time.sleep(delay)
         retry = retry_next
         if not retry:
             break
