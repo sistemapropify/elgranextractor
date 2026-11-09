@@ -118,10 +118,12 @@ def capture_gallery_district(district, report, retry_missing=False):
                 state.close()
             pending = [lot_id for lot_id in available
                        if lot_id not in imported]
-            for offset in range(0, len(pending), 5):
+            offset = 0
+            batch_size = 5
+            while offset < len(pending):
                 if stop_import.is_set():
                     return
-                chunk = pending[offset:offset + 5]
+                chunk = pending[offset:offset + batch_size]
                 try:
                     migrate_manifests_direct(
                         gateway, district, metadata['name'], chunk,
@@ -152,18 +154,31 @@ def capture_gallery_district(district, report, retry_missing=False):
                         finally:
                             state.close()
                         failed.update(missing)
+                        pending = [
+                            lot_id for lot_id in pending
+                            if lot_id not in set(missing)
+                        ]
+                        continue
+                    if 'excede los límites' in str(error) and batch_size > 1:
+                        batch_size = max(1, batch_size // 2)
+                        continue
+                    offset += len(chunk)
                     continue
                 except Conflict as error:
                     print(
                         'IMPORT_INCREMENTAL_RETRY', district,
                         type(error).__name__, str(error), flush=True)
+                    time.sleep(2)
                     continue
                 except Exception as error:
                     print(
                         'IMPORT_INCREMENTAL_ERROR', district,
                         type(error).__name__, str(error), flush=True)
+                    offset += len(chunk)
                     continue
                 imported.update(chunk)
+                offset += len(chunk)
+                batch_size = 5
                 print(
                     'IMPORT_INCREMENTAL', district, len(imported),
                     len(available), flush=True)
