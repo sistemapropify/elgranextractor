@@ -59,7 +59,11 @@ def _detail_fields(detail):
     fields = {}
     for source, target in mapping:
         value = detail.get(source)
-        if value in (None, ''):
+        if value is None:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+        if value == '':
             continue
         if target in (
                 'land_area', 'front', 'right', 'left', 'back'):
@@ -71,6 +75,12 @@ def _detail_fields(detail):
         except ValueError:
             continue
     return fields
+
+
+def _blank(value):
+    return value is None or (
+        isinstance(value, str) and not value.strip()
+    )
 
 
 def _boundary_rows(detail, entity_id, version_id, observed_at):
@@ -336,8 +346,12 @@ def migrate_formalization_details(gateway, ubigeo, district, lots, cloud=None,
         attribute_rows = []
         for entity_id in entity_ids:
             row = current_by_entity.get(entity_id, {'entity_id': entity_id})
+            row = {
+                column: (None if _blank(value) else value)
+                for column, value in row.items()
+            }
             for field, value in updates[entity_id].items():
-                if row.get(field) in (None, ''):
+                if _blank(row.get(field)):
                     row[field] = value
             attribute_rows.append([
                 row.get(column) for column in CURRENT_ATTRIBUTE_COLUMNS

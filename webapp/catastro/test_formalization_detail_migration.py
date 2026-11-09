@@ -19,12 +19,18 @@ class FormalizationDetailMigrationTests(SimpleTestCase):
             'PM_LTEDER': '9.5',
             'PM_LTEIZQ': '9.38',
             'PM_LTEFON': '14.55',
+            'EDI_PISO': ' ',
+            'EDI_DPTO': ' ',
+            'FECHA_TITULO': ' ',
         })
         self.assertEqual(fields['land_area'], 139.71)
         self.assertEqual(fields['front'], 15.32)
         self.assertEqual(fields['right'], 9.5)
         self.assertEqual(fields['left'], 9.38)
         self.assertEqual(fields['back'], 14.55)
+        self.assertNotIn('floor', fields)
+        self.assertNotIn('unit', fields)
+        self.assertNotIn('property_registration_date', fields)
 
     def test_boundary_segments_preserve_labels_and_multi_part_measures(self):
         rows = _boundary_rows({
