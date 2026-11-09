@@ -1313,7 +1313,7 @@ function inicializarBuscadorDirecciones() {
     }
 
     // --- Geocoding function (fallback + búsqueda manual) ---
-    function geocodeAddress(query) {
+    function geocodeAddress(query, autoSearch=false) {
         if (!query || query.trim() === '') return;
         
         const geocoder = new google.maps.Geocoder();
@@ -1339,6 +1339,7 @@ function inicializarBuscadorDirecciones() {
                 colocarMarcadorPrincipal(location);
                 
                 searchInput.blur();
+                if(autoSearch)setTimeout(()=>buscarComparables(),250);
             } else {
                 console.warn('Geocoder no encontró resultados para:', fullQuery, status);
                 mostrarToast('warning', 'No se encontró la dirección. Intenta con otro término (ej: "Cayma", "Yanahuara", "Plaza de Armas Arequipa").');
@@ -1352,8 +1353,9 @@ function inicializarBuscadorDirecciones() {
             acmMap.setCenter(location);
             acmMap.setZoom(16);
             colocarMarcadorPrincipal(location);
+            setTimeout(()=>buscarComparables(),250);
         },
-        onAddress:geocodeAddress,
+        onAddress:query=>geocodeAddress(query,true),
         onStatus:(text,error=false)=>mostrarToast(error?'warning':'info',text),
         csrf:getCSRFToken(),
     });

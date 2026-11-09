@@ -155,8 +155,9 @@
     clearResult('Parámetros modificados: vuelve a buscar.');$('cmp-warnings').replaceChildren();$('cmp-status').textContent='Listo para una nueva búsqueda.';$('cmp-search').disabled=false;
   }
   function setLocation(lat,lng){if(locationLocked)return;form.elements.lat.value=lat.toFixed(7);form.elements.lng.value=lng.toFixed(7);invalidate();if(map)map.panTo({lat,lng});if(window.ACMZona)window.ACMZona.actualizar(lat,lng);document.dispatchEvent(new CustomEvent('acm:target-location',{detail:{lat,lng}}));}
+  function searchAfterLocation(){setTimeout(()=>{if(!searching&&!locationLocked&&permissions.calculate&&form.elements.lat.value&&form.elements.lng.value)form.requestSubmit();},250);}
   function locationStatus(text,error=false){const node=$('cmp-location-status');if(!node)return;node.textContent=text||'';node.hidden=!text;node.dataset.error=String(error);}
-  function geocodeAddress(query){
+  function geocodeAddress(query,autoSearch=false){
     const value=String(query||'').trim();if(!value)return;
     if(!window.google?.maps?.Geocoder){locationStatus('Google Maps no está disponible; ingresa latitud y longitud.',true);return;}
     locationStatus('Buscando la dirección…');
@@ -167,6 +168,7 @@
       setLocation(location.lat(),location.lng());
       if(place.geometry.viewport)map.fitBounds(place.geometry.viewport);else{map.setZoom(16);map.panTo(location);}
       locationStatus('Dirección localizada.');
+      if(autoSearch)searchAfterLocation();
     });
   }
   function hideGoogleGestureHint(){
@@ -187,8 +189,8 @@
     const auto=new google.maps.places.Autocomplete($('cmp-address'),{fields:['geometry','formatted_address'],componentRestrictions:{country:'pe'}});
     auto.addListener('place_changed',()=>{const place=auto.getPlace();if(place.geometry){if(place.formatted_address)$('cmp-address').value=place.formatted_address;setLocation(place.geometry.location.lat(),place.geometry.location.lng());map.setZoom(16);locationStatus('Dirección localizada.');}});
     window.ACMLocationLink?.install($('cmp-address'),{
-      onLocation:(lat,lng)=>{setLocation(lat,lng);map.setZoom(16);},
-      onAddress:geocodeAddress,
+      onLocation:(lat,lng)=>{setLocation(lat,lng);map.setZoom(16);searchAfterLocation();},
+      onAddress:query=>geocodeAddress(query,true),
       onStatus:locationStatus,
       csrf:form.elements.csrfmiddlewaretoken.value,
     });
