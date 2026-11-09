@@ -12,6 +12,7 @@ from catastro.pdf_fields import extract_page
 from catastro.registry import normalize
 from catastro.report_fields import extract_report
 from catastro.state import State
+from catastro.storage import StorageError
 from scrapi.geollaqta_scraper import (
     collect,
     CollectionError,
@@ -67,6 +68,8 @@ class FakeR2:
         self.objects[key] = (body, mime)
 
     def get(self, key):
+        if key not in self.objects:
+            raise StorageError('R2 respondió HTTP 404.', 404)
         return self.objects[key][0], {}
 
 
@@ -267,6 +270,24 @@ class CollectorTests(unittest.TestCase):
             self.assertTrue(result['complete'])
             self.assertEqual(len(source.gets),get_count+1)
             self.assertFalse((Path(tmp)/'040117'/LOT).exists())
+
+    def test_missing_remote_manifest_is_rebuilt_from_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = State(tmp)
+            state.save_lot(
+                LOT, '040117', object_id=1, status='failed', uploaded=1,
+                error='R2 manifest missing')
+            state.close()
+            source = FakeSource()
+            source.missing = False
+            result = collect(
+                '040117', lot_id=LOT, root=tmp, source=source,
+                r2=FakeR2())
+            self.assertEqual(result['uploaded'], 1)
+            self.assertTrue(result['complete'])
+            state = State(tmp)
+            self.assertEqual(state.lot(LOT)['status'], 'complete')
+            state.close()
 
     def test_r2_working_copy_cleanup_preserves_existing_review_files(self):
         with tempfile.TemporaryDirectory() as tmp:

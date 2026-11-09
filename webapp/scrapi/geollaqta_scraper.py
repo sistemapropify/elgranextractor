@@ -230,8 +230,16 @@ def _archive_lot(feature, ubigeo, state, source, r2, upload, keep_local, checkpo
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
     elif stored_lot and stored_lot['uploaded'] and upload:
-        body, _ = r2.get('geollaqta/' + ubigeo + '/' + code + '/datos.json')
-        manifest = json.loads(body)
+        try:
+            body, _ = r2.get(
+                'geollaqta/' + ubigeo + '/' + code + '/datos.json')
+            manifest = json.loads(body)
+        except StorageError as error:
+            if error.http_status != 404:
+                raise
+            # The ledger can outlive a damaged or deleted remote manifest.
+            # Rebuild it through the normal source-to-R2 path.
+            manifest = {}
     else:
         manifest = {}
     prior = {a['filename']: a for a in manifest.get('artifacts', [])}
