@@ -21,6 +21,15 @@ os.environ.setdefault('CATASTRO_REQUEST_INTERVAL', '0.05')
 os.environ.setdefault('CATASTRO_MAX_WORKERS', '30')
 sys.path.insert(0, str(ROOT / 'webapp'))
 
+from django.conf import settings
+
+if not settings.configured:
+    settings.configure(CACHES={
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        },
+    })
+
 from catastro import cofopri_vector_migration, geollaqta_bulk, vector_snapshots
 from catastro.formalization_detail_migration import (
     migrate_formalization_details,
@@ -36,6 +45,7 @@ from cuadrantizacion.geollaqta import DISTRICTS
 
 INCREMENTAL_IMPORTED = {}
 INCREMENTAL_FAILED = {}
+REPORT_LOCK = threading.RLock()
 
 
 def seed_existing(district):
@@ -84,10 +94,11 @@ def pcdpi_districts():
 
 
 def write_report(report):
-    (WORK / 'captura_completa_resultado.json').write_text(
-        json.dumps(report, ensure_ascii=False, indent=2),
-        encoding='utf-8',
-    )
+    with REPORT_LOCK:
+        (WORK / 'captura_completa_resultado.json').write_text(
+            json.dumps(report, ensure_ascii=False, indent=2),
+            encoding='utf-8',
+        )
 
 
 def capture_gallery_district(district, report, retry_missing=False):
@@ -393,6 +404,22 @@ def capture_formalization_details(district, report):
     print('FORMAL_DONE', district, json.dumps(item), flush=True)
 
 
+def capture_all_formalization(report):
+    for district in sorted(DISTRICTS):
+        try:
+            capture_formalization_details(district, report)
+        except Exception as error:
+            report['formalization_detail_failures'].append({
+                'ubigeo': district,
+                'district': DISTRICTS[district]['name'],
+                'error': str(error),
+            })
+            print(
+                'FORMAL_DISTRICT_ERROR', district,
+                type(error).__name__, str(error), flush=True)
+            write_report(report)
+
+
 def main():
     report = {
         'started_at': int(time.time()),
@@ -403,6 +430,13 @@ def main():
         'formalization_results': [],
         'formalization_detail_failures': [],
     }
+    formalization = threading.Thread(
+        target=capture_all_formalization,
+        args=(report,),
+        name='catastro-formalizacion',
+        daemon=False,
+    )
+    formalization.start()
     districts = sorted(DISTRICTS)
     retry = list(districts)
     for attempt in range(4):
@@ -429,8 +463,7 @@ def main():
             flush=True,
         )
         time.sleep(min(30 * (attempt + 1), 120))
-    for district in sorted(DISTRICTS):
-        capture_formalization_details(district, report)
+    formalization.join()
     report['finished_at'] = int(time.time())
     write_report(report)
     print(
