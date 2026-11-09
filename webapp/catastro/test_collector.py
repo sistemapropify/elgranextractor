@@ -12,7 +12,14 @@ from catastro.pdf_fields import extract_page
 from catastro.registry import normalize
 from catastro.report_fields import extract_report
 from catastro.state import State
-from scrapi.geollaqta_scraper import collect, CollectionError, GalleryLinks, validate, Stopped
+from scrapi.geollaqta_scraper import (
+    collect,
+    CollectionError,
+    GalleryLinks,
+    pdf_pages,
+    validate,
+    Stopped,
+)
 
 LOT = '04011713059004'
 BASE = 'https://catastro.cofopri.gob.pe/geollaqta/reportefichas/vistapdf/'
@@ -64,6 +71,11 @@ class FakeR2:
 
 
 class CollectorTests(unittest.TestCase):
+    def test_pdf_extraction_does_not_scan_unused_layout_tables(self):
+        pages = pdf_pages(pdf())
+        self.assertEqual(pages[0]['text'], 'Documento original de prueba')
+        self.assertNotIn('tables', pages[0])
+
     def test_geometry_identity_tolerates_source_whitespace_but_rejects_mismatch(self):
         manifest = {'lot_id': LOT, 'district_ubigeo': '040117',
                     'feature': {'attributes': {'ID_LOTE': ' '+LOT+' ', 'ID_DIST': ' 040117 '},

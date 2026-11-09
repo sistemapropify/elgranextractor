@@ -188,13 +188,13 @@ def pdf_pages(data):
         from catastro.pdf_fields import extract_page
         with fitz.open(stream=data, filetype='pdf') as doc:
             return [{'number': i + 1, 'text': page.get_text(sort=True),
-                     'tables': [table.extract() for table in page.find_tables().tables], **extract_page(page)}
+                     **extract_page(page)}
                     for i, page in enumerate(doc)]
     except ImportError:
         import io
         import pdfplumber
         with pdfplumber.open(io.BytesIO(data)) as doc:
-            return [{'number': i + 1, 'text': page.extract_text() or '', 'tables': page.extract_tables()}
+            return [{'number': i + 1, 'text': page.extract_text() or ''}
                     for i, page in enumerate(doc.pages)]
 
 
