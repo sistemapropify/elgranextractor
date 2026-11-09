@@ -406,19 +406,58 @@ def capture_formalization_details(district, report):
         'seconds': round(time.monotonic() - started, 1),
     }
     report['formalization_results'].append(item)
-    try:
-        imported = migrate_formalization_details(
-            Gateway(), district, metadata['name'], lots,
-            batch_size=5,
-            actor='carga-completa-catastro-maestro')
-        item['d1_import'] = {
-            'available': imported.get('available', 0),
-            'processed': imported.get('processed', 0),
-        }
-    except Exception as error:
-        item['d1_import_error'] = str(error)
+    import_formalization_to_d1(district, lots, item)
     write_report(report)
     print('FORMAL_DONE', district, json.dumps(item), flush=True)
+
+
+def import_formalization_to_d1(district, lots, item):
+    metadata = DISTRICTS[district]
+    last_error = None
+    for attempt in range(5):
+        try:
+            imported = migrate_formalization_details(
+                Gateway(), district, metadata['name'], lots,
+                batch_size=5,
+                actor='carga-completa-catastro-maestro')
+            item['d1_import'] = {
+                'available': imported.get('available', 0),
+                'processed': imported.get('processed', 0),
+            }
+            item.pop('d1_import_error', None)
+            return
+        except Exception as error:
+            last_error = error
+            if attempt == 4:
+                break
+            delay = 30 * (2 ** attempt)
+            print(
+                'FORMAL_IMPORT_RETRY', district, attempt + 1,
+                type(error).__name__, str(error),
+                'wait', delay, flush=True)
+            time.sleep(delay)
+    item['d1_import_error'] = str(last_error)
+    print(
+        'FORMAL_IMPORT_ERROR', district,
+        type(last_error).__name__, str(last_error), flush=True)
+
+
+def retry_formalization_imports(report):
+    failed_districts = {
+        item['ubigeo'] for item in report['formalization_results']
+        if item.get('d1_import_error')
+    }
+    for district in sorted(failed_districts):
+        item = next(
+            value for value in report['formalization_results']
+            if value['ubigeo'] == district)
+        try:
+            lots = cofopri_vector_migration.merged_formalization_lots(
+                district)
+            import_formalization_to_d1(district, lots, item)
+        except Exception as error:
+            item['d1_import_error'] = str(error)
+        write_report(report)
 
 
 def capture_all_formalization(report):
@@ -435,6 +474,7 @@ def capture_all_formalization(report):
                 'FORMAL_DISTRICT_ERROR', district,
                 type(error).__name__, str(error), flush=True)
             write_report(report)
+    retry_formalization_imports(report)
 
 
 def main():
