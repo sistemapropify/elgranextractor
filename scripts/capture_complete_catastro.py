@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,8 @@ from catastro.master_store import Conflict
 from catastro.state import State
 from catastro.storage import StorageError
 from cuadrantizacion.geollaqta import DISTRICTS
+
+INCREMENTAL_IMPORTED = {}
 
 
 def seed_existing(district):
@@ -87,6 +90,57 @@ def write_report(report):
 def capture_gallery_district(district, report, retry_missing=False):
     metadata = DISTRICTS[district]
     started = time.monotonic()
+    imported = INCREMENTAL_IMPORTED.setdefault(district, set())
+    imported.clear()
+    stop_import = threading.Event()
+
+    def import_while_capturing():
+        gateway = Gateway()
+        while not stop_import.wait(15):
+            state = State()
+            try:
+                available = [
+                    row['lot_id'] for row in state.db.execute(
+                        '''SELECT lot_id FROM lots
+                           WHERE ubigeo=? AND uploaded=1
+                             AND status IN ('complete','partial')
+                           ORDER BY lot_id''',
+                        (district,),
+                    )
+                ]
+            finally:
+                state.close()
+            pending = [lot_id for lot_id in available
+                       if lot_id not in imported]
+            for offset in range(0, len(pending), 5):
+                if stop_import.is_set():
+                    return
+                chunk = pending[offset:offset + 5]
+                try:
+                    migrate_manifests_direct(
+                        gateway, district, metadata['name'], chunk,
+                        actor='carga-completa-catastro-maestro')
+                except (Conflict, StorageError) as error:
+                    print(
+                        'IMPORT_INCREMENTAL_RETRY', district,
+                        type(error).__name__, str(error), flush=True)
+                    continue
+                except Exception as error:
+                    print(
+                        'IMPORT_INCREMENTAL_ERROR', district,
+                        type(error).__name__, str(error), flush=True)
+                    continue
+                imported.update(chunk)
+                print(
+                    'IMPORT_INCREMENTAL', district, len(imported),
+                    len(available), flush=True)
+
+    importer = threading.Thread(
+        target=import_while_capturing,
+        name='catastro-d1-' + district,
+        daemon=True,
+    )
+    importer.start()
     print('GALLERY_START', district, metadata['name'], flush=True)
     try:
         archived, truncated = seed_existing(district)
@@ -132,6 +186,8 @@ def capture_gallery_district(district, report, retry_missing=False):
             flush=True,
         )
     finally:
+        stop_import.set()
+        importer.join(timeout=120)
         write_report(report)
     return bool(
         report['gallery_results']
@@ -142,7 +198,7 @@ def capture_gallery_district(district, report, retry_missing=False):
     )
 
 
-def import_gallery_district(district, report):
+def import_gallery_district(district, report, skip=()):
     """Normalize every successfully archived manifest from one district into D1."""
     metadata = DISTRICTS[district]
     state = State()
@@ -158,7 +214,11 @@ def import_gallery_district(district, report):
         ]
     finally:
         state.close()
-    print('IMPORT_START', district, len(lots), flush=True)
+    skipped = set(skip)
+    lots = [lot_id for lot_id in lots if lot_id not in skipped]
+    print(
+        'IMPORT_START', district, len(lots),
+        'incremental', len(skipped), flush=True)
     imported = failed = 0
     gateway = Gateway()
     offset = 0
@@ -203,6 +263,7 @@ def import_gallery_district(district, report):
         'ubigeo': district,
         'district': metadata['name'],
         'available': len(lots),
+        'already_imported_incrementally': len(skipped),
         'imported': imported,
         'failed': failed,
     }
@@ -300,7 +361,9 @@ def main():
         for district in retry:
             completed = capture_gallery_district(
                 district, report, retry_missing=attempt > 0)
-            import_gallery_district(district, report)
+            import_gallery_district(
+                district, report,
+                skip=INCREMENTAL_IMPORTED.get(district, ()))
             if not completed:
                 retry_next.append(district)
         retry = retry_next
