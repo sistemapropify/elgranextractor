@@ -388,7 +388,10 @@ def collect(ubigeo, max_lotes=None, lot_id=None, retry_missing=False, upload=Tru
         )
     keep_local = keep_local or not upload
     summary = {'ubigeo': ubigeo, 'processed': 0, 'uploaded': 0, 'partial': 0,
-               'failed': 0, 'skipped': 0, 'complete': False, 'stop_reason': 'batch_limit', 'scope': 'lot' if lot_id else 'district'}
+               'failed': 0, 'skipped': 0, 'complete': False,
+               'stop_reason': 'batch_limit',
+               'scope': 'lot' if lot_id else 'district',
+               'fatal_errors': [], 'last_error': ''}
     disk_bytes = sum(p.stat().st_size for p in state.root.rglob('*') if p.is_file()) if budget is not None else 0
 
     def event(message):
@@ -464,6 +467,8 @@ def collect(ubigeo, max_lotes=None, lot_id=None, retry_missing=False, upload=Tru
             if result['fatal']:
                 message += '; ' + result['fatal']
                 summary['stop_reason'] = 'source_or_storage_error'
+                summary['last_error'] = result['fatal']
+                summary['fatal_errors'].append(result['fatal'])
             if notify:
                 event(message)
         seen = set()

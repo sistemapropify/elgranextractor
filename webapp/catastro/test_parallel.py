@@ -158,7 +158,7 @@ class ParallelCollectorTests(unittest.TestCase):
             self.assertFalse(result['complete'])
 
     def test_invalid_worker_counts_are_rejected_before_opening_a_ledger(self):
-        for value in (0, 51, -1, True, 2.5, 'bad'):
+        for value in (0, 31, -1, True, 2.5, 'bad'):
             with self.subTest(value=value), patch('scrapi.geollaqta_scraper.State') as state:
                 with self.assertRaises(ValueError):
                     collect('040117', workers=value)
