@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import threading
 import time
@@ -34,6 +35,7 @@ from catastro.storage import StorageError
 from cuadrantizacion.geollaqta import DISTRICTS
 
 INCREMENTAL_IMPORTED = {}
+INCREMENTAL_FAILED = {}
 
 
 def seed_existing(district):
@@ -93,6 +95,8 @@ def capture_gallery_district(district, report, retry_missing=False):
     started = time.monotonic()
     imported = INCREMENTAL_IMPORTED.setdefault(district, set())
     imported.clear()
+    failed = INCREMENTAL_FAILED.setdefault(district, set())
+    failed.clear()
     stop_import = threading.Event()
 
     def import_while_capturing():
@@ -122,7 +126,34 @@ def capture_gallery_district(district, report, retry_missing=False):
                     migrate_manifests_direct(
                         gateway, district, metadata['name'], chunk,
                         actor='carga-completa-catastro-maestro')
-                except (Conflict, StorageError) as error:
+                except StorageError as error:
+                    print(
+                        'IMPORT_INCREMENTAL_RETRY', district,
+                        type(error).__name__, str(error), flush=True)
+                    if error.http_status == 404:
+                        match = re.search(
+                            r'Lote\s+([A-Za-z0-9-]+):', str(error))
+                        missing = [match.group(1)] if match else chunk
+                        state = State()
+                        try:
+                            for lot_id in missing:
+                                stored = state.lot(lot_id)
+                                if stored:
+                                    state.save_lot(
+                                        lot_id, district,
+                                        object_id=stored['object_id'],
+                                        status='failed',
+                                        uploaded=0,
+                                        missing=0,
+                                        reports=0,
+                                        photos=0,
+                                        error='Manifiesto R2 faltante; recapturar.',
+                                    )
+                        finally:
+                            state.close()
+                        failed.update(missing)
+                    continue
+                except Conflict as error:
                     print(
                         'IMPORT_INCREMENTAL_RETRY', district,
                         type(error).__name__, str(error), flush=True)
@@ -197,6 +228,7 @@ def capture_gallery_district(district, report, retry_missing=False):
         and not report['gallery_results'][-1]['result'].get('failed')
         and not report['gallery_results'][-1]['result'].get('partial')
         and not report['gallery_results'][-1]['result'].get('remaining_objects')
+        and not INCREMENTAL_FAILED.get(district)
     )
 
 
@@ -363,6 +395,12 @@ def main():
         for district in retry:
             completed = capture_gallery_district(
                 district, report, retry_missing=attempt > 0)
+            if INCREMENTAL_FAILED.get(district):
+                report['d1_import_failures'].append({
+                    'ubigeo': district,
+                    'lots': sorted(INCREMENTAL_FAILED[district]),
+                    'error': 'Manifiestos R2 faltantes; lotes marcados para recaptura.',
+                })
             import_gallery_district(
                 district, report,
                 skip=INCREMENTAL_IMPORTED.get(district, ()))
