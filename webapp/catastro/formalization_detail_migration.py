@@ -5,6 +5,7 @@ import hashlib
 import json
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 from . import master_contract
 from . import master_store
@@ -123,7 +124,6 @@ def _registral_rows(detail, entity_id, version_id, observed_at):
 
 
 def _read_details(ubigeo, source, lots, cloud):
-    values = []
     lots_by_predio = {
         str((lot.get('properties') or {}).get('ID_PREDIO_RPU')
             or lot.get('id') or ''): lot
@@ -131,6 +131,7 @@ def _read_details(ubigeo, source, lots, cloud):
     }
     prefix = ('geollaqta/formalizacion/' + ubigeo + '/' + source + '/')
     listed = cloud.list_objects(prefix, max_pages=100)
+    pending = []
     for item in listed['objects']:
         key = item['key']
         filename = key.rsplit('/', 1)[-1]
@@ -138,17 +139,28 @@ def _read_details(ubigeo, source, lots, cloud):
         lot = lots_by_predio.get(predio)
         if lot is None:
             continue
+        pending.append((lot, predio, key))
+
+    def read(item):
+        lot, predio, key = item
         try:
             body, _ = cloud.get_manifest(key)
-        except StorageError as error:
+        except StorageError:
             raise
         detail = json.loads(body)
         if (detail.get('ID_PREDIO_RPU') != predio
                 or detail.get('source') != source
                 or detail.get('FORMALIZATION_DETAIL_STATUS') != 'available'):
-            continue
-        values.append((lot, detail, key, hashlib.sha256(body).hexdigest()))
-    return values
+            return None
+        return (lot, detail, key, hashlib.sha256(body).hexdigest())
+
+    with ThreadPoolExecutor(
+            max_workers=max(1, min(20, len(pending))),
+            thread_name_prefix='formalizacion-r2') as pool:
+        return [
+            value for value in pool.map(read, pending)
+            if value is not None
+        ]
 
 
 def migrate_formalization_details(gateway, ubigeo, district, lots, cloud=None,
