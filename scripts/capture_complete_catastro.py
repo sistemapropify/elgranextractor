@@ -24,6 +24,8 @@ from catastro.formalization_detail_migration import (
 )
 from catastro.jobs import run_job, start_job
 from catastro.master_d1 import Gateway
+from catastro.manifest_migration import migrate_manifests_direct
+from catastro.master_store import Conflict
 from catastro.state import State
 from catastro.storage import StorageError
 from cuadrantizacion.geollaqta import DISTRICTS
@@ -52,11 +54,15 @@ def seed_existing(district):
                 lot_id,
                 district,
                 object_id=object_by_lot.get(lot_id),
-                status='complete',
+                # A prefix proves that something was uploaded, not that the
+                # lot is complete. Verify it through the normal collector
+                # before excluding it from the migration.
+                status='failed',
                 uploaded=1,
                 missing=0,
                 reports=0,
                 photos=0,
+                error='Archivo R2 pendiente de verificación y normalización.',
             )
     finally:
         state.close()
@@ -77,7 +83,7 @@ def write_report(report):
     )
 
 
-def capture_gallery_district(district, report):
+def capture_gallery_district(district, report, retry_missing=False):
     metadata = DISTRICTS[district]
     started = time.monotonic()
     print('GALLERY_START', district, metadata['name'], flush=True)
@@ -97,6 +103,7 @@ def capture_gallery_district(district, report):
         job_id = start_job(
             district,
             launch=False,
+            retry_missing=retry_missing,
             workers=int(os.environ['CATASTRO_MAX_WORKERS']),
         )
         result = run_job(job_id)
@@ -123,9 +130,85 @@ def capture_gallery_district(district, report):
             'GALLERY_ERROR', district, type(error).__name__, str(error),
             flush=True,
         )
-        raise
     finally:
         write_report(report)
+    return bool(
+        report['gallery_results']
+        and report['gallery_results'][-1].get('ubigeo') == district
+        and not report['gallery_results'][-1]['result'].get('failed')
+        and not report['gallery_results'][-1]['result'].get('partial')
+        and not report['gallery_results'][-1]['result'].get('remaining_objects')
+    )
+
+
+def import_gallery_district(district, report):
+    """Normalize every successfully archived manifest from one district into D1."""
+    metadata = DISTRICTS[district]
+    state = State()
+    try:
+        lots = [
+            row['lot_id'] for row in state.db.execute(
+                '''SELECT lot_id FROM lots
+                   WHERE ubigeo=? AND uploaded=1
+                     AND status IN ('complete','partial')
+                   ORDER BY lot_id''',
+                (district,),
+            )
+        ]
+    finally:
+        state.close()
+    print('IMPORT_START', district, len(lots), flush=True)
+    imported = failed = 0
+    gateway = Gateway()
+    offset = 0
+    batch_size = 5
+    while offset < len(lots):
+        chunk = lots[offset:offset + batch_size]
+        try:
+            migrate_manifests_direct(
+                gateway, district, metadata['name'], chunk,
+                actor='carga-completa-catastro-maestro')
+            imported += len(chunk)
+            offset += len(chunk)
+            batch_size = 5
+        except Conflict:
+            time.sleep(3)
+            continue
+        except StorageError as error:
+            if 'excede los límites' in str(error) and batch_size > 1:
+                batch_size = max(1, batch_size // 2)
+                continue
+            failed += len(chunk)
+            report['d1_import_failures'].append({
+                'ubigeo': district,
+                'lots': chunk,
+                'error': str(error),
+            })
+            offset += len(chunk)
+        except Exception as error:
+            failed += len(chunk)
+            report['d1_import_failures'].append({
+                'ubigeo': district,
+                'lots': chunk,
+                'error': str(error),
+            })
+            offset += len(chunk)
+        if offset % 500 == 0 or offset >= len(lots):
+            print(
+                'IMPORT_PROGRESS', district, offset, len(lots),
+                'failed', failed, flush=True)
+            write_report(report)
+    item = {
+        'ubigeo': district,
+        'district': metadata['name'],
+        'available': len(lots),
+        'imported': imported,
+        'failed': failed,
+    }
+    report['d1_import_results'].append(item)
+    print('IMPORT_DONE', district, json.dumps(item, ensure_ascii=False),
+          flush=True)
+    write_report(report)
 
 
 def capture_formalization_details(district, report):
@@ -204,11 +287,29 @@ def main():
         'started_at': int(time.time()),
         'gallery_results': [],
         'gallery_failures': [],
+        'd1_import_results': [],
+        'd1_import_failures': [],
         'formalization_results': [],
         'formalization_detail_failures': [],
     }
-    for district in pcdpi_districts():
-        capture_gallery_district(district, report)
+    districts = sorted(DISTRICTS)
+    retry = list(districts)
+    for attempt in range(4):
+        retry_next = []
+        for district in retry:
+            completed = capture_gallery_district(
+                district, report, retry_missing=attempt > 0)
+            import_gallery_district(district, report)
+            if not completed:
+                retry_next.append(district)
+        retry = retry_next
+        if not retry:
+            break
+        print(
+            'GALLERY_RETRY_PASS', attempt + 2, len(retry), retry,
+            flush=True,
+        )
+        time.sleep(min(30 * (attempt + 1), 120))
     for district in sorted(DISTRICTS):
         capture_formalization_details(district, report)
     report['finished_at'] = int(time.time())
@@ -218,6 +319,8 @@ def main():
         json.dumps({
             'gallery_districts': len(report['gallery_results']),
             'gallery_failures': len(report['gallery_failures']),
+            'd1_import_districts': len(report['d1_import_results']),
+            'd1_import_failures': len(report['d1_import_failures']),
             'formalization_districts': len(report['formalization_results']),
             'formalization_detail_failures':
                 len(report['formalization_detail_failures']),

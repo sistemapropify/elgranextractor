@@ -74,6 +74,41 @@ class CollectorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'geometría no corresponde'):
             normalize(manifest)
 
+    def test_multi_segment_boundaries_are_summed_with_original_evidence(self):
+        record = '0401172013010006147'
+        manifest = {
+            'lot_id': LOT,
+            'district_ubigeo': '040117',
+            'feature': {
+                'attributes': {'ID_LOTE': LOT, 'ID_DIST': '040117'},
+                'geometry': {'rings': []},
+            },
+            'artifacts': [],
+            'reports': [{
+                'record_id': record,
+                'type': 'cadastral_report_pdf',
+                'filename': 'report.pdf',
+                'pages': [{
+                    'number': 1,
+                    'named_fields': [
+                        {'original_label': 'IZQUIERDA',
+                         'label': 'Medida perimétrica · IZQUIERDA',
+                         'value': '78.55-8.25'},
+                        {'original_label': 'FONDO',
+                         'label': 'Medida perimétrica · FONDO',
+                         'value': '6.65-18.10'},
+                    ],
+                }],
+            }],
+        }
+        row = normalize(manifest)[0]
+        self.assertEqual(row['left'], 86.8)
+        self.assertEqual(row['back'], 24.75)
+        self.assertEqual(row['provenance']['left']['segments_m'],
+                         [78.55, 8.25])
+        self.assertEqual(row['provenance']['back']['raw_measure'],
+                         '6.65-18.10')
+
     def test_parser_keeps_names_multiple_forms_and_reports(self):
         parser = GalleryLinks('040117')
         parser.feed(HTML.decode())

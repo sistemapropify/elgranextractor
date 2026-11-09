@@ -121,7 +121,20 @@ class R2:
         maximum = self.DEFAULT_READ_LIMIT if max_bytes is None else int(max_bytes)
         if maximum < 1 or maximum > self.MANIFEST_READ_LIMIT:
             raise StorageError('Límite de lectura de R2 no válido.')
-        data, headers = self.request('GET', key, read_limit=maximum + 1)
+        for attempt in range(3):
+            try:
+                data, headers = self.request(
+                    'GET', key, read_limit=maximum + 1)
+                break
+            except StorageError as exc:
+                transient = (
+                    'conectar' in str(exc)
+                    or any('HTTP ' + code in str(exc)
+                           for code in ('429', '500', '502', '503', '504'))
+                )
+                if not transient or attempt == 2:
+                    raise
+                time.sleep(attempt + 1)
         if len(data) > maximum:
             raise StorageError('El archivo supera el límite de lectura.')
         return data, headers

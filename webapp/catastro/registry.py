@@ -88,6 +88,21 @@ def number(value):
     return result if math.isfinite(result) else None
 
 
+def measurement(value):
+    """Return a single length or the sum of explicit side segments."""
+    raw = str(value or '').strip()
+    parts = [
+        part.strip() for part in re.split(r'\s*(?:-|–|—|;)\s*', raw)
+        if part.strip()
+    ]
+    if len(parts) <= 1:
+        return number(raw), []
+    values = [number(part) for part in parts]
+    if any(item is None for item in values):
+        return None, []
+    return round(sum(values), 4), values
+
+
 def asset_url(lot_id, filename):
     return '/catastro/registros/archivo/' + quote(lot_id, safe='') + '/' + quote(filename, safe='') + '/'
 
@@ -207,8 +222,20 @@ def normalize(manifest):
                 conflicts.append(key)
                 continue
             raw = ' | '.join(values) if key == 'owners' else values[0]
-            row[key] = number(raw) if key in NUMBER_COLUMNS else raw
-            row['provenance'][key] = {k: items[0][1].get(k) for k in ('filename', 'page', 'label')}
+            segments = []
+            if key in ('front', 'back', 'left', 'right'):
+                row[key], segments = measurement(raw)
+            else:
+                row[key] = number(raw) if key in NUMBER_COLUMNS else raw
+            row['provenance'][key] = {
+                k: items[0][1].get(k)
+                for k in ('filename', 'page', 'label')
+            }
+            if segments:
+                row['provenance'][key].update({
+                    'raw_measure': raw,
+                    'segments_m': segments,
+                })
             if key in NUMBER_COLUMNS and row[key] is None:
                 conflicts.append(key)
         row['document_status'] = ('Revisar discrepancias: ' + ', '.join(conflicts) if conflicts else

@@ -6,7 +6,7 @@ import sys
 import time
 
 from .state import State, ROOT
-from .storage import credentials
+from .storage import StorageError, credentials
 from .parallel import worker_count
 from scrapi.geollaqta_scraper import collect, validate, Stopped, CollectionError
 
@@ -35,7 +35,7 @@ def collect_with_recovery(job, state, progress, checkpoint):
                              retry_missing=bool(job['retry_missing']), progress=update,
                              checkpoint=checkpoint, workers=job['workers'])
             reason = str(result.get('last_error') or '')
-        except CollectionError as exc:
+        except (CollectionError, StorageError) as exc:
             reason = str(exc)
             if not _connection_failure(reason) or attempt == 3:
                 raise
