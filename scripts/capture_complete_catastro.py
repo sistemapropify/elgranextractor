@@ -19,7 +19,7 @@ os.environ['CATASTRO_KEEP_LOCAL'] = '0'
 os.environ['CATASTRO_MASTER_COLLECTION_ENABLED'] = '1'
 os.environ['CATASTRO_MASTER_STORAGE'] = 'd1'
 os.environ.setdefault('CATASTRO_REQUEST_INTERVAL', '0.05')
-os.environ.setdefault('CATASTRO_MAX_WORKERS', '30')
+os.environ.setdefault('CATASTRO_MAX_WORKERS', '50')
 sys.path.insert(0, str(ROOT / 'webapp'))
 
 from django.conf import settings

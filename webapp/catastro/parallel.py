@@ -9,13 +9,13 @@ import time
 def worker_count(value=None):
     value = os.environ.get('CATASTRO_MAX_WORKERS', '10') if value is None else value
     if isinstance(value, bool) or not isinstance(value, (int, str)):
-        raise ValueError('Selecciona entre 1 y 30 lotes simultáneos.')
+        raise ValueError('Selecciona entre 1 y 50 lotes simultáneos.')
     try:
         result = int(value)
     except ValueError:
-        raise ValueError('Selecciona entre 1 y 30 lotes simultáneos.') from None
-    if not 1 <= result <= 30:
-        raise ValueError('Selecciona entre 1 y 30 lotes simultáneos.')
+        raise ValueError('Selecciona entre 1 y 50 lotes simultáneos.') from None
+    if not 1 <= result <= 50:
+        raise ValueError('Selecciona entre 1 y 50 lotes simultáneos.')
     return result
 
 
