@@ -24,6 +24,7 @@ from catastro import cofopri_vector_migration, geollaqta_bulk, vector_snapshots
 from catastro.formalization_detail_migration import (
     migrate_formalization_details,
 )
+from catastro.geollaqta_bulk import linked_lot_ids
 from catastro.jobs import run_job, start_job
 from catastro.master_d1 import Gateway
 from catastro.manifest_migration import migrate_manifests_direct
@@ -96,6 +97,7 @@ def capture_gallery_district(district, report, retry_missing=False):
 
     def import_while_capturing():
         gateway = Gateway()
+        imported.update(linked_lot_ids(gateway, district))
         while not stop_import.wait(15):
             state = State()
             try:
