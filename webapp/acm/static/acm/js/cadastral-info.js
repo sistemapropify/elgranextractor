@@ -149,12 +149,18 @@
                 if(uuid){$('master-id').textContent='LOTE-CM-'+uuid.slice(0,12).toUpperCase();$('master-id').title=master.entity_id;}
                 else $('master-id').textContent='Sin vínculo';
             }
-            $('land').textContent=data.land_area==null&&gis.land_area!=null?'Sin dato documental':metric(data.land_area);
-            $('built').textContent=data.built_area==null&&gis.built_area!=null?'Sin dato documental':metric(data.built_area);
+            const landValue=data.land_area!=null?metric(data.land_area):
+                calculated.land_area!=null?metric(calculated.land_area)+' (calculado)':
+                gis.land_area!=null?metric(gis.land_area)+' (SIG)':'Sin dato';
+            const builtValue=data.built_area!=null?metric(data.built_area):
+                gis.built_area!=null?metric(gis.built_area)+' (SIG)':'Sin dato';
+            $('land').textContent=landValue;
+            $('built').textContent=builtValue;
             $('floors').textContent=metric(data.floors??gis.floors);$('units').textContent=metric(data.units??gis.units);
             $('land-gis').textContent=metric(gis.land_area);$('built-gis').textContent=metric(gis.built_area);
             $('land-calculated').textContent=metric(calculated.land_area);
-            $('perimeter').textContent=metric(data.perimeter);
+            $('perimeter').textContent=data.perimeter!=null?metric(data.perimeter):
+                calculated.perimeter!=null?metric(calculated.perimeter)+' (calculado)':'Sin dato';
             $('perimeter-calculated').textContent=metric(calculated.perimeter);
             sides.forEach(k=>$(k).textContent=metric(data.boundaries?.[k]));
             $('report').replaceChildren();
