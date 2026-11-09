@@ -1346,6 +1346,18 @@ function inicializarBuscadorDirecciones() {
         });
     }
 
+    window.ACMLocationLink?.install(searchInput,{
+        onLocation:(lat,lng)=>{
+            const location=new google.maps.LatLng(lat,lng);
+            acmMap.setCenter(location);
+            acmMap.setZoom(16);
+            colocarMarcadorPrincipal(location);
+        },
+        onAddress:geocodeAddress,
+        onStatus:(text,error=false)=>mostrarToast(error?'warning':'info',text),
+        csrf:getCSRFToken(),
+    });
+
     // --- Event Listeners ---
 
     // Botón de búsqueda (Geocoding manual)

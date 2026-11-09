@@ -4,6 +4,7 @@ from . import components_views as views
 urlpatterns = [
     path('analisis/', views.page, name='acm_analisis'),
     path('analisis-pruebas/', views.page, name='acm_analisis_pruebas'),
+    path('ubicacion/resolver/', views.resolve_location, name='acm_resolver_ubicacion'),
     path('componentes/buscar/', views.search, name='componentes_buscar'),
     path('componentes/calcular/', views.recalculate, name='componentes_calcular'),
     path('componentes/explicar/', views.explain_ai, name='componentes_explicar'),

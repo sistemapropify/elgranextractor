@@ -6,6 +6,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as SourceTimeout
 from functools import wraps
 
+import requests
+
 from django.apps import apps
 from django.conf import settings
 from django.core import signing
@@ -21,6 +23,7 @@ from .access_data import issue_snapshot, read_snapshot, project, restore_selecti
 from .history_access import visible_history, attach_authors
 
 from .components_engine import candidates, calculate, parameters, positive, number, SOURCES
+from .location_links import LocationLinkError, resolve_google_maps_link
 
 logger = logging.getLogger(__name__)
 SALT = 'acm-componentes-v1'
@@ -49,6 +52,28 @@ def bounded_propify_rows():
 
 def session_user(request):
     return getattr(request, 'acm_identity', None)
+
+
+@require_POST
+@csrf_protect
+@required('calculate')
+def resolve_location(request):
+    if len(request.body) > 4096:
+        return JsonResponse({'error': 'El enlace enviado es demasiado grande.'}, status=413)
+    try:
+        payload = json.loads(request.body or b'{}')
+    except (TypeError, ValueError, UnicodeError):
+        return JsonResponse({'error': 'El enlace enviado no es válido.'}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({'error': 'El enlace enviado no es válido.'}, status=400)
+    try:
+        return JsonResponse(resolve_google_maps_link(payload.get('url', '')))
+    except LocationLinkError as error:
+        return JsonResponse({'error': str(error)}, status=400)
+    except requests.RequestException:
+        return JsonResponse({
+            'error': 'Google Maps no respondió. Pega el enlace nuevamente.'
+        }, status=502)
 
 
 def authenticated(view):

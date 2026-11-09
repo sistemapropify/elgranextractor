@@ -42,7 +42,8 @@
 
           <div class="form-group">
             <label for="cmp-address">Ubicación</label>
-            <input id="cmp-address" class="form-control" placeholder="Dirección o clic en el mapa" autocomplete="off">
+            <input id="cmp-address" class="form-control" placeholder="Dirección, enlace de Google Maps o arrástralo aquí" autocomplete="off">
+            <p id="cmp-location-status" class="cmp-muted" role="status" aria-live="polite" hidden></p>
           </div>
 
           <div class="cmp-form-row">
@@ -316,9 +317,10 @@
 <script src="{% static 'acm/js/map-card-docking.js' %}?v=1"></script>
 <script src="{% static 'acm/js/floating-comparison.js' %}?v=9"></script>
 <script src="{% static 'acm/js/comparison-valuation.js' %}?v=13"></script>
+<script src="{% static 'acm/js/location-link.js' %}?v=1"></script>
 {% if replication %}{{ replication|json_script:"cmp-replication-data" }}{% endif %}
 {% if analysis_resume %}{{ analysis_resume|json_script:"cmp-role-analysis-data" }}{% endif %}
-<script src="{% static 'acm/js/components.js' %}?v=85"></script>
+<script src="{% static 'acm/js/components.js' %}?v=86"></script>
 <script src="{% static 'acm/js/property-gallery.js' %}?v=2"></script>
 {% if acm_permissions.ai %}<script src="{% static 'acm/js/ml-preview.js' %}?v=1"></script>{% endif %}
 {% if acm_permissions.pdm_polygons %}
