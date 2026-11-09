@@ -174,11 +174,15 @@ def _read_details(ubigeo, source, lots, cloud):
 
 
 def migrate_formalization_details(gateway, ubigeo, district, lots, cloud=None,
-                                  batch_size=100, actor='formalizacion-d1'):
+                                  batch_size=100, actor='formalizacion-d1',
+                                  records=None):
     """Attach every archived formalization report to its current master lot."""
     cloud = cloud or R2(timeout=30)
-    records = _read_details(ubigeo, 'psad56', lots, cloud)
-    records += _read_details(ubigeo, 'wgs84', lots, cloud)
+    if records is None:
+        records = _read_details(ubigeo, 'psad56', lots, cloud)
+        records += _read_details(ubigeo, 'wgs84', lots, cloud)
+    else:
+        records = list(records)
     if not records:
         return {'ubigeo': ubigeo, 'available': 0, 'processed': 0}
     source_id = 'cofopri-formalizacion-detalle-' + ubigeo

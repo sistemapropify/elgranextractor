@@ -47,6 +47,7 @@ from cuadrantizacion.geollaqta import DISTRICTS
 
 INCREMENTAL_IMPORTED = {}
 INCREMENTAL_FAILED = {}
+FORMALIZATION_RECORDS = {}
 REPORT_LOCK = threading.RLock()
 
 
@@ -345,6 +346,7 @@ def capture_formalization_details(district, report):
     started = time.monotonic()
     saved = failed = skipped = 0
     tasks = []
+    records = []
     for lot in lots:
         properties = lot.get('properties') or {}
         predio = str(properties.get('ID_PREDIO_RPU') or lot.get('id') or '')
@@ -353,18 +355,26 @@ def capture_formalization_details(district, report):
                 or type(object_id) is not int or object_id <= 0):
             skipped += 1
             continue
-        tasks.append((lot['source'], predio, object_id))
+        tasks.append((lot, lot['source'], predio, object_id))
 
     def load_detail(task):
-        source, predio, object_id = task
+        lot, source, predio, object_id = task
         try:
             value = vector_snapshots.formalization_detail(
                 source, predio, object_id, district)
             if value.get('FORMALIZATION_DETAIL_STATUS') == 'available':
-                return task, None
-            return task, 'No devolvió datos'
+                key = value.get('PERSISTED_OBJECT_KEY')
+                digest = value.get('PERSISTED_SHA256')
+                if not key or not digest:
+                    return task, 'No se pudo verificar el archivo R2', None
+                detail = {
+                    name: item for name, item in value.items()
+                    if not name.startswith('PERSISTED_')
+                }
+                return task, None, (lot, detail, key, digest)
+            return task, 'No devolvió datos', None
         except Exception as error:
-            return task, str(error)
+            return task, str(error), None
 
     workers = min(
         len(tasks),
@@ -375,10 +385,11 @@ def capture_formalization_details(district, report):
             thread_name_prefix='formalizacion') as pool:
         futures = [pool.submit(load_detail, task) for task in tasks]
         for index, future in enumerate(as_completed(futures), 1):
-            task, error = future.result()
-            source, predio, object_id = task
+            task, error, record = future.result()
+            lot, source, predio, object_id = task
             if error is None:
                 saved += 1
+                records.append(record)
             else:
                 failed += 1
                 report['formalization_detail_failures'].append({
@@ -406,12 +417,13 @@ def capture_formalization_details(district, report):
         'seconds': round(time.monotonic() - started, 1),
     }
     report['formalization_results'].append(item)
-    import_formalization_to_d1(district, lots, item)
+    FORMALIZATION_RECORDS[district] = records
+    import_formalization_to_d1(district, lots, item, records)
     write_report(report)
     print('FORMAL_DONE', district, json.dumps(item), flush=True)
 
 
-def import_formalization_to_d1(district, lots, item):
+def import_formalization_to_d1(district, lots, item, records=None):
     metadata = DISTRICTS[district]
     last_error = None
     for attempt in range(5):
@@ -419,7 +431,8 @@ def import_formalization_to_d1(district, lots, item):
             imported = migrate_formalization_details(
                 Gateway(), district, metadata['name'], lots,
                 batch_size=5,
-                actor='carga-completa-catastro-maestro')
+                actor='carga-completa-catastro-maestro',
+                records=records)
             item['d1_import'] = {
                 'available': imported.get('available', 0),
                 'processed': imported.get('processed', 0),
@@ -454,7 +467,9 @@ def retry_formalization_imports(report):
         try:
             lots = cofopri_vector_migration.merged_formalization_lots(
                 district)
-            import_formalization_to_d1(district, lots, item)
+            import_formalization_to_d1(
+                district, lots, item,
+                FORMALIZATION_RECORDS.get(district))
         except Exception as error:
             item['d1_import_error'] = str(error)
         write_report(report)

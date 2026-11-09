@@ -330,6 +330,8 @@ def formalization_detail(source, predio, object_id, ubigeo=''):
             if (saved.get('ID_PREDIO_RPU') == predio
                     and saved.get('OBJECTID') == int(object_id)
                     and saved.get('source') == source):
+                saved['PERSISTED_OBJECT_KEY'] = object_key
+                saved['PERSISTED_SHA256'] = hashlib.sha256(body).hexdigest()
                 cache.set(cache_key, saved, 3600)
                 return saved
         except StorageError as error:
@@ -347,6 +349,7 @@ def formalization_detail(source, predio, object_id, ubigeo=''):
             value, ensure_ascii=False, separators=(',', ':')).encode()
         storage.put_verified(object_key, payload, 'application/json')
         value['PERSISTED_OBJECT_KEY'] = object_key
+        value['PERSISTED_SHA256'] = hashlib.sha256(payload).hexdigest()
     cache.set(cache_key, value, 3600)
     return value
 
