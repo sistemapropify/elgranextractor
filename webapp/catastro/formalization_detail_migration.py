@@ -165,7 +165,7 @@ def _read_details(ubigeo, source, lots, cloud):
         return (lot, detail, key, hashlib.sha256(body).hexdigest())
 
     with ThreadPoolExecutor(
-            max_workers=max(1, min(20, len(pending))),
+            max_workers=max(1, min(6, len(pending))),
             thread_name_prefix='formalizacion-r2') as pool:
         return [
             value for value in pool.map(read, pending)
