@@ -8,6 +8,7 @@ import re
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 ROOT = Path(__file__).resolve().parents[1]
 WORK = Path(r'D:\PROMETEO\catastro_completo')
@@ -342,7 +343,8 @@ def capture_formalization_details(district, report):
     )
     started = time.monotonic()
     saved = failed = skipped = 0
-    for index, lot in enumerate(lots, 1):
+    tasks = []
+    for lot in lots:
         properties = lot.get('properties') or {}
         predio = str(properties.get('ID_PREDIO_RPU') or lot.get('id') or '')
         object_id = properties.get('OBJECTID')
@@ -350,36 +352,49 @@ def capture_formalization_details(district, report):
                 or type(object_id) is not int or object_id <= 0):
             skipped += 1
             continue
+        tasks.append((lot['source'], predio, object_id))
+
+    def load_detail(task):
+        source, predio, object_id = task
         try:
             value = vector_snapshots.formalization_detail(
-                lot['source'], predio, object_id, district)
+                source, predio, object_id, district)
             if value.get('FORMALIZATION_DETAIL_STATUS') == 'available':
+                return task, None
+            return task, 'No devolvió datos'
+        except Exception as error:
+            return task, str(error)
+
+    workers = min(
+        len(tasks),
+        int(os.environ.get('CATASTRO_FORMALIZATION_WORKERS', '12')),
+    )
+    with ThreadPoolExecutor(
+            max_workers=max(1, workers),
+            thread_name_prefix='formalizacion') as pool:
+        futures = [pool.submit(load_detail, task) for task in tasks]
+        for index, future in enumerate(as_completed(futures), 1):
+            task, error = future.result()
+            source, predio, object_id = task
+            if error is None:
                 saved += 1
             else:
                 failed += 1
                 report['formalization_detail_failures'].append({
                     'ubigeo': district,
-                    'source': lot['source'],
+                    'source': source,
                     'predio': predio,
                     'object_id': object_id,
-                    'error': 'No devolvió datos',
+                    'error': error,
                 })
-        except Exception as error:
-            failed += 1
-            report['formalization_detail_failures'].append({
-                'ubigeo': district,
-                'source': lot['source'],
-                'predio': predio,
-                'object_id': object_id,
-                'error': str(error),
-            })
-        if index % 100 == 0:
-            print(
-                'FORMAL_PROGRESS', district, index, len(lots),
-                'saved', saved, 'failed', failed, 'skipped', skipped,
-                flush=True,
-            )
-            write_report(report)
+            processed = index + skipped
+            if processed % 100 == 0 or processed == len(lots):
+                print(
+                    'FORMAL_PROGRESS', district, processed, len(lots),
+                    'saved', saved, 'failed', failed, 'skipped', skipped,
+                    flush=True,
+                )
+                write_report(report)
     item = {
         'ubigeo': district,
         'district': metadata['name'],
