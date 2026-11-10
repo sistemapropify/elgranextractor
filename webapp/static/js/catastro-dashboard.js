@@ -97,13 +97,22 @@
   async function loadMigration(){
     const district=el('district')?.value;if(!district)return;
     if(el('master-map-link'))el('master-map-link').href='/catastro/maestro/?ubigeo='+encodeURIComponent(district);
+    let districtError=null;
     try{
       const data=await api('maestro/migracion/?ubigeo='+encodeURIComponent(district));
       migrationDistrict=district;renderMigration(data);
-      const global=await api('maestro/migracion/estado/?ubigeo=all').catch(()=>({job:{}}));
-      renderGlobalJob(global.job||{});
+    }catch(error){districtError=error;}
+    let globalActive=false;
+    try{
+      const global=await api('maestro/migracion/estado/?ubigeo=all');
+      const globalJob=global.job||{};
+      globalActive=['running','stale'].includes(globalJob.status);
+      if(!renderGlobalJob(globalJob) && districtError)migrationMessage(districtError.message,true);
+    }catch(error){
+      migrationMessage((districtError||error).message,true);
     }
-    catch(error){migrationMessage(error.message,true);const button=el('migrate-master');if(button)button.disabled=true;}
+    const button=el('migrate-master');
+    if(button && !globalActive)button.disabled=migrationBusy;
   }
   async function migrateToMaster(){
     if(migrationBusy)return;
