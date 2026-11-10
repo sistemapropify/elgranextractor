@@ -155,7 +155,7 @@
     clearResult('Parámetros modificados: vuelve a buscar.');$('cmp-warnings').replaceChildren();$('cmp-status').textContent='Listo para una nueva búsqueda.';$('cmp-search').disabled=false;
   }
   function setLocation(lat,lng){if(locationLocked)return;form.elements.lat.value=lat.toFixed(7);form.elements.lng.value=lng.toFixed(7);invalidate();if(map)map.panTo({lat,lng});if(window.ACMZona)window.ACMZona.actualizar(lat,lng);document.dispatchEvent(new CustomEvent('acm:target-location',{detail:{lat,lng}}));}
-  function searchAfterLocation(){setTimeout(()=>{if(!searching&&!locationLocked&&permissions.calculate&&form.elements.lat.value&&form.elements.lng.value)form.requestSubmit();},250);}
+  function searchAfterLocation(){setTimeout(()=>{if(!searching&&!locationLocked&&permissions.calculate&&form.elements.lat.value&&form.elements.lng.value)form.requestSubmit();},120);}
   function locationStatus(text,error=false){const node=$('cmp-location-status');if(!node)return;node.textContent=text||'';node.hidden=!text;node.dataset.error=String(error);}
   function geocodeAddress(query,autoSearch=false){
     const value=String(query||'').trim();if(!value)return;
@@ -187,9 +187,16 @@
     const p=input();map=new google.maps.Map($('cmp-map'),{center:restoredViewport?{lat:restoredViewport.lat,lng:restoredViewport.lng}:{lat:p.lat,lng:p.lng},zoom:restoredViewport?.zoom??15,mapTypeControl:false,streetViewControl:!!permissions.street_view,gestureHandling:'greedy'});map.addListener('click',e=>setLocation(e.latLng.lat(),e.latLng.lng()));
     if(window.CatastroRasterMap)window.CatastroRasterMap.init(map,{catalogUrl:'/acm/catastro/raster/'});
     const auto=new google.maps.places.Autocomplete($('cmp-address'),{fields:['geometry','formatted_address'],componentRestrictions:{country:'pe'}});
-    auto.addListener('place_changed',()=>{const place=auto.getPlace();if(place.geometry){if(place.formatted_address)$('cmp-address').value=place.formatted_address;setLocation(place.geometry.location.lat(),place.geometry.location.lng());map.setZoom(16);locationStatus('Dirección localizada.');}});
+    auto.addListener('place_changed',()=>{const place=auto.getPlace();if(place.geometry){if(place.formatted_address)$('cmp-address').value=place.formatted_address;if(locationLocked)setLocationLocked(false);setLocation(place.geometry.location.lat(),place.geometry.location.lng());map.setZoom(16);locationStatus('Dirección localizada.');searchAfterLocation();}});
+    const locationDrop=$('cmp-address').closest('.form-group');
     window.ACMLocationLink?.install($('cmp-address'),{
-      onLocation:(lat,lng)=>{setLocation(lat,lng);map.setZoom(16);searchAfterLocation();},
+      dropTarget:locationDrop,
+      onLocation:(lat,lng)=>{
+        if(locationLocked){setLocationLocked(false);setSearchFormCollapsed(false);}
+        setLocation(lat,lng);map.setZoom(16);map.panTo({lat,lng});
+        locationStatus('Ubicación cargada. Buscando comparables automáticamente…');
+        searchAfterLocation();
+      },
       onAddress:query=>geocodeAddress(query,true),
       onStatus:locationStatus,
       csrf:form.elements.csrfmiddlewaretoken.value,

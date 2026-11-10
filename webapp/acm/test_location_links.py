@@ -48,6 +48,17 @@ class GoogleMapsLocationTests(SimpleTestCase):
         self.assertFalse(session.calls[0][1]['allow_redirects'])
         self.assertTrue(session.response.closed)
 
+    def test_shared_google_maps_destination_resolves_query_coordinates(self):
+        session = _Session(_Response(
+            location=(
+                'https://maps.google.com?q=-16.3852120,-71.5228350'
+                '&entry=gps&g_st=iwb')))
+        value = resolve_google_maps_link(
+            'https://maps.app.goo.gl/1MsGvMyqhgnC3uVZ6?g_st=iwb',
+            session=session)
+        self.assertEqual(
+            value, {'lat': -16.385212, 'lng': -71.522835})
+
     def test_short_link_cannot_redirect_to_an_arbitrary_host(self):
         session = _Session(_Response(location='http://169.254.169.254/latest'))
         with self.assertRaises(LocationLinkError):

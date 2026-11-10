@@ -1058,6 +1058,17 @@
     line-height: 1.3;
 }
 
+#cmp-form .form-group.is-dragging-map {
+    border-radius: 6px;
+    outline: 2px solid #58a6ff;
+    outline-offset: 2px;
+}
+
+#cmp-form .form-group.is-dragging-map .form-control {
+    border-color: #58a6ff;
+    box-shadow: 0 0 0 3px rgba(88, 166, 255, .18);
+}
+
 .cmp-form-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));

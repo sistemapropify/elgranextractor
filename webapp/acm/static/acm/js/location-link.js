@@ -14,6 +14,7 @@
     const onStatus = options.onStatus || (() => {});
     const endpoint = options.endpoint || '/acm/ubicacion/resolver/';
     const csrf = options.csrf || document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    const dropTarget = options.dropTarget || input;
     let pending = null;
 
     async function resolve(value) {
@@ -57,18 +58,6 @@
       }
     }
 
-    input.addEventListener('dragover', event => {
-      event.preventDefault();
-      event.dataTransfer.dropEffect = 'copy';
-    });
-    input.addEventListener('drop', event => {
-      const transfer = event.dataTransfer;
-      const value = transfer?.getData('text/uri-list') || transfer?.getData('text/plain') || '';
-      if (!value.trim()) return;
-      event.preventDefault();
-      input.value = value.trim();
-      resolve(value);
-    });
     input.addEventListener('paste', event => {
       const value = event.clipboardData?.getData('text/plain') || '';
       if (extractGoogleMapsUrl(value)) {
@@ -81,6 +70,23 @@
         const pasted = input.value.trim();
         if (pasted) onAddress(pasted);
       }, 0);
+    });
+    dropTarget.addEventListener('dragover', event => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+      dropTarget.classList.add('is-dragging-map');
+    });
+    dropTarget.addEventListener('dragleave', () => {
+      dropTarget.classList.remove('is-dragging-map');
+    });
+    dropTarget.addEventListener('drop', event => {
+      const transfer = event.dataTransfer;
+      const value = transfer?.getData('text/uri-list') || transfer?.getData('text/plain') || '';
+      if (!value.trim()) return;
+      event.preventDefault();
+      dropTarget.classList.remove('is-dragging-map');
+      input.value = value.trim();
+      resolve(value);
     });
     input.addEventListener('change', () => {
       if (extractGoogleMapsUrl(input.value)) resolve(input.value);
