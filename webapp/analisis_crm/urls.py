@@ -90,6 +90,16 @@ urlpatterns = [
         name='lead_funnel_queue',
     ),
     path(
+        'embudo-leads/version/',
+        intelligence_views.lead_funnel_version,
+        name='lead_funnel_version',
+    ),
+    path(
+        'reingresos-24h/',
+        intelligence_views.meta_window_reentries_dashboard,
+        name='meta_window_reentries',
+    ),
+    path(
         'resultados/<int:lead_id>/panel/',
         intelligence_views.lead_conversation_panel,
         name='lead_conversation_panel',

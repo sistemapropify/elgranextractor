@@ -20,13 +20,13 @@
 </style>
 {% endblock %}
 {% block content %}
-<main class="pli-page">
+<main class="pli-page" id="leadFunnelPage" data-version="{{ data_version }}" data-version-url="{% url 'analisis_crm:lead_funnel_version' %}">
   {% include "lead_intelligence/_analysis_tabs.html" %}
   <div class="pli-result-head">
     <div>
       <div class="pli-kicker">Embudo comercial</div>
       <h1>Leads por etapa</h1>
-      <p>{{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }} · {{ page_obj.paginator.count|intcomma }} leads</p>
+      <p>{{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }} · {{ page_obj.paginator.count|intcomma }} leads · actualización automática cada 10 s</p>
     </div>
     <form class="pli-filter lfq-filter" method="get">
       <div><label for="from">Desde</label><input id="from" type="date" name="from" value="{{ date_from|date:'Y-m-d' }}"></div>
@@ -90,7 +90,10 @@
   var body = document.getElementById('leadConversationBody');
   var closeButton = drawer ? drawer.querySelector('.lcp-close') : null;
   var activeRow = null;
+  var activeConversationUrl = null;
   var requestController = null;
+  var funnelPage = document.getElementById('leadFunnelPage');
+  var lastVersion = funnelPage ? funnelPage.getAttribute('data-version') : null;
 
   function setActive(row) {
     if (activeRow) activeRow.setAttribute('aria-expanded', 'false');
@@ -102,6 +105,7 @@
     if (!drawer) return;
     drawer.classList.remove('open');
     drawer.setAttribute('aria-hidden', 'true');
+    activeConversationUrl = null;
     setActive(null);
     if (requestController) requestController.abort();
   }
@@ -110,6 +114,7 @@
     if (!drawer || !body) return;
     var url = row.getAttribute('data-conversation-url');
     if (!url) return;
+    activeConversationUrl = url;
     setActive(row);
     drawer.classList.add('open');
     drawer.setAttribute('aria-hidden', 'false');
@@ -142,6 +147,58 @@
   document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') closeDrawer();
   });
+
+  async function refreshVisibleData() {
+    if (document.hidden) return;
+    try {
+      var versionResponse = await fetch(funnelPage.getAttribute('data-version-url'), {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      });
+      if (!versionResponse.ok) return;
+      var versionData = await versionResponse.json();
+      if (versionData.version === lastVersion) return;
+      lastVersion = versionData.version;
+      var response = await fetch(window.location.href, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      });
+      if (!response.ok) return;
+      var documentText = await response.text();
+      var updated = new DOMParser().parseFromString(documentText, 'text/html');
+      var currentList = document.querySelector('.lfq-list');
+      var nextList = updated.querySelector('.lfq-list');
+      if (currentList && nextList && currentList.innerHTML !== nextList.innerHTML) {
+        currentList.replaceWith(nextList);
+      }
+      var currentPriorities = document.querySelector('.lfq-priority-grid');
+      var nextPriorities = updated.querySelector('.lfq-priority-grid');
+      if (currentPriorities && nextPriorities) {
+        currentPriorities.replaceWith(nextPriorities);
+      }
+      if (activeConversationUrl) {
+        var refreshedRow = Array.from(document.querySelectorAll('.lfq-row')).find(function (row) {
+          return row.getAttribute('data-conversation-url') === activeConversationUrl;
+        });
+        setActive(refreshedRow || null);
+        var drawerResponse = await fetch(activeConversationUrl, {
+          cache: 'no-store',
+          credentials: 'same-origin',
+          headers: {'X-Requested-With': 'XMLHttpRequest'}
+        });
+        if (drawerResponse.ok && body) {
+          var scrollTop = body.scrollTop;
+          body.innerHTML = await drawerResponse.text();
+          body.scrollTop = scrollTop;
+        }
+      }
+    } catch (error) {
+      // La vista conserva los datos actuales; el siguiente ciclo volverá a intentar.
+    }
+  }
+  window.setInterval(refreshVisibleData, 10000);
 })();
 </script>
 {% endblock %}

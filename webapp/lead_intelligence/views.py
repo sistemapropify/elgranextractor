@@ -22,10 +22,12 @@ from .services import (
     FUNNEL_STAGE_ORDER,
     LEAD_RESULT_STAGES,
     RECONTACT_GROUPS,
+    get_crm_data_version,
     get_analysis_quality_dashboard,
     get_attention_quality_dashboard,
     get_hourly_agent_matrix,
     get_lead_conversation,
+    get_meta_window_reentries,
     get_lead_results,
     get_management_dashboard,
     normalized_period,
@@ -828,10 +830,17 @@ def lead_funnel_queue(request):
             "all_priority_query": all_priority_query.urlencode(),
             "segment_options": segment_options,
             "stage_options": stage_options,
+            "data_version": get_crm_data_version(),
             "active_tab": "lead_funnel",
             "title": "Leads por etapa",
         },
     )
+
+
+@management_access_required
+@require_GET
+def lead_funnel_version(request):
+    return JsonResponse({"version": get_crm_data_version()})
 
 
 @management_access_required
@@ -846,6 +855,52 @@ def lead_conversation(request, lead_id):
             "lead": lead,
             "back_query": request.GET.urlencode(),
             "title": f"Conversación · {lead['display_name']}",
+        },
+    )
+
+
+@management_access_required
+def meta_window_reentries_dashboard(request):
+    """Audit call-center replies to leads that reopened after the Meta window."""
+    def optional_date(name):
+        raw = request.GET.get(name, "").strip()
+        try:
+            return date.fromisoformat(raw) if raw else None
+        except ValueError:
+            return None
+
+    date_from = optional_date("from")
+    date_to = optional_date("to")
+    response_status = request.GET.get("response_status", "").strip() or None
+    if response_status not in ("responded", "pending"):
+        response_status = None
+    agent_login = request.GET.get("agent_login", "").strip() or None
+    result = get_meta_window_reentries(
+        date_from,
+        date_to,
+        response_status=response_status,
+        agent_login=agent_login,
+    )
+    reentries = result.pop("reentries")
+    page_obj = Paginator(reentries, 40).get_page(request.GET.get("page"))
+    query = request.GET.copy()
+    query.pop("page", None)
+    return render(
+        request,
+        "lead_intelligence/meta_window_reentries.html",
+        {
+            **result,
+            "reentries": reentries,
+            "page_obj": page_obj,
+            "date_from": date_from,
+            "date_to": date_to,
+            "response_status": response_status,
+            "selected_agent_login": agent_login,
+            "query_without_page": query.urlencode(),
+            "current_query": request.GET.urlencode(),
+            "data_version": get_crm_data_version(),
+            "active_tab": "reentries",
+            "title": "Reingresos fuera de la ventana de 24 horas",
         },
     )
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
-from datetime import date, datetime, timezone as datetime_timezone
+from datetime import date, datetime, timedelta, timezone as datetime_timezone
 from zoneinfo import ZoneInfo
 
 from django.utils.dateparse import parse_datetime
@@ -118,6 +118,47 @@ def has_interest(text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in INTEREST_PATTERNS)
 
 
+def meta_window_reentries(messages, window_hours=24):
+    """Return lead messages that reopen a closed WhatsApp service window."""
+    lead_messages = [
+        message for message in messages if message.get("sender") == "lead"
+    ]
+    reentries = []
+    for previous, current in zip(lead_messages, lead_messages[1:]):
+        gap_seconds = (current["timestamp"] - previous["timestamp"]).total_seconds()
+        if gap_seconds <= window_hours * 60 * 60:
+            continue
+        response = next(
+            (
+                message
+                for message in messages
+                if message.get("sender") == "agent"
+                and message["timestamp"] > current["timestamp"]
+            ),
+            None,
+        )
+        reentries.append(
+            {
+                "previous_lead_message": previous,
+                "reentry_message": current,
+                "window_closed_at": previous["timestamp"]
+                + timedelta(hours=window_hours),
+                "gap_seconds": int(gap_seconds),
+                "first_agent_response": response,
+                "response_seconds": (
+                    int(
+                        (
+                            response["timestamp"] - current["timestamp"]
+                        ).total_seconds()
+                    )
+                    if response
+                    else None
+                ),
+            }
+        )
+    return reentries
+
+
 def has_visit_intent(text: str) -> bool:
     normalized = normalize_text(text)
     if any(re.search(pattern, normalized) for pattern in NEGATIVE_INTEREST_PATTERNS):
@@ -200,7 +241,10 @@ def analyze_chat_history(raw_history) -> dict:
             continue
         messages.append(
             {
+                "id": item.get("id"),
                 "sender": sender,
+                "sender_id": item.get("sender_id"),
+                "sender_name": item.get("sender_name"),
                 "text": content,
                 "timestamp": timestamp,
                 "position": position,

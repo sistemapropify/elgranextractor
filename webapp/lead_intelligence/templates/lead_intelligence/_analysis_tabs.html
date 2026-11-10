@@ -2,6 +2,7 @@
   <a class="pli-tab" href="{% url 'analisis_crm:control_board' %}">Control de leads</a>
   <a class="pli-tab{% if active_tab == 'overview' %} active{% endif %}" href="{% url 'analisis_crm:dashboard' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Embudo comercial</a>
   <a class="pli-tab{% if active_tab == 'lead_funnel' %} active{% endif %}" href="{% url 'analisis_crm:lead_funnel_queue' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Leads por etapa</a>
+  <a class="pli-tab{% if active_tab == 'reentries' %} active{% endif %}" href="{% url 'analisis_crm:meta_window_reentries' %}">Reingresos +24 h</a>
   <a class="pli-tab{% if active_tab == 'cohorts' %} active{% endif %}" href="{% url 'analisis_crm:cohorts' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Cohortes</a>
   <a class="pli-tab{% if active_tab == 'attention' %} active{% endif %}" href="{% url 'analisis_crm:attention_quality' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Calidad de atención</a>
   <a class="pli-tab{% if active_tab == 'remarketing' %} active{% endif %}" href="{% url 'analisis_crm:remarketing' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Remarketing</a>

@@ -22,6 +22,8 @@ from .contextual_analysis import ANALYSIS_VERSION, conversation_hash
 from .conversation_analysis import (
     LIMA_TIMEZONE,
     analyze_chat_history,
+    lima_date,
+    meta_window_reentries,
     milestone_within_days,
     normalize_text,
 )
@@ -199,6 +201,24 @@ def _load_assignment_timelines(rows):
         event["effective_at"] = _utc_datetime(event["effective_at"])
         timelines.setdefault(event["lead_id"], []).append(event)
     return timelines
+
+
+def _load_user_logins(user_ids):
+    ids = sorted({int(user_id) for user_id in user_ids if user_id})
+    if not ids:
+        return {}
+    placeholders = ", ".join(["%s"] * len(ids))
+    with connections["propifai"].cursor() as cursor:
+        cursor.execute(
+            f"""
+            SELECT uc.agent_id, u.username
+            FROM dbo.user_chatwoot uc
+            JOIN dbo.[user] u ON u.id = uc.user_id
+            WHERE uc.agent_id IN ({placeholders})
+            """,
+            ids,
+        )
+        return {row[0]: row[1] for row in cursor.fetchall()}
 
 
 def _responsible_at(timeline, moment, current_agent_id, current_agent_name):
@@ -448,13 +468,20 @@ def build_daily_incoming(metrics_by_date, date_from, date_to):
     return series
 
 
-def _lead_result_rows(date_from, date_to, lead_id=None, segment=None, activity_scope=False):
+def _lead_result_rows(
+    date_from,
+    date_to,
+    lead_id=None,
+    segment=None,
+    activity_scope=False,
+    resolve_visits=True,
+):
     params = []
     where = []
     if lead_id is not None:
         where.append("l.id = %s")
         params.append(lead_id)
-    else:
+    elif date_from is not None and date_to is not None:
         timestamp_expression = (
             "COALESCE(l.updated_at, l.date_entry, l.created_at)"
             if activity_scope else "COALESCE(l.date_entry, l.created_at)"
@@ -466,6 +493,7 @@ def _lead_result_rows(date_from, date_to, lead_id=None, segment=None, activity_s
             ) BETWEEN %s AND %s"""
         )
         params.extend([date_from, date_to])
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     with connections["propifai"].cursor() as cursor:
         cursor.execute(
             f"""
@@ -493,6 +521,7 @@ def _lead_result_rows(date_from, date_to, lead_id=None, segment=None, activity_s
                     u.username,
                     'Sin asignar'
                 ) AS agent_name,
+                u.username AS agent_username,
                 COALESCE(ls.name, 'Sin estado') AS status_name,
                 COALESCE(cl.name, 'Sin canal') AS channel_name,
                 mc.name AS campaign_name
@@ -502,13 +531,32 @@ def _lead_result_rows(date_from, date_to, lead_id=None, segment=None, activity_s
             LEFT JOIN dbo.lead_status ls ON ls.id = l.lead_status_id
             LEFT JOIN dbo.canal_lead cl ON cl.id = l.canal_lead_id
             LEFT JOIN dbo.meta_campaign mc ON mc.id = l.meta_campaign_ref_id
-            WHERE {" AND ".join(where)}
+            {where_sql}
             ORDER BY COALESCE(l.date_entry, l.created_at) DESC, l.id DESC
             """,
             params,
         )
         rows = _dict_rows(cursor)
-    return apply_visit_resolutions(rows)
+    return apply_visit_resolutions(rows) if resolve_visits else rows
+
+
+def get_crm_data_version():
+    """Return a lightweight fingerprint for polling CRM-backed screens."""
+    with connections["propifai"].cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*) AS lead_count,
+                CONVERT(
+                    varchar(33),
+                    MAX(COALESCE(l.date_last_message, l.updated_at, l.created_at)),
+                    127
+                ) AS latest_activity_at
+            FROM dbo.lead l
+            """
+        )
+        row = _one(cursor)
+    return f"{row.get('lead_count', 0)}:{row.get('latest_activity_at') or ''}"
 
 
 # Horario de atención de negocio: 09:00 a 18:00 (hora de Perú). La hora 18
@@ -1034,6 +1082,135 @@ def get_lead_results(
         "recontact_label": RECONTACT_GROUPS.get(recontact, ""),
         "recontact_counts": dict(recontact_counts),
         "order": order,
+    }
+
+
+def get_meta_window_reentries(
+    date_from=None,
+    date_to=None,
+    response_status=None,
+    agent_login=None,
+):
+    """Audit leads that wrote again after the 24-hour Meta window closed."""
+    rows = _lead_result_rows(None, None, resolve_visits=False)
+    items = []
+    for row in rows:
+        analysis = analyze_chat_history(row.get("chat_history"))
+        campaign_segment = _campaign_segment(row.get("campaign_name"))
+        campaign_label = (
+            "Captaciones"
+            if campaign_segment == "captaciones"
+            else "Compradores"
+            if campaign_segment == "compradores"
+            else "Sin campaña"
+        )
+        for event in meta_window_reentries(analysis["messages"]):
+            reentry_date = lima_date(event["reentry_message"]["timestamp"])
+            if date_from and reentry_date and reentry_date < date_from:
+                continue
+            if date_to and reentry_date and reentry_date > date_to:
+                continue
+            response = event["first_agent_response"]
+            state = "responded" if response else "pending"
+            responder = (
+                (response or {}).get("sender_name")
+                or row.get("agent_name")
+                or "Sin asignar"
+            )
+            responder_id = (response or {}).get("sender_id")
+            if response_status == "responded" and state != "responded":
+                continue
+            if response_status == "pending" and state != "pending":
+                continue
+            items.append(
+                {
+                    "lead_id": row["id"],
+                    "display_name": _display_name(row),
+                    "status_name": row.get("status_name") or "Sin estado",
+                    "current_agent_name": row.get("agent_name") or "Sin asignar",
+                    "current_agent_login": row.get("agent_username") or "",
+                    "campaign_label": campaign_label,
+                    "phone": row.get("phone"),
+                    "lead_created_at": _utc_datetime(row.get("entered_at")),
+                    "previous_lead_message": event["previous_lead_message"],
+                    "reentry_message": event["reentry_message"],
+                    "reentry_at": event["reentry_message"]["timestamp"],
+                    "window_closed_at": event["window_closed_at"],
+                    "gap_seconds": event["gap_seconds"],
+                    "gap_label": duration_label(event["gap_seconds"]),
+                    "response_status": state,
+                    "responder_name": responder,
+                    "responder_id": responder_id,
+                    "responder_login": "",
+                    "response_at": response["timestamp"] if response else None,
+                    "response_seconds": event["response_seconds"],
+                    "response_label": (
+                        duration_label(event["response_seconds"])
+                        if response
+                        else "Sin respuesta registrada"
+                    ),
+                    "response_text": response["text"] if response else "",
+                    "last_message_at": analysis.get("last_message_at"),
+                }
+            )
+    responder_logins = _load_user_logins(
+        item["responder_id"] for item in items
+    )
+    for item in items:
+        item["responder_login"] = (
+            responder_logins.get(item["responder_id"])
+            or (
+                item["current_agent_login"]
+                if item["responder_name"] == item["current_agent_name"]
+                else ""
+            )
+        )
+    if agent_login:
+        items = [
+            item for item in items
+            if item["responder_login"] == agent_login
+        ]
+    items.sort(
+        key=lambda item: (
+            item["reentry_at"].timestamp(),
+            item["lead_id"],
+        ),
+        reverse=True,
+    )
+    for position, item in enumerate(items, start=1):
+        item["rank"] = position
+    response_times = [
+        item["response_seconds"]
+        for item in items
+        if item["response_seconds"] is not None
+    ]
+    agent_counts = Counter(item["responder_login"] for item in items)
+    agent_names = {
+        item["responder_login"]: item["responder_name"]
+        for item in items
+        if item["responder_login"]
+    }
+    return {
+        "reentries": items,
+        "total_reentries": len(items),
+        "unique_leads": len({item["lead_id"] for item in items}),
+        "pending_count": sum(
+            item["response_status"] == "pending" for item in items
+        ),
+        "responded_count": sum(
+            item["response_status"] == "responded" for item in items
+        ),
+        "median_response_seconds": median_or_none(response_times),
+        "median_response_label": duration_label(median_or_none(response_times)),
+        "agent_options": [
+            {
+                "login": name,
+                "name": agent_names.get(name, name),
+                "count": count,
+            }
+            for name, count in agent_counts.most_common()
+            if name
+        ],
     }
 
 

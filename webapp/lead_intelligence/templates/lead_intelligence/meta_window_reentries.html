@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% load tz humanize %}
+{% block title %}Reingresos fuera de 24 h | PROMETEO{% endblock %}
+{% block extra_css %}
+<style>
+{% include "lead_intelligence/_dashboard_styles.html" %}
+.mwr-filter{grid-template-columns:minmax(130px,1fr) minmax(130px,1fr) minmax(180px,1fr) minmax(220px,1.3fr) auto;min-width:780px}
+.mwr-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}
+.mwr-summary .pli-card{padding:15px}.mwr-summary small{color:var(--pli-muted);display:block;font-size:.63rem;font-weight:800;text-transform:uppercase}.mwr-summary strong{color:#f0f6fc;display:block;font-size:1.55rem;margin-top:6px}.mwr-summary span{color:var(--pli-muted);font-size:.68rem}
+.mwr-list{display:grid;gap:10px}.mwr-row{display:grid;grid-template-columns:58px minmax(0,1fr) 240px;overflow:hidden;text-decoration:none;color:inherit}.mwr-row:hover{border-color:#58a6ff}.mwr-rank{align-items:center;background:#0d1117;border-right:1px solid var(--pli-line);display:flex;flex-direction:column;justify-content:center}.mwr-rank small{color:var(--pli-muted);font-size:.54rem;font-weight:800;text-transform:uppercase}.mwr-rank strong{color:#f0f6fc;font-size:1.3rem}.mwr-main{padding:13px 15px}.mwr-head{align-items:flex-start;display:flex;gap:10px;justify-content:space-between}.mwr-head h2{color:#f0f6fc;font-size:.95rem;margin:2px 0}.mwr-id{color:var(--pli-muted);font-size:.62rem}.mwr-messages{display:grid;gap:6px;margin-top:10px}.mwr-message{background:#0d1117;border:1px solid var(--pli-line);border-radius:9px;padding:8px 10px}.mwr-message small{display:block;font-size:.58rem;font-weight:800;margin-bottom:3px;text-transform:uppercase}.mwr-message.lead small{color:#79c0ff}.mwr-message.agent small{color:#7ee787}.mwr-message p{color:#c9d1d9;font-size:.72rem;line-height:1.42;margin:0;white-space:pre-wrap}.mwr-message time{color:var(--pli-muted);display:block;font-size:.58rem;margin-top:4px}.mwr-side{align-items:flex-end;background:#0d1117;border-left:1px solid var(--pli-line);display:flex;flex-direction:column;gap:5px;justify-content:center;padding:12px 14px;text-align:right}.mwr-side strong{color:#79c0ff;font-size:.76rem}.mwr-side span,.mwr-side small{color:var(--pli-muted);font-size:.66rem}.mwr-side .login{color:#f0f6fc;font-size:.72rem;font-weight:800}.mwr-pending{color:#e3b341!important}.mwr-responded{color:#7ee787!important}.mwr-clear{color:#79c0ff;font-size:.7rem;font-weight:750;text-decoration:none}
+@media(max-width:980px){.mwr-summary{grid-template-columns:repeat(2,1fr)}.mwr-row{grid-template-columns:52px minmax(0,1fr)}.mwr-side{align-items:flex-start;border-left:0;border-top:1px solid var(--pli-line);grid-column:2;padding:10px 14px;text-align:left}}@media(max-width:720px){.mwr-filter{grid-template-columns:1fr 1fr;min-width:0}.mwr-summary{grid-template-columns:1fr}.mwr-head{display:block}}
+</style>
+{% endblock %}
+{% block content %}
+<main class="pli-page" id="metaWindowPage" data-version="{{ data_version }}" data-version-url="{% url 'analisis_crm:lead_funnel_version' %}">
+  {% include "lead_intelligence/_analysis_tabs.html" %}
+  <header class="pli-head">
+    <div>
+      <div class="pli-kicker">Auditoría de conversaciones antiguas</div>
+      <h1>Reingresos fuera de la ventana de 24 h</h1>
+      <p>Leads que volvieron a escribir después de que la ventana de Meta estuviera cerrada, con el trabajo realizado por Call Center y su login de Propify · actualización automática.</p>
+    </div>
+    <form class="pli-filter mwr-filter" method="get">
+      <div><label for="from">Reingreso desde</label><input id="from" type="date" name="from" value="{{ date_from|date:'Y-m-d' }}"></div>
+      <div><label for="to">Reingreso hasta</label><input id="to" type="date" name="to" value="{{ date_to|date:'Y-m-d' }}"></div>
+      <div><label for="response_status">Respuesta</label><select id="response_status" name="response_status"><option value="">Todas</option><option value="responded"{% if response_status == "responded" %} selected{% endif %}>Respondidas</option><option value="pending"{% if response_status == "pending" %} selected{% endif %}>Sin respuesta</option></select></div>
+      <div><label for="agent_login">Login Propify</label><select id="agent_login" name="agent_login"><option value="">Todos</option>{% for option in agent_options %}<option value="{{ option.login }}"{% if option.login == selected_agent_login %} selected{% endif %}>{{ option.name }} · {{ option.login }} ({{ option.count }})</option>{% endfor %}</select></div>
+      <button class="pli-submit" type="submit">Filtrar</button>
+    </form>
+  </header>
+
+  {% if selected_agent_login or response_status or date_from or date_to %}<a class="mwr-clear" href="{% url 'analisis_crm:meta_window_reentries' %}">Limpiar filtros ×</a>{% endif %}
+
+  <section class="mwr-summary">
+    <div class="pli-card"><small>Reingresos +24 h</small><strong>{{ total_reentries|intcomma }}</strong><span>Mensajes del lead que reabrieron la ventana</span></div>
+    <div class="pli-card"><small>Leads distintos</small><strong>{{ unique_leads|intcomma }}</strong><span>Conversaciones antiguas recuperadas</span></div>
+    <div class="pli-card"><small>Respondidos</small><strong>{{ responded_count|intcomma }}</strong><span>Trabajo registrado por Call Center</span></div>
+    <div class="pli-card"><small>Sin respuesta</small><strong>{{ pending_count|intcomma }}</strong><span>Pendientes de atención</span></div>
+  </section>
+
+  <section class="mwr-list" aria-label="Reingresos después de 24 horas">
+    {% for item in page_obj %}
+      <a class="pli-card mwr-row" href="{% url 'analisis_crm:lead_conversation' item.lead_id %}?{{ current_query }}">
+        <div class="mwr-rank"><small>#</small><strong>{{ item.rank }}</strong></div>
+        <div class="mwr-main">
+          <div class="mwr-head">
+            <div><span class="mwr-id">LEAD #{{ item.lead_id }}</span><h2>{{ item.display_name }}</h2></div>
+            <span class="pli-chip">{{ item.status_name }}</span>
+          </div>
+          <div class="mwr-messages">
+            <div class="mwr-message lead"><small>Último mensaje antes de cerrar ventana</small><p>{{ item.previous_lead_message.text }}</p><time>{{ item.previous_lead_message.timestamp|localtime|date:"d/m/Y H:i" }} · ventana cerró {{ item.window_closed_at|localtime|date:"d/m/Y H:i" }}</time></div>
+            <div class="mwr-message lead"><small>Volvió a escribir después de {{ item.gap_label }}</small><p>{{ item.reentry_message.text }}</p><time>{{ item.reentry_at|localtime|date:"d/m/Y H:i" }}</time></div>
+            {% if item.response_text %}<div class="mwr-message agent"><small>Respuesta de Call Center · {{ item.response_label }}</small><p>{{ item.response_text }}</p><time>{{ item.response_at|localtime|date:"d/m/Y H:i" }}</time></div>{% endif %}
+          </div>
+        </div>
+        <aside class="mwr-side">
+          <small>Atendido por</small>
+          <strong>{{ item.responder_name }}</strong>
+          <span class="login">{% if item.responder_login %}@{{ item.responder_login }}{% else %}Login no registrado{% endif %}</span>
+          <span>Asignado actual: {{ item.current_agent_name }}</span>
+          <span>{% if item.current_agent_login %}@{{ item.current_agent_login }}{% endif %}</span>
+          <span>{{ item.campaign_label }}</span>
+          {% if item.response_status == "pending" %}<b class="mwr-pending">Sin respuesta</b>{% else %}<b class="mwr-responded">{{ item.response_label }}</b>{% endif %}
+        </aside>
+      </a>
+    {% empty %}
+      <article class="pli-card pli-section"><h2>Sin reingresos para estos filtros</h2><p>No se encontraron mensajes del lead después de una ventana cerrada de 24 horas.</p></article>
+    {% endfor %}
+  </section>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="pli-pagination" aria-label="Paginación">
+      {% if page_obj.has_previous %}<a href="?{{ query_without_page }}&amp;page={{ page_obj.previous_page_number }}">← Anterior</a>{% endif %}
+      <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a href="?{{ query_without_page }}&amp;page={{ page_obj.next_page_number }}">Siguiente →</a>{% endif %}
+    </nav>
+  {% endif %}
+</main>
+<script>
+(function () {
+  var page = document.getElementById('metaWindowPage');
+  if (!page) return;
+  var lastVersion = page.getAttribute('data-version');
+  window.setInterval(async function () {
+    if (document.hidden) return;
+    try {
+      var response = await fetch(page.getAttribute('data-version-url'), {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      });
+      if (!response.ok) return;
+      var data = await response.json();
+      if (data.version !== lastVersion) window.location.reload();
+    } catch (error) {
+      // El siguiente ciclo vuelve a intentarlo sin interrumpir la pantalla.
+    }
+  }, 30000);
+})();
+</script>
+{% endblock %}
