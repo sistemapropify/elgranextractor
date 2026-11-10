@@ -380,33 +380,52 @@ def capture_formalization_details(district, report):
         len(tasks),
         int(os.environ.get('CATASTRO_FORMALIZATION_WORKERS', '12')),
     )
-    with ThreadPoolExecutor(
-            max_workers=max(1, workers),
-            thread_name_prefix='formalizacion') as pool:
-        futures = [pool.submit(load_detail, task) for task in tasks]
-        for index, future in enumerate(as_completed(futures), 1):
-            task, error, record = future.result()
-            lot, source, predio, object_id = task
-            if error is None:
-                saved += 1
-                records.append(record)
-            else:
-                failed += 1
-                report['formalization_detail_failures'].append({
-                    'ubigeo': district,
-                    'source': source,
-                    'predio': predio,
-                    'object_id': object_id,
-                    'error': error,
-                })
-            processed = index + skipped
-            if processed % 100 == 0 or processed == len(lots):
-                print(
-                    'FORMAL_PROGRESS', district, processed, len(lots),
-                    'saved', saved, 'failed', failed, 'skipped', skipped,
-                    flush=True,
-                )
-                write_report(report)
+    pending = tasks
+    failure_messages = {}
+    for capture_attempt in range(6):
+        if not pending:
+            break
+        next_pending = []
+        with ThreadPoolExecutor(
+                max_workers=max(1, min(workers, len(pending))),
+                thread_name_prefix='formalizacion') as pool:
+            futures = [pool.submit(load_detail, task) for task in pending]
+            for index, future in enumerate(as_completed(futures), 1):
+                task, error, record = future.result()
+                lot, source, predio, object_id = task
+                if error is None:
+                    saved += 1
+                    records.append(record)
+                    failure_messages.pop(task, None)
+                else:
+                    next_pending.append(task)
+                    failure_messages[task] = error
+                if index % 100 == 0 or index == len(pending):
+                    print(
+                        'FORMAL_PROGRESS', district, index, len(pending),
+                        'pass', capture_attempt + 1,
+                        'saved', saved, 'pending', len(next_pending),
+                        'skipped', skipped,
+                        flush=True,
+                    )
+                    write_report(report)
+        pending = next_pending
+        if pending and capture_attempt < 5:
+            delay = min(30 * (capture_attempt + 1), 180)
+            print(
+                'FORMAL_RETRY', district, capture_attempt + 1,
+                'pending', len(pending), 'wait', delay, flush=True)
+            time.sleep(delay)
+    failed = len(pending)
+    for task in pending:
+        lot, source, predio, object_id = task
+        report['formalization_detail_failures'].append({
+            'ubigeo': district,
+            'source': source,
+            'predio': predio,
+            'object_id': object_id,
+            'error': failure_messages.get(task, 'No se pudo descargar'),
+        })
     item = {
         'ubigeo': district,
         'district': metadata['name'],
