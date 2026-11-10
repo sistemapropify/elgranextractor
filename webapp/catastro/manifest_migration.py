@@ -5,6 +5,7 @@ import hashlib
 import json
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 from . import geollaqta_bulk
 from . import master_store
@@ -19,8 +20,7 @@ def _uid(*parts):
 
 
 def _prepared(ubigeo, lot_ids, cloud):
-    prepared = []
-    for lot_id in lot_ids:
+    def load(lot_id):
         manifest, snapshot, digest = geollaqta_bulk._manifest(
             cloud, ubigeo, lot_id)
         payload = prepare(manifest, source_verified=True)
@@ -39,8 +39,12 @@ def _prepared(ubigeo, lot_ids, cloud):
                     'attributes', {}).get('ID_LOTE'),
             'observed_at': manifest.get('retrieved_at'),
         })
-        prepared.append(payload)
-    return prepared
+        return payload
+
+    with ThreadPoolExecutor(
+            max_workers=max(1, min(8, len(lot_ids))),
+            thread_name_prefix='manifiesto-r2') as pool:
+        return list(pool.map(load, lot_ids))
 
 
 def _merge_payloads(ubigeo, district, prepared):
