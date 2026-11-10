@@ -321,7 +321,14 @@ def _run_all(actor, batch_size, job_id):
 
         districts = sorted(geollaqta.DISTRICTS)
         for ubigeo in districts:
-            ids, truncated = geollaqta_bulk.lot_ids(ubigeo, cloud)
+            try:
+                ids, truncated = geollaqta_bulk.lot_ids(ubigeo, cloud)
+            except StorageError as error:
+                totals['failed_districts'].append({
+                    'ubigeo': ubigeo,
+                    'error': str(error),
+                })
+                continue
             if truncated:
                 totals['failed_districts'].append({
                     'ubigeo': ubigeo,
