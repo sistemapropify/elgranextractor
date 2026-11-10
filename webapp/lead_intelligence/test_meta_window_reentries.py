@@ -64,6 +64,34 @@ class MetaWindowReentryTests(SimpleTestCase):
             NOW + timedelta(hours=24),
         )
 
+    def test_bot_response_does_not_close_reentry(self):
+        messages = [
+            {"timestamp": NOW, "sender": "lead", "text": "Hola"},
+            {
+                "timestamp": NOW + timedelta(hours=1),
+                "sender": "agent",
+                "source_sender": "bot",
+                "text": "Respuesta automática",
+            },
+            {
+                "timestamp": NOW + timedelta(hours=25),
+                "sender": "lead",
+                "text": "Volví",
+            },
+            {
+                "timestamp": NOW + timedelta(hours=25, minutes=3),
+                "sender": "agent",
+                "source_sender": "agent",
+                "text": "Te atiendo",
+            },
+        ]
+        events = meta_window_reentries(messages)
+        self.assertEqual(
+            events[0]["first_agent_response"]["text"],
+            "Te atiendo",
+        )
+        self.assertEqual(events[0]["response_seconds"], 3 * 60)
+
     @patch("lead_intelligence.services._load_user_logins", return_value={46: "lissy"})
     @patch("lead_intelligence.services._lead_result_rows")
     def test_report_maps_responder_to_propify_login(self, lead_rows, _user_logins):

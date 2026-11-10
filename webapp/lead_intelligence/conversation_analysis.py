@@ -133,6 +133,7 @@ def meta_window_reentries(messages, window_hours=24):
                 message
                 for message in messages
                 if message.get("sender") == "agent"
+                and message.get("source_sender", "agent") != "bot"
                 and message["timestamp"] > current["timestamp"]
             ),
             None,
@@ -234,6 +235,7 @@ def analyze_chat_history(raw_history) -> dict:
         if sender not in RECOGNIZED_SENDERS:
             unknown_senders += 1
             continue
+        source_sender = sender
         sender = SENDER_ALIASES[sender]
         timestamp = _timestamp(item.get("timestamp"))
         if timestamp is None:
@@ -245,6 +247,7 @@ def analyze_chat_history(raw_history) -> dict:
                 "sender": sender,
                 "sender_id": item.get("sender_id"),
                 "sender_name": item.get("sender_name"),
+                "source_sender": source_sender,
                 "text": content,
                 "timestamp": timestamp,
                 "position": position,
