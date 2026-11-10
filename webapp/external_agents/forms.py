@@ -51,6 +51,7 @@ class ExternalAgentForm(forms.ModelForm):
             'address',
             'email',
             'mobile',
+            'level',
         ]
         widgets = {
             'first_name': forms.TextInput(attrs={
@@ -90,6 +91,7 @@ class ExternalAgentForm(forms.ModelForm):
                 'inputmode': 'tel',
                 'autocomplete': 'tel',
             }),
+            'level': forms.Select(attrs={'class': SELECT_CLASS}),
         }
 
     def __init__(self, *args, **kwargs):

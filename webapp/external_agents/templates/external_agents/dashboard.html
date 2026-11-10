@@ -230,8 +230,17 @@
             {% endfor %}
         </select>
     </div>
+    <div class="ea-field">
+        <label class="ea-label" for="ea-level">Nivel</label>
+        <select class="ea-select" id="ea-level" name="nivel">
+            <option value="">Todos</option>
+            {% for value, label in level_choices %}
+            <option value="{{ value }}" {% if level_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
     <button class="ea-btn ea-btn-blue" type="submit">Aplicar filtros</button>
-    {% if query or status_filter or document_type_filter %}
+    {% if query or status_filter or document_type_filter or level_filter %}
     <a class="ea-btn" href="{% url 'external_agents:dashboard' %}">Limpiar</a>
     {% endif %}
 </form>
@@ -269,6 +278,7 @@
         </div>
         <footer class="ea-card-footer">
             <div class="ea-card-meta">
+                {% if agent.level %}<span class="ea-badge amber">{{ agent.get_level_display }}</span>{% endif %}
                 <span class="ea-badge blue">{{ agent.attachment_count }} adjunto{{ agent.attachment_count|pluralize }}</span>
                 <span style="color:var(--ea-muted);font-size:10px">Actualizado {{ agent.updated_at|date:"d/m/Y" }}</span>
             </div>
@@ -292,7 +302,7 @@
 {% else %}
 <section class="ea-panel ea-empty">
     <div class="ea-empty-icon" aria-hidden="true">◎</div>
-    {% if query or status_filter or document_type_filter %}
+    {% if query or status_filter or document_type_filter or level_filter %}
     <h3>No encontramos coincidencias</h3>
     <p>Prueba con otro nombre, documento o filtro. Los datos existentes no se modificaron.</p>
     <a class="ea-btn" href="{% url 'external_agents:dashboard' %}">Ver todos los agentes</a>

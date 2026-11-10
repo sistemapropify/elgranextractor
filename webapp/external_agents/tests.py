@@ -31,6 +31,7 @@ class ExternalAgentsViewsTests(TestCase):
             address='Av. Ejemplo 123',
             email='ana@example.com',
             mobile='+51 999 111 222',
+            level=ExternalAgent.Level.SENIOR,
             created_by_username='tester',
             updated_by_username='tester',
         )
@@ -56,6 +57,7 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Ana Quispe Rojas')
         self.assertContains(response, '12345678')
+        self.assertContains(response, 'Senior')
 
     def test_all_module_pages_render(self):
         login_response = self.client.get(reverse('external_agents:login'))
@@ -67,6 +69,9 @@ class ExternalAgentsViewsTests(TestCase):
         self.authenticate_propify()
         create_response = self.client.get(reverse('external_agents:agent_create'))
         self.assertContains(create_response, 'enctype="multipart/form-data"')
+        self.assertContains(create_response, 'Training')
+        self.assertContains(create_response, 'Junior')
+        self.assertContains(create_response, 'Senior')
         pages = [
             reverse('external_agents:agent_create'),
             reverse('external_agents:agent_detail', kwargs={'pk': self.agent.pk}),
@@ -89,6 +94,7 @@ class ExternalAgentsViewsTests(TestCase):
             'address': 'Calle Uno 456',
             'email': 'luis@example.com',
             'mobile': '+51 988 777 666',
+            'level': ExternalAgent.Level.JUNIOR,
         })
         created = ExternalAgent.objects.get(document_number='87654321')
         self.assertRedirects(
@@ -96,6 +102,7 @@ class ExternalAgentsViewsTests(TestCase):
             reverse('external_agents:agent_detail', kwargs={'pk': created.pk}),
         )
         self.assertEqual(created.created_by_username, 'tester')
+        self.assertEqual(created.level, ExternalAgent.Level.JUNIOR)
 
     def test_create_agent_accepts_attachment_during_registration(self):
         self.authenticate_propify()

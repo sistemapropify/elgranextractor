@@ -212,6 +212,9 @@
                         {% endif %}
                     </p>
                 </div>
+                {% if agent.level %}
+                <span class="ea-badge amber">{{ agent.get_level_display }}</span>
+                {% endif %}
                 {% if agent.is_active %}
                 <span class="ea-badge green">Activo</span>
                 {% else %}
@@ -244,6 +247,10 @@
                             No registrado
                         {% endif %}
                     </div>
+                </div>
+                <div class="ea-data-block">
+                    <span class="ea-data-label">Nivel</span>
+                    <div class="ea-data-value">{{ agent.get_level_display|default:"No registrado" }}</div>
                 </div>
                 <div class="ea-data-block">
                     <span class="ea-data-label">Correo electrónico</span>

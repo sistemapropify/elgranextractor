@@ -26,10 +26,11 @@ class ExternalAgentAdmin(admin.ModelAdmin):
         'document_number',
         'email',
         'mobile',
+        'level',
         'is_active',
         'updated_at',
     ]
-    list_filter = ['is_active', 'personal_document_type']
+    list_filter = ['is_active', 'level', 'personal_document_type']
     search_fields = [
         'first_name',
         'paternal_last_name',

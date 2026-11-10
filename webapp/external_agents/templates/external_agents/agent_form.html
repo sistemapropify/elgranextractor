@@ -126,6 +126,11 @@
                     {% if form.maternal_last_name.errors %}<div class="ea-errors">{{ form.maternal_last_name.errors }}</div>{% endif %}
                 </div>
                 <div class="ea-field">
+                    <label class="ea-label" for="{{ form.level.id_for_label }}">Nivel</label>
+                    {{ form.level }}
+                    {% if form.level.errors %}<div class="ea-errors">{{ form.level.errors }}</div>{% endif %}
+                </div>
+                <div class="ea-field">
                     <label class="ea-label" for="{{ form.personal_document_type.id_for_label }}">Tipo de documento personal</label>
                     {{ form.personal_document_type }}
                     {% if form.personal_document_type.errors %}<div class="ea-errors">{{ form.personal_document_type.errors }}</div>{% endif %}

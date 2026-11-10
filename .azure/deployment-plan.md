@@ -117,6 +117,8 @@ and relationships remain in SQL; binary documents live only in Azure Blob.
   identity/contact data, multiple blank records are allowed, and the empty
   QueryDict is now treated as a valid submitted form. Duplicate identity is
   checked only when both document type and number are supplied.
+- Added an optional agent level with `Training`, `Junior` and `Senior` choices,
+  including form, directory filter, card/profile badges and admin filtering.
 - The Propify login submit button locks on the first valid submission, ignores
   repeated submits and restores after browser-history navigation.
 - Final CI/CD, production migration, public route, static assets, login redirect

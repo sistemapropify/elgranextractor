@@ -94,6 +94,7 @@ def dashboard(request):
     query = str(request.GET.get('q') or '').strip()
     status = str(request.GET.get('estado') or '').strip()
     document_type = str(request.GET.get('tipo_documento') or '').strip()
+    level = str(request.GET.get('nivel') or '').strip()
     agents = ExternalAgent.objects.annotate(attachment_count=Count('attachments'))
 
     if query:
@@ -111,6 +112,8 @@ def dashboard(request):
         agents = agents.filter(is_active=False)
     if document_type.isdigit():
         agents = agents.filter(personal_document_type_id=int(document_type))
+    if level in ExternalAgent.Level.values:
+        agents = agents.filter(level=level)
 
     total_agents = ExternalAgent.objects.count()
     active_agents = ExternalAgent.objects.filter(is_active=True).count()
@@ -138,6 +141,8 @@ def dashboard(request):
         'query': query,
         'status_filter': status,
         'document_type_filter': document_type,
+        'level_filter': level,
+        'level_choices': ExternalAgent.Level.choices,
         'document_types': DocumentType.objects.filter(
             scope=DocumentType.Scope.PERSONAL,
             is_active=True,

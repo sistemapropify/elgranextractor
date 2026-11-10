@@ -54,6 +54,11 @@ class DocumentType(models.Model):
 class ExternalAgent(models.Model):
     """Agente inmobiliario externo registrado por el equipo Propify."""
 
+    class Level(models.TextChoices):
+        TRAINING = 'training', 'Training'
+        JUNIOR = 'junior', 'Junior'
+        SENIOR = 'senior', 'Senior'
+
     first_name = models.CharField(
         max_length=120,
         blank=True,
@@ -94,6 +99,13 @@ class ExternalAgent(models.Model):
         max_length=30,
         blank=True,
         verbose_name='Celular',
+    )
+    level = models.CharField(
+        max_length=20,
+        choices=Level.choices,
+        blank=True,
+        db_index=True,
+        verbose_name='Nivel',
     )
     is_active = models.BooleanField(
         default=True,
