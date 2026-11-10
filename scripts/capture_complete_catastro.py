@@ -382,6 +382,7 @@ def capture_formalization_details(district, report):
     )
     pending = tasks
     failure_messages = {}
+    task_key = lambda task: (task[1], task[2], task[3])
     for capture_attempt in range(6):
         if not pending:
             break
@@ -396,10 +397,10 @@ def capture_formalization_details(district, report):
                 if error is None:
                     saved += 1
                     records.append(record)
-                    failure_messages.pop(task, None)
+                    failure_messages.pop(task_key(task), None)
                 else:
                     next_pending.append(task)
-                    failure_messages[task] = error
+                    failure_messages[task_key(task)] = error
                 if index % 100 == 0 or index == len(pending):
                     print(
                         'FORMAL_PROGRESS', district, index, len(pending),
@@ -424,7 +425,8 @@ def capture_formalization_details(district, report):
             'source': source,
             'predio': predio,
             'object_id': object_id,
-            'error': failure_messages.get(task, 'No se pudo descargar'),
+            'error': failure_messages.get(
+                task_key(task), 'No se pudo descargar'),
         })
     item = {
         'ubigeo': district,
