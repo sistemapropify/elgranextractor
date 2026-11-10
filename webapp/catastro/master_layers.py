@@ -122,8 +122,18 @@ def _master_metadata(source_id, summary=None):
             'locked': True,
         },
         'layers': {
-            'lotes': {'count': summary['lotes'], 'kind': 'polygon'},
-            'manzanas': {'count': summary['manzanas'], 'kind': 'polygon'},
+            'lotes': {
+                'count': summary['lotes'],
+                'kind': 'polygon',
+                'sources': (
+                    summary.get('source_counts', {}).get('lote') or {}),
+            },
+            'manzanas': {
+                'count': summary['manzanas'],
+                'kind': 'polygon',
+                'sources': (
+                    summary.get('source_counts', {}).get('manzana') or {}),
+            },
             'vias': {
                 'count': summary.get('vias', 0),
                 'kind': 'line',

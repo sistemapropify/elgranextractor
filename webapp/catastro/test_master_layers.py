@@ -521,4 +521,6 @@ class MasterGeometryTests(SimpleTestCase):
         self.assertNotIn('geollaqta-data.js', html)
         self.assertNotIn('geollaqta-district.js', html)
         self.assertNotIn('collection-form', html)
-        self.assertIn('catastro-maestro.js?v=47', html)
+        self.assertIn('catastro-maestro.js?v=48', html)
+        self.assertIn('master-lotes-pcdpi', html)
+        self.assertIn('master-lotes-formalizacion', html)

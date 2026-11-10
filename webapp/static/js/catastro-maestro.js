@@ -45,8 +45,10 @@
     const collections=new Map(),enabled=new Map(),pending=new Map();
     const dataFeatures=new Map();
     const parkFeatures=new Map();
-    const layerOn={manzanas:true,lotes:true,vias:true,vias_formalizacion:false};
-    const isFormalizationSourceId=sourceId=>String(sourceId||'').startsWith('cofopri-psad56-')
+    const layerOn={manzanas:true,lotes:true,lotes_pcdpi:true,lotes_formalizacion:false,vias:true,vias_formalizacion:false};
+    let lotSourceTouched=false;
+    const isFormalizationSourceId=sourceId=>String(sourceId||'').startsWith('cofopri-formalizacion-')
+        ||String(sourceId||'').startsWith('cofopri-psad56-')
         ||String(sourceId||'').startsWith('cofopri-wgs84-');
     const recordSourceId=item=>item?.feature?.properties?.IDENTITY_SOURCE_ID||item?.source?.id||'';
     const isFormalizationRecord=item=>isFormalizationSourceId(recordSourceId(item));
@@ -160,16 +162,25 @@
             &&(c.key==='vias'?(layerOn.vias||layerOn.vias_formalizacion):layerOn[c.key]));
     }
     function recordVisible(collection,item) {
+        if(collection.key==='lotes'||collection.key==='manzanas')
+            return layerOn[collection.key]&&(isFormalizationRecord(item)
+                ?layerOn.lotes_formalizacion:layerOn.lotes_pcdpi);
         if(collection.key!=='vias')return layerOn[collection.key];
         return isFormalizationRecord(item)?layerOn.vias_formalizacion:layerOn.vias;
     }
     function availableCounts() {
-        const values={manzanas:0,lotes:0,vias:0,vias_formalizacion:0};
+        const values={manzanas:0,lotes:0,lotes_pcdpi:0,lotes_formalizacion:0,vias:0,vias_formalizacion:0};
         for(const source of catalog?.sources||[]){
             if(!source.active||!masterRole(source)||!enabled.get(source.id)
                 ||(district!==ALL_DISTRICTS&&!source.districts.includes(district)))continue;
-            for(const key of ['manzanas','lotes'])
-                values[key]+=Number(source.layers?.[key]?.count||0);
+            for(const key of ['manzanas','lotes']){
+                const count=Number(source.layers?.[key]?.count||0),breakdown=source.layers?.[key]?.sources||{};
+                values[key]+=count;
+                if(key==='lotes'&&Object.keys(breakdown).length){
+                    for(const [sourceId,sourceCount] of Object.entries(breakdown))
+                        values[isFormalizationSourceId(sourceId)?'lotes_formalizacion':'lotes_pcdpi']+=Number(sourceCount||0);
+                }
+            }
             const breakdown=source.layers?.vias?.sources||{};
             if(Object.keys(breakdown).length){
                 for(const [sourceId,count] of Object.entries(breakdown))
@@ -187,6 +198,11 @@
                 .reduce((sum,c)=>sum+c.records.filter(r=>recordVisible(c,r)).length,0);
             el('count-'+key).textContent=fmt(n)+(available[key]>n?' / '+fmt(available[key]):'');
         }
+        const lotRecords=scoped().filter(c=>c.key==='lotes').flatMap(c=>c.records);
+        const lotPcdpi=lotRecords.filter(r=>!isFormalizationRecord(r)).length;
+        const lotFormalization=lotRecords.filter(isFormalizationRecord).length;
+        el('count-lotes-pcdpi').textContent=fmt(lotPcdpi)+(available.lotes_pcdpi>lotPcdpi?' / '+fmt(available.lotes_pcdpi):'');
+        el('count-lotes-formalizacion').textContent=fmt(lotFormalization)+(available.lotes_formalizacion>lotFormalization?' / '+fmt(available.lotes_formalizacion):'');
         el('map-note').textContent=!district?'Selecciona un distrito para cargar sus registros.':!visible().length?'Sin registros maestros visibles en el ámbito seleccionado.':district===ALL_DISTRICTS
             ?'Catastro Maestro · todos los distritos con registros D1 · procedencia conservada por entidad.'
             :'Catastro Maestro · registros vinculados por UUID; cada campo conserva su fuente y versión.';
@@ -200,6 +216,7 @@
         if(!map)return;
         const bounds=new google.maps.LatLngBounds();
         visible().forEach(c=>c.records.forEach(r=>{
+            if(!recordVisible(c,r))return;
             const parts=r.feature.geometry.type==='Polygon'?[r.feature.geometry.coordinates]:r.feature.geometry.coordinates;
             parts.forEach(p=>p[0].forEach(([lng,lat])=>bounds.extend({lat,lng})));
         }));
@@ -610,6 +627,7 @@
     function lotAt(point){
         const target=world(point),matches=[];
         visible().filter(c=>c.key==='lotes').forEach(c=>c.records.forEach(r=>{
+            if(!recordVisible(c,r))return;
             if(target[0]>=r.bbox[0]&&target[0]<=r.bbox[2]&&target[1]>=r.bbox[1]&&target[1]<=r.bbox[3]&&contains(r.feature.geometry,point))matches.push(r);
         }));
         matches.sort((a,b)=>(a.source.role==='draft'?-1:0)-(b.source.role==='draft'?-1:0));
@@ -637,7 +655,10 @@
         const layerVisible=key==='vias'
             ?(isFormalizationSourceId(identitySourceId)
                 ?layerOn.vias_formalizacion:layerOn.vias)
-            :layerOn[key];
+            :(key==='lotes'||key==='manzanas')
+                ?layerOn[key]&&(isFormalizationSourceId(identitySourceId)
+                    ?layerOn.lotes_formalizacion:layerOn.lotes_pcdpi)
+                :layerOn[key];
         return {
             visible:Boolean((district===ALL_DISTRICTS||feature.getProperty('DISTRICT')===district)&&layerVisible&&enabled.get(sourceId)!==false),
             clickable:false,fillOpacity:0,
@@ -659,7 +680,8 @@
                 const features=slice.map(item=>{
                     const masterId=recordId(item.source,item.key,item.feature);
                     return {type:'Feature',properties:{MASTER_ID:masterId,MASTER_LAYER:item.key,
-                        SOURCE_ID:item.source.id,DISTRICT:collection.district},
+                        SOURCE_ID:item.source.id,IDENTITY_SOURCE_ID:item.feature.properties.IDENTITY_SOURCE_ID||item.source.source_key||item.source.id,
+                        DISTRICT:collection.district},
                         geometry:item.feature.geometry};
                 });
                 const added=vectorLayer.addGeoJson({type:'FeatureCollection',features},
@@ -809,6 +831,8 @@
             const concurrency=4;
             await Promise.all(Array.from({length:Math.min(concurrency,sources.length)},()=>worker()));
             if(signal.aborted)return;
+            syncLotSourceDefaults();
+            vectorLayer?.setStyle(vectorStyle);
             loading(null);
             counts();if(fitAfter)fit();
             if(sources.length){
@@ -841,6 +865,18 @@
         }
         changeDistrict(true);
         status('Cayma · plano municipal de 2006 · referencia temporal sin validar.');
+    }
+    function syncLotSourceDefaults(){
+        if(lotSourceTouched)return;
+        const rows=scoped().filter(c=>c.key==='lotes').flatMap(c=>c.records);
+        if(!rows.length)return;
+        const hasPcdpi=rows.some(r=>!isFormalizationRecord(r));
+        const hasFormalization=rows.some(isFormalizationRecord);
+        layerOn.lotes_pcdpi=hasPcdpi;
+        layerOn.lotes_formalizacion=!hasPcdpi&&hasFormalization;
+        if(district===ALL_DISTRICTS){layerOn.lotes_pcdpi=hasPcdpi;layerOn.lotes_formalizacion=hasFormalization;}
+        if(el('lotes-pcdpi'))el('lotes-pcdpi').checked=layerOn.lotes_pcdpi;
+        if(el('lotes-formalizacion'))el('lotes-formalizacion').checked=layerOn.lotes_formalizacion;
     }
     function sourcesPanel() {
         el('sources').replaceChildren();
@@ -974,6 +1010,16 @@
         el('satellite').addEventListener('click',()=>{const value=map.getMapTypeId()!=='satellite';map.setMapTypeId(value?'satellite':'roadmap');el('satellite').setAttribute('aria-pressed',String(value));});
         for(const key of ['manzanas','lotes','vias'])el(key).addEventListener('change',()=>{
             layerOn[key]=el(key).checked;
+            if(selectedFeature){vectorLayer.revertStyle(selectedFeature);selected=null;selectedFeature=null;}
+            counts();vectorLayer.setStyle(vectorStyle);
+        });
+        el('lotes-pcdpi')?.addEventListener('change',()=>{
+            lotSourceTouched=true;layerOn.lotes_pcdpi=el('lotes-pcdpi').checked;
+            if(selectedFeature){vectorLayer.revertStyle(selectedFeature);selected=null;selectedFeature=null;}
+            counts();vectorLayer.setStyle(vectorStyle);
+        });
+        el('lotes-formalizacion')?.addEventListener('change',()=>{
+            lotSourceTouched=true;layerOn.lotes_formalizacion=el('lotes-formalizacion').checked;
             if(selectedFeature){vectorLayer.revertStyle(selectedFeature);selected=null;selectedFeature=null;}
             counts();vectorLayer.setStyle(vectorStyle);
         });

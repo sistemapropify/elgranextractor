@@ -300,7 +300,7 @@ class D1ReadModel:
                           JOIN identities i ON i.entity_id=e.id
                            AND i.layer=e.kind
                           JOIN versions v ON v.id=i.version_id
-                          WHERE e.kind='via'
+                          WHERE e.kind IN ('lote','manzana','via')
                           GROUP BY e.ubigeo,e.kind,v.source_id
                           ORDER BY e.ubigeo,e.kind,v.source_id"""
         if revision is None:
