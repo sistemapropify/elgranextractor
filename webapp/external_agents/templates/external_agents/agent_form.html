@@ -109,21 +109,10 @@
             <div class="ea-errors ea-message error" style="margin-bottom:16px">{{ form.non_field_errors }}</div>
             {% endif %}
             <div class="ea-form-grid">
-                <div class="ea-field">
-                    <label class="ea-label" for="{{ form.first_name.id_for_label }}">Nombre</label>
-                    {{ form.first_name }}
-                    {% if form.first_name.errors %}<div class="ea-errors">{{ form.first_name.errors }}</div>{% endif %}
-                </div>
-                <div class="ea-field">
-                    <label class="ea-label" for="{{ form.paternal_last_name.id_for_label }}">Apellido paterno</label>
-                    {{ form.paternal_last_name }}
-                    {% if form.paternal_last_name.errors %}<div class="ea-errors">{{ form.paternal_last_name.errors }}</div>{% endif %}
-                </div>
-                <div class="ea-field">
-                    <label class="ea-label" for="{{ form.maternal_last_name.id_for_label }}">Apellido materno</label>
-                    {{ form.maternal_last_name }}
-                    <span class="ea-help">Campo opcional.</span>
-                    {% if form.maternal_last_name.errors %}<div class="ea-errors">{{ form.maternal_last_name.errors }}</div>{% endif %}
+                <div class="ea-field ea-span-2">
+                    <label class="ea-label" for="{{ form.full_name.id_for_label }}">Nombre y apellidos</label>
+                    {{ form.full_name }}
+                    {% if form.full_name.errors %}<div class="ea-errors">{{ form.full_name.errors }}</div>{% endif %}
                 </div>
                 <div class="ea-field">
                     <label class="ea-label" for="{{ form.level.id_for_label }}">Nivel</label>

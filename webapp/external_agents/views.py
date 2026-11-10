@@ -99,9 +99,7 @@ def dashboard(request):
 
     if query:
         agents = agents.filter(
-            Q(first_name__icontains=query)
-            | Q(paternal_last_name__icontains=query)
-            | Q(maternal_last_name__icontains=query)
+            Q(full_name__icontains=query)
             | Q(document_number__icontains=query)
             | Q(email__icontains=query)
             | Q(mobile__icontains=query)
@@ -124,9 +122,7 @@ def dashboard(request):
 
     paginator = Paginator(
         agents.select_related('personal_document_type').order_by(
-            'paternal_last_name',
-            'maternal_last_name',
-            'first_name',
+            'full_name',
             'pk',
         ),
         18,

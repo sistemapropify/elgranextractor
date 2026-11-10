@@ -32,9 +32,7 @@ class ExternalAgentAdmin(admin.ModelAdmin):
     ]
     list_filter = ['is_active', 'level', 'personal_document_type']
     search_fields = [
-        'first_name',
-        'paternal_last_name',
-        'maternal_last_name',
+        'full_name',
         'document_number',
         'email',
         'mobile',
@@ -47,7 +45,3 @@ class ExternalAgentAdmin(admin.ModelAdmin):
         'updated_at',
     ]
     inlines = [ExternalAgentAttachmentInline]
-
-    @admin.display(description='Nombre completo')
-    def full_name(self, obj):
-        return obj.full_name

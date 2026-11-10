@@ -119,6 +119,9 @@ and relationships remain in SQL; binary documents live only in Azure Blob.
   checked only when both document type and number are supplied.
 - Added an optional agent level with `Training`, `Junior` and `Senior` choices,
   including form, directory filter, card/profile badges and admin filtering.
+- Consolidated first name and both surnames into one optional `full_name`
+  field. The migration preserves existing agents by concatenating their three
+  legacy name columns before removing them.
 - The Propify login submit button locks on the first valid submission, ignores
   repeated submits and restores after browser-history navigation.
 - Final CI/CD, production migration, public route, static assets, login redirect

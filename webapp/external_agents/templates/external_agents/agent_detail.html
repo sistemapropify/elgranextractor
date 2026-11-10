@@ -1,7 +1,7 @@
 {% extends "external_agents/base.html" %}
 
-{% block page_title %}{{ agent.full_name }}{% endblock %}
-{% block hero_title %}{{ agent.full_name }}{% endblock %}
+{% block page_title %}{{ agent.display_name }}{% endblock %}
+{% block hero_title %}{{ agent.display_name }}{% endblock %}
 {% block hero_subtitle %}Ficha personal, identificación y documentación digital del agente externo.{% endblock %}
 
 {% block head_actions %}
@@ -199,7 +199,7 @@
             <div class="ea-profile-head">
                 <div class="ea-profile-avatar">{{ agent.initials }}</div>
                 <div style="min-width:0;flex:1">
-                    <h2>{{ agent.full_name }}</h2>
+                    <h2>{{ agent.display_name }}</h2>
                     <p>
                         {% if agent.personal_document_type and agent.document_number %}
                             {{ agent.personal_document_type.name }} · {{ agent.document_number }}
@@ -222,17 +222,9 @@
                 {% endif %}
             </div>
             <div class="ea-data-grid">
-                <div class="ea-data-block">
-                    <span class="ea-data-label">Nombre</span>
-                    <div class="ea-data-value">{{ agent.first_name }}</div>
-                </div>
-                <div class="ea-data-block">
-                    <span class="ea-data-label">Apellido paterno</span>
-                    <div class="ea-data-value">{{ agent.paternal_last_name }}</div>
-                </div>
-                <div class="ea-data-block">
-                    <span class="ea-data-label">Apellido materno</span>
-                    <div class="ea-data-value">{{ agent.maternal_last_name|default:"No registrado" }}</div>
+                <div class="ea-data-block wide">
+                    <span class="ea-data-label">Nombre y apellidos</span>
+                    <div class="ea-data-value">{{ agent.full_name|default:"No registrado" }}</div>
                 </div>
                 <div class="ea-data-block">
                     <span class="ea-data-label">Documento</span>

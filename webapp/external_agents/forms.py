@@ -43,9 +43,7 @@ class ExternalAgentForm(forms.ModelForm):
     class Meta:
         model = ExternalAgent
         fields = [
-            'first_name',
-            'paternal_last_name',
-            'maternal_last_name',
+            'full_name',
             'personal_document_type',
             'document_number',
             'address',
@@ -54,20 +52,10 @@ class ExternalAgentForm(forms.ModelForm):
             'level',
         ]
         widgets = {
-            'first_name': forms.TextInput(attrs={
+            'full_name': forms.TextInput(attrs={
                 'class': INPUT_CLASS,
-                'placeholder': 'Nombres del agente',
-                'autocomplete': 'given-name',
-            }),
-            'paternal_last_name': forms.TextInput(attrs={
-                'class': INPUT_CLASS,
-                'placeholder': 'Apellido paterno',
-                'autocomplete': 'family-name',
-            }),
-            'maternal_last_name': forms.TextInput(attrs={
-                'class': INPUT_CLASS,
-                'placeholder': 'Apellido materno',
-                'autocomplete': 'additional-name',
+                'placeholder': 'Nombres y apellidos completos',
+                'autocomplete': 'name',
             }),
             'personal_document_type': forms.Select(attrs={'class': SELECT_CLASS}),
             'document_number': forms.TextInput(attrs={

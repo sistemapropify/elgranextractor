@@ -59,20 +59,11 @@ class ExternalAgent(models.Model):
         JUNIOR = 'junior', 'Junior'
         SENIOR = 'senior', 'Senior'
 
-    first_name = models.CharField(
-        max_length=120,
+    full_name = models.CharField(
+        max_length=400,
         blank=True,
-        verbose_name='Nombre',
-    )
-    paternal_last_name = models.CharField(
-        max_length=120,
-        blank=True,
-        verbose_name='Apellido paterno',
-    )
-    maternal_last_name = models.CharField(
-        max_length=120,
-        blank=True,
-        verbose_name='Apellido materno',
+        db_index=True,
+        verbose_name='Nombre completo',
     )
     personal_document_type = models.ForeignKey(
         DocumentType,
@@ -127,33 +118,27 @@ class ExternalAgent(models.Model):
 
     class Meta:
         db_table = 'external_agents_agent'
-        ordering = ['paternal_last_name', 'maternal_last_name', 'first_name', 'pk']
+        ordering = ['full_name', 'pk']
         verbose_name = 'Agente externo'
         verbose_name_plural = 'Agentes externos'
 
     @property
-    def full_name(self):
-        name = ' '.join(
-            part for part in (
-                self.first_name,
-                self.paternal_last_name,
-                self.maternal_last_name,
-            ) if part
-        ).strip()
-        if name:
-            return name
-        return f'Agente externo #{self.pk}' if self.pk else 'Agente externo'
+    def display_name(self):
+        return (
+            (self.full_name or '').strip()
+            or (f'Agente externo #{self.pk}' if self.pk else 'Agente externo')
+        )
 
     @property
     def initials(self):
         letters = [
-            (self.first_name or '').strip()[:1],
-            (self.paternal_last_name or '').strip()[:1],
+            word[:1] for word in (self.full_name or '').split()[:2]
+            if word
         ]
         return ''.join(letter.upper() for letter in letters if letter) or 'AE'
 
     def __str__(self):
-        return self.full_name
+        return self.display_name
 
 
 class ExternalAgentAttachment(models.Model):

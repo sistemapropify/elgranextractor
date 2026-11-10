@@ -23,9 +23,7 @@ class ExternalAgentsViewsTests(TestCase):
             sort_order=1,
         )
         self.agent = ExternalAgent.objects.create(
-            first_name='Ana',
-            paternal_last_name='Quispe',
-            maternal_last_name='Rojas',
+            full_name='Ana Quispe Rojas',
             personal_document_type=self.personal_type,
             document_number='12345678',
             address='Av. Ejemplo 123',
@@ -86,9 +84,7 @@ class ExternalAgentsViewsTests(TestCase):
     def test_create_agent_records_propify_user(self):
         self.authenticate_propify()
         response = self.client.post(reverse('external_agents:agent_create'), {
-            'first_name': 'Luis',
-            'paternal_last_name': 'Mamani',
-            'maternal_last_name': '',
+            'full_name': 'Luis Mamani',
             'personal_document_type': self.personal_type.pk,
             'document_number': '87654321',
             'address': 'Calle Uno 456',
@@ -118,9 +114,7 @@ class ExternalAgentsViewsTests(TestCase):
             return_value='agentes-externos/2026/11/documento-general.pdf',
         ):
             response = self.client.post(reverse('external_agents:agent_create'), {
-                'first_name': 'Luis',
-                'paternal_last_name': 'Mamani',
-                'maternal_last_name': '',
+                'full_name': 'Luis Mamani',
                 'personal_document_type': self.personal_type.pk,
                 'document_number': '87654321',
                 'address': 'Calle Uno 456',
@@ -146,9 +140,7 @@ class ExternalAgentsViewsTests(TestCase):
             content_type='application/pdf',
         )
         response = self.client.post(reverse('external_agents:agent_create'), {
-            'first_name': 'Luis',
-            'paternal_last_name': 'Mamani',
-            'maternal_last_name': '',
+            'full_name': 'Luis Mamani',
             'personal_document_type': self.personal_type.pk,
             'document_number': '87654321',
             'address': 'Calle Uno 456',
@@ -165,9 +157,7 @@ class ExternalAgentsViewsTests(TestCase):
 
     def test_duplicate_person_document_is_rejected(self):
         form = ExternalAgentForm(data={
-            'first_name': 'Otra',
-            'paternal_last_name': 'Persona',
-            'maternal_last_name': '',
+            'full_name': 'Otra Persona',
             'personal_document_type': self.personal_type.pk,
             'document_number': '12345678',
             'address': 'Calle Dos 789',
@@ -193,8 +183,7 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertEqual(second.status_code, 302)
         self.assertEqual(ExternalAgent.objects.count(), before + 2)
         blank_agents = ExternalAgent.objects.filter(
-            first_name='',
-            paternal_last_name='',
+            full_name='',
             document_number='',
         )
         self.assertGreaterEqual(blank_agents.count(), 2)
