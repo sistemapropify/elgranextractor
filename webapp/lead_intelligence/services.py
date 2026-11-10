@@ -541,7 +541,7 @@ def _lead_result_rows(
 
 
 def get_crm_data_version():
-    """Return a lightweight fingerprint for polling CRM-backed screens."""
+    """Return a lightweight fingerprint for CRM and assessment updates."""
     with connections["propifai"].cursor() as cursor:
         cursor.execute(
             """
@@ -556,7 +556,17 @@ def get_crm_data_version():
             """
         )
         row = _one(cursor)
-    return f"{row.get('lead_count', 0)}:{row.get('latest_activity_at') or ''}"
+    latest_assessment = (
+        LeadConversationAssessment.objects.using("default")
+        .order_by("-analyzed_at")
+        .values_list("analyzed_at", flat=True)
+        .first()
+    )
+    return (
+        f"{row.get('lead_count', 0)}:"
+        f"{row.get('latest_activity_at') or ''}:"
+        f"{latest_assessment.isoformat() if latest_assessment else ''}"
+    )
 
 
 # Horario de atención de negocio: 09:00 a 18:00 (hora de Perú). La hora 18
