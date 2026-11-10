@@ -22,6 +22,11 @@ class ExternalAgentsViewsTests(TestCase):
             scope=DocumentType.Scope.ATTACHMENT,
             sort_order=1,
         )
+        self.attachment_type_cv = DocumentType.objects.create(
+            name='Curriculum Vitae',
+            scope=DocumentType.Scope.ATTACHMENT,
+            sort_order=2,
+        )
         self.agent = ExternalAgent.objects.create(
             full_name='Ana Quispe Rojas',
             personal_document_type=self.personal_type,
@@ -100,18 +105,32 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertEqual(created.created_by_username, 'tester')
         self.assertEqual(created.level, ExternalAgent.Level.JUNIOR)
 
-    def test_create_agent_accepts_attachment_during_registration(self):
+    def test_create_agent_accepts_multiple_attachments_during_registration(self):
         self.authenticate_propify()
-        uploaded = SimpleUploadedFile(
-            'documento-general.pdf',
+        identity = SimpleUploadedFile(
+            'dni.pdf',
             b'%PDF-1.4 registration',
+            content_type='application/pdf',
+        )
+        curriculum = SimpleUploadedFile(
+            'curriculum.pdf',
+            b'%PDF-1.4 curriculum',
+            content_type='application/pdf',
+        )
+        certificate = SimpleUploadedFile(
+            'certificado.pdf',
+            b'%PDF-1.4 certificate',
             content_type='application/pdf',
         )
         field = ExternalAgentAttachment._meta.get_field('file')
         with patch.object(
             field.storage,
             'save',
-            return_value='agentes-externos/2026/11/documento-general.pdf',
+            side_effect=[
+                'agentes-externos/2026/11/dni.pdf',
+                'agentes-externos/2026/11/curriculum.pdf',
+                'agentes-externos/2026/11/certificado.pdf',
+            ],
         ):
             response = self.client.post(reverse('external_agents:agent_create'), {
                 'full_name': 'Luis Mamani',
@@ -120,17 +139,26 @@ class ExternalAgentsViewsTests(TestCase):
                 'address': 'Calle Uno 456',
                 'email': 'luis@example.com',
                 'mobile': '+51 988 777 666',
-                'attachment_type': self.attachment_type.pk,
-                'attachment_file': uploaded,
+                'doc_2-document_type': self.attachment_type.pk,
+                'doc_2-file': identity,
+                'doc_3-document_type': self.attachment_type_cv.pk,
+                'doc_3-file': curriculum,
+                'doc_4-document_type': self.attachment_type_cv.pk,
+                'doc_4-file': certificate,
             })
         created = ExternalAgent.objects.get(document_number='87654321')
         self.assertRedirects(
             response,
             reverse('external_agents:agent_detail', kwargs={'pk': created.pk}),
         )
-        attachment = ExternalAgentAttachment.objects.get(agent=created)
-        self.assertEqual(attachment.document_type, self.attachment_type)
-        self.assertEqual(attachment.original_name, 'documento-general.pdf')
+        attachments = list(
+            ExternalAgentAttachment.objects.filter(agent=created).order_by('pk')
+        )
+        self.assertEqual(len(attachments), 3)
+        self.assertEqual(
+            [attachment.original_name for attachment in attachments],
+            ['dni.pdf', 'curriculum.pdf', 'certificado.pdf'],
+        )
 
     def test_attachment_during_registration_requires_its_type(self):
         self.authenticate_propify()
@@ -146,12 +174,12 @@ class ExternalAgentsViewsTests(TestCase):
             'address': 'Calle Uno 456',
             'email': 'luis@example.com',
             'mobile': '+51 988 777 666',
-            'attachment_file': uploaded,
+            'doc_0-file': uploaded,
         })
         self.assertEqual(response.status_code, 200)
         self.assertContains(
             response,
-            'Selecciona el tipo y adjunta el archivo para guardar el documento.',
+            'Selecciona el tipo de documento.',
         )
         self.assertFalse(ExternalAgent.objects.filter(document_number='87654321').exists())
 
@@ -219,7 +247,10 @@ class ExternalAgentsViewsTests(TestCase):
         ) as storage_save:
             response = self.client.post(
                 reverse('external_agents:attachment_upload', kwargs={'pk': self.agent.pk}),
-                {'document_type': self.attachment_type.pk, 'file': uploaded},
+                {
+                    'doc_0-document_type': self.attachment_type.pk,
+                    'doc_0-file': uploaded,
+                },
             )
         self.assertRedirects(
             response,

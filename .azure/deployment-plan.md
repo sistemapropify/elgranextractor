@@ -122,6 +122,10 @@ and relationships remain in SQL; binary documents live only in Azure Blob.
 - Consolidated first name and both surnames into one optional `full_name`
   field. The migration preserves existing agents by concatenating their three
   legacy name columns before removing them.
+- Registration and agent detail now expose six initial document rows and can
+  add more dynamically, with independent type/file pairs and up to 20 documents
+  per submission. Indexed server-side field names keep blank rows from shifting
+  file-to-type associations.
 - The Propify login submit button locks on the first valid submission, ignores
   repeated submits and restores after browser-history navigation.
 - Final CI/CD, production migration, public route, static assets, login redirect

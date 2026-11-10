@@ -276,22 +276,45 @@
         {% if attachment_types_available %}
         <form class="ea-upload-box" method="post" enctype="multipart/form-data" action="{% url 'external_agents:attachment_upload' pk=agent.pk %}">
             {% csrf_token %}
-            <div class="ea-upload-grid">
-                <div class="ea-field">
-                    <label class="ea-label" for="{{ attachment_form.document_type.id_for_label }}">Tipo de documento</label>
-                    {{ attachment_form.document_type }}
-                    {% if attachment_form.document_type.errors %}<div class="ea-errors">{{ attachment_form.document_type.errors }}</div>{% endif %}
+            <div class="ea-upload-rows" id="eaDetailAttachmentRows">
+                {% for attachment_form in attachment_forms %}
+                <div class="ea-upload-row">
+                    <div class="ea-field">
+                        <span class="ea-label">Tipo de documento</span>
+                        {{ attachment_form.document_type }}
+                        {% if attachment_form.document_type.errors %}<div class="ea-errors">{{ attachment_form.document_type.errors }}</div>{% endif %}
+                    </div>
+                    <div class="ea-field">
+                        <span class="ea-label">Archivo</span>
+                        {{ attachment_form.file }}
+                        {% if attachment_form.file.errors %}<div class="ea-errors">{{ attachment_form.file.errors }}</div>{% endif %}
+                        <span class="ea-help">{{ attachment_form.file.help_text }}</span>
+                    </div>
+                    <button class="ea-upload-remove" type="button" title="Quitar esta fila" aria-label="Quitar esta fila">×</button>
                 </div>
-                <div class="ea-field">
-                    <label class="ea-label" for="{{ attachment_form.file.id_for_label }}">Archivo</label>
-                    {{ attachment_form.file }}
-                    {% if attachment_form.file.errors %}<div class="ea-errors">{{ attachment_form.file.errors }}</div>{% endif %}
-                    <span class="ea-help">{{ attachment_form.file.help_text }}</span>
-                </div>
+                {% endfor %}
+            </div>
+            <div class="ea-upload-toolbar">
+                <button class="ea-btn ea-btn-small" type="button" id="eaDetailAttachmentAdd">＋ Agregar otro documento</button>
+                <span class="ea-upload-limit">Hasta 20 documentos por operación</span>
             </div>
             <div class="ea-upload-actions">
-                <button class="ea-btn ea-btn-blue ea-btn-small" type="submit">Subir documento</button>
+                <button class="ea-btn ea-btn-blue ea-btn-small" type="submit">Subir documentos</button>
             </div>
+            <template id="eaDetailAttachmentRowTemplate">
+                <div class="ea-upload-row">
+                    <div class="ea-field">
+                        <span class="ea-label">Tipo de documento</span>
+                        {{ empty_attachment_form.document_type }}
+                    </div>
+                    <div class="ea-field">
+                        <span class="ea-label">Archivo</span>
+                        {{ empty_attachment_form.file }}
+                        <span class="ea-help">{{ empty_attachment_form.file.help_text }}</span>
+                    </div>
+                    <button class="ea-upload-remove" type="button" title="Quitar esta fila" aria-label="Quitar esta fila">×</button>
+                </div>
+            </template>
         </form>
         {% else %}
         <div class="ea-upload-box" style="color:var(--ea-muted);font-size:12px;line-height:1.55">
@@ -324,4 +347,43 @@
         {% endif %}
     </section>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+    (() => {
+        const rows = document.getElementById('eaDetailAttachmentRows');
+        const template = document.getElementById('eaDetailAttachmentRowTemplate');
+        const addButton = document.getElementById('eaDetailAttachmentAdd');
+        if (!rows || !template || !addButton) return;
+        const maximum = 20;
+        let nextIndex = maximum;
+
+        function updateLimit() {
+            addButton.disabled = rows.children.length >= maximum;
+        }
+
+        addButton.addEventListener('click', () => {
+            if (rows.children.length >= maximum) return;
+            const markup = template.innerHTML.replaceAll(
+                '__index__',
+                String(nextIndex++)
+            );
+            rows.appendChild(
+                document.createRange().createContextualFragment(markup)
+            );
+            updateLimit();
+        });
+
+        rows.addEventListener('click', (event) => {
+            const remove = event.target.closest('.ea-upload-remove');
+            if (!remove) return;
+            remove.closest('.ea-upload-row')?.remove();
+            updateLimit();
+        });
+
+        updateLimit();
+    })();
+</script>
 {% endblock %}

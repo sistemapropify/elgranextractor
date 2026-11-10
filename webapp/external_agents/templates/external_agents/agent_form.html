@@ -61,16 +61,13 @@
     .ea-guide a:hover { text-decoration: underline; }
     .ea-registration-attachment {
         grid-column: 1 / -1;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-        gap: 14px;
+        display: block;
         padding: 15px;
         border: 1px solid var(--ea-border);
         border-radius: 10px;
         background: rgba(31, 111, 235, .06);
     }
     .ea-registration-attachment__head {
-        grid-column: 1 / -1;
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
@@ -85,13 +82,15 @@
         font-size: 11px;
         line-height: 1.45;
     }
+    .ea-registration-attachment .ea-upload-rows {
+        margin-top: 12px;
+    }
     @media (max-width: 950px) {
         .ea-form-layout { grid-template-columns: 1fr; }
         .ea-guide { position: static; }
     }
     @media (max-width: 620px) {
         .ea-form-grid { grid-template-columns: 1fr; }
-        .ea-registration-attachment { grid-template-columns: 1fr; }
         .ea-span-2 { grid-column: auto; }
         .ea-registration-attachment { grid-column: auto; }
         .ea-form-actions { flex-direction: column-reverse; }
@@ -148,22 +147,55 @@
                 <div class="ea-registration-attachment">
                     <div class="ea-registration-attachment__head">
                         <div>
-                            <strong>Documento adjunto</strong>
-                            <span>Puedes guardar un archivo junto con el registro. Los demás documentos se agregan después desde la ficha.</span>
+                            <strong>Documentos adjuntos</strong>
+                            <span>Puedes cargar varios documentos a la vez, cada uno con su tipo.</span>
                         </div>
                         <span class="ea-badge blue">Opcional</span>
                     </div>
-                    <div class="ea-field">
-                        <label class="ea-label" for="{{ form.attachment_type.id_for_label }}">Tipo de documento</label>
-                        {{ form.attachment_type }}
-                        {% if form.attachment_type.errors %}<div class="ea-errors">{{ form.attachment_type.errors }}</div>{% endif %}
+                    {% if attachment_types_available %}
+                    {% if attachment_error %}<div class="ea-message error">{{ attachment_error }}</div>{% endif %}
+                    <div class="ea-upload-rows" id="eaAttachmentRows">
+                        {% for attachment_form in attachment_forms %}
+                        <div class="ea-upload-row">
+                            <div class="ea-field">
+                                <span class="ea-label">Tipo de documento</span>
+                                {{ attachment_form.document_type }}
+                                {% if attachment_form.document_type.errors %}<div class="ea-errors">{{ attachment_form.document_type.errors }}</div>{% endif %}
+                            </div>
+                            <div class="ea-field">
+                                <span class="ea-label">Archivo</span>
+                                {{ attachment_form.file }}
+                                {% if attachment_form.file.errors %}<div class="ea-errors">{{ attachment_form.file.errors }}</div>{% endif %}
+                                <span class="ea-help">{{ attachment_form.file.help_text }}</span>
+                            </div>
+                            <button class="ea-upload-remove" type="button" title="Quitar esta fila" aria-label="Quitar esta fila">×</button>
+                        </div>
+                        {% endfor %}
                     </div>
-                    <div class="ea-field">
-                        <label class="ea-label" for="{{ form.attachment_file.id_for_label }}">Archivo</label>
-                        {{ form.attachment_file }}
-                        {% if form.attachment_file.errors %}<div class="ea-errors">{{ form.attachment_file.errors }}</div>{% endif %}
-                        <span class="ea-help">{{ form.attachment_file.help_text }}</span>
+                    <div class="ea-upload-toolbar">
+                        <button class="ea-btn ea-btn-small" type="button" id="eaAttachmentAdd">＋ Agregar otro documento</button>
+                        <span class="ea-upload-limit">Hasta 20 documentos por operación · máximo 15 MB por archivo</span>
                     </div>
+                    <template id="eaAttachmentRowTemplate">
+                        <div class="ea-upload-row">
+                            <div class="ea-field">
+                                <span class="ea-label">Tipo de documento</span>
+                                {{ empty_attachment_form.document_type }}
+                            </div>
+                            <div class="ea-field">
+                                <span class="ea-label">Archivo</span>
+                                {{ empty_attachment_form.file }}
+                                <span class="ea-help">{{ empty_attachment_form.file.help_text }}</span>
+                            </div>
+                            <button class="ea-upload-remove" type="button" title="Quitar esta fila" aria-label="Quitar esta fila">×</button>
+                        </div>
+                    </template>
+                    {% else %}
+                    <div class="ea-message warning" style="margin-top:12px">
+                        No hay tipos de documento configurados para adjuntos.
+                        <a href="{% url 'external_agents:configuration' %}">Crea el primero en Configuración</a>.
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             <div class="ea-form-actions">
@@ -185,9 +217,48 @@
         <ul>
             <li>Si completas tipo y número, verifica que correspondan al mismo documento.</li>
             <li>El apellido materno puede quedar vacío.</li>
-            <li>Puedes adjuntar un documento durante el alta; después podrás agregar más desde la ficha.</li>
+            <li>Puedes cargar varios documentos durante el alta; después podrás agregar más desde la ficha.</li>
         </ul>
         <p style="margin-top:14px"><a href="{% url 'external_agents:configuration' %}">Administrar tipos de documento →</a></p>
     </aside>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+    (() => {
+        const rows = document.getElementById('eaAttachmentRows');
+        const template = document.getElementById('eaAttachmentRowTemplate');
+        const addButton = document.getElementById('eaAttachmentAdd');
+        if (!rows || !template || !addButton) return;
+        const maximum = 20;
+        let nextIndex = maximum;
+
+        function updateLimit() {
+            addButton.disabled = rows.children.length >= maximum;
+        }
+
+        addButton.addEventListener('click', () => {
+            if (rows.children.length >= maximum) return;
+            const markup = template.innerHTML.replaceAll(
+                '__index__',
+                String(nextIndex++)
+            );
+            rows.appendChild(
+                document.createRange().createContextualFragment(markup)
+            );
+            updateLimit();
+        });
+
+        rows.addEventListener('click', (event) => {
+            const remove = event.target.closest('.ea-upload-remove');
+            if (!remove) return;
+            remove.closest('.ea-upload-row')?.remove();
+            updateLimit();
+        });
+
+        updateLimit();
+    })();
+</script>
 {% endblock %}

@@ -389,6 +389,55 @@
         display: inline-flex;
     }
 
+    .ea-upload-rows {
+        display: grid;
+        gap: 10px;
+    }
+
+    .ea-upload-row {
+        display: grid;
+        grid-template-columns: minmax(180px, .9fr) minmax(220px, 1.1fr) 36px;
+        gap: 10px;
+        align-items: end;
+        padding: 11px;
+        border: 1px solid var(--ea-border);
+        border-radius: 9px;
+        background: rgba(13, 17, 23, .35);
+    }
+
+    .ea-upload-remove {
+        width: 36px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(248, 81, 73, .45);
+        border-radius: 8px;
+        background: rgba(248, 81, 73, .08);
+        color: #ff958e;
+        font: inherit;
+        font-size: 18px;
+        cursor: pointer;
+    }
+
+    .ea-upload-remove:hover {
+        border-color: var(--ea-red);
+        background: rgba(248, 81, 73, .16);
+    }
+
+    .ea-upload-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 11px;
+    }
+
+    .ea-upload-limit {
+        color: var(--ea-muted);
+        font-size: 11px;
+    }
+
     @media (max-width: 760px) {
         .ea-module-head {
             flex-direction: column;
@@ -407,6 +456,14 @@
             width: 42px;
             height: 42px;
             border-radius: 11px;
+        }
+
+        .ea-upload-row {
+            grid-template-columns: 1fr;
+        }
+
+        .ea-upload-remove {
+            width: 100%;
         }
     }
 </style>

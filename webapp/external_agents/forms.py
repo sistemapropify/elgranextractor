@@ -23,23 +23,6 @@ def clean_attachment_file(uploaded):
 
 
 class ExternalAgentForm(forms.ModelForm):
-    attachment_type = forms.ModelChoiceField(
-        queryset=DocumentType.objects.none(),
-        required=False,
-        label='Tipo de documento adjunto',
-        empty_label='Seleccionar tipo de adjunto',
-        widget=forms.Select(attrs={'class': SELECT_CLASS}),
-    )
-    attachment_file = forms.FileField(
-        required=False,
-        label='Documento adjunto',
-        help_text='Opcional. PDF, JPG, PNG o WEBP. Máximo 15 MB.',
-        widget=forms.FileInput(attrs={
-            'class': 'ea-file-input',
-            'accept': '.pdf,.png,.jpg,.jpeg,.webp',
-        }),
-    )
-
     class Meta:
         model = ExternalAgent
         fields = [
@@ -92,13 +75,8 @@ class ExternalAgentForm(forms.ModelForm):
             .order_by('sort_order', 'name', 'pk')
         )
         self.fields['personal_document_type'].empty_label = 'Seleccionar tipo de documento'
-        self.fields['attachment_type'].queryset = (
-            DocumentType.objects
-            .filter(scope=DocumentType.Scope.ATTACHMENT, is_active=True)
-            .order_by('sort_order', 'name', 'pk')
-        )
         for field_name, field in self.fields.items():
-            if field.required and field_name != 'attachment_file':
+            if field.required:
                 field.widget.attrs['aria-required'] = 'true'
 
     def clean(self):
@@ -118,18 +96,6 @@ class ExternalAgentForm(forms.ModelForm):
                     'document_number',
                     'Ya existe un agente externo con este tipo y número de documento.',
                 )
-        attachment_type = cleaned.get('attachment_type')
-        attachment_file = cleaned.get('attachment_file')
-        if bool(attachment_type) != bool(attachment_file):
-            self.add_error(
-                'attachment_file' if attachment_file else 'attachment_type',
-                'Selecciona el tipo y adjunta el archivo para guardar el documento.',
-            )
-        if attachment_file:
-            try:
-                clean_attachment_file(attachment_file)
-            except forms.ValidationError as error:
-                self.add_error('attachment_file', error)
         return cleaned
 
 
@@ -161,6 +127,19 @@ class AttachmentForm(forms.ModelForm):
             return uploaded
         self.original_name = clean_attachment_file(uploaded)
         return uploaded
+
+    def clean(self):
+        cleaned = super().clean()
+        document_type = cleaned.get('document_type')
+        uploaded = cleaned.get('file')
+        if uploaded and not document_type:
+            self.add_error(
+                'document_type',
+                'Selecciona el tipo de documento.',
+            )
+        elif document_type and not uploaded:
+            self.add_error('file', 'Selecciona el archivo.')
+        return cleaned
 
 
 class DocumentTypeForm(forms.ModelForm):

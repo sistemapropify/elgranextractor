@@ -1,4 +1,5 @@
 import mimetypes
+import re
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlencode
@@ -23,6 +24,10 @@ from .forms import AttachmentForm, DocumentTypeForm, ExternalAgentForm
 from .models import DocumentType, ExternalAgent, ExternalAgentAttachment
 
 
+MAX_ATTACHMENTS_PER_SUBMISSION = 20
+INITIAL_ATTACHMENT_ROWS = 6
+
+
 def _username(request):
     principal = getattr(request, 'propify_user', None)
     return str(getattr(principal, 'username', '') or '').strip()
@@ -37,6 +42,93 @@ def _safe_next(request, default='/agentes-externos/'):
     ):
         return candidate
     return default
+
+
+def _empty_attachment_forms():
+    return [
+        AttachmentForm(prefix=f'doc_{index}')
+        for index in range(INITIAL_ATTACHMENT_ROWS)
+    ]
+
+
+def _attachment_forms_from_request(request):
+    if request.method != 'POST':
+        return _empty_attachment_forms(), ''
+
+    indices = sorted({
+        int(match.group(1))
+        for key in [*request.POST.keys(), *request.FILES.keys()]
+        if (match := re.fullmatch(r'doc_(\d+)-(?:document_type|file)', key))
+    })
+    if len(indices) > MAX_ATTACHMENTS_PER_SUBMISSION:
+        return [], (
+            f'Puedes subir como máximo {MAX_ATTACHMENTS_PER_SUBMISSION} '
+            'documentos por operación.'
+        )
+    if indices:
+        forms = []
+        for index in indices:
+            prefix = f'doc_{index}'
+            document_type = request.POST.get(f'{prefix}-document_type')
+            uploaded = request.FILES.get(f'{prefix}-file')
+            if not document_type and not uploaded:
+                continue
+            forms.append(AttachmentForm(
+                data=request.POST,
+                files=request.FILES,
+                prefix=prefix,
+            ))
+        return forms, ''
+
+    # Backward-compatible single attachment payload.
+    document_types = request.POST.getlist('document_type')
+    uploaded_files = request.FILES.getlist('file')
+    count = max(len(document_types), len(uploaded_files))
+    if count > MAX_ATTACHMENTS_PER_SUBMISSION:
+        return [], (
+            f'Puedes subir como máximo {MAX_ATTACHMENTS_PER_SUBMISSION} '
+            'documentos por operación.'
+        )
+    forms = []
+    for index in range(count):
+        document_type = document_types[index] if index < len(document_types) else ''
+        uploaded = uploaded_files[index] if index < len(uploaded_files) else None
+        if not document_type and not uploaded:
+            continue
+        forms.append(AttachmentForm(
+            data={'document_type': document_type},
+            files={'file': uploaded} if uploaded else None,
+        ))
+    return forms, ''
+
+
+def _save_attachment_forms(request, agent, forms):
+    saved = 0
+    for form in forms:
+        if not form.is_valid():
+            continue
+        attachment = form.save(commit=False)
+        attachment.agent = agent
+        attachment.original_name = getattr(form, 'original_name', '')
+        attachment.uploaded_by_username = _username(request)
+        try:
+            attachment.save()
+        except Exception:
+            messages.error(
+                request,
+                'Uno de los documentos no pudo subirse a Azure. '
+                'Puedes intentarlo nuevamente desde la ficha.',
+            )
+            continue
+        saved += 1
+    if saved:
+        suffix = 's' if saved != 1 else ''
+        messages.success(
+            request,
+            f'{saved} documento{suffix} adjunto{suffix} '
+            f'guardado{suffix} en Azure.',
+        )
+    return saved
 
 
 def external_agent_access_required(view_func):
@@ -159,18 +251,29 @@ def agent_create(request):
         request.POST if request.method == 'POST' else None,
         request.FILES if request.method == 'POST' else None,
     )
-    if request.method == 'POST' and form.is_valid():
+    attachment_forms, attachment_error = _attachment_forms_from_request(request)
+    agent_valid = form.is_valid()
+    attachments_valid = not attachment_error and all(
+        attachment_form.is_valid() for attachment_form in attachment_forms
+    )
+    if request.method == 'POST' and agent_valid and attachments_valid:
         agent = form.save(commit=False)
         agent.created_by_username = _username(request)
         agent.updated_by_username = agent.created_by_username
         agent.save()
-        _save_optional_attachment(request, agent, form)
+        _save_attachment_forms(request, agent, attachment_forms)
         messages.success(request, 'Agente externo registrado correctamente.')
         return redirect('external_agents:agent_detail', pk=agent.pk)
     return render(request, 'external_agents/agent_form.html', {
         'form': form,
         'mode': 'create',
         'agent': None,
+        'attachment_forms': attachment_forms,
+        'empty_attachment_form': AttachmentForm(prefix='doc___index__'),
+        'attachment_error': attachment_error,
+        'attachment_types_available': (
+            AttachmentForm().fields['document_type'].queryset.exists()
+        ),
     })
 
 
@@ -182,44 +285,29 @@ def agent_edit(request, pk):
         request.FILES if request.method == 'POST' else None,
         instance=agent,
     )
-    if request.method == 'POST' and form.is_valid():
+    attachment_forms, attachment_error = _attachment_forms_from_request(request)
+    agent_valid = form.is_valid()
+    attachments_valid = not attachment_error and all(
+        attachment_form.is_valid() for attachment_form in attachment_forms
+    )
+    if request.method == 'POST' and agent_valid and attachments_valid:
         agent = form.save(commit=False)
         agent.updated_by_username = _username(request)
         agent.save()
-        _save_optional_attachment(request, agent, form)
+        _save_attachment_forms(request, agent, attachment_forms)
         messages.success(request, 'Datos del agente actualizados.')
         return redirect('external_agents:agent_detail', pk=agent.pk)
     return render(request, 'external_agents/agent_form.html', {
         'form': form,
         'mode': 'edit',
         'agent': agent,
+        'attachment_forms': attachment_forms,
+        'empty_attachment_form': AttachmentForm(prefix='doc___index__'),
+        'attachment_error': attachment_error,
+        'attachment_types_available': (
+            AttachmentForm().fields['document_type'].queryset.exists()
+        ),
     })
-
-
-def _save_optional_attachment(request, agent, form):
-    document_type = form.cleaned_data.get('attachment_type')
-    uploaded = form.cleaned_data.get('attachment_file')
-    if not document_type or not uploaded:
-        return None
-    from .forms import clean_attachment_file
-    attachment = ExternalAgentAttachment(
-        agent=agent,
-        document_type=document_type,
-        file=uploaded,
-        original_name=clean_attachment_file(uploaded),
-        uploaded_by_username=_username(request),
-    )
-    try:
-        attachment.save()
-    except Exception:
-        messages.error(
-            request,
-            'La ficha del agente se guardó, pero el documento no pudo subirse a Azure. '
-            'Puedes intentarlo nuevamente desde la ficha.',
-        )
-        return None
-    messages.success(request, 'Documento adjunto guardado en Azure.')
-    return attachment
 
 
 @external_agent_access_required
@@ -228,13 +316,15 @@ def agent_detail(request, pk):
         ExternalAgent.objects.select_related('personal_document_type'),
         pk=pk,
     )
-    attachment_form = AttachmentForm()
+    attachment_forms = _empty_attachment_forms()
+    empty_attachment_form = AttachmentForm(prefix='doc___index__')
     return render(request, 'external_agents/agent_detail.html', {
         'agent': agent,
         'attachments': agent.attachments.select_related('document_type'),
-        'attachment_form': attachment_form,
+        'attachment_forms': attachment_forms,
+        'empty_attachment_form': empty_attachment_form,
         'attachment_types_available': (
-            attachment_form.fields['document_type'].queryset.exists()
+            empty_attachment_form.fields['document_type'].queryset.exists()
         ),
     })
 
@@ -245,18 +335,18 @@ def attachment_upload(request, pk):
     if request.method != 'POST':
         return redirect('external_agents:agent_detail', pk=pk)
 
-    form = AttachmentForm(request.POST, request.FILES)
-    if form.is_valid():
-        attachment = form.save(commit=False)
-        attachment.agent = agent
-        attachment.original_name = getattr(form, 'original_name', '')
-        attachment.uploaded_by_username = _username(request)
-        attachment.save()
-        messages.success(request, 'Documento adjunto guardado.')
+    forms, attachment_error = _attachment_forms_from_request(request)
+    if attachment_error:
+        messages.error(request, attachment_error)
+    elif not forms:
+        messages.error(request, 'Selecciona al menos un tipo y un archivo.')
+    elif not all(form.is_valid() for form in forms):
+        for form in forms:
+            for errors in form.errors.values():
+                for error in errors:
+                    messages.error(request, error)
     else:
-        for errors in form.errors.values():
-            for error in errors:
-                messages.error(request, error)
+        _save_attachment_forms(request, agent, forms)
     return redirect('external_agents:agent_detail', pk=pk)
 
 
