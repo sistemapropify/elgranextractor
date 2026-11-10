@@ -6,5 +6,5 @@ def empty(request):
 
 urlpatterns = [path('catastro/',include('catastro.urls'))]
 urlpatterns += [path(name+'/',empty,name=name) for name in ['login','logout','register']]
-urlpatterns += [path('analisis-crm/',include(([path(name+'/',empty,name=name) for name in ['remarketing_campaigns','remarketing_deliveries','remarketing','dashboard','mobile_updates','lead_funnel_queue']],'analisis_crm'),namespace='analisis_crm'))]
+urlpatterns += [path('analisis-crm/',include(([path(name+'/',empty,name=name) for name in ['remarketing_campaigns','remarketing_deliveries','remarketing','dashboard','mobile_updates','lead_funnel_queue','meta_window_reentries']],'analisis_crm'),namespace='analisis_crm'))]
 urlpatterns += [path('prospects/',include(([path('logout/',empty,name='logout')],'prospects'),namespace='prospects'))]
