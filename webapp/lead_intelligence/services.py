@@ -1127,7 +1127,15 @@ def get_meta_window_reentries(
                 or row.get("agent_name")
                 or "Sin asignar"
             )
-            responder_id = (response or {}).get("sender_id")
+            responder_raw_id = (response or {}).get("sender_id")
+            try:
+                responder_id = (
+                    int(responder_raw_id)
+                    if responder_raw_id not in (None, "")
+                    else None
+                )
+            except (TypeError, ValueError):
+                responder_id = None
             if response_status == "responded" and state != "responded":
                 continue
             if response_status == "pending" and state != "pending":

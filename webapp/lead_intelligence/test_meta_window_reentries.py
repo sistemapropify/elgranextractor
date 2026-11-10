@@ -101,9 +101,9 @@ class MetaWindowReentryTests(SimpleTestCase):
                 "chat_history": json.dumps(
                     [
                         message(1, "lead", "Hola", 0),
-                        message(2, "agent", "Respuesta inicial", 5, 46),
+                        message(2, "agent", "Respuesta inicial", 5, "46"),
                         message(3, "lead", "Volví después", 26 * 60),
-                        message(4, "agent", "Te atiendo", 26 * 60 + 4, 46),
+                        message(4, "agent", "Te atiendo", 26 * 60 + 4, "46"),
                     ]
                 ),
                 "first_name": "Ana",
