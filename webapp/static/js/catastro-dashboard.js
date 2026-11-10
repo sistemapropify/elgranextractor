@@ -120,7 +120,7 @@
     try{
       const data=await api('maestro/migracion/iniciar/',{ubigeo:'all',batch_size:200});
       migrationScope='all';
-      migrationMessage(data.started?'Migración de TODOS los distritos iniciada en Azure. Ya puedes cerrar esta página; el servidor continuará.':'La migración global ya estaba ejecutándose en segundo plano.');
+      migrationMessage(data.started?'Migración de TODOS los distritos iniciada en Azure. Puedes cerrar esta página o apagar tu computadora; el servidor continuará.':'La migración global ya estaba ejecutándose en segundo plano.');
       renderGlobalJob(data.job||{});
     }catch(error){migrationMessage(error.message,true);}
     finally{migrationBusy=false;await loadMigration();}
