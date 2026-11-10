@@ -137,6 +137,19 @@ class MigrationRunnerTests(SimpleTestCase):
         self.assertTrue(result['started'])
         self.assertEqual(claim.call_args.args[3], 50)
 
+    @patch('catastro.migration_runner._claim',
+           return_value=(True, {'id': 'all', 'batch_size': 200}))
+    @patch('catastro.migration_runner.Gateway')
+    @patch('catastro.migration_runner.threading.Thread')
+    def test_all_scope_starts_one_background_worker(
+            self, thread, gateway, claim):
+        result = migration_runner.start_all('admin', 500)
+        self.assertTrue(result['started'])
+        self.assertEqual(claim.call_args.args[1:4], ('all', 'admin', 200))
+        self.assertEqual(thread.call_args.kwargs['name'],
+                         'geollaqta-migration-all')
+        thread.return_value.start.assert_called_once()
+
     @patch('catastro.management.commands.catastro_migration_worker.migration_runner._run')
     @patch('catastro.management.commands.catastro_migration_worker.migration_runner._claim',
            return_value=(True, {'id': 'recovered'}))

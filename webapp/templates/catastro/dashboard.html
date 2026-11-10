@@ -32,10 +32,11 @@
     </div>
     <progress id="master-migration-progress" value="0" max="1" aria-label="Progreso de vinculación al Catastro Maestro"></progress>
     <div class="catastro-pipeline-actions">
-      <button class="catastro-button btn btn-success" id="migrate-master" type="button" disabled>Migrar pendientes al Catastro Maestro</button>
+      <button class="catastro-button btn btn-success" id="migrate-master" type="button" disabled>Migrar TODOS los pendientes al Catastro Maestro</button>
       <a class="catastro-button btn btn-secondary" href="/catastro/maestro/planos/">Ver etapas y calidad</a>
     </div>
-    <p id="master-migration-status" class="catastro-help" role="status">Consultando la vinculación de Yanahuara…</p>
+    <p id="master-migration-status" class="catastro-help" role="status">Consultando la vinculación global del Catastro Maestro…</p>
+    <p class="catastro-help"><strong>Un solo clic:</strong> procesa todos los distritos con información disponible en R2, incluyendo manifiestos de lotes, vectores, fichas formalizadas, titulares, documentos, fotografías y auditoría D1. Continúa desde el último avance.</p>
     <p class="catastro-help"><strong>Registro del proceso:</strong> D1 guarda el estado, actor, lotes procesados, pendientes, revisiones, errores y auditoría bajo la clave <code>migration:geollaqta:040126</code>. Los lotes normalizados se conservan en <code>versions</code>, <code>identities</code>, <code>current_attributes</code>, <code>media</code>, titulares y procedencia.</p>
     <details class="catastro-help"><summary><strong>Qué hace exactamente la migración R2 → D1</strong></summary><ol><li>Consulta qué lotes de R2 todavía no están vinculados.</li><li>Descarga los manifiestos en tandas pequeñas y verifica lote, distrito y versión de extracción.</li><li>Convierte los campos COFOPRI al modelo del maestro y asigna un UUID estable al inmueble.</li><li>Guarda la versión original normalizada y sus aportes como evidencia inmutable.</li><li>Activa el lote y sus unidades en D1 sin duplicar identidades.</li><li>Relaciona geometría, atributos actuales, propietarios, documentos, fotos y procedencia.</li><li>Registra el avance y la revisión D1 después de cada tanda.</li><li>Al terminar, ejecuta la auditoría antes de permitir la publicación en mapa y ACM.</li></ol></details>
     <details class="catastro-help"><summary><strong>Qué significa “registro consolidado”</strong></summary><p>No es un archivo nuevo. Es el registro maestro que resulta de la migración. Un mismo inmueble recibe un UUID maestro. <code>entities</code> contiene ese UUID; <code>identities</code> relaciona el código del plano o COFOPRI con el UUID; <code>current_attributes</code> reúne los valores vigentes; <code>selections</code> indica qué dato se eligió; <code>media</code> enlaza PDFs y fotos; <code>relationships</code> enlaza titulares. La evidencia conserva de qué archivo y fecha provino cada aporte.</p></details>
@@ -60,4 +61,4 @@
   <section class="catastro-card"><h2>Predios del archivo</h2><p class="catastro-help">Últimos 50 predios del distrito seleccionado. Abre un predio para revisar sus documentos y fotos.</p><div class="catastro-table-wrap"><table><thead><tr><th>Código del lote</th><th>Estado</th><th>Documentos</th><th>Fachadas</th><th>Pendientes</th><th>Archivo</th></tr></thead><tbody id="lots-list"><tr><td colspan="6">Consultando el archivo catastral…</td></tr></tbody></table></div></section>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=9" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=10" defer></script>{% endblock %}

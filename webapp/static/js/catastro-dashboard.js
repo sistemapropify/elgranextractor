@@ -5,7 +5,7 @@
   const el = id => document.getElementById(id);
   const labels = {queued:'Preparando',running:'Descargando',completed:'Descarga terminada',failed:'Requiere revisión',stopped:'Detenida',interrupted:'Interrumpida',complete:'Completo',partial:'Documentos pendientes'};
   let active = null, configured = false, collectionEnabled = true, timer = null, busy = false, generation = 0, refreshFailed = false;
-  let migrationBusy = false, migrationDistrict = null, migrationPollTimer = null;
+  let migrationBusy = false, migrationDistrict = null, migrationPollTimer = null, migrationScope = 'district';
   const node = (tag, text) => { const n = document.createElement(tag); n.textContent = text; return n; };
   const bytes = value => value >= 1e9 ? (value / 1e9).toFixed(2) + ' GB' : value >= 1e6 ? (value / 1e6).toFixed(2) + ' MB' : value >= 1e3 ? (value / 1e3).toFixed(1) + ' KB' : value + ' B';
   async function api(url, data) {
@@ -39,8 +39,8 @@
     el('master-audit-status').classList.toggle('warn',auditStatus==='warnings');
     el('master-audit-status').classList.toggle('error-message',auditStatus==='failed');
     const progress=el('master-migration-progress');progress.max=Math.max(1,source);progress.value=Math.min(source,linked);
-    const button=el('migrate-master');button.disabled=migrationBusy||running||!source||!pending;
-    button.textContent=running?'Migrando en segundo plano…':pending?linked?'Continuar vinculación al Maestro':'Migrar al Catastro Maestro':'Todos los lotes están vinculados';
+    const button=el('migrate-master');button.disabled=migrationBusy||running;
+    button.textContent='Migrar TODOS los pendientes al Catastro Maestro';
     if(running)migrationMessage('Azure está migrando en segundo plano. Puedes cerrar esta página o apagar tu computadora; el avance queda guardado en D1.',false);
     else if(stale)migrationMessage('La ejecución anterior se interrumpió. El vigilante de Azure la reanudará automáticamente; también puedes continuarla manualmente.',true);
     else if(job.status==='error')migrationMessage(job.message||'La migración se detuvo. Puedes reanudarla con el botón.',true);
@@ -51,6 +51,34 @@
     else if(!migrationBusy)migrationMessage(linked.toLocaleString('es-PE')+' de '+source.toLocaleString('es-PE')+' lotes vinculados. El origen está en R2 ('+(data.manifest_revision?('extracción v'+data.manifest_revision):'JSON por lote')+') y el destino es D1.');
     if(running||stale)scheduleMigrationPoll();else{clearTimeout(migrationPollTimer);migrationPollTimer=null;}
   }
+  function renderGlobalJob(job){
+    if(!job || !job.id)return false;
+    const running=job.status==='running',stale=job.status==='stale';
+    if(Number.isFinite(Number(job.source_lots)))el('master-source-lots').textContent=Number(job.source_lots).toLocaleString('es-PE');
+    if(Number.isFinite(Number(job.linked_lots)))el('master-linked-lots').textContent=Number(job.linked_lots).toLocaleString('es-PE');
+    if(Number.isFinite(Number(job.pending_lots)))el('master-pending-lots').textContent=Number(job.pending_lots).toLocaleString('es-PE');
+    if(Number.isFinite(Number(job.last_batch_revision)))el('master-last-revision').textContent=Number(job.last_batch_revision).toLocaleString('es-PE');
+    const progress=el('master-migration-progress');
+    if(Number.isFinite(Number(job.source_lots)))progress.max=Math.max(1,Number(job.source_lots));
+    if(Number.isFinite(Number(job.linked_lots)))progress.value=Math.min(progress.max,Number(job.linked_lots));
+    const button=el('migrate-master');
+    button.disabled=migrationBusy||running;
+    button.textContent=running?'Migrando TODOS los distritos…':'Migrar TODOS los pendientes al Catastro Maestro';
+    if(running||stale){
+      migrationScope='all';
+      el('master-audit-status').textContent=stale?'Reanudando':'En curso';
+      migrationMessage(job.message||('Migrando '+(job.current_district||'distritos')+'…'),stale);
+      scheduleMigrationPoll();
+      return true;
+    }
+    if(job.status==='error'){
+      migrationScope='all';
+      migrationMessage(job.message||'La migración global se detuvo.',true);
+      el('master-audit-status').textContent='Requiere revisión';
+      return true;
+    }
+    return false;
+  }
   function scheduleMigrationPoll(){
     clearTimeout(migrationPollTimer);
     migrationPollTimer=setTimeout(pollMigration,4000);
@@ -58,30 +86,33 @@
   async function pollMigration(){
     if(document.hidden){scheduleMigrationPoll();return;}
     try{
+      const global=await api('maestro/migracion/estado/?ubigeo=all');
+      if(renderGlobalJob(global.job||{}))return;
       const data=await api('maestro/migracion/estado/?ubigeo='+encodeURIComponent(el('district').value));
       const job=data.job||{};
-      if(job.status==='running'||job.status==='stale'){
-        if(Number.isFinite(Number(job.linked_lots)))el('master-linked-lots').textContent=Number(job.linked_lots).toLocaleString('es-PE');
-        if(Number.isFinite(Number(job.pending_lots)))el('master-pending-lots').textContent=Number(job.pending_lots).toLocaleString('es-PE');
-        const progress=el('master-migration-progress');
-        if(Number.isFinite(Number(job.linked_lots)))progress.value=Number(job.linked_lots);
-        migrationMessage(job.status==='stale'?'Esperando que el vigilante de Azure reanude la migración…':(job.message||'Azure continúa migrando en segundo plano…'),job.status==='stale');
-        scheduleMigrationPoll();
-      }else await loadMigration();
+      if(job.status==='running'||job.status==='stale'){migrationScope='district';scheduleMigrationPoll();}
+      else{migrationScope='district';await loadMigration();}
     }catch(error){migrationMessage(error.message,true);scheduleMigrationPoll();}
   }
   async function loadMigration(){
     const district=el('district')?.value;if(!district)return;
     if(el('master-map-link'))el('master-map-link').href='/catastro/maestro/?ubigeo='+encodeURIComponent(district);
-    try{const data=await api('maestro/migracion/?ubigeo='+encodeURIComponent(district));migrationDistrict=district;renderMigration(data);}
+    try{
+      const data=await api('maestro/migracion/?ubigeo='+encodeURIComponent(district));
+      migrationDistrict=district;renderMigration(data);
+      const global=await api('maestro/migracion/estado/?ubigeo=all').catch(()=>({job:{}}));
+      renderGlobalJob(global.job||{});
+    }
     catch(error){migrationMessage(error.message,true);const button=el('migrate-master');if(button)button.disabled=true;}
   }
   async function migrateToMaster(){
     if(migrationBusy)return;
     migrationBusy=true;const button=el('migrate-master');button.disabled=true;button.textContent='Iniciando migración en Azure…';
     try{
-      const data=await api('maestro/migracion/iniciar/',{ubigeo:el('district').value,batch_size:200});
-      migrationMessage(data.started?'Migración iniciada en Azure. Ya puedes cerrar esta página o apagar la computadora; el servidor continuará.':'La migración ya estaba ejecutándose en segundo plano.');
+      const data=await api('maestro/migracion/iniciar/',{ubigeo:'all',batch_size:200});
+      migrationScope='all';
+      migrationMessage(data.started?'Migración de TODOS los distritos iniciada en Azure. Ya puedes cerrar esta página; el servidor continuará.':'La migración global ya estaba ejecutándose en segundo plano.');
+      renderGlobalJob(data.job||{});
     }catch(error){migrationMessage(error.message,true);}
     finally{migrationBusy=false;await loadMigration();}
   }

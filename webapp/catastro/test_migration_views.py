@@ -62,6 +62,22 @@ class MigrationViewTests(SimpleTestCase):
         self.assertTrue(json.loads(response.content)['started'])
         start.assert_called_once_with('040126', 'admin', 20)
 
+    @patch('catastro.migration_views.migration_runner.start_all')
+    def test_background_start_supports_all_districts(self, start_all):
+        start_all.return_value = {
+            'started': True,
+            'job': {'status': 'running', 'id': 'all-job'},
+        }
+        request = self.factory.post(
+            '/catastro/api/maestro/migracion/iniciar/',
+            data=json.dumps({'ubigeo': 'all', 'batch_size': 200}),
+            content_type='application/json')
+        request.current_user = self.user
+        request._dont_enforce_csrf_checks = True
+        response = migration_views.start(request)
+        self.assertEqual(response.status_code, 202)
+        start_all.assert_called_once_with('admin', 200)
+
     @patch('catastro.migration_views.Gateway')
     @patch('catastro.migration_views.migration_runner.job')
     def test_background_job_status_is_exposed(self, job, gateway):

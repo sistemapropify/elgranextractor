@@ -19,10 +19,12 @@ def _private(value, status=200):
     return response
 
 
-def _ubigeo(request):
+def _ubigeo(request, allow_all=False):
     value = str(request.GET.get('ubigeo') or
                 (json.loads(request.body or b'{}').get('ubigeo')
                  if request.method == 'POST' else '040126'))
+    if allow_all and value == migration_runner.ALL_SCOPE:
+        return value
     registry_cloud.validate_district(value)
     return value
 
@@ -53,8 +55,18 @@ def migrate(request):
         payload = json.loads(request.body or b'{}')
         if not isinstance(payload, dict):
             raise ValueError('Solicitud no válida.')
-        ubigeo = registry_cloud.validate_district(
-            str(payload.get('ubigeo') or '040126'))
+        value = str(payload.get('ubigeo') or '040126')
+        if value == migration_runner.ALL_SCOPE:
+            user = getattr(request, 'current_user', None) or request.user
+            actor = (getattr(user, 'username', '') or
+                     str(getattr(user, 'pk', 'administrador')))
+            batch_size = payload.get('batch_size', 200)
+            if (type(batch_size) is not int or
+                    not 1 <= batch_size <= 200):
+                raise ValueError('El tamaño de tanda no es válido.')
+            result = migration_runner.start_all(actor, batch_size)
+            return _private(result, 202 if result.get('started') else 200)
+        ubigeo = registry_cloud.validate_district(value)
         limit = payload.get('limit', 20)
         if type(limit) is not int:
             raise ValueError('El tamaño de tanda no es válido.')
@@ -79,14 +91,17 @@ def start(request):
         payload = json.loads(request.body or b'{}')
         if not isinstance(payload, dict):
             raise ValueError('Solicitud no válida.')
-        ubigeo = registry_cloud.validate_district(
-            str(payload.get('ubigeo') or '040126'))
+        value = str(payload.get('ubigeo') or '040126')
         batch_size = payload.get('batch_size', 200)
         if type(batch_size) is not int or not 1 <= batch_size <= 200:
             raise ValueError('El tamaño de tanda no es válido.')
         user = getattr(request, 'current_user', None) or request.user
         actor = (getattr(user, 'username', '') or
                  str(getattr(user, 'pk', 'administrador')))
+        if value == migration_runner.ALL_SCOPE:
+            result = migration_runner.start_all(actor, batch_size)
+            return _private(result, 202 if result.get('started') else 200)
+        ubigeo = registry_cloud.validate_district(value)
         result = migration_runner.start(ubigeo, actor, batch_size)
         return _private(result, 202 if result.get('started') else 200)
     except (ValueError, TypeError, json.JSONDecodeError) as error:
@@ -99,7 +114,7 @@ def start(request):
 @admin_required
 def job(request):
     try:
-        ubigeo = _ubigeo(request)
+        ubigeo = _ubigeo(request, allow_all=True)
         return _private({'job': migration_runner.job(Gateway(), ubigeo)})
     except ValueError as error:
         return _private({'error': str(error)}, 400)
