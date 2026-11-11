@@ -65,6 +65,7 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'Senior')
         self.assertContains(response, 'class="ea-agent-card"')
         self.assertContains(response, 'vista=matriz')
+        self.assertIn('no-store', response['Cache-Control'])
 
     def test_dashboard_renders_excel_style_matrix(self):
         self.authenticate_propify()
@@ -328,8 +329,10 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'id="eaOpenAttachmentUpload"')
         self.assertContains(response, 'id="eaAttachmentUploadDialog"')
         self.assertContains(response, 'id="eaAttachmentPreviewDialog"')
+        self.assertContains(response, 'id="eaAttachmentPreviewOpen"')
         self.assertContains(response, 'class="ea-file-preview-button"')
         self.assertContains(response, 'Disponible para proyectos en Arequipa.')
+        self.assertIn('no-store', response['Cache-Control'])
 
         field = ExternalAgentAttachment._meta.get_field('file')
         with patch.object(

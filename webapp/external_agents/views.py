@@ -10,6 +10,7 @@ from django.db.models import Count, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.cache import never_cache
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from prospects.propify_auth import (
@@ -182,6 +183,7 @@ def logout_view(request):
     return redirect('external_agents:login')
 
 
+@never_cache
 @external_agent_access_required
 def dashboard(request):
     query = str(request.GET.get('q') or '').strip()
@@ -260,6 +262,7 @@ def dashboard(request):
     })
 
 
+@never_cache
 @external_agent_access_required
 def agent_create(request):
     form = ExternalAgentForm(
@@ -292,6 +295,7 @@ def agent_create(request):
     })
 
 
+@never_cache
 @external_agent_access_required
 def agent_edit(request, pk):
     agent = get_object_or_404(ExternalAgent, pk=pk)
@@ -325,6 +329,7 @@ def agent_edit(request, pk):
     })
 
 
+@never_cache
 @external_agent_access_required
 def agent_detail(request, pk):
     agent = get_object_or_404(

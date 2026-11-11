@@ -137,6 +137,9 @@ and relationships remain in SQL; binary documents live only in Azure Blob.
 - The authenticated attachment preview response explicitly permits framing only
   from the same origin (`X-Frame-Options: SAMEORIGIN`), allowing the PDF modal
   viewer while continuing to block embedding on external sites.
+- Agent directory/form/detail pages are rendered with `no-store`, the view
+  switch remains visible, and the preview modal includes an authenticated
+  “open in new tab” fallback when a browser cannot frame a PDF.
 - The Propify login submit button locks on the first valid submission, ignores
   repeated submits and restores after browser-history navigation.
 - Final CI/CD, production migration, public route, static assets, login redirect

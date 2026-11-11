@@ -68,6 +68,10 @@
         justify-content: space-between;
         gap: 12px;
         margin: -4px 0 14px;
+        padding: 11px 13px;
+        border: 1px solid var(--ea-border);
+        border-radius: 10px;
+        background: var(--ea-panel);
     }
     .ea-view-toolbar__label {
         color: var(--ea-muted);
@@ -85,7 +89,10 @@
         background: var(--ea-panel);
     }
     .ea-view-switch a {
-        padding: 6px 11px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 8px 13px;
         border-radius: 6px;
         color: var(--ea-muted);
         text-decoration: none;
@@ -349,15 +356,15 @@
     {% endif %}
 </form>
 
-{% if agents %}
 <div class="ea-view-toolbar">
-    <span class="ea-view-toolbar__label">Formato del directorio</span>
+    <span class="ea-view-toolbar__label">Cambiar formato del directorio</span>
     <nav class="ea-view-switch" aria-label="Cambiar vista del directorio">
-        <a href="?{% if view_query %}{{ view_query }}&{% endif %}vista=tarjetas" class="{% if view_mode == 'cards' %}active{% endif %}">▦ Tarjetas</a>
-        <a href="?{% if view_query %}{{ view_query }}&{% endif %}vista=matriz" class="{% if view_mode == 'table' %}active{% endif %}">▤ Matriz</a>
+        <a href="?{% if view_query %}{{ view_query }}&{% endif %}vista=tarjetas" class="{% if view_mode == 'cards' %}active{% endif %}">▦ Vista tarjetas</a>
+        <a href="?{% if view_query %}{{ view_query }}&{% endif %}vista=matriz" class="{% if view_mode == 'table' %}active{% endif %}">▤ Vista matriz</a>
     </nav>
 </div>
 
+{% if agents %}
 {% if view_mode == 'table' %}
 <div class="ea-matrix-wrap">
     <table class="ea-matrix">
