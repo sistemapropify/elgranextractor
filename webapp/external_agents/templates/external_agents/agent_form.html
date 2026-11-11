@@ -144,6 +144,11 @@
                     {{ form.address }}
                     {% if form.address.errors %}<div class="ea-errors">{{ form.address.errors }}</div>{% endif %}
                 </div>
+                <div class="ea-field ea-span-2">
+                    <label class="ea-label" for="{{ form.observations.id_for_label }}">Observaciones</label>
+                    {{ form.observations }}
+                    {% if form.observations.errors %}<div class="ea-errors">{{ form.observations.errors }}</div>{% endif %}
+                </div>
                 <div class="ea-registration-attachment">
                     <div class="ea-registration-attachment__head">
                         <div>

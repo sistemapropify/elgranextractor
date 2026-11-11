@@ -30,6 +30,7 @@ class ExternalAgentForm(forms.ModelForm):
             'personal_document_type',
             'document_number',
             'address',
+            'observations',
             'email',
             'mobile',
             'level',
@@ -50,6 +51,11 @@ class ExternalAgentForm(forms.ModelForm):
                 'class': INPUT_CLASS,
                 'placeholder': 'Dirección completa',
                 'autocomplete': 'street-address',
+            }),
+            'observations': forms.Textarea(attrs={
+                'class': INPUT_CLASS,
+                'rows': 4,
+                'placeholder': 'Observaciones internas del agente',
             }),
             'email': forms.EmailInput(attrs={
                 'class': INPUT_CLASS,

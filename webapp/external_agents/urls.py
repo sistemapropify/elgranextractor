@@ -38,6 +38,11 @@ urlpatterns = [
         name='attachment_download',
     ),
     path(
+        '<int:pk>/adjuntos/<int:attachment_pk>/ver/',
+        views.attachment_preview,
+        name='attachment_preview',
+    ),
+    path(
         '<int:pk>/adjuntos/<int:attachment_pk>/eliminar/',
         views.attachment_delete,
         name='attachment_delete',

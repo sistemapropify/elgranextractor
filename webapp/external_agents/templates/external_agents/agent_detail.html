@@ -172,6 +172,123 @@
         align-items: center;
         flex: 0 0 auto;
     }
+    .ea-file-preview-button {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+        font: inherit;
+        cursor: pointer;
+    }
+    .ea-file-preview-button:hover .ea-file-main strong {
+        color: var(--ea-blue);
+        text-decoration: underline;
+    }
+    .ea-file-thumb {
+        width: 48px;
+        height: 48px;
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        border-radius: 8px;
+        border: 1px solid var(--ea-border);
+        background: var(--ea-bg);
+        color: var(--ea-blue);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: .3px;
+    }
+    .ea-file-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .ea-panel-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+    .ea-file-modal {
+        width: min(940px, calc(100vw - 30px));
+        max-height: calc(100vh - 30px);
+        padding: 0;
+        border: 1px solid var(--ea-border);
+        border-radius: 13px;
+        background: var(--ea-panel);
+        color: var(--ea-text);
+        box-shadow: 0 28px 90px rgba(0, 0, 0, .55);
+    }
+    .ea-file-modal::backdrop {
+        background: rgba(1, 4, 9, .78);
+        backdrop-filter: blur(2px);
+    }
+    .ea-file-modal__head,
+    .ea-file-modal__foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 17px;
+        border-bottom: 1px solid var(--ea-border);
+    }
+    .ea-file-modal__foot {
+        border-top: 1px solid var(--ea-border);
+        border-bottom: 0;
+    }
+    .ea-file-modal__head h2 {
+        margin: 0;
+        color: #f0f6fc;
+        font-size: 17px;
+    }
+    .ea-file-modal__body {
+        max-height: calc(100vh - 150px);
+        overflow: auto;
+        padding: 16px 17px;
+    }
+    .ea-modal-close {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--ea-border);
+        border-radius: 8px;
+        background: var(--ea-panel-raised);
+        color: var(--ea-text);
+        font-size: 20px;
+        cursor: pointer;
+    }
+    .ea-preview-modal {
+        width: min(1100px, calc(100vw - 24px));
+    }
+    .ea-preview-modal .ea-file-modal__body {
+        min-height: 260px;
+        display: grid;
+        place-items: center;
+        padding: 10px;
+        background: #0d1117;
+    }
+    .ea-preview-frame {
+        width: 100%;
+        height: min(72vh, 760px);
+        border: 0;
+        border-radius: 8px;
+        background: #fff;
+    }
+    .ea-preview-image {
+        max-width: 100%;
+        max-height: min(72vh, 760px);
+        object-fit: contain;
+        border-radius: 8px;
+    }
     .ea-attachment-empty {
         padding: 38px 20px;
         text-align: center;
@@ -188,6 +305,8 @@
         .ea-attachment { align-items: flex-start; flex-wrap: wrap; }
         .ea-file-main { flex-basis: calc(100% - 52px); }
         .ea-file-actions { width: 100%; padding-left: 51px; }
+        .ea-file-preview-button { flex-basis: 100%; }
+        .ea-file-actions { padding-left: 0; }
     }
 </style>
 {% endblock %}
@@ -253,6 +372,10 @@
                     <div class="ea-data-value">{% if agent.mobile %}<a href="tel:{{ agent.mobile }}">{{ agent.mobile }}</a>{% else %}No registrado{% endif %}</div>
                 </div>
                 <div class="ea-data-block wide">
+                    <span class="ea-data-label">Observaciones</span>
+                    <div class="ea-data-value" style="white-space:pre-wrap">{{ agent.observations|default:"Sin observaciones" }}</div>
+                </div>
+                <div class="ea-data-block wide">
                     <span class="ea-data-label">Dirección</span>
                     <div class="ea-data-value">{{ agent.address|default:"No registrada" }}</div>
                 </div>
@@ -270,12 +393,73 @@
                 <h2 class="ea-panel-title">Documentos adjuntos</h2>
                 <p class="ea-panel-note">{{ attachments|length }} archivo{{ attachments|length|pluralize }} asociado{{ attachments|length|pluralize }} a esta ficha.</p>
             </div>
-            <a class="ea-btn ea-btn-small" href="{% url 'external_agents:configuration' %}">Tipos de adjunto</a>
+            <div class="ea-panel-actions">
+                {% if attachment_types_available %}
+                <button class="ea-btn ea-btn-blue ea-btn-small" id="eaOpenAttachmentUpload" type="button">＋ Añadir archivos adjuntos</button>
+                {% endif %}
+                <a class="ea-btn ea-btn-small" href="{% url 'external_agents:configuration' %}">Tipos de adjunto</a>
+            </div>
         </div>
 
-        {% if attachment_types_available %}
-        <form class="ea-upload-box" method="post" enctype="multipart/form-data" action="{% url 'external_agents:attachment_upload' pk=agent.pk %}">
-            {% csrf_token %}
+        {% if not attachment_types_available %}
+        <div class="ea-upload-box" style="color:var(--ea-muted);font-size:12px;line-height:1.55">
+            No hay tipos de documento para adjuntos activos.
+            <a href="{% url 'external_agents:configuration' %}" style="color:var(--ea-blue)">Crea el primero en Configuración</a>.
+        </div>
+        {% endif %}
+
+        {% if attachments %}
+        <div class="ea-attachments">
+            {% for attachment in attachments %}
+            <div class="ea-attachment">
+                <button
+                    class="ea-file-preview-button"
+                    type="button"
+                    data-attachment-name="{{ attachment.display_name }}"
+                    data-preview-url="{% url 'external_agents:attachment_preview' pk=agent.pk attachment_pk=attachment.pk %}"
+                    data-download-url="{% url 'external_agents:attachment_download' pk=agent.pk attachment_pk=attachment.pk %}"
+                    data-is-image="{{ attachment.is_image|yesno:'true,false' }}"
+                >
+                    <span class="ea-file-thumb">
+                        {% if attachment.is_image %}
+                        <img src="{% url 'external_agents:attachment_preview' pk=agent.pk attachment_pk=attachment.pk %}" alt="" loading="lazy">
+                        {% else %}
+                        {{ attachment.extension }}
+                        {% endif %}
+                    </span>
+                    <span class="ea-file-main">
+                        <strong title="{{ attachment.display_name }}">{{ attachment.display_name }}</strong>
+                        <span>{{ attachment.document_type.name }} · {{ attachment.created_at|date:"d/m/Y H:i" }}{% if attachment.uploaded_by_username %} · {{ attachment.uploaded_by_username }}{% endif %}</span>
+                    </span>
+                </button>
+                <div class="ea-file-actions">
+                    <a class="ea-btn ea-btn-small" href="{% url 'external_agents:attachment_download' pk=agent.pk attachment_pk=attachment.pk %}">Descargar</a>
+                    <form class="ea-inline-form" method="post" action="{% url 'external_agents:attachment_delete' pk=agent.pk attachment_pk=attachment.pk %}" onsubmit="return confirm('¿Eliminar este documento adjunto? Esta acción no se puede deshacer.');">
+                        {% csrf_token %}
+                        <button class="ea-btn ea-btn-small ea-btn-danger" type="submit" title="Eliminar documento">Eliminar</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="ea-attachment-empty">Todavía no hay documentos adjuntos.<br>Pulsa «Añadir archivos adjuntos» para cargar el primero.</div>
+        {% endif %}
+    </section>
+</div>
+
+{% if attachment_types_available %}
+<dialog class="ea-file-modal" id="eaAttachmentUploadDialog">
+    <form method="post" enctype="multipart/form-data" action="{% url 'external_agents:attachment_upload' pk=agent.pk %}">
+        {% csrf_token %}
+        <header class="ea-file-modal__head">
+            <div>
+                <h2>Añadir archivos adjuntos</h2>
+                <p class="ea-panel-note">Cada archivo debe tener su tipo de documento.</p>
+            </div>
+            <button class="ea-modal-close" type="button" data-close-dialog aria-label="Cerrar">×</button>
+        </header>
+        <div class="ea-file-modal__body">
             <div class="ea-upload-rows" id="eaDetailAttachmentRows">
                 {% for attachment_form in attachment_forms %}
                 <div class="ea-upload-row">
@@ -298,9 +482,6 @@
                 <button class="ea-btn ea-btn-small" type="button" id="eaDetailAttachmentAdd">＋ Agregar otro documento</button>
                 <span class="ea-upload-limit">Hasta 20 documentos por operación</span>
             </div>
-            <div class="ea-upload-actions">
-                <button class="ea-btn ea-btn-blue ea-btn-small" type="submit">Subir documentos</button>
-            </div>
             <template id="eaDetailAttachmentRowTemplate">
                 <div class="ea-upload-row">
                     <div class="ea-field">
@@ -315,38 +496,33 @@
                     <button class="ea-upload-remove" type="button" title="Quitar esta fila" aria-label="Quitar esta fila">×</button>
                 </div>
             </template>
-        </form>
-        {% else %}
-        <div class="ea-upload-box" style="color:var(--ea-muted);font-size:12px;line-height:1.55">
-            No hay tipos de documento para adjuntos activos.
-            <a href="{% url 'external_agents:configuration' %}" style="color:var(--ea-blue)">Crea el primero en Configuración</a>.
         </div>
-        {% endif %}
+        <footer class="ea-file-modal__foot">
+            <button class="ea-btn" type="button" data-close-dialog>Cancelar</button>
+            <button class="ea-btn ea-btn-blue" type="submit">Subir documentos</button>
+        </footer>
+    </form>
+</dialog>
+{% endif %}
 
-        {% if attachments %}
-        <div class="ea-attachments">
-            {% for attachment in attachments %}
-            <div class="ea-attachment">
-                <div class="ea-file-icon" aria-hidden="true">▤</div>
-                <div class="ea-file-main">
-                    <strong title="{{ attachment.original_name|default:attachment.file.name }}">{{ attachment.original_name|default:attachment.file.name }}</strong>
-                    <span>{{ attachment.document_type.name }} · {{ attachment.created_at|date:"d/m/Y H:i" }}{% if attachment.uploaded_by_username %} · {{ attachment.uploaded_by_username }}{% endif %}</span>
-                </div>
-                <div class="ea-file-actions">
-                    <a class="ea-btn ea-btn-small" href="{% url 'external_agents:attachment_download' pk=agent.pk attachment_pk=attachment.pk %}">Descargar</a>
-                    <form class="ea-inline-form" method="post" action="{% url 'external_agents:attachment_delete' pk=agent.pk attachment_pk=attachment.pk %}" onsubmit="return confirm('¿Eliminar este documento adjunto? Esta acción no se puede deshacer.');">
-                        {% csrf_token %}
-                        <button class="ea-btn ea-btn-small ea-btn-danger" type="submit" title="Eliminar documento">Eliminar</button>
-                    </form>
-                </div>
-            </div>
-            {% endfor %}
+<dialog class="ea-file-modal ea-preview-modal" id="eaAttachmentPreviewDialog">
+    <header class="ea-file-modal__head">
+        <div>
+            <h2 id="eaAttachmentPreviewName">Vista previa</h2>
+            <p class="ea-panel-note">Archivo adjunto del agente.</p>
         </div>
-        {% else %}
-        <div class="ea-attachment-empty">Todavía no hay documentos adjuntos.<br>Selecciona un tipo y carga el primer archivo.</div>
-        {% endif %}
-    </section>
-</div>
+        <button class="ea-modal-close" type="button" data-close-preview aria-label="Cerrar">×</button>
+    </header>
+    <div class="ea-file-modal__body">
+        <img class="ea-preview-image" id="eaAttachmentPreviewImage" alt="Vista previa del archivo" hidden>
+        <iframe class="ea-preview-frame" id="eaAttachmentPreviewFrame" title="Vista previa del documento" hidden></iframe>
+        <p class="ea-help" id="eaAttachmentPreviewUnavailable" hidden>Este archivo no tiene una vista previa disponible.</p>
+    </div>
+    <footer class="ea-file-modal__foot">
+        <span></span>
+        <a class="ea-btn ea-btn-blue" id="eaAttachmentPreviewDownload" href="#">Descargar archivo</a>
+    </footer>
+</dialog>
 {% endblock %}
 
 {% block extra_js %}
@@ -356,34 +532,87 @@
         const rows = document.getElementById('eaDetailAttachmentRows');
         const template = document.getElementById('eaDetailAttachmentRowTemplate');
         const addButton = document.getElementById('eaDetailAttachmentAdd');
-        if (!rows || !template || !addButton) return;
         const maximum = 20;
         let nextIndex = maximum;
 
-        function updateLimit() {
-            addButton.disabled = rows.children.length >= maximum;
+        if (rows && template && addButton) {
+            const updateLimit = () => {
+                addButton.disabled = rows.children.length >= maximum;
+            };
+            addButton.addEventListener('click', () => {
+                if (rows.children.length >= maximum) return;
+                const markup = template.innerHTML.replaceAll(
+                    '__index__',
+                    String(nextIndex++)
+                );
+                rows.appendChild(
+                    document.createRange().createContextualFragment(markup)
+                );
+                updateLimit();
+            });
+            rows.addEventListener('click', (event) => {
+                const remove = event.target.closest('.ea-upload-remove');
+                if (!remove) return;
+                remove.closest('.ea-upload-row')?.remove();
+                updateLimit();
+            });
+            updateLimit();
         }
 
-        addButton.addEventListener('click', () => {
-            if (rows.children.length >= maximum) return;
-            const markup = template.innerHTML.replaceAll(
-                '__index__',
-                String(nextIndex++)
-            );
-            rows.appendChild(
-                document.createRange().createContextualFragment(markup)
-            );
-            updateLimit();
+        const uploadDialog = document.getElementById('eaAttachmentUploadDialog');
+        const uploadButton = document.getElementById('eaOpenAttachmentUpload');
+        uploadButton?.addEventListener('click', () => uploadDialog?.showModal());
+        uploadDialog?.addEventListener('click', (event) => {
+            if (event.target === uploadDialog) uploadDialog.close();
+        });
+        uploadDialog?.querySelectorAll('[data-close-dialog]').forEach((button) => {
+            button.addEventListener('click', () => uploadDialog.close());
         });
 
-        rows.addEventListener('click', (event) => {
-            const remove = event.target.closest('.ea-upload-remove');
-            if (!remove) return;
-            remove.closest('.ea-upload-row')?.remove();
-            updateLimit();
+        const previewDialog = document.getElementById('eaAttachmentPreviewDialog');
+        const previewName = document.getElementById('eaAttachmentPreviewName');
+        const previewImage = document.getElementById('eaAttachmentPreviewImage');
+        const previewFrame = document.getElementById('eaAttachmentPreviewFrame');
+        const previewDownload = document.getElementById('eaAttachmentPreviewDownload');
+        const previewUnavailable = document.getElementById('eaAttachmentPreviewUnavailable');
+
+        const clearPreview = () => {
+            previewImage.hidden = true;
+            previewImage.removeAttribute('src');
+            previewFrame.hidden = true;
+            previewFrame.removeAttribute('src');
+            previewUnavailable.hidden = true;
+        };
+
+        document.querySelectorAll('.ea-file-preview-button').forEach((button) => {
+            button.addEventListener('click', () => {
+                clearPreview();
+                const previewUrl = button.dataset.previewUrl;
+                previewName.textContent = button.dataset.attachmentName || 'Vista previa';
+                previewDownload.href = button.dataset.downloadUrl || '#';
+                if (button.dataset.isImage === 'true') {
+                    previewImage.src = previewUrl;
+                    previewImage.hidden = false;
+                } else {
+                    previewFrame.src = previewUrl;
+                    previewFrame.hidden = false;
+                }
+                previewDialog.showModal();
+            });
         });
 
-        updateLimit();
+        const closePreview = () => {
+            previewDialog.close();
+            clearPreview();
+        };
+        previewDialog.querySelector('[data-close-preview]')?.addEventListener('click', closePreview);
+        previewDialog.addEventListener('click', (event) => {
+            if (event.target === previewDialog) closePreview();
+        });
+        previewDialog.addEventListener('cancel', (event) => {
+            event.preventDefault();
+            closePreview();
+        });
     })();
 </script>
 {% endblock %}

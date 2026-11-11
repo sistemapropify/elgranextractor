@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from django.core.validators import FileExtensionValidator
 from django.db import models
 
@@ -84,6 +86,11 @@ class ExternalAgent(models.Model):
         max_length=300,
         blank=True,
         verbose_name='Dirección',
+    )
+    observations = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='Observaciones',
     )
     email = models.EmailField(blank=True, verbose_name='Correo electrónico')
     mobile = models.CharField(
@@ -185,3 +192,17 @@ class ExternalAgentAttachment(models.Model):
 
     def __str__(self):
         return self.original_name or self.file.name
+
+    @property
+    def display_name(self):
+        return self.original_name or Path(self.file.name).name
+
+    @property
+    def extension(self):
+        return Path(self.file.name).suffix.lstrip('.').upper() or 'ARCHIVO'
+
+    @property
+    def is_image(self):
+        return Path(self.file.name).suffix.lower() in {
+            '.png', '.jpg', '.jpeg', '.webp',
+        }

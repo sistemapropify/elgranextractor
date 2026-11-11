@@ -195,6 +195,7 @@ def dashboard(request):
             | Q(document_number__icontains=query)
             | Q(email__icontains=query)
             | Q(mobile__icontains=query)
+            | Q(observations__icontains=query)
         )
     if status == 'activos':
         agents = agents.filter(is_active=True)
@@ -369,6 +370,38 @@ def attachment_download(request, pk, attachment_pk):
         filename=filename,
         content_type=content_type,
     )
+
+
+@external_agent_access_required
+def attachment_preview(request, pk, attachment_pk):
+    attachment = get_object_or_404(
+        ExternalAgentAttachment,
+        pk=attachment_pk,
+        agent_id=pk,
+    )
+    try:
+        file_handle = attachment.file.storage.open(attachment.file.name, 'rb')
+    except Exception as exc:
+        raise Http404('No se pudo recuperar el documento adjunto.') from exc
+    filename = attachment.display_name
+    content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    if content_type not in {
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+    }:
+        raise Http404('Este tipo de archivo no tiene vista previa.')
+    response = FileResponse(
+        file_handle,
+        as_attachment=False,
+        filename=filename,
+        content_type=content_type,
+    )
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    response['Cache-Control'] = 'private, max-age=300'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 @external_agent_access_required

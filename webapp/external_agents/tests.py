@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
@@ -34,6 +35,7 @@ class ExternalAgentsViewsTests(TestCase):
             address='Av. Ejemplo 123',
             email='ana@example.com',
             mobile='+51 999 111 222',
+            observations='Disponible para proyectos en Arequipa.',
             level=ExternalAgent.Level.SENIOR,
             created_by_username='tester',
             updated_by_username='tester',
@@ -96,6 +98,7 @@ class ExternalAgentsViewsTests(TestCase):
             'email': 'luis@example.com',
             'mobile': '+51 988 777 666',
             'level': ExternalAgent.Level.JUNIOR,
+            'observations': 'Prefiere contacto por WhatsApp.',
         })
         created = ExternalAgent.objects.get(document_number='87654321')
         self.assertRedirects(
@@ -104,6 +107,7 @@ class ExternalAgentsViewsTests(TestCase):
         )
         self.assertEqual(created.created_by_username, 'tester')
         self.assertEqual(created.level, ExternalAgent.Level.JUNIOR)
+        self.assertEqual(created.observations, 'Prefiere contacto por WhatsApp.')
 
     def test_create_agent_accepts_multiple_attachments_during_registration(self):
         self.authenticate_propify()
@@ -274,3 +278,38 @@ class ExternalAgentsViewsTests(TestCase):
             ExternalAgentAttachment.objects.filter(pk=attachment.pk).exists()
         )
         storage_delete.assert_called_once()
+
+    def test_detail_uses_attachment_modals_and_preview(self):
+        self.authenticate_propify()
+        attachment = ExternalAgentAttachment.objects.create(
+            agent=self.agent,
+            document_type=self.attachment_type,
+            file='agentes-externos/prueba.pdf',
+            original_name='prueba.pdf',
+            uploaded_by_username='tester',
+        )
+        response = self.client.get(
+            reverse('external_agents:agent_detail', kwargs={'pk': self.agent.pk})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="eaOpenAttachmentUpload"')
+        self.assertContains(response, 'id="eaAttachmentUploadDialog"')
+        self.assertContains(response, 'id="eaAttachmentPreviewDialog"')
+        self.assertContains(response, 'class="ea-file-preview-button"')
+        self.assertContains(response, 'Disponible para proyectos en Arequipa.')
+
+        field = ExternalAgentAttachment._meta.get_field('file')
+        with patch.object(
+            field.storage,
+            'open',
+            return_value=ContentFile(b'%PDF-1.4 preview'),
+        ):
+            preview = self.client.get(reverse(
+                'external_agents:attachment_preview',
+                kwargs={'pk': self.agent.pk, 'attachment_pk': attachment.pk},
+            ))
+        self.assertEqual(preview.status_code, 200)
+        self.assertTrue(
+            preview['Content-Disposition'].startswith('inline;')
+        )
+        self.assertEqual(preview['Content-Type'], 'application/pdf')

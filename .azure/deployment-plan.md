@@ -126,6 +126,10 @@ and relationships remain in SQL; binary documents live only in Azure Blob.
   add more dynamically, with independent type/file pairs and up to 20 documents
   per submission. Indexed server-side field names keep blank rows from shifting
   file-to-type associations.
+- Added optional agent observations and moved later attachment uploads into a
+  modal opened from the detail page. Uploaded images show thumbnails and PDFs
+  show a compact file preview; clicking either opens an authenticated inline
+  preview modal, with the existing protected download remaining available.
 - The Propify login submit button locks on the first valid submission, ignores
   repeated submits and restores after browser-history navigation.
 - Final CI/CD, production migration, public route, static assets, login redirect
