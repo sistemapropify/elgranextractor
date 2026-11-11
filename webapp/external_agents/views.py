@@ -187,7 +187,16 @@ def dashboard(request):
     status = str(request.GET.get('estado') or '').strip()
     document_type = str(request.GET.get('tipo_documento') or '').strip()
     level = str(request.GET.get('nivel') or '').strip()
-    agents = ExternalAgent.objects.annotate(attachment_count=Count('attachments'))
+    view_mode = (
+        'table'
+        if request.GET.get('vista') in {'matriz', 'table'}
+        else 'cards'
+    )
+    agents = (
+        ExternalAgent.objects
+        .annotate(attachment_count=Count('attachments'))
+        .prefetch_related('attachments__document_type')
+    )
 
     if query:
         agents = agents.filter(
@@ -223,7 +232,9 @@ def dashboard(request):
     page = paginator.get_page(request.GET.get('page'))
     querystring = request.GET.copy()
     querystring.pop('page', None)
-    querystring.pop('q', None)
+    view_query = request.GET.copy()
+    view_query.pop('page', None)
+    view_query.pop('vista', None)
     return render(request, 'external_agents/dashboard.html', {
         'page': page,
         'agents': page.object_list,
@@ -231,6 +242,8 @@ def dashboard(request):
         'status_filter': status,
         'document_type_filter': document_type,
         'level_filter': level,
+        'view_mode': view_mode,
+        'view_query': view_query.urlencode(),
         'level_choices': ExternalAgent.Level.choices,
         'document_types': DocumentType.objects.filter(
             scope=DocumentType.Scope.PERSONAL,

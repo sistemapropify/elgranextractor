@@ -130,6 +130,10 @@ and relationships remain in SQL; binary documents live only in Azure Blob.
   modal opened from the detail page. Uploaded images show thumbnails and PDFs
   show a compact file preview; clicking either opens an authenticated inline
   preview modal, with the existing protected download remaining available.
+- The agent directory now switches between cards and a horizontally scrollable
+  matrix with ID, full name, level, document, mobile, email, address,
+  observations and document titles. Search, filters, pagination and the chosen
+  view are preserved across navigation.
 - The Propify login submit button locks on the first valid submission, ignores
   repeated submits and restores after browser-history navigation.
 - Final CI/CD, production migration, public route, static assets, login redirect

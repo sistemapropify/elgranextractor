@@ -63,6 +63,39 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'Ana Quispe Rojas')
         self.assertContains(response, '12345678')
         self.assertContains(response, 'Senior')
+        self.assertContains(response, 'class="ea-agent-card"')
+        self.assertContains(response, 'vista=matriz')
+
+    def test_dashboard_renders_excel_style_matrix(self):
+        self.authenticate_propify()
+        ExternalAgentAttachment.objects.create(
+            agent=self.agent,
+            document_type=self.attachment_type,
+            file='agentes-externos/matriz.pdf',
+            original_name='DNI y certificado.pdf',
+            uploaded_by_username='tester',
+        )
+        response = self.client.get(
+            reverse('external_agents:dashboard'),
+            {'vista': 'matriz'},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="ea-matrix"')
+        for heading in (
+            'ID',
+            'Nombres y apellidos',
+            'Nivel',
+            'DNI / documento',
+            'Celular',
+            'Correo',
+            'Dirección',
+            'Observaciones',
+            'Documentos',
+        ):
+            self.assertContains(response, heading)
+        self.assertContains(response, 'Ana Quispe Rojas')
+        self.assertContains(response, 'Disponible para proyectos en Arequipa.')
+        self.assertContains(response, 'DNI y certificado.pdf')
 
     def test_all_module_pages_render(self):
         login_response = self.client.get(reverse('external_agents:login'))
