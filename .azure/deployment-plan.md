@@ -134,6 +134,9 @@ and relationships remain in SQL; binary documents live only in Azure Blob.
   matrix with ID, full name, level, document, mobile, email, address,
   observations and document titles. Search, filters, pagination and the chosen
   view are preserved across navigation.
+- The authenticated attachment preview response explicitly permits framing only
+  from the same origin (`X-Frame-Options: SAMEORIGIN`), allowing the PDF modal
+  viewer while continuing to block embedding on external sites.
 - The Propify login submit button locks on the first valid submission, ignores
   repeated submits and restores after browser-history navigation.
 - Final CI/CD, production migration, public route, static assets, login redirect

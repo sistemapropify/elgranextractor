@@ -10,6 +10,7 @@ from django.db.models import Count, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from prospects.propify_auth import (
     WEB_PROFILE_SESSION_KEY,
@@ -385,6 +386,7 @@ def attachment_download(request, pk, attachment_pk):
     )
 
 
+@xframe_options_sameorigin
 @external_agent_access_required
 def attachment_preview(request, pk, attachment_pk):
     attachment = get_object_or_404(
@@ -414,6 +416,7 @@ def attachment_preview(request, pk, attachment_pk):
     response['Content-Disposition'] = f'inline; filename="{filename}"'
     response['Cache-Control'] = 'private, max-age=300'
     response['X-Content-Type-Options'] = 'nosniff'
+    response['X-Frame-Options'] = 'SAMEORIGIN'
     return response
 
 

@@ -346,3 +346,4 @@ class ExternalAgentsViewsTests(TestCase):
             preview['Content-Disposition'].startswith('inline;')
         )
         self.assertEqual(preview['Content-Type'], 'application/pdf')
+        self.assertEqual(preview['X-Frame-Options'], 'SAMEORIGIN')
