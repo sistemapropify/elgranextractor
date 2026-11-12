@@ -611,12 +611,6 @@ def cierres(request):
         if row.get('code') and row['code'] != '—'
     ]
 
-    collections = list(
-        CommissionCollection.objects.filter(
-            currency_code='USD',
-            deal_type=deal_type,
-        )
-    )
     payments = list(
         CommissionPayment.objects
         .filter(
@@ -631,25 +625,25 @@ def cierres(request):
         .filter(
             collection__currency_code='USD',
             collection__deal_type=deal_type,
+            collection__operation_code__in=active_codes,
         )
         .select_related('collection')
         .order_by('-collection_date', '-created_at', '-pk')[:30]
     )
     currency_summaries = []
-    for currency in sorted({item.currency_code or 'USD' for item in collections}):
-        currency_collections = [
-            item for item in collections
-            if (item.currency_code or 'USD') == currency
-        ]
+    if rows:
         currency_payments = [
             item for item in payments
-            if (item.currency_code or 'USD') == currency
+            if (item.currency_code or 'USD') == 'USD'
         ]
-        commission = sum(float(item.amount_to_collect or 0) for item in currency_collections)
-        collected = sum(float(item.collected_amount or 0) for item in currency_collections)
-        agent_commission = sum(float(item.amount_for_agents or 0) for item in currency_collections)
-        broker_commission = sum(float(item.amount_for_brokers or 0) for item in currency_collections)
-        propify_commission = sum(float(item.amount_for_propify or 0) for item in currency_collections)
+        commission = sum(float(row.get('commission') or 0) for row in rows)
+        collected = sum(float(row.get('collected') or 0) for row in rows)
+        agent_commission = sum(float(row.get('agents_total') or 0) for row in rows)
+        broker_commission = sum(float(row.get('brokers_total') or 0) for row in rows)
+        propify_commission = sum(
+            float(row.get('commission_propify') or 0)
+            for row in rows
+        )
         agents_paid = sum(
             float(item.amount or 0)
             for item in currency_payments
@@ -672,8 +666,8 @@ def cierres(request):
             and item.beneficiary_type == CommissionPayment.BeneficiaryType.OTHER
         )
         currency_summaries.append({
-            'currency': currency,
-            'count': len(currency_collections),
+            'currency': 'USD',
+            'count': len(rows),
             'commission': commission,
             'collected': collected,
             'pending': max(commission - collected, 0),

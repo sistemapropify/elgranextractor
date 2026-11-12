@@ -492,6 +492,13 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertNotContains(response, 'Cierre en soles que no debe mostrarse')
         self.assertEqual(CommissionCollection.objects.count(), 2)
 
+        CommissionCollection.objects.create(
+            operation_code='PROP-OLD-999999',
+            property_name='Cierre histórico fuera de la lista actual',
+            deal_type='sale',
+            currency_code='USD',
+            amount_to_collect='999999.00',
+        )
         with patch(
             'external_agents.views._propify_closings',
             return_value=(
@@ -506,6 +513,8 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(sale_detail, 'Agente de Captación')
         self.assertContains(sale_detail, 'Agente Comprador')
         self.assertNotContains(sale_detail, 'PROP000888')
+        self.assertNotContains(sale_detail, 'PROP-OLD-999999')
+        self.assertNotContains(sale_detail, 'USD 999,999.00')
 
         with patch(
             'external_agents.views._propify_closings',
