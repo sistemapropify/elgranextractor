@@ -1,4 +1,5 @@
 {% extends "external_agents/base.html" %}
+{% load humanize %}
 
 {% block page_title %}Cobros y pagos de comisiones{% endblock %}
 {% block hero_title %}Cobros y pagos de comisiones{% endblock %}
@@ -263,35 +264,35 @@
         <div class="ea-currency-values">
             <div>
                 <span>Comisión por cobrar</span>
-                <strong>{{ item.currency }} {{ item.commission|floatformat:2 }}</strong>
+                <strong>{{ item.currency }} {{ item.commission|floatformat:2|intcomma }}</strong>
             </div>
             <div class="green">
                 <span>Cobrado al propietario</span>
-                <strong>{{ item.currency }} {{ item.collected|floatformat:2 }}</strong>
+                <strong>{{ item.currency }} {{ item.collected|floatformat:2|intcomma }}</strong>
             </div>
             <div class="amber">
                 <span>Saldo por cobrar</span>
-                <strong>{{ item.currency }} {{ item.pending|floatformat:2 }}</strong>
+                <strong>{{ item.currency }} {{ item.pending|floatformat:2|intcomma }}</strong>
             </div>
             <div class="blue">
                 <span>Comisión de agentes</span>
-                <strong>{{ item.currency }} {{ item.agent_commission|floatformat:2 }}</strong>
+                <strong>{{ item.currency }} {{ item.agent_commission|floatformat:2|intcomma }}</strong>
             </div>
             <div>
                 <span>Pagado a agentes</span>
-                <strong>{{ item.currency }} {{ item.agents_paid|floatformat:2 }}</strong>
+                <strong>{{ item.currency }} {{ item.agents_paid|floatformat:2|intcomma }}</strong>
             </div>
             <div class="amber">
                 <span>Pendiente a agentes</span>
-                <strong>{{ item.currency }} {{ item.agents_pending|floatformat:2 }}</strong>
+                <strong>{{ item.currency }} {{ item.agents_pending|floatformat:2|intcomma }}</strong>
             </div>
             <div>
                 <span>Comisión de Propify</span>
-                <strong>{{ item.currency }} {{ item.propify_commission|floatformat:2 }}</strong>
+                <strong>{{ item.currency }} {{ item.propify_commission|floatformat:2|intcomma }}</strong>
             </div>
             <div class="green">
                 <span>Pagado a Propify</span>
-                <strong>{{ item.currency }} {{ item.propify_paid|floatformat:2 }}</strong>
+                <strong>{{ item.currency }} {{ item.propify_paid|floatformat:2|intcomma }}</strong>
             </div>
         </div>
     </article>
@@ -458,19 +459,19 @@
             <div class="ea-closing-metrics">
                 <div>
                     <span>Monto de venta</span>
-                    <strong>{{ row.currency }} {{ row.amount|floatformat:2 }}</strong>
+                    <strong>{{ row.currency }} {{ row.amount|floatformat:2|intcomma }}</strong>
                 </div>
                 <div>
                     <span>Comisión total</span>
-                    <strong>{{ row.currency }} {{ row.commission|floatformat:2 }}</strong>
+                    <strong>{{ row.currency }} {{ row.commission|floatformat:2|intcomma }}</strong>
                 </div>
                 <div>
                     <span>Cobrado al propietario</span>
-                    <strong>{{ row.currency }} {{ row.collected|floatformat:2 }}</strong>
+                    <strong>{{ row.currency }} {{ row.collected|floatformat:2|intcomma }}</strong>
                 </div>
                 <div>
                     <span>Saldo por cobrar</span>
-                    <strong>{{ row.currency }} {{ row.pending|floatformat:2 }}</strong>
+                    <strong>{{ row.currency }} {{ row.pending|floatformat:2|intcomma }}</strong>
                 </div>
             </div>
             <div class="ea-participants">
@@ -478,7 +479,7 @@
                 <div class="ea-participant">
                     <span>{{ payable.label }}{% if payable.pct %} · {{ payable.pct|floatformat:2 }}%{% endif %}</span>
                     <strong>{{ payable.name }}</strong>
-                    <em>{{ row.currency }} {{ payable.amount|floatformat:2 }}</em>
+                    <em>{{ row.currency }} {{ payable.amount|floatformat:2|intcomma }}</em>
                 </div>
                 {% empty %}
                 <div class="ea-participant">
@@ -522,7 +523,7 @@
                     <td>{{ entry.collection_date|date:"d/m/Y" }}</td>
                     <td>{{ entry.collection.operation_code }}</td>
                     <td>{{ entry.collection.property_name }}</td>
-                    <td class="num">{{ entry.collection.currency_code }} {{ entry.amount|floatformat:2 }}</td>
+                    <td class="num">{{ entry.collection.currency_code }} {{ entry.amount|floatformat:2|intcomma }}</td>
                     <td>{{ entry.payment_method|default:"—" }}</td>
                     <td>{{ entry.voucher|default:"—" }}</td>
                     <td>{{ entry.registered_by_username|default:"—" }}</td>
@@ -564,7 +565,7 @@
                     <td>{{ payment.property_name }}</td>
                     <td>{{ payment.beneficiary_name|default:"—" }}</td>
                     <td>{{ payment.get_beneficiary_type_display }}</td>
-                    <td class="num">{{ payment.currency_code }} {{ payment.amount|floatformat:2 }}</td>
+                    <td class="num">{{ payment.currency_code }} {{ payment.amount|floatformat:2|intcomma }}</td>
                     <td><span class="ea-badge {% if payment.status == 'pagado' %}green{% elif payment.status == 'anulado' %}muted{% else %}amber{% endif %}">{{ payment.get_status_display }}</span></td>
                     <td>{{ payment.voucher|default:"—" }}</td>
                 </tr>

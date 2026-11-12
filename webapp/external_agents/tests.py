@@ -460,6 +460,8 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'Agente de Captación')
         self.assertContains(response, 'Agente Comprador')
         self.assertContains(response, 'Comisión de agentes')
+        self.assertContains(response, 'USD 1,554.00')
+        self.assertContains(response, 'USD 1,243.20')
         self.assertNotContains(response, 'Pagos a agentes')
 
         collection = CommissionCollection.objects.get(operation_code='PROP000261')
