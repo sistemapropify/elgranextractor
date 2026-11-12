@@ -129,7 +129,7 @@
     }
     .ea-closings-grid {
         width: 100%;
-        min-width: 1380px;
+        min-width: 1510px;
         border-collapse: separate;
         border-spacing: 0;
         font-size: 11px;
@@ -165,21 +165,93 @@
         font-variant-numeric: tabular-nums;
     }
     .ea-closings-grid .code { color: #79c0ff; font-weight: 750; white-space: nowrap; }
-    .ea-closings-grid .property { min-width: 230px; max-width: 300px; white-space: normal; }
-    .ea-closings-grid .participants-cell { min-width: 300px; }
-    .ea-participant-line {
+    .ea-property-cell {
         display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 280px;
+        max-width: 340px;
+    }
+    .ea-property-cell img,
+    .ea-property-fallback {
+        width: 46px;
+        height: 34px;
+        flex: 0 0 auto;
+        border: 1px solid var(--ea-border);
+        border-radius: 5px;
+        background: #0d1117;
+        object-fit: cover;
+    }
+    .ea-property-fallback {
+        display: grid;
+        place-items: center;
+        color: #6e7681;
+        font-size: 14px;
+    }
+    .ea-property-title {
+        min-width: 0;
+        white-space: normal;
+        line-height: 1.35;
+    }
+    .ea-closings-grid .participants-cell { min-width: 300px; }
+    .ea-closings-grid .actions-cell {
+        position: sticky;
+        right: 0;
+        z-index: 1;
+        min-width: 64px;
+        border-left: 1px solid #47515b;
+        background: #171d24;
+        box-shadow: -8px 0 14px rgba(1, 4, 9, .24);
+    }
+    .ea-closings-grid th.actions-cell {
+        z-index: 4;
+        background: #20262e;
+    }
+    .ea-grid-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        width: 100%;
+    }
+    .ea-grid-action {
+        width: 100%;
+        min-width: 0;
+        padding: 3px 5px;
+        border: 1px solid #388bfd;
+        border-radius: 5px;
+        background: #1f6feb;
+        color: #fff;
+        font: inherit;
+        font-size: 9px;
+        font-weight: 800;
+        line-height: 1.1;
+        cursor: pointer;
+    }
+    .ea-grid-action:hover { background: #388bfd; }
+    .ea-grid-action.pay {
+        border-color: #da3633;
+        background: #b62324;
+    }
+    .ea-grid-action.pay:hover { background: #da3633; }
+    .ea-participant-line {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
         align-items: baseline;
-        justify-content: space-between;
-        gap: 12px;
+        gap: 8px;
         padding: 1px 0;
         white-space: nowrap;
     }
-    .ea-participant-line span {
+    .ea-participant-label {
         overflow: hidden;
         max-width: 225px;
         text-overflow: ellipsis;
         color: #c9d1d9;
+    }
+    .ea-participant-pct {
+        color: #ff6b64;
+        font-size: 10px;
+        font-weight: 850;
+        font-variant-numeric: tabular-nums;
     }
     .ea-participant-line strong {
         color: #79c0ff;
@@ -328,23 +400,23 @@
     {% for item in summary.by_currency %}
     <div class="ea-kpi">
         <span>Comisión total</span>
-        <strong title="{{ item.currency }} {{ item.commission|floatformat:2|intcomma }}">{{ item.currency }} {{ item.commission|floatformat:2|intcomma }}</strong>
+        <strong title="{{ item.currency }} {{ item.commission|floatformat:0|intcomma }}">{{ item.currency }} {{ item.commission|floatformat:0|intcomma }}</strong>
     </div>
     <div class="ea-kpi green">
         <span>Cobrado</span>
-        <strong title="{{ item.currency }} {{ item.collected|floatformat:2|intcomma }}">{{ item.currency }} {{ item.collected|floatformat:2|intcomma }}</strong>
+        <strong title="{{ item.currency }} {{ item.collected|floatformat:0|intcomma }}">{{ item.currency }} {{ item.collected|floatformat:0|intcomma }}</strong>
     </div>
     <div class="ea-kpi amber">
         <span>Por cobrar</span>
-        <strong title="{{ item.currency }} {{ item.pending|floatformat:2|intcomma }}">{{ item.currency }} {{ item.pending|floatformat:2|intcomma }}</strong>
+        <strong title="{{ item.currency }} {{ item.pending|floatformat:0|intcomma }}">{{ item.currency }} {{ item.pending|floatformat:0|intcomma }}</strong>
     </div>
     <div class="ea-kpi blue">
         <span>Agentes</span>
-        <strong title="{{ item.currency }} {{ item.agent_commission|floatformat:2|intcomma }}">{{ item.currency }} {{ item.agent_commission|floatformat:2|intcomma }}</strong>
+        <strong title="{{ item.currency }} {{ item.agent_commission|floatformat:0|intcomma }}">{{ item.currency }} {{ item.agent_commission|floatformat:0|intcomma }}</strong>
     </div>
     <div class="ea-kpi blue">
         <span>Propify</span>
-        <strong title="{{ item.currency }} {{ item.propify_commission|floatformat:2|intcomma }}">{{ item.currency }} {{ item.propify_commission|floatformat:2|intcomma }}</strong>
+        <strong title="{{ item.currency }} {{ item.propify_commission|floatformat:0|intcomma }}">{{ item.currency }} {{ item.propify_commission|floatformat:0|intcomma }}</strong>
     </div>
     <div class="ea-kpi">
         <span>Cierres</span>
@@ -383,6 +455,7 @@
                 <th class="num">Cobrado</th>
                 <th class="num">Saldo</th>
                 <th>Estado</th>
+                <th class="actions-cell">Acciones</th>
             </tr>
         </thead>
         <tbody>
@@ -390,36 +463,62 @@
             <tr>
                 <td class="num">{{ forloop.counter }}</td>
                 <td class="code">{{ row.code }}</td>
-                <td class="property">{{ row.property }}</td>
+                <td>
+                    <div class="ea-property-cell">
+                        {% if row.image_url %}
+                        <img src="{{ row.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer">
+                        {% else %}
+                        <span class="ea-property-fallback" aria-hidden="true">▧</span>
+                        {% endif %}
+                        <span class="ea-property-title">{{ row.property }}</span>
+                    </div>
+                </td>
                 <td>{{ row.date_display }}</td>
                 <td>{{ row.currency }}</td>
-                <td class="num">{{ row.amount|floatformat:2|intcomma }}</td>
+                <td class="num">{{ row.amount|floatformat:0|intcomma }}</td>
                 <td class="num">{{ row.commission_pct|floatformat:2 }}%</td>
-                <td class="num">{{ row.commission|floatformat:2|intcomma }}</td>
-                <td class="num">{{ row.agents_total|floatformat:2|intcomma }}</td>
-                <td class="num">{{ row.commission_propify|floatformat:2|intcomma }}</td>
+                <td class="num">{{ row.commission|floatformat:0|intcomma }}</td>
+                <td class="num">{{ row.agents_total|floatformat:0|intcomma }}</td>
+                <td class="num">{{ row.commission_propify|floatformat:0|intcomma }}</td>
                 <td class="participants-cell">
                     {% for payable in row.payables %}
                     <div class="ea-participant-line">
-                        <span>{{ payable.label }} · {{ payable.name }}</span>
-                        <strong>{{ row.currency }} {{ payable.amount|floatformat:2|intcomma }}</strong>
+                        <span class="ea-participant-label">{{ payable.label }} · {{ payable.name }}</span>
+                        <span class="ea-participant-pct">{{ payable.pct|floatformat:0 }}%</span>
+                        <strong>{{ row.currency }} {{ payable.amount|floatformat:0|intcomma }}</strong>
                     </div>
                     {% empty %}
                     <span class="ea-matrix-empty">Sin participantes</span>
                     {% endfor %}
                 </td>
-                <td class="num">{{ row.collected|floatformat:2|intcomma }}</td>
-                <td class="num">{{ row.pending|floatformat:2|intcomma }}</td>
+                <td class="num">{{ row.collected|floatformat:0|intcomma }}</td>
+                <td class="num">{{ row.pending|floatformat:0|intcomma }}</td>
                 <td>
                     {% if row.collection_status %}
                     <span class="ea-badge {% if row.collection_status == 'Pendiente' %}amber{% else %}green{% endif %}">{{ row.collection_status }}</span>
                     {% endif %}
                     {% if row.status %}<span class="ea-badge muted">{{ row.status }}</span>{% endif %}
                 </td>
+                <td class="actions-cell">
+                    <div class="ea-grid-actions">
+                        <button
+                            class="ea-grid-action"
+                            type="button"
+                            data-open-modal="collection-modal"
+                            data-operation="{{ row.code }}"
+                        >Cobrar</button>
+                        <button
+                            class="ea-grid-action pay"
+                            type="button"
+                            data-open-modal="payment-modal"
+                            data-operation="{{ row.code }}"
+                        >Pagar</button>
+                    </div>
+                </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="14" class="ea-matrix-empty" style="padding:26px;text-align:center;">No hay cierres de {{ deal_label|lower }}.</td>
+                <td colspan="15" class="ea-matrix-empty" style="padding:26px;text-align:center;">No hay cierres de {{ deal_label|lower }}.</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -437,7 +536,7 @@
                 <td>{{ entry.collection_date|date:"d/m/Y" }}</td>
                 <td>{{ entry.collection.operation_code }}</td>
                 <td>{{ entry.collection.property_name }}</td>
-                <td class="num">{{ entry.collection.currency_code }} {{ entry.amount|floatformat:2|intcomma }}</td>
+                <td class="num">{{ entry.collection.currency_code }} {{ entry.amount|floatformat:0|intcomma }}</td>
                 <td>{{ entry.payment_method|default:"—" }}</td>
                 <td>{{ entry.voucher|default:"—" }}</td>
                 <td>{{ entry.registered_by_username|default:"—" }}</td>
@@ -462,7 +561,7 @@
                 <td>{{ payment.property_name }}</td>
                 <td>{{ payment.beneficiary_name|default:"—" }}</td>
                 <td>{{ payment.get_beneficiary_type_display }}</td>
-                <td class="num">{{ payment.currency_code }} {{ payment.amount|floatformat:2|intcomma }}</td>
+                <td class="num">{{ payment.currency_code }} {{ payment.amount|floatformat:0|intcomma }}</td>
                 <td><span class="ea-badge {% if payment.status == 'pagado' %}green{% elif payment.status == 'anulado' %}muted{% else %}amber{% endif %}">{{ payment.get_status_display }}</span></td>
                 <td>{{ payment.voucher|default:"—" }}</td>
             </tr>
@@ -642,7 +741,16 @@
     document.querySelectorAll('[data-open-modal]').forEach(button => {
         button.addEventListener('click', () => {
             const dialog = document.getElementById(button.dataset.openModal);
-            if (dialog && typeof dialog.showModal === 'function') dialog.showModal();
+            if (dialog && typeof dialog.showModal === 'function') {
+                if (button.dataset.operation) {
+                    const operation = dialog.querySelector('select[name="operation_code"]');
+                    if (operation) {
+                        operation.value = button.dataset.operation;
+                        operation.dispatchEvent(new Event('change'));
+                    }
+                }
+                dialog.showModal();
+            }
         });
     });
     document.querySelectorAll('[data-close-modal]').forEach(button => {

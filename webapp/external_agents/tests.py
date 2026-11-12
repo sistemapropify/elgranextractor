@@ -364,6 +364,7 @@ class ExternalAgentsViewsTests(TestCase):
             'id': 42,
             'property_code': 'PROP000261',
             'property_title': 'Casa en Urb. Colonial II',
+            'property_image': 'properties/media/thumbnails/casa_thumb.webp',
             'closing_date': '2026-11-06',
             'amount': '259000.00',
             'currency_code': 'USD',
@@ -410,6 +411,11 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertEqual(row['commission_propify'], 1243.2)
         self.assertEqual(row['currency'], 'USD')
         self.assertEqual(
+            row['image_url'],
+            'https://propifymedia01.blob.core.windows.net/media/'
+            'properties/media/thumbnails/casa_thumb.webp',
+        )
+        self.assertEqual(
             [agent['amount'] for agent in row['agents']],
             [155.4, 155.4],
         )
@@ -417,6 +423,13 @@ class ExternalAgentsViewsTests(TestCase):
             {item['name'] for item in row['payables']},
             {'Agente de Captación', 'Agente Comprador', 'Propify'},
         )
+        self.assertEqual(
+            [item['name'] for item in row['payables']],
+            ['Propify', 'Agente de Captación', 'Agente Comprador'],
+        )
+        payable_pcts = [item['pct'] for item in row['payables']]
+        self.assertAlmostEqual(payable_pcts[0], 80.0, places=2)
+        self.assertEqual(payable_pcts[1:], [20.0, 20.0])
         payable_types = {
             item['name']: item['type'] for item in row['payables']
         }
@@ -504,8 +517,8 @@ class ExternalAgentsViewsTests(TestCase):
             response = self.client.get(reverse('external_agents:cierres'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '<span>Agentes</span>')
-        self.assertContains(response, 'USD 1,554.00')
-        self.assertContains(response, 'USD 1,243.20')
+        self.assertContains(response, 'USD 1,554')
+        self.assertContains(response, 'USD 1,243')
         self.assertContains(response, 'Ventas')
         self.assertContains(response, 'Alquileres')
         self.assertContains(response, 'data-open-modal="collection-modal"')
@@ -516,6 +529,17 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertNotContains(response, 'name="due_date"')
         self.assertContains(response, 'class="ea-closings-grid"')
         self.assertNotContains(response, 'class="ea-closing-card"')
+        self.assertContains(response, 'class="ea-participant-pct">80%')
+        self.assertContains(response, 'class="ea-participant-pct">20%')
+        self.assertContains(response, '>Cobrar</button>')
+        self.assertContains(response, '>Pagar</button>')
+        self.assertContains(response, 'class="ea-grid-action pay"')
+        html = response.content.decode()
+        self.assertEqual(html.count('data-operation="PROP000261"'), 2)
+        self.assertContains(
+            response,
+            'properties/media/thumbnails/casa_thumb.webp',
+        )
         self.assertContains(response, '?tipo=venta&vista=cierres')
         self.assertContains(response, 'Agente de Captación')
         self.assertContains(response, 'Agente Comprador')
@@ -546,7 +570,7 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(sale_detail, 'Agente Comprador')
         self.assertNotContains(sale_detail, 'PROP000888')
         self.assertNotContains(sale_detail, 'PROP-OLD-999999')
-        self.assertNotContains(sale_detail, 'USD 999,999.00')
+        self.assertNotContains(sale_detail, 'USD 999,999')
 
         with patch(
             'external_agents.views._propify_closings_from_database',
@@ -562,7 +586,7 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(rent_summary, 'Comisiones de Alquileres')
         self.assertContains(rent_summary, '1 cierre')
         self.assertContains(rent_summary, 'PROP000888')
-        self.assertContains(rent_summary, 'PEN 2,500.00')
+        self.assertContains(rent_summary, 'PEN 2,500')
         self.assertNotContains(rent_summary, 'PROP000261')
 
         collection = CommissionCollection.objects.get(operation_code='PROP000261')

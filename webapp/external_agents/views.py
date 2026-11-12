@@ -3,7 +3,7 @@ import re
 from datetime import date
 from functools import wraps
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from django.contrib import messages
 from django.conf import settings
@@ -41,6 +41,7 @@ from .models import (
 
 MAX_ATTACHMENTS_PER_SUBMISSION = 20
 INITIAL_ATTACHMENT_ROWS = 6
+PROPIFY_MEDIA_BASE_URL = 'https://propifymedia01.blob.core.windows.net/media'
 
 
 def _propify_closings_from_database():
@@ -53,6 +54,7 @@ def _propify_closings_from_database():
                     c.id,
                     p.code,
                     p.title,
+                    COALESCE(media.thumbnail, media.[file]) AS property_image,
                     c.deal_type,
                     c.status,
                     c.closing_date,
@@ -67,6 +69,14 @@ def _propify_closings_from_database():
                 FROM closing c
                 INNER JOIN property p ON p.id = c.property_id
                 LEFT JOIN currency cu ON cu.id = c.currency_id
+                OUTER APPLY (
+                    SELECT TOP 1 pm.thumbnail, pm.[file]
+                    FROM property_media pm
+                    WHERE pm.property_id = p.id
+                      AND pm.media_type = 'image'
+                      AND (pm.thumbnail IS NOT NULL OR pm.[file] IS NOT NULL)
+                    ORDER BY pm.[order], pm.id
+                ) media
                 WHERE c.status = %s
                 ORDER BY c.closing_date DESC, c.id DESC
                 """,
@@ -76,6 +86,7 @@ def _propify_closings_from_database():
                 'id',
                 'property_code',
                 'property_title',
+                'property_image',
                 'deal_type',
                 'status',
                 'closing_date',
@@ -343,11 +354,22 @@ def _normalize_closing(item):
             'name': 'Propify',
             'label': 'Servicio Propify',
             'type': CommissionPayment.BeneficiaryType.PROPIFFY,
-            'pct': 0,
+            'pct': (
+                commission_propify / commission_amount * 100
+                if commission_amount > 0
+                else 0
+            ),
             'amount': commission_propify,
             'key': 'propify:Propify',
             'beneficiary_name': 'Propify',
         })
+    payable_order = {
+        CommissionPayment.BeneficiaryType.PROPIFFY: 0,
+        CommissionPayment.BeneficiaryType.SELLER: 1,
+        CommissionPayment.BeneficiaryType.BUYER: 2,
+        CommissionPayment.BeneficiaryType.OTHER: 3,
+    }
+    payables.sort(key=lambda payable: payable_order.get(payable['type'], 4))
 
     displayed_status = item.get('status') or item.get('closing_status') or ''
     if item.get('is_verified') is True:
@@ -356,6 +378,12 @@ def _normalize_closing(item):
         displayed_status = 'Pendiente de verificar'
     closing_date = item.get('closing_date') or '—'
     parsed_closing_date = _parse_closing_date(closing_date)
+    property_image = str(item.get('property_image') or '').strip()
+    image_url = (
+        f'{PROPIFY_MEDIA_BASE_URL}/{quote(property_image.replace(chr(92), "/").lstrip("/"), safe="/")}'
+        if property_image
+        else ''
+    )
     return {
         'id': item.get('id') or item.get('pk') or '—',
         'code': (
@@ -365,6 +393,7 @@ def _normalize_closing(item):
             or '—'
         ),
         'property': property_name,
+        'image_url': image_url,
         'date': closing_date,
         'date_display': (
             parsed_closing_date.strftime('%d/%m/%Y')
