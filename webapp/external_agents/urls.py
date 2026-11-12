@@ -9,6 +9,8 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('cierres/', views.cierres, name='cierres'),
+    path('cierres/cobrar/', views.collection_add, name='collection_add'),
+    path('cierres/pagar/', views.payment_add, name='payment_add'),
     path('nuevo/', views.agent_create, name='agent_create'),
     path('configuracion/', views.configuration, name='configuration'),
     path(

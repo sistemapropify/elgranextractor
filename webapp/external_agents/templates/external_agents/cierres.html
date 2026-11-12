@@ -126,9 +126,119 @@
         <span>Por cobrar</span>
     </div>
     <div class="ea-cierre-stat purple">
-        <strong>${{ summary.payable_agents|floatformat:2 }}</strong>
-        <span>Pagos a agentes</span>
+        <strong>${{ summary.paid_to_agents|floatformat:2 }}</strong>
+        <span>Pagado a agentes</span>
     </div>
+</section>
+
+<section class="ea-panel" style="margin-bottom:16px;">
+    <div class="ea-panel-head">
+        <div>
+            <h2 class="ea-panel-title">Registrar cobro</h2>
+            <p class="ea-panel-note">Suma el abono del propietario al cierre seleccionado.</p>
+        </div>
+    </div>
+    <form method="post" action="{% url 'external_agents:collection_add' %}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;padding:16px 18px;">
+        {% csrf_token %}
+        <div class="ea-field">
+            <label class="ea-label" for="cobro-operacion">Cierre</label>
+            <select class="ea-select" id="cobro-operacion" name="operation_code" required>
+                {% for row in rows %}
+                <option value="{{ row.code }}">{{ row.code }} · {{ row.property }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="cobro-monto">Monto</label>
+            <input class="ea-input" id="cobro-monto" name="amount" type="number" step="0.01" min="0" required>
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="cobro-medio">Medio</label>
+            <input class="ea-input" id="cobro-medio" name="payment_method" placeholder="Transferencia, depósito...">
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="cobro-cuenta">Cuenta</label>
+            <input class="ea-input" id="cobro-cuenta" name="account">
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="cobro-comprobante">Comprobante</label>
+            <input class="ea-input" id="cobro-comprobante" name="voucher">
+        </div>
+        <div class="ea-field" style="justify-content:flex-end;">
+            <button class="ea-btn ea-btn-primary" type="submit">Guardar cobro</button>
+        </div>
+    </form>
+</section>
+
+<section class="ea-panel" style="margin-bottom:16px;">
+    <div class="ea-panel-head">
+        <div>
+            <h2 class="ea-panel-title">Registrar pago de comisión</h2>
+            <p class="ea-panel-note">Paga a Propify, al agente vendedor o al agente comprador.</p>
+        </div>
+    </div>
+    <form method="post" action="{% url 'external_agents:payment_add' %}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;padding:16px 18px;">
+        {% csrf_token %}
+        <div class="ea-field">
+            <label class="ea-label" for="pago-operacion">Cierre</label>
+            <select class="ea-select" id="pago-operacion" name="operation_code" required>
+                {% for row in rows %}
+                <option value="{{ row.code }}">{{ row.code }} · {{ row.property }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="pago-tipo">Beneficiario</label>
+            <select class="ea-select" id="pago-tipo" name="beneficiary_type" required>
+                <option value="propify">Propify</option>
+                <option value="agente_vendedor">Agente vendedor</option>
+                <option value="agente_comprador">Agente comprador</option>
+                <option value="otro">Otro</option>
+            </select>
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="pago-nombre">Nombre</label>
+            <input class="ea-input" id="pago-nombre" name="beneficiary_name">
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="pago-monto">Monto</label>
+            <input class="ea-input" id="pago-monto" name="amount" type="number" step="0.01" min="0" required>
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="pago-vencimiento">Vence</label>
+            <input class="ea-input" id="pago-vencimiento" name="due_date" type="date">
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="pago-fecha">Pago</label>
+            <input class="ea-input" id="pago-fecha" name="payment_date" type="date">
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="pago-estado">Estado</label>
+            <select class="ea-select" id="pago-estado" name="status">
+                <option value="pendiente">Pendiente</option>
+                <option value="pagado">Pagado</option>
+            </select>
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="pago-medio">Medio</label>
+            <input class="ea-input" id="pago-medio" name="payment_method">
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="pago-comprobante">Comprobante</label>
+            <input class="ea-input" id="pago-comprobante" name="voucher">
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="pago-aprobador">Aprobado por</label>
+            <input class="ea-input" id="pago-aprobador" name="approved_by">
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="pago-notas">Notas</label>
+            <input class="ea-input" id="pago-notas" name="notes">
+        </div>
+        <div class="ea-field" style="justify-content:flex-end;">
+            <button class="ea-btn ea-btn-blue" type="submit">Guardar pago</button>
+        </div>
+    </form>
 </section>
 
 <div class="ea-cierres-wrap">
@@ -159,7 +269,7 @@
                 <td>
                     <div class="ea-agents">
                         {% for agent in row.agents %}
-                        <span>{{ agent.label }} · {{ agent.name }} · ${{ agent.amount|floatformat:2 }}</span>
+                        <span>{{ agent.label }} · {{ agent.name }}</span>
                         {% empty %}
                         <span class="ea-matrix-empty">—</span>
                         {% endfor %}

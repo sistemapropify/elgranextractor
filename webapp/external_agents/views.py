@@ -9,7 +9,7 @@ import requests
 from django.contrib import messages
 from django.conf import settings
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -150,10 +150,6 @@ def _normalize_closing(item):
             item.get('collected_amount', item.get('paid_amount')),
             0,
         )
-    commission_propify = _first_number(
-        item.get('commission_propify_amount'),
-        amount * _first_number(item.get('commission_pf', 0)) / 100,
-    )
     sides = item.get('sides') or item.get('agents_detail') or []
     if not isinstance(sides, list):
         sides = []
@@ -173,8 +169,15 @@ def _normalize_closing(item):
             'name': _agent_name(side),
             'label': label,
             'pct': pct,
-            'amount': amount * pct / 100,
+            'amount': commission_amount * pct / 100,
         })
+    commission_pf = _first_number(item.get('commission_pf'), 0)
+    commission_propify = _first_number(
+        item.get('commission_propify_amount'),
+        commission_amount * commission_pf / 100 if commission_pf else (
+            commission_amount - sum(agent['amount'] for agent in agents)
+        ),
+    )
     pending = max(commission_amount - collected, 0)
     return {
         'id': item.get('id') or item.get('pk') or '—',
@@ -242,16 +245,12 @@ def _sync_commission_collections(rows, request):
         if not created:
             collection.property_name = row.get('property') or collection.property_name
             collection.amount_to_collect = amount
-            collection.collected_amount = collected
             collection.closing_date = _parse_closing_date(row.get('date')) or collection.closing_date
-            collection.status = status
             collection.updated_by_username = username
             collection.save(update_fields=[
                 'property_name',
                 'amount_to_collect',
-                'collected_amount',
                 'closing_date',
-                'status',
                 'updated_by_username',
                 'updated_at',
             ])
@@ -438,22 +437,116 @@ def cierres(request):
     rows = [_normalize_closing(item) for item in (closings or [])]
     _sync_commission_collections(rows, request)
 
+    collected_total = (
+        CommissionCollection.objects.aggregate(total=Sum('collected_amount'))['total']
+        or 0
+    )
+    pending_total = (
+        CommissionCollection.objects.aggregate(total=Sum('amount_to_collect'))['total']
+        or 0
+    ) - collected_total
+    paid_to_agents = (
+        CommissionPayment.objects.filter(status=CommissionPayment.Status.PAID)
+        .aggregate(total=Sum('amount'))['total']
+        or 0
+    )
+    pending_payments = (
+        CommissionPayment.objects.filter(status=CommissionPayment.Status.PENDING)
+        .aggregate(total=Sum('amount'))['total']
+        or 0
+    )
+
     summary = {
         'total': len(rows),
-        'commission': sum(row['commission'] for row in rows),
-        'collected': sum(row['collected'] for row in rows),
-        'pending': sum(row['pending'] for row in rows),
-        'payable_agents': sum(
-            agent['amount']
-            for row in rows
-            for agent in row['agents']
-        ),
+        'commission': pending_total + collected_total,
+        'collected': collected_total,
+        'pending': max(pending_total, 0),
+        'paid_to_agents': paid_to_agents,
+        'pending_payments': pending_payments,
     }
     return render(request, 'external_agents/cierres.html', {
         'rows': rows,
         'summary': summary,
         'error': error,
     })
+
+
+def _parse_date_input(value):
+    if not value:
+        return None
+    text = str(value).strip()
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _redirect_cierres():
+    return redirect('external_agents:cierres')
+
+
+@never_cache
+@external_agent_access_required
+def collection_add(request):
+    if request.method != 'POST':
+        return _redirect_cierres()
+    operation_code = str(request.POST.get('operation_code') or '').strip()
+    amount = _first_number(request.POST.get('amount'))
+    if not operation_code or amount <= 0:
+        messages.error(request, 'Selecciona un cierre y un monto válido.')
+        return _redirect_cierres()
+    collection = get_object_or_404(
+        CommissionCollection,
+        operation_code=operation_code,
+    )
+    collection.collected_amount = _first_number(collection.collected_amount) + amount
+    if collection.amount_to_collect > 0 and collection.collected_amount >= collection.amount_to_collect:
+        collection.status = CommissionCollection.Status.COLLECTED
+    elif collection.collected_amount > 0:
+        collection.status = CommissionCollection.Status.PARTIAL
+    collection.updated_by_username = _username(request)
+    collection.save(update_fields=[
+        'collected_amount',
+        'status',
+        'updated_by_username',
+        'updated_at',
+    ])
+    messages.success(request, 'Cobro registrado correctamente.')
+    return _redirect_cierres()
+
+
+@never_cache
+@external_agent_access_required
+def payment_add(request):
+    if request.method != 'POST':
+        return _redirect_cierres()
+    operation_code = str(request.POST.get('operation_code') or '').strip()
+    beneficiary_type = str(request.POST.get('beneficiary_type') or '').strip()
+    amount = _first_number(request.POST.get('amount'))
+    valid_types = {value for value, _ in CommissionPayment.BeneficiaryType.choices}
+    if not operation_code or beneficiary_type not in valid_types or amount <= 0:
+        messages.error(request, 'Revisa los datos del pago antes de guardarlo.')
+        return _redirect_cierres()
+    payment = CommissionPayment(
+        operation_code=operation_code,
+        property_name=str(request.POST.get('property_name') or '').strip(),
+        beneficiary_type=beneficiary_type,
+        beneficiary_name=str(request.POST.get('beneficiary_name') or '').strip(),
+        amount=amount,
+        due_date=_parse_date_input(request.POST.get('due_date')),
+        payment_date=_parse_date_input(request.POST.get('payment_date')),
+        status=str(request.POST.get('status') or CommissionPayment.Status.PENDING),
+        payment_method=str(request.POST.get('payment_method') or '').strip(),
+        account=str(request.POST.get('account') or '').strip(),
+        voucher=str(request.POST.get('voucher') or '').strip(),
+        approved_by=str(request.POST.get('approved_by') or '').strip(),
+        notes=str(request.POST.get('notes') or '').strip(),
+        created_by_username=_username(request),
+        updated_by_username=_username(request),
+    )
+    payment.save()
+    messages.success(request, 'Pago registrado correctamente.')
+    return _redirect_cierres()
 
 
 @never_cache
