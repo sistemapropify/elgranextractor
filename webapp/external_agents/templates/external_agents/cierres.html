@@ -1,100 +1,248 @@
 {% extends "external_agents/base.html" %}
 
-{% block page_title %}Cierres y comisiones{% endblock %}
-{% block hero_title %}Cierres y comisiones{% endblock %}
-{% block hero_subtitle %}Ventas cerradas en Propify con el cobro de comisiones y los pagos pendientes a Propify y a los agentes.{% endblock %}
+{% block page_title %}Cobros y pagos de comisiones{% endblock %}
+{% block hero_title %}Cobros y pagos de comisiones{% endblock %}
+{% block hero_subtitle %}Controla los abonos del propietario y los pagos a Propify, al agente de captación y al agente comprador usando los cierres reales de Propify.{% endblock %}
+
+{% block head_actions %}
+<a class="ea-btn" href="{% url 'external_agents:dashboard' %}">Volver al directorio</a>
+<a class="ea-btn ea-btn-blue" href="{% url 'external_agents:cierres' %}">Actualizar desde Propify</a>
+{% endblock %}
 
 {% block extra_module_css %}
 <style>
-    .ea-cierres-stats {
+    .ea-finance-grid {
         display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 10px;
-        margin-bottom: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
     }
-    .ea-cierre-stat {
-        padding: 14px 16px;
+    .ea-currency-card {
+        overflow: hidden;
         border: 1px solid var(--ea-border);
-        border-radius: 11px;
+        border-radius: 12px;
         background: var(--ea-panel);
     }
-    .ea-cierre-stat strong {
-        display: block;
+    .ea-currency-card h2 {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 0;
+        padding: 13px 16px;
+        border-bottom: 1px solid var(--ea-border);
+        background: var(--ea-panel-raised);
         color: #f0f6fc;
-        font-size: 23px;
-        line-height: 1.1;
+        font-size: 14px;
     }
-    .ea-cierre-stat span {
+    .ea-currency-card h2 span {
+        color: var(--ea-muted);
+        font-size: 11px;
+        font-weight: 700;
+    }
+    .ea-currency-values {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1px;
+        background: var(--ea-border);
+    }
+    .ea-currency-values div {
+        min-width: 0;
+        padding: 13px 15px;
+        background: var(--ea-panel);
+    }
+    .ea-currency-values span {
         display: block;
-        margin-top: 5px;
         color: var(--ea-muted);
         font-size: 10px;
         font-weight: 700;
-        letter-spacing: .5px;
+        letter-spacing: .35px;
         text-transform: uppercase;
     }
-    .ea-cierre-stat.blue strong { color: #79c0ff; }
-    .ea-cierre-stat.green strong { color: #7ee787; }
-    .ea-cierre-stat.amber strong { color: #e3b341; }
-    .ea-cierre-stat.purple strong { color: #a371f7; }
-    .ea-cierre-stat.red strong { color: #ff958e; }
-    .ea-cierres-wrap {
+    .ea-currency-values strong {
+        display: block;
+        margin-top: 5px;
+        color: #f0f6fc;
+        font-size: 17px;
+        font-variant-numeric: tabular-nums;
+    }
+    .ea-currency-values .green strong { color: #7ee787; }
+    .ea-currency-values .amber strong { color: #e3b341; }
+    .ea-currency-values .blue strong { color: #79c0ff; }
+    .ea-operation-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+    .ea-operation-card {
+        min-width: 0;
+        border: 1px solid var(--ea-border);
+        border-radius: 12px;
+        background: var(--ea-panel);
+    }
+    .ea-operation-card .ea-panel-head {
+        padding-bottom: 0;
+    }
+    .ea-operation-form {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        padding: 16px 18px 18px;
+    }
+    .ea-operation-form .wide { grid-column: 1 / -1; }
+    .ea-operation-info {
+        display: grid;
+        gap: 4px;
+        grid-column: 1 / -1;
+        min-height: 48px;
+        padding: 11px 12px;
+        border: 1px solid rgba(88, 166, 255, .28);
+        border-radius: 8px;
+        background: rgba(88, 166, 255, .07);
+        color: #c9d1d9;
+        font-size: 12px;
+        line-height: 1.45;
+    }
+    .ea-operation-info strong { color: #f0f6fc; }
+    .ea-closing-list {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+    .ea-closing-card {
+        overflow: hidden;
+        border: 1px solid var(--ea-border);
+        border-radius: 12px;
+        background: var(--ea-panel);
+    }
+    .ea-closing-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--ea-border);
+        background: var(--ea-panel-raised);
+    }
+    .ea-closing-head h3 {
+        margin: 0;
+        color: #f0f6fc;
+        font-size: 14px;
+        line-height: 1.35;
+    }
+    .ea-closing-head p {
+        margin: 4px 0 0;
+        color: var(--ea-muted);
+        font-size: 11px;
+    }
+    .ea-closing-metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 1px;
+        background: var(--ea-border);
+    }
+    .ea-closing-metrics div {
+        padding: 11px 14px;
+        background: var(--ea-panel);
+    }
+    .ea-closing-metrics span {
+        display: block;
+        color: var(--ea-muted);
+        font-size: 9px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .ea-closing-metrics strong {
+        display: block;
+        margin-top: 4px;
+        color: #f0f6fc;
+        font-size: 14px;
+        font-variant-numeric: tabular-nums;
+    }
+    .ea-participants {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 8px;
+        padding: 13px 16px 16px;
+    }
+    .ea-participant {
+        min-width: 0;
+        padding: 10px 11px;
+        border: 1px solid var(--ea-border);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, .018);
+    }
+    .ea-participant span {
+        display: block;
+        color: var(--ea-muted);
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: .35px;
+        text-transform: uppercase;
+    }
+    .ea-participant strong {
+        display: block;
+        margin-top: 4px;
+        overflow-wrap: anywhere;
+        color: #e6edf3;
+        font-size: 12px;
+    }
+    .ea-participant em {
+        display: block;
+        margin-top: 5px;
+        color: #79c0ff;
+        font-size: 13px;
+        font-style: normal;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+    }
+    .ea-ledger-wrap {
         width: 100%;
         overflow: auto;
         border: 1px solid var(--ea-border);
         border-radius: 11px;
         background: var(--ea-panel);
     }
-    .ea-cierres {
+    .ea-ledger {
         width: 100%;
-        min-width: 1180px;
-        border-collapse: separate;
-        border-spacing: 0;
-        font-size: 12px;
+        min-width: 840px;
+        border-collapse: collapse;
+        font-size: 11px;
     }
-    .ea-cierres th {
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        padding: 11px 10px;
+    .ea-ledger th,
+    .ea-ledger td {
+        padding: 9px 10px;
         border-bottom: 1px solid var(--ea-border);
+        text-align: left;
+        vertical-align: top;
+    }
+    .ea-ledger th {
         background: var(--ea-panel-raised);
         color: var(--ea-muted);
-        text-align: left;
-        font-size: 10px;
-        font-weight: 800;
-        letter-spacing: .45px;
+        font-size: 9px;
+        letter-spacing: .35px;
         text-transform: uppercase;
         white-space: nowrap;
     }
-    .ea-cierres td {
-        padding: 11px 10px;
-        border-bottom: 1px solid var(--ea-border);
-        color: #c9d1d9;
-        vertical-align: top;
-    }
-    .ea-cierres tbody tr:hover td {
-        background: rgba(88, 166, 255, .045);
-    }
-    .ea-cierres tbody tr:last-child td {
-        border-bottom: 0;
-    }
-    .ea-num {
+    .ea-ledger td { color: #c9d1d9; }
+    .ea-ledger tr:last-child td { border-bottom: 0; }
+    .ea-ledger .num {
         text-align: right;
+        white-space: nowrap;
         font-variant-numeric: tabular-nums;
-        white-space: nowrap;
     }
-    .ea-agents {
-        display: grid;
-        gap: 3px;
-        color: #c9d1d9;
-        font-size: 11px;
-    }
-    .ea-agents span {
-        white-space: nowrap;
-    }
+    .ea-ledger-section { margin-top: 18px; }
     @media (max-width: 900px) {
-        .ea-cierres-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .ea-operation-grid { grid-template-columns: 1fr; }
+        .ea-closing-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 620px) {
+        .ea-operation-form { grid-template-columns: 1fr; }
+        .ea-operation-form .wide,
+        .ea-operation-info { grid-column: auto; }
+        .ea-closing-head { flex-direction: column; }
+        .ea-closing-metrics { grid-template-columns: 1fr; }
+        .ea-currency-values { grid-template-columns: 1fr; }
     }
 </style>
 {% endblock %}
@@ -108,188 +256,438 @@
     <a class="ea-btn" href="{% url 'external_agents:cierres' %}">Reintentar</a>
 </section>
 {% else %}
-<section class="ea-cierres-stats" aria-label="Resumen de cierres">
-    <div class="ea-cierre-stat blue">
-        <strong>{{ summary.total }}</strong>
-        <span>Cierres</span>
-    </div>
-    <div class="ea-cierre-stat">
-        <strong>${{ summary.commission|floatformat:2 }}</strong>
-        <span>Comisión total</span>
-    </div>
-    <div class="ea-cierre-stat green">
-        <strong>${{ summary.collected|floatformat:2 }}</strong>
-        <span>Cobrado</span>
-    </div>
-    <div class="ea-cierre-stat amber">
-        <strong>${{ summary.pending|floatformat:2 }}</strong>
-        <span>Por cobrar</span>
-    </div>
-    <div class="ea-cierre-stat purple">
-        <strong>${{ summary.paid_to_agents|floatformat:2 }}</strong>
-        <span>Pagado a agentes</span>
-    </div>
+<section class="ea-finance-grid" aria-label="Resumen de cobros y comisiones">
+    {% for item in summary.by_currency %}
+    <article class="ea-currency-card">
+        <h2>{{ item.currency }} <span>{{ item.count }} cierre{{ item.count|pluralize:"s" }}</span></h2>
+        <div class="ea-currency-values">
+            <div>
+                <span>Comisión por cobrar</span>
+                <strong>{{ item.currency }} {{ item.commission|floatformat:2 }}</strong>
+            </div>
+            <div class="green">
+                <span>Cobrado al propietario</span>
+                <strong>{{ item.currency }} {{ item.collected|floatformat:2 }}</strong>
+            </div>
+            <div class="amber">
+                <span>Saldo por cobrar</span>
+                <strong>{{ item.currency }} {{ item.pending|floatformat:2 }}</strong>
+            </div>
+            <div class="blue">
+                <span>Comisión de agentes</span>
+                <strong>{{ item.currency }} {{ item.agent_commission|floatformat:2 }}</strong>
+            </div>
+            <div>
+                <span>Pagado a agentes</span>
+                <strong>{{ item.currency }} {{ item.agents_paid|floatformat:2 }}</strong>
+            </div>
+            <div class="amber">
+                <span>Pendiente a agentes</span>
+                <strong>{{ item.currency }} {{ item.agents_pending|floatformat:2 }}</strong>
+            </div>
+            <div>
+                <span>Comisión de Propify</span>
+                <strong>{{ item.currency }} {{ item.propify_commission|floatformat:2 }}</strong>
+            </div>
+            <div class="green">
+                <span>Pagado a Propify</span>
+                <strong>{{ item.currency }} {{ item.propify_paid|floatformat:2 }}</strong>
+            </div>
+        </div>
+    </article>
+    {% empty %}
+    <article class="ea-currency-card">
+        <h2>Sin cierres <span>0 cierres</span></h2>
+        <div class="ea-currency-values">
+            <div>
+                <span>Comisión por cobrar</span>
+                <strong>—</strong>
+            </div>
+            <div>
+                <span>Cobrado al propietario</span>
+                <strong>—</strong>
+            </div>
+        </div>
+    </article>
+    {% endfor %}
 </section>
 
-<section class="ea-panel" style="margin-bottom:16px;">
+<section class="ea-operation-grid" aria-label="Registrar movimientos">
+    <article class="ea-operation-card">
+        <div class="ea-panel-head">
+            <div>
+                <h2 class="ea-panel-title">Registrar cobro al propietario</h2>
+                <p class="ea-panel-note">Cada abono queda como un movimiento independiente ligado al código del cierre.</p>
+            </div>
+        </div>
+        <form class="ea-operation-form" method="post" action="{% url 'external_agents:collection_add' %}">
+            {% csrf_token %}
+            <div class="ea-field wide">
+                <label class="ea-label" for="cobro-operacion">Código de operación / propiedad</label>
+                <select class="ea-select" id="cobro-operacion" name="operation_code" required>
+                    {% for row in rows %}
+                    <option value="{{ row.code }}">{{ row.code }} · {{ row.property }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="ea-operation-info" id="cobro-info">Selecciona un cierre para ver la comisión y el saldo.</div>
+            <div class="ea-field">
+                <label class="ea-label" for="cobro-monto">Importe recibido</label>
+                <input class="ea-input" id="cobro-monto" name="amount" type="number" step="0.01" min="0.01" required>
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="cobro-fecha">Fecha del abono</label>
+                <input class="ea-input" id="cobro-fecha" name="collection_date" type="date" required>
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="cobro-medio">Medio</label>
+                <input class="ea-input" id="cobro-medio" name="payment_method" placeholder="Transferencia, depósito...">
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="cobro-cuenta">Cuenta de destino</label>
+                <input class="ea-input" id="cobro-cuenta" name="account">
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="cobro-comprobante">Comprobante</label>
+                <input class="ea-input" id="cobro-comprobante" name="voucher">
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="cobro-notas">Observaciones</label>
+                <input class="ea-input" id="cobro-notas" name="notes">
+            </div>
+            <div class="ea-field wide" style="align-items:flex-end;">
+                <button class="ea-btn ea-btn-primary" type="submit" {% if not rows %}disabled{% endif %}>Guardar cobro</button>
+            </div>
+        </form>
+    </article>
+
+    <article class="ea-operation-card">
+        <div class="ea-panel-head">
+            <div>
+                <h2 class="ea-panel-title">Registrar pago de comisión</h2>
+                <p class="ea-panel-note">Elige un solo beneficiario. Los dos agentes aparecen por separado, nunca en un mismo campo.</p>
+            </div>
+        </div>
+        <form class="ea-operation-form" method="post" action="{% url 'external_agents:payment_add' %}">
+            {% csrf_token %}
+            <div class="ea-field wide">
+                <label class="ea-label" for="pago-operacion">Código de operación / propiedad</label>
+                <select class="ea-select" id="pago-operacion" name="operation_code" required>
+                    {% for row in rows %}
+                    <option value="{{ row.code }}">{{ row.code }} · {{ row.property }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="ea-field wide">
+                <label class="ea-label" for="pago-beneficiario">Beneficiario</label>
+                <select class="ea-select" id="pago-beneficiario" name="beneficiary_choice" required>
+                    <option value="">Selecciona un beneficiario</option>
+                </select>
+            </div>
+            <input type="hidden" id="pago-tipo" name="beneficiary_type">
+            <input type="hidden" id="pago-nombre" name="beneficiary_name">
+            <input type="hidden" id="pago-moneda" name="currency_code">
+            <div class="ea-operation-info" id="pago-info">Selecciona el cierre y luego el agente o el servicio que corresponde pagar.</div>
+            <div class="ea-field">
+                <label class="ea-label" for="pago-monto">Importe a pagar</label>
+                <input class="ea-input" id="pago-monto" name="amount" type="number" step="0.01" min="0.01" required>
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="pago-vencimiento">Fecha de vencimiento</label>
+                <input class="ea-input" id="pago-vencimiento" name="due_date" type="date">
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="pago-fecha">Fecha de pago</label>
+                <input class="ea-input" id="pago-fecha" name="payment_date" type="date">
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="pago-estado">Estado</label>
+                <select class="ea-select" id="pago-estado" name="status">
+                    <option value="pendiente">Pendiente</option>
+                    <option value="pagado">Pagado</option>
+                </select>
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="pago-medio">Medio de pago</label>
+                <input class="ea-input" id="pago-medio" name="payment_method">
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="pago-cuenta">Cuenta de salida</label>
+                <input class="ea-input" id="pago-cuenta" name="account">
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="pago-comprobante">Comprobante</label>
+                <input class="ea-input" id="pago-comprobante" name="voucher">
+            </div>
+            <div class="ea-field">
+                <label class="ea-label" for="pago-aprobador">Aprobado por</label>
+                <input class="ea-input" id="pago-aprobador" name="approved_by">
+            </div>
+            <div class="ea-field wide">
+                <label class="ea-label" for="pago-notas">Observaciones</label>
+                <input class="ea-input" id="pago-notas" name="notes">
+            </div>
+            <div class="ea-field wide" style="align-items:flex-end;">
+                <button class="ea-btn ea-btn-blue" type="submit" {% if not rows %}disabled{% endif %}>Guardar pago</button>
+            </div>
+        </form>
+    </article>
+</section>
+
+<section class="ea-panel" style="margin-bottom:18px;">
     <div class="ea-panel-head">
         <div>
-            <h2 class="ea-panel-title">Registrar cobro</h2>
-            <p class="ea-panel-note">Suma el abono del propietario al cierre seleccionado.</p>
+            <h2 class="ea-panel-title">Cierres de Propify</h2>
+            <p class="ea-panel-note">{{ summary.total }} cierre{{ summary.total|pluralize:"s" }}. Los importes corresponden a la comisión, no al precio de venta.</p>
         </div>
     </div>
-    <form method="post" action="{% url 'external_agents:collection_add' %}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;padding:16px 18px;">
-        {% csrf_token %}
-        <div class="ea-field">
-            <label class="ea-label" for="cobro-operacion">Cierre</label>
-            <select class="ea-select" id="cobro-operacion" name="operation_code" required>
-                {% for row in rows %}
-                <option value="{{ row.code }}">{{ row.code }} · {{ row.property }}</option>
+    <div class="ea-closing-list" style="padding:0 16px 16px;">
+        {% for row in rows %}
+        <article class="ea-closing-card">
+            <div class="ea-closing-head">
+                <div>
+                    <h3>{{ row.code }} · {{ row.property }}</h3>
+                    <p>
+                        {% if row.date_display != '—' %}Cierre {{ row.date_display }}{% else %}Fecha de cierre pendiente{% endif %}
+                        {% if row.status %} · {{ row.status }}{% endif %}
+                        {% if row.collection_status %} · Cobro {{ row.collection_status|lower }}{% endif %}
+                    </p>
+                </div>
+                <span class="ea-badge blue">{{ row.currency }}</span>
+            </div>
+            <div class="ea-closing-metrics">
+                <div>
+                    <span>Monto de venta</span>
+                    <strong>{{ row.currency }} {{ row.amount|floatformat:2 }}</strong>
+                </div>
+                <div>
+                    <span>Comisión total</span>
+                    <strong>{{ row.currency }} {{ row.commission|floatformat:2 }}</strong>
+                </div>
+                <div>
+                    <span>Cobrado al propietario</span>
+                    <strong>{{ row.currency }} {{ row.collected|floatformat:2 }}</strong>
+                </div>
+                <div>
+                    <span>Saldo por cobrar</span>
+                    <strong>{{ row.currency }} {{ row.pending|floatformat:2 }}</strong>
+                </div>
+            </div>
+            <div class="ea-participants">
+                {% for payable in row.payables %}
+                <div class="ea-participant">
+                    <span>{{ payable.label }}{% if payable.pct %} · {{ payable.pct|floatformat:2 }}%{% endif %}</span>
+                    <strong>{{ payable.name }}</strong>
+                    <em>{{ row.currency }} {{ payable.amount|floatformat:2 }}</em>
+                </div>
+                {% empty %}
+                <div class="ea-participant">
+                    <span>Comisiones</span>
+                    <strong>Sin participantes informados por Propify.</strong>
+                </div>
                 {% endfor %}
-            </select>
+            </div>
+        </article>
+        {% empty %}
+        <div class="ea-empty" style="padding:28px;">
+            <h3>No hay cierres registrados en Propify para esta cuenta.</h3>
         </div>
-        <div class="ea-field">
-            <label class="ea-label" for="cobro-monto">Monto</label>
-            <input class="ea-input" id="cobro-monto" name="amount" type="number" step="0.01" min="0" required>
-        </div>
-        <div class="ea-field">
-            <label class="ea-label" for="cobro-medio">Medio</label>
-            <input class="ea-input" id="cobro-medio" name="payment_method" placeholder="Transferencia, depósito...">
-        </div>
-        <div class="ea-field">
-            <label class="ea-label" for="cobro-cuenta">Cuenta</label>
-            <input class="ea-input" id="cobro-cuenta" name="account">
-        </div>
-        <div class="ea-field">
-            <label class="ea-label" for="cobro-comprobante">Comprobante</label>
-            <input class="ea-input" id="cobro-comprobante" name="voucher">
-        </div>
-        <div class="ea-field" style="justify-content:flex-end;">
-            <button class="ea-btn ea-btn-primary" type="submit">Guardar cobro</button>
-        </div>
-    </form>
+        {% endfor %}
+    </div>
 </section>
 
-<section class="ea-panel" style="margin-bottom:16px;">
+<section class="ea-ledger-section">
     <div class="ea-panel-head">
         <div>
-            <h2 class="ea-panel-title">Registrar pago de comisión</h2>
-            <p class="ea-panel-note">Paga a Propify, al agente vendedor o al agente comprador.</p>
+            <h2 class="ea-panel-title">Historial de cobros recibidos</h2>
+            <p class="ea-panel-note">Los abonos parciales se conservan por separado y no modifican movimientos anteriores.</p>
         </div>
     </div>
-    <form method="post" action="{% url 'external_agents:payment_add' %}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;padding:16px 18px;">
-        {% csrf_token %}
-        <div class="ea-field">
-            <label class="ea-label" for="pago-operacion">Cierre</label>
-            <select class="ea-select" id="pago-operacion" name="operation_code" required>
-                {% for row in rows %}
-                <option value="{{ row.code }}">{{ row.code }} · {{ row.property }}</option>
+    <div class="ea-ledger-wrap">
+        <table class="ea-ledger">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Operación</th>
+                    <th>Propiedad</th>
+                    <th class="num">Importe</th>
+                    <th>Medio</th>
+                    <th>Comprobante</th>
+                    <th>Registrado por</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in collection_entries %}
+                <tr>
+                    <td>{{ entry.collection_date|date:"d/m/Y" }}</td>
+                    <td>{{ entry.collection.operation_code }}</td>
+                    <td>{{ entry.collection.property_name }}</td>
+                    <td class="num">{{ entry.collection.currency_code }} {{ entry.amount|floatformat:2 }}</td>
+                    <td>{{ entry.payment_method|default:"—" }}</td>
+                    <td>{{ entry.voucher|default:"—" }}</td>
+                    <td>{{ entry.registered_by_username|default:"—" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7">Todavía no se registraron abonos.</td></tr>
                 {% endfor %}
-            </select>
-        </div>
-        <div class="ea-field">
-            <label class="ea-label" for="pago-tipo">Beneficiario</label>
-            <select class="ea-select" id="pago-tipo" name="beneficiary_type" required>
-                <option value="propify">Propify</option>
-                <option value="agente_vendedor">Agente vendedor</option>
-                <option value="agente_comprador">Agente comprador</option>
-                <option value="otro">Otro</option>
-            </select>
-        </div>
-        <div class="ea-field">
-            <label class="ea-label" for="pago-nombre">Nombre</label>
-            <input class="ea-input" id="pago-nombre" name="beneficiary_name">
-        </div>
-        <div class="ea-field">
-            <label class="ea-label" for="pago-monto">Monto</label>
-            <input class="ea-input" id="pago-monto" name="amount" type="number" step="0.01" min="0" required>
-        </div>
-        <div class="ea-field">
-            <label class="ea-label" for="pago-vencimiento">Vence</label>
-            <input class="ea-input" id="pago-vencimiento" name="due_date" type="date">
-        </div>
-        <div class="ea-field">
-            <label class="ea-label" for="pago-fecha">Pago</label>
-            <input class="ea-input" id="pago-fecha" name="payment_date" type="date">
-        </div>
-        <div class="ea-field">
-            <label class="ea-label" for="pago-estado">Estado</label>
-            <select class="ea-select" id="pago-estado" name="status">
-                <option value="pendiente">Pendiente</option>
-                <option value="pagado">Pagado</option>
-            </select>
-        </div>
-        <div class="ea-field">
-            <label class="ea-label" for="pago-medio">Medio</label>
-            <input class="ea-input" id="pago-medio" name="payment_method">
-        </div>
-        <div class="ea-field">
-            <label class="ea-label" for="pago-comprobante">Comprobante</label>
-            <input class="ea-input" id="pago-comprobante" name="voucher">
-        </div>
-        <div class="ea-field">
-            <label class="ea-label" for="pago-aprobador">Aprobado por</label>
-            <input class="ea-input" id="pago-aprobador" name="approved_by">
-        </div>
-        <div class="ea-field">
-            <label class="ea-label" for="pago-notas">Notas</label>
-            <input class="ea-input" id="pago-notas" name="notes">
-        </div>
-        <div class="ea-field" style="justify-content:flex-end;">
-            <button class="ea-btn ea-btn-blue" type="submit">Guardar pago</button>
-        </div>
-    </form>
+            </tbody>
+        </table>
+    </div>
 </section>
 
-<div class="ea-cierres-wrap">
-    <table class="ea-cierres">
-        <thead>
-            <tr>
-                <th>Operación</th>
-                <th>Propiedad</th>
-                <th>Cierre</th>
-                <th class="ea-num">Monto venta</th>
-                <th class="ea-num">Comisión</th>
-                <th>Agentes</th>
-                <th class="ea-num">Cobrado</th>
-                <th class="ea-num">Saldo</th>
-                <th>Estado</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in rows %}
-            <tr>
-                <td>{{ row.code|default:"—" }}</td>
-                <td>{{ row.property }}</td>
-                <td>
-                    {% if row.date != '—' %}{{ row.date|date:"d/m/Y" }}{% else %}—{% endif %}
-                </td>
-                <td class="ea-num">${{ row.amount|floatformat:2 }}</td>
-                <td class="ea-num">${{ row.commission|floatformat:2 }}</td>
-                <td>
-                    <div class="ea-agents">
-                        {% for agent in row.agents %}
-                        <span>{{ agent.label }} · {{ agent.name }}</span>
-                        {% empty %}
-                        <span class="ea-matrix-empty">—</span>
-                        {% endfor %}
-                    </div>
-                </td>
-                <td class="ea-num">${{ row.collected|floatformat:2 }}</td>
-                <td class="ea-num">${{ row.pending|floatformat:2 }}</td>
-                <td>
-                    {% if row.status %}<span class="ea-badge blue">{{ row.status }}</span>{% else %}<span class="ea-badge muted">—</span>{% endif %}
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="9" class="ea-matrix-empty" style="padding:28px;text-align:center;">
-                    No hay cierres registrados en Propify para esta cuenta.
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+<section class="ea-ledger-section">
+    <div class="ea-panel-head">
+        <div>
+            <h2 class="ea-panel-title">Historial de pagos de comisiones</h2>
+            <p class="ea-panel-note">Cada pago identifica un solo beneficiario y queda enlazado al código de operación.</p>
+        </div>
+    </div>
+    <div class="ea-ledger-wrap">
+        <table class="ea-ledger">
+            <thead>
+                <tr>
+                    <th>Pago</th>
+                    <th>Operación</th>
+                    <th>Propiedad</th>
+                    <th>Beneficiario</th>
+                    <th>Tipo</th>
+                    <th class="num">Importe</th>
+                    <th>Estado</th>
+                    <th>Comprobante</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for payment in payments %}
+                <tr>
+                    <td>{% if payment.payment_date %}{{ payment.payment_date|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+                    <td>{{ payment.operation_code }}</td>
+                    <td>{{ payment.property_name }}</td>
+                    <td>{{ payment.beneficiary_name|default:"—" }}</td>
+                    <td>{{ payment.get_beneficiary_type_display }}</td>
+                    <td class="num">{{ payment.currency_code }} {{ payment.amount|floatformat:2 }}</td>
+                    <td><span class="ea-badge {% if payment.status == 'pagado' %}green{% elif payment.status == 'anulado' %}muted{% else %}amber{% endif %}">{{ payment.get_status_display }}</span></td>
+                    <td>{{ payment.voucher|default:"—" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="8">Todavía no se registraron pagos.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+{{ closing_data|json_script:"ea-closing-data" }}
+<script>
+(function () {
+    const closings = JSON.parse(document.getElementById('ea-closing-data').textContent || '[]');
+    const byCode = new Map(closings.map(item => [item.code, item]));
+    const cobroOperation = document.getElementById('cobro-operacion');
+    const cobroInfo = document.getElementById('cobro-info');
+    const cobroAmount = document.getElementById('cobro-monto');
+    const pagoOperation = document.getElementById('pago-operacion');
+    const pagoBeneficiary = document.getElementById('pago-beneficiario');
+    const pagoInfo = document.getElementById('pago-info');
+    const pagoAmount = document.getElementById('pago-monto');
+    const pagoType = document.getElementById('pago-tipo');
+    const pagoName = document.getElementById('pago-nombre');
+    const pagoCurrency = document.getElementById('pago-moneda');
+
+    function money(value, currency) {
+        return `${currency} ${Number(value || 0).toLocaleString('es-PE', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })}`;
+    }
+
+    function selectedClosing(select) {
+        return select && select.value ? byCode.get(select.value) : null;
+    }
+
+    function setInfo(container, title, detail) {
+        const heading = document.createElement('strong');
+        const text = document.createElement('span');
+        heading.textContent = title;
+        text.textContent = detail;
+        container.replaceChildren(heading, text);
+    }
+
+    function updateCollection() {
+        const closing = selectedClosing(cobroOperation);
+        if (!closing) return;
+        setInfo(
+            cobroInfo,
+            closing.property,
+            `Comisión total: ${money(closing.commission, closing.currency)} · Saldo pendiente: ${money(closing.pending, closing.currency)}`
+        );
+        cobroAmount.max = Number(closing.pending || 0).toFixed(2);
+        cobroAmount.value = Number(closing.pending || 0).toFixed(2);
+    }
+
+    function populateBeneficiaries() {
+        const closing = selectedClosing(pagoOperation);
+        pagoBeneficiary.replaceChildren();
+        pagoType.value = '';
+        pagoName.value = '';
+        pagoCurrency.value = '';
+        pagoAmount.value = '';
+        if (!closing) return;
+        pagoCurrency.value = closing.currency;
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Selecciona un beneficiario';
+        pagoBeneficiary.append(placeholder);
+        closing.payables.forEach((payable, index) => {
+            const option = document.createElement('option');
+            option.value = String(index);
+            option.textContent = `${payable.label} · ${payable.name} · ${money(payable.amount, closing.currency)}`;
+            option.dataset.type = payable.type;
+            option.dataset.name = payable.beneficiary_name;
+            option.dataset.amount = payable.amount;
+            pagoBeneficiary.append(option);
+        });
+        setInfo(
+            pagoInfo,
+            closing.property,
+            'Selecciona solo al agente de captación, al agente comprador, al broker o a Propify.'
+        );
+    }
+
+    function updatePayment() {
+        const option = pagoBeneficiary.selectedOptions[0];
+        const closing = selectedClosing(pagoOperation);
+        if (!option || !option.value || !closing) {
+            pagoType.value = '';
+            pagoName.value = '';
+            pagoAmount.value = '';
+            return;
+        }
+        pagoType.value = option.dataset.type;
+        pagoName.value = option.dataset.name;
+        pagoAmount.value = Number(option.dataset.amount || 0).toFixed(2);
+        setInfo(
+            pagoInfo,
+            option.dataset.name,
+            `Importe calculado por Propify: ${money(option.dataset.amount, closing.currency)}. Puedes registrar un pago parcial editando el importe.`
+        );
+    }
+
+    if (cobroOperation) {
+        cobroOperation.addEventListener('change', updateCollection);
+        updateCollection();
+    }
+    if (pagoOperation) {
+        pagoOperation.addEventListener('change', populateBeneficiaries);
+        populateBeneficiaries();
+    }
+    if (pagoBeneficiary) pagoBeneficiary.addEventListener('change', updatePayment);
+
+    const today = new Date();
+    const localDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 10);
+    const collectionDate = document.getElementById('cobro-fecha');
+    if (collectionDate && !collectionDate.value) collectionDate.value = localDate;
+})();
+</script>
 {% endif %}
 {% endblock %}

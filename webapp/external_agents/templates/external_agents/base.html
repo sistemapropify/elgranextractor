@@ -490,6 +490,7 @@
         </div>
     </header>
 
+    {% if '/agentes-externos/cierres/' not in request.path %}
     <nav class="ea-module-nav" aria-label="Navegación de agentes externos">
         <a href="{% url 'external_agents:dashboard' %}" class="ea-nav-link {% if '/agentes-externos/configuracion/' not in request.path and '/agentes-externos/nuevo/' not in request.path %}active{% endif %}">
             <span aria-hidden="true">▦</span> Directorio
@@ -501,6 +502,7 @@
             <span aria-hidden="true">⚙</span> Tipos de documento
         </a>
     </nav>
+    {% endif %}
 
     {% if messages %}
     <div class="ea-messages" aria-live="polite">

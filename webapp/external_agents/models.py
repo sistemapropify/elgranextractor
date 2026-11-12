@@ -194,6 +194,11 @@ class CommissionPayment(models.Model):
         decimal_places=2,
         verbose_name='Importe a pagar',
     )
+    currency_code = models.CharField(
+        max_length=3,
+        default='USD',
+        verbose_name='Moneda',
+    )
     due_date = models.DateField(
         null=True,
         blank=True,
@@ -296,6 +301,29 @@ class CommissionCollection(models.Model):
         default=0,
         verbose_name='Monto cobrado',
     )
+    amount_for_agents = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Comisión para agentes',
+    )
+    amount_for_brokers = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Comisión para brokers',
+    )
+    amount_for_propify = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Comisión para Propify',
+    )
+    currency_code = models.CharField(
+        max_length=3,
+        default='USD',
+        verbose_name='Moneda',
+    )
     closing_date = models.DateField(
         null=True,
         blank=True,
@@ -329,6 +357,61 @@ class CommissionCollection(models.Model):
 
     def __str__(self):
         return f'{self.operation_code} · {self.get_status_display()}'
+
+
+class CommissionCollectionEntry(models.Model):
+    """Abono recibido del propietario para una comisión de cierre."""
+
+    collection = models.ForeignKey(
+        CommissionCollection,
+        on_delete=models.CASCADE,
+        related_name='entries',
+        verbose_name='Cobro de comisión',
+    )
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        verbose_name='Importe recibido',
+    )
+    collection_date = models.DateField(
+        db_index=True,
+        verbose_name='Fecha del abono',
+    )
+    payment_method = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='Medio de pago',
+    )
+    account = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name='Cuenta de destino',
+    )
+    voucher = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name='Comprobante',
+    )
+    notes = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='Observaciones',
+    )
+    registered_by_username = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name='Registrado por',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Creado el')
+
+    class Meta:
+        db_table = 'external_agents_commission_collection_entry'
+        ordering = ['-collection_date', '-pk']
+        verbose_name = 'Abono de comisión'
+        verbose_name_plural = 'Abonos de comisiones'
+
+    def __str__(self):
+        return f'{self.collection.operation_code} · {self.amount}'
 
 
 class ExternalAgentAttachment(models.Model):

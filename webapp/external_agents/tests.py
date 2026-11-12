@@ -8,7 +8,15 @@ from django.urls import reverse
 from prospects.propify_auth import WEB_PROFILE_SESSION_KEY, WEB_TOKEN_SESSION_KEY
 
 from .forms import ExternalAgentForm
-from .models import DocumentType, ExternalAgent, ExternalAgentAttachment
+from .models import (
+    CommissionCollection,
+    CommissionCollectionEntry,
+    CommissionPayment,
+    DocumentType,
+    ExternalAgent,
+    ExternalAgentAttachment,
+)
+from .views import _normalize_closing
 
 
 class ExternalAgentsViewsTests(TestCase):
@@ -350,3 +358,178 @@ class ExternalAgentsViewsTests(TestCase):
         )
         self.assertEqual(preview['Content-Type'], 'application/pdf')
         self.assertEqual(preview['X-Frame-Options'], 'SAMEORIGIN')
+
+    def closing_payload(self):
+        return [{
+            'id': 42,
+            'property_code': 'PROP000261',
+            'property_title': 'Casa en Urb. Colonial II',
+            'closing_date': '2026-11-06',
+            'amount': '259000.00',
+            'currency_code': 'USD',
+            'commission_pct': '0.60',
+            'commission_amount': '1554.00',
+            'agents_amount': '310.80',
+            'brokers_amount': '0.00',
+            'propify_amount': '1243.20',
+            'is_verified': True,
+            'sides': [
+                {
+                    'role': 'listing',
+                    'role_display': 'Captación',
+                    'agent_name': 'Agente de Captación',
+                    'share_pct': '50.00',
+                    'agent_pct': '20.00',
+                    'side_amount': '777.00',
+                    'agent_amount': '155.40',
+                    'broker_name': None,
+                    'broker_pct': '0.00',
+                    'broker_amount': '0.00',
+                },
+                {
+                    'role': 'buyer',
+                    'role_display': 'Comprador',
+                    'agent_name': 'Agente Comprador',
+                    'share_pct': '50.00',
+                    'agent_pct': '20.00',
+                    'side_amount': '777.00',
+                    'agent_amount': '155.40',
+                    'broker_name': None,
+                    'broker_pct': '0.00',
+                    'broker_amount': '0.00',
+                },
+            ],
+        }]
+
+    def test_normalize_closing_uses_real_propify_commission_fields(self):
+        row = _normalize_closing(self.closing_payload()[0])
+        self.assertEqual(row['code'], 'PROP000261')
+        self.assertEqual(row['amount'], 259000)
+        self.assertEqual(row['commission'], 1554)
+        self.assertEqual(row['agents_total'], 310.8)
+        self.assertEqual(row['commission_propify'], 1243.2)
+        self.assertEqual(row['currency'], 'USD')
+        self.assertEqual(
+            [agent['amount'] for agent in row['agents']],
+            [155.4, 155.4],
+        )
+        self.assertEqual(
+            {item['name'] for item in row['payables']},
+            {'Agente de Captación', 'Agente Comprador', 'Propify'},
+        )
+        payable_types = {
+            item['name']: item['type'] for item in row['payables']
+        }
+        self.assertEqual(
+            payable_types['Agente de Captación'],
+            CommissionPayment.BeneficiaryType.SELLER,
+        )
+        self.assertEqual(
+            payable_types['Agente Comprador'],
+            CommissionPayment.BeneficiaryType.BUYER,
+        )
+
+    def test_normalize_accepts_legacy_my_closings_fallback(self):
+        row = _normalize_closing({
+            'id': 7,
+            'code': 'PROP000007',
+            'title': 'Residencia de respaldo',
+            'closing_date': '2026-11-01',
+            'closing_amount': '100000.00',
+            'currency_code': 'PEN',
+            'commission_final': '3.00',
+            'commission_total_amount': '3000.00',
+            'commission_agent_amount': '2400.00',
+            'commission_propify_amount': '600.00',
+            'responsible_name': 'Agente de Captación',
+        })
+        self.assertEqual(row['code'], 'PROP000007')
+        self.assertEqual(row['currency'], 'PEN')
+        self.assertEqual(row['commission'], 3000)
+        self.assertEqual(row['agents'][0]['amount'], 2400)
+        self.assertEqual(row['commission_propify'], 600)
+
+    def test_closing_screen_separates_agents_and_preserves_partial_collections(self):
+        self.authenticate_propify()
+        with patch(
+            'external_agents.views._propify_closings',
+            return_value=(self.closing_payload(), None),
+        ):
+            response = self.client.get(reverse('external_agents:cierres'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Agente de Captación')
+        self.assertContains(response, 'Agente Comprador')
+        self.assertContains(response, 'Comisión de agentes')
+        self.assertNotContains(response, 'Pagos a agentes')
+
+        collection = CommissionCollection.objects.get(operation_code='PROP000261')
+        self.assertEqual(float(collection.amount_to_collect), 1554)
+        self.assertEqual(float(collection.amount_for_agents), 310.8)
+        self.assertEqual(float(collection.amount_for_propify), 1243.2)
+        self.assertEqual(collection.currency_code, 'USD')
+
+        first = self.client.post(
+            reverse('external_agents:collection_add'),
+            {
+                'operation_code': 'PROP000261',
+                'amount': '1000.00',
+                'collection_date': '2026-11-07',
+                'payment_method': 'Transferencia',
+                'voucher': 'OP-001',
+            },
+        )
+        second = self.client.post(
+            reverse('external_agents:collection_add'),
+            {
+                'operation_code': 'PROP000261',
+                'amount': '500.00',
+                'collection_date': '2026-11-08',
+                'payment_method': 'Transferencia',
+                'voucher': 'OP-002',
+            },
+        )
+        self.assertEqual(first.status_code, 302)
+        self.assertEqual(second.status_code, 302)
+        collection.refresh_from_db()
+        self.assertEqual(float(collection.collected_amount), 1500)
+        self.assertEqual(collection.status, CommissionCollection.Status.PARTIAL)
+        self.assertEqual(
+            list(
+                CommissionCollectionEntry.objects
+                .order_by('collection_date')
+                .values_list('amount', flat=True)
+            ),
+            [1000, 500],
+        )
+
+        overpaid = self.client.post(
+            reverse('external_agents:collection_add'),
+            {
+                'operation_code': 'PROP000261',
+                'amount': '100.00',
+                'collection_date': '2026-11-09',
+            },
+        )
+        self.assertEqual(overpaid.status_code, 302)
+        collection.refresh_from_db()
+        self.assertEqual(float(collection.collected_amount), 1500)
+        self.assertEqual(CommissionCollectionEntry.objects.count(), 2)
+
+        payment = self.client.post(
+            reverse('external_agents:payment_add'),
+            {
+                'operation_code': 'PROP000261',
+                'beneficiary_type': CommissionPayment.BeneficiaryType.BUYER,
+                'beneficiary_name': 'Agente Comprador',
+                'amount': '155.40',
+                'currency_code': 'USD',
+                'status': CommissionPayment.Status.PAID,
+                'payment_date': '2026-11-09',
+                'voucher': 'PAGO-001',
+            },
+        )
+        self.assertEqual(payment.status_code, 302)
+        saved_payment = CommissionPayment.objects.get(operation_code='PROP000261')
+        self.assertEqual(saved_payment.beneficiary_name, 'Agente Comprador')
+        self.assertEqual(saved_payment.currency_code, 'USD')
+        self.assertEqual(float(saved_payment.amount), 155.4)

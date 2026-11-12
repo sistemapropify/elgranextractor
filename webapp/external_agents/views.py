@@ -9,9 +9,11 @@ import requests
 from django.contrib import messages
 from django.conf import settings
 from django.core.paginator import Paginator
-from django.db.models import Count, Q, Sum
+from django.db import transaction
+from django.db.models import Count, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from django.views.decorators.clickjacking import xframe_options_sameorigin
@@ -30,6 +32,8 @@ from prospects.propify_auth import (
 from .forms import AttachmentForm, DocumentTypeForm, ExternalAgentForm
 from .models import (
     CommissionCollection,
+    CommissionCollectionEntry,
+    CommissionPayment,
     DocumentType,
     ExternalAgent,
     ExternalAgentAttachment,
@@ -51,6 +55,7 @@ def _closings_fallback_urls():
 def _propify_closings(token):
     """Pide la lista de cierres a Propify y la normaliza a una lista plana."""
     ultimo_error = 'No se pudo conectar con Propify para cargar los cierres.'
+    permission_error = None
     for url in _closings_fallback_urls():
         try:
             response = requests.get(
@@ -70,6 +75,12 @@ def _propify_closings(token):
             except ValueError:
                 detail = None
             message = str(detail or 'Propify rechazó el acceso a los cierres.')
+            if response.status_code == 403:
+                permission_error = {
+                    'status': response.status_code,
+                    'message': message,
+                }
+                continue
             return None, {
                 'status': response.status_code,
                 'message': message,
@@ -92,6 +103,8 @@ def _propify_closings(token):
                 if isinstance(payload.get(key), list):
                     return payload[key], None
         ultimo_error = 'Propify devolvió un listado de cierres con un formato desconocido.'
+    if permission_error:
+        return None, permission_error
     return None, {'status': 502, 'message': ultimo_error}
 
 
@@ -123,8 +136,9 @@ def _normalize_closing(item):
         property_name = property_value.get('name') or property_value.get('title') or '—'
     else:
         property_name = (
-            item.get('property_name')
-            or item.get('property_title')
+            item.get('property_title')
+            or item.get('property_name')
+            or item.get('title')
             or item.get('address')
             or '—'
         )
@@ -137,100 +151,165 @@ def _normalize_closing(item):
         0,
     )
     commission_amount = _first_number(
-        item.get('commission_amount'),
+        item.get('commission_amount', item.get('commission_total_amount')),
         amount * commission_pct / 100,
     )
-    payments = item.get('payments') or item.get('deposits') or []
-    if isinstance(payments, list):
-        collected = sum(
-            _first_number(
-                payment.get('amount') if isinstance(payment, dict) else payment,
-                0,
-            )
-            for payment in payments
-        )
+    currency = item.get('currency')
+    if isinstance(currency, dict):
+        currency_code = str(currency.get('code') or '').strip().upper()
     else:
-        collected = _first_number(
-            item.get('collected_amount', item.get('paid_amount')),
-            0,
-        )
+        currency_code = ''
+    currency_code = (
+        str(item.get('currency_code') or '').strip().upper()
+        or currency_code
+        or 'USD'
+    )
     sides = item.get('sides') or item.get('agents_detail') or []
     if not isinstance(sides, list):
         sides = []
+    if not sides and item.get('responsible_name'):
+        fallback_agent_amount = _first_number(
+            item.get('commission_agent_amount'),
+            0,
+        )
+        fallback_agent_pct = (
+            fallback_agent_amount / commission_amount * 100
+            if commission_amount > 0
+            else 0
+        )
+        sides = [{
+            'role': 'listing',
+            'role_display': 'Captación',
+            'agent_name': item.get('responsible_name'),
+            'share_pct': 100,
+            'agent_pct': fallback_agent_pct,
+            'side_amount': commission_amount,
+            'agent_amount': fallback_agent_amount,
+        }]
     agents = []
+    brokers = []
+    payables = []
     for side in sides:
         if not isinstance(side, dict):
             continue
         role = str(side.get('role') or '').lower()
-        if 'capta' in role or 'vent' in role or role in {'seller', 'vendedor'}:
+        if (
+            'capta' in role
+            or 'vent' in role
+            or role in {'listing', 'seller', 'vendedor'}
+        ):
             side_label = 'Captación'
+            beneficiary_type = CommissionPayment.BeneficiaryType.SELLER
         elif 'compra' in role or role in {'buyer', 'comprador'}:
             side_label = 'Comprador'
+            beneficiary_type = CommissionPayment.BeneficiaryType.BUYER
         else:
             side_label = str(side.get('label') or side.get('role') or 'Agente')
+            beneficiary_type = CommissionPayment.BeneficiaryType.OTHER
 
-        allocations = (
-            side.get('agents')
-            or side.get('allocations')
-            or side.get('participants')
-            or side.get('shares')
+        side_amount = _first_number(
+            side.get('side_amount'),
+            commission_amount * _first_number(side.get('share_pct'), 0) / 100,
         )
-        if isinstance(allocations, list) and allocations:
-            for allocation in allocations:
-                if not isinstance(allocation, dict):
-                    continue
-                allocation_pct = _first_number(
-                    allocation.get('agent_pct', allocation.get('share_pct', allocation.get('pct'))),
-                    0,
-                )
-                allocation_amount = _first_number(
-                    allocation.get(
-                        'amount',
-                        allocation.get('agent_amount', allocation.get('commission_amount')),
-                    ),
-                    commission_amount * allocation_pct / 100,
-                )
-                agents.append({
-                    'name': _agent_name(allocation),
-                    'label': side_label,
-                    'pct': allocation_pct,
-                    'amount': allocation_amount,
-                })
-        else:
-            side_pct = _first_number(
-                side.get('agent_pct', side.get('share_pct')),
-                0,
-            )
-            side_amount = _first_number(
-                side.get('agent_amount', side.get('amount')),
-                commission_amount * side_pct / 100,
-            )
-            agents.append({
-                'name': _agent_name(side),
-                'label': side_label,
-                'pct': side_pct,
-                'amount': side_amount,
+        agent_pct = _first_number(side.get('agent_pct'), 0)
+        agent_name = _agent_name(side)
+        agent_amount = _first_number(
+            side.get('agent_amount'),
+            side_amount * agent_pct / 100,
+        )
+        agent = {
+            'name': agent_name,
+            'label': side_label,
+            'type': beneficiary_type,
+            'share_pct': _first_number(side.get('share_pct'), 0),
+            'pct': agent_pct,
+            'side_amount': side_amount,
+            'amount': agent_amount,
+        }
+        agents.append(agent)
+        if agent_amount > 0 and agent_name not in {'', '—'}:
+            payables.append({
+                **agent,
+                'key': f'{beneficiary_type}:{agent_name}',
+                'beneficiary_name': agent_name,
             })
-    commission_pf = _first_number(item.get('commission_pf'), 0)
-    commission_propify = _first_number(
-        item.get('commission_propify_amount'),
-        commission_amount * commission_pf / 100 if commission_pf else (
-            commission_amount - sum(agent['amount'] for agent in agents)
-        ),
+
+        broker_name = str(
+            side.get('broker_name')
+            or _agent_name(side.get('broker'))
+            or ''
+        ).strip()
+        broker_amount = _first_number(side.get('broker_amount'), 0)
+        if broker_amount > 0 and broker_name not in {'', '—'}:
+            broker = {
+                'name': broker_name,
+                'label': f'Broker · {side_label}',
+                'type': CommissionPayment.BeneficiaryType.OTHER,
+                'pct': _first_number(side.get('broker_pct'), 0),
+                'amount': broker_amount,
+                'key': f'otro:{broker_name}:{side_label}',
+                'beneficiary_name': broker_name,
+            }
+            brokers.append(broker)
+            payables.append(broker)
+
+    agents_total = _first_number(
+        item.get('agents_amount'),
+        sum(agent['amount'] for agent in agents),
     )
-    pending = max(commission_amount - collected, 0)
+    brokers_total = _first_number(
+        item.get('brokers_amount'),
+        sum(broker['amount'] for broker in brokers),
+    )
+    commission_propify = _first_number(
+        item.get('propify_amount', item.get('commission_propify_amount')),
+        max(commission_amount - agents_total - brokers_total, 0),
+    )
+    if commission_propify > 0:
+        payables.append({
+            'name': 'Propify',
+            'label': 'Servicio Propify',
+            'type': CommissionPayment.BeneficiaryType.PROPIFFY,
+            'pct': 0,
+            'amount': commission_propify,
+            'key': 'propify:Propify',
+            'beneficiary_name': 'Propify',
+        })
+
+    displayed_status = item.get('status') or item.get('closing_status') or ''
+    if item.get('is_verified') is True:
+        displayed_status = 'Verificado'
+    elif item.get('is_verified') is False:
+        displayed_status = 'Pendiente de verificar'
+    closing_date = item.get('closing_date') or '—'
+    parsed_closing_date = _parse_closing_date(closing_date)
     return {
         'id': item.get('id') or item.get('pk') or '—',
-        'code': item.get('code') or item.get('operation_code') or '—',
+        'code': (
+            item.get('code')
+            or item.get('operation_code')
+            or item.get('property_code')
+            or '—'
+        ),
         'property': property_name,
-        'date': item.get('closing_date') or '—',
+        'date': closing_date,
+        'date_display': (
+            parsed_closing_date.strftime('%d/%m/%Y')
+            if parsed_closing_date
+            else '—'
+        ),
         'amount': amount,
+        'currency': currency_code,
         'commission': commission_amount,
         'commission_propify': commission_propify,
-        'collected': collected,
-        'pending': pending,
+        'agents_total': agents_total,
+        'brokers_total': brokers_total,
+        'collected': 0,
+        'pending': commission_amount,
         'agents': agents,
-        'status': item.get('status') or item.get('closing_status') or '',
+        'brokers': brokers,
+        'payables': payables,
+        'status': displayed_status,
     }
 
 
@@ -256,28 +335,24 @@ def _parse_closing_date(value):
 
 
 def _sync_commission_collections(rows, request):
-    """Crea o actualiza el cobro local para cada cierre detectado."""
+    """Sincroniza el cierre de Propify sin perder los abonos locales."""
     username = _username(request)
     for row in rows:
         key = _closing_key(row)
         if not key:
             continue
-        collected = row.get('collected', 0)
         amount = row.get('commission', 0)
-        if collected <= 0:
-            status = CommissionCollection.Status.PENDING
-        elif collected >= amount > 0:
-            status = CommissionCollection.Status.COLLECTED
-        else:
-            status = CommissionCollection.Status.PARTIAL
         collection, created = CommissionCollection.objects.get_or_create(
             operation_code=key,
             defaults={
                 'property_name': row.get('property') or '',
                 'amount_to_collect': amount,
-                'collected_amount': collected,
+                'amount_for_agents': row.get('agents_total', 0),
+                'amount_for_brokers': row.get('brokers_total', 0),
+                'amount_for_propify': row.get('commission_propify', 0),
+                'currency_code': row.get('currency') or 'USD',
                 'closing_date': _parse_closing_date(row.get('date')),
-                'status': status,
+                'status': CommissionCollection.Status.PENDING,
                 'created_by_username': username,
                 'updated_by_username': username,
             },
@@ -285,15 +360,31 @@ def _sync_commission_collections(rows, request):
         if not created:
             collection.property_name = row.get('property') or collection.property_name
             collection.amount_to_collect = amount
+            collection.amount_for_agents = row.get('agents_total', 0)
+            collection.amount_for_brokers = row.get('brokers_total', 0)
+            collection.amount_for_propify = row.get('commission_propify', 0)
+            collection.currency_code = row.get('currency') or collection.currency_code
             collection.closing_date = _parse_closing_date(row.get('date')) or collection.closing_date
             collection.updated_by_username = username
-            collection.save(update_fields=[
-                'property_name',
-                'amount_to_collect',
-                'closing_date',
-                'updated_by_username',
-                'updated_at',
-            ])
+        _update_collection_status(collection)
+        collection.save()
+        row['collected'] = float(collection.collected_amount or 0)
+        row['pending'] = max(
+            float(collection.amount_to_collect or 0) - row['collected'],
+            0,
+        )
+        row['collection_status'] = collection.get_status_display()
+
+
+def _update_collection_status(collection):
+    collected = collection.collected_amount or 0
+    expected = collection.amount_to_collect or 0
+    if collected <= 0:
+        collection.status = CommissionCollection.Status.PENDING
+    elif expected > 0 and collected >= expected:
+        collection.status = CommissionCollection.Status.COLLECTED
+    else:
+        collection.status = CommissionCollection.Status.PARTIAL
 
 
 def _username(request):
@@ -477,37 +568,85 @@ def cierres(request):
     rows = [_normalize_closing(item) for item in (closings or [])]
     _sync_commission_collections(rows, request)
 
-    collected_total = (
-        CommissionCollection.objects.aggregate(total=Sum('collected_amount'))['total']
-        or 0
+    collections = list(CommissionCollection.objects.all())
+    payments = list(
+        CommissionPayment.objects
+        .exclude(status=CommissionPayment.Status.ANNULLED)
+        .order_by('-payment_date', '-created_at', '-pk')
     )
-    pending_total = (
-        CommissionCollection.objects.aggregate(total=Sum('amount_to_collect'))['total']
-        or 0
-    ) - collected_total
-    paid_to_agents = (
-        CommissionPayment.objects.filter(status=CommissionPayment.Status.PAID)
-        .aggregate(total=Sum('amount'))['total']
-        or 0
+    collection_entries = list(
+        CommissionCollectionEntry.objects
+        .select_related('collection')
+        .order_by('-collection_date', '-created_at', '-pk')[:30]
     )
-    pending_payments = (
-        CommissionPayment.objects.filter(status=CommissionPayment.Status.PENDING)
-        .aggregate(total=Sum('amount'))['total']
-        or 0
-    )
+    currency_summaries = []
+    for currency in sorted({item.currency_code or 'USD' for item in collections}):
+        currency_collections = [
+            item for item in collections
+            if (item.currency_code or 'USD') == currency
+        ]
+        currency_payments = [
+            item for item in payments
+            if (item.currency_code or 'USD') == currency
+        ]
+        commission = sum(float(item.amount_to_collect or 0) for item in currency_collections)
+        collected = sum(float(item.collected_amount or 0) for item in currency_collections)
+        agent_commission = sum(float(item.amount_for_agents or 0) for item in currency_collections)
+        propify_commission = sum(float(item.amount_for_propify or 0) for item in currency_collections)
+        agents_paid = sum(
+            float(item.amount or 0)
+            for item in currency_payments
+            if item.status == CommissionPayment.Status.PAID
+            and item.beneficiary_type in {
+                CommissionPayment.BeneficiaryType.SELLER,
+                CommissionPayment.BeneficiaryType.BUYER,
+            }
+        )
+        propify_paid = sum(
+            float(item.amount or 0)
+            for item in currency_payments
+            if item.status == CommissionPayment.Status.PAID
+            and item.beneficiary_type == CommissionPayment.BeneficiaryType.PROPIFFY
+        )
+        currency_summaries.append({
+            'currency': currency,
+            'count': len(currency_collections),
+            'commission': commission,
+            'collected': collected,
+            'pending': max(commission - collected, 0),
+            'agent_commission': agent_commission,
+            'agents_paid': agents_paid,
+            'agents_pending': max(agent_commission - agents_paid, 0),
+            'propify_commission': propify_commission,
+            'propify_paid': propify_paid,
+            'propify_pending': max(propify_commission - propify_paid, 0),
+        })
 
     summary = {
         'total': len(rows),
-        'commission': pending_total + collected_total,
-        'collected': collected_total,
-        'pending': max(pending_total, 0),
-        'paid_to_agents': paid_to_agents,
-        'pending_payments': pending_payments,
+        'by_currency': currency_summaries,
     }
+    closing_data = [
+        {
+            'code': row['code'],
+            'property': row['property'],
+            'currency': row['currency'],
+            'commission': row['commission'],
+            'pending': row['pending'],
+            'payables': row['payables'],
+        }
+        for row in rows
+        if row['code'] != '—'
+    ]
     return render(request, 'external_agents/cierres.html', {
         'rows': rows,
         'summary': summary,
         'error': error,
+        'closing_data': closing_data,
+        'payments': payments[:30],
+        'collection_entries': collection_entries,
+        'beneficiary_types': CommissionPayment.BeneficiaryType.choices,
+        'payment_statuses': CommissionPayment.Status.choices,
     })
 
 
@@ -535,23 +674,56 @@ def collection_add(request):
     if not operation_code or amount <= 0:
         messages.error(request, 'Selecciona un cierre y un monto válido.')
         return _redirect_cierres()
-    collection = get_object_or_404(
-        CommissionCollection,
-        operation_code=operation_code,
-    )
-    collection.collected_amount = _first_number(collection.collected_amount) + amount
-    if collection.amount_to_collect > 0 and collection.collected_amount >= collection.amount_to_collect:
-        collection.status = CommissionCollection.Status.COLLECTED
-    elif collection.collected_amount > 0:
-        collection.status = CommissionCollection.Status.PARTIAL
-    collection.updated_by_username = _username(request)
-    collection.save(update_fields=[
-        'collected_amount',
-        'status',
-        'updated_by_username',
-        'updated_at',
-    ])
-    messages.success(request, 'Cobro registrado correctamente.')
+    with transaction.atomic():
+        try:
+            collection = (
+                CommissionCollection.objects
+                .select_for_update()
+                .get(operation_code=operation_code)
+            )
+        except CommissionCollection.DoesNotExist:
+            messages.error(request, 'El cierre seleccionado ya no está disponible.')
+            return _redirect_cierres()
+        remaining = max(
+            float(collection.amount_to_collect or 0)
+            - float(collection.collected_amount or 0),
+            0,
+        )
+        if remaining <= 0:
+            messages.error(request, 'Este cierre ya no tiene saldo pendiente de cobro.')
+            return _redirect_cierres()
+        if amount - remaining > 0.005:
+            messages.error(
+                request,
+                f'El abono supera el saldo pendiente de '
+                f'{collection.currency_code} {remaining:,.2f}.',
+            )
+            return _redirect_cierres()
+        CommissionCollectionEntry.objects.create(
+            collection=collection,
+            amount=amount,
+            collection_date=(
+                _parse_date_input(request.POST.get('collection_date'))
+                or timezone.localdate()
+            ),
+            payment_method=str(request.POST.get('payment_method') or '').strip(),
+            account=str(request.POST.get('account') or '').strip(),
+            voucher=str(request.POST.get('voucher') or '').strip(),
+            notes=str(request.POST.get('notes') or '').strip(),
+            registered_by_username=_username(request),
+        )
+        collection.collected_amount = (
+            _first_number(collection.collected_amount) + amount
+        )
+        collection.updated_by_username = _username(request)
+        _update_collection_status(collection)
+        collection.save(update_fields=[
+            'collected_amount',
+            'status',
+            'updated_by_username',
+            'updated_at',
+        ])
+    messages.success(request, 'Abono registrado en el historial del cierre.')
     return _redirect_cierres()
 
 
@@ -562,20 +734,48 @@ def payment_add(request):
         return _redirect_cierres()
     operation_code = str(request.POST.get('operation_code') or '').strip()
     beneficiary_type = str(request.POST.get('beneficiary_type') or '').strip()
+    beneficiary_name = str(request.POST.get('beneficiary_name') or '').strip()
+    beneficiary_choice = str(request.POST.get('beneficiary_choice') or '').strip()
+    if beneficiary_choice and (not beneficiary_type or not beneficiary_name):
+        choice_type, _, choice_name = beneficiary_choice.partition(':')
+        beneficiary_type = beneficiary_type or choice_type
+        beneficiary_name = beneficiary_name or choice_name.split(':', 1)[0]
     amount = _first_number(request.POST.get('amount'))
     valid_types = {value for value, _ in CommissionPayment.BeneficiaryType.choices}
-    if not operation_code or beneficiary_type not in valid_types or amount <= 0:
+    valid_statuses = {value for value, _ in CommissionPayment.Status.choices}
+    status = str(
+        request.POST.get('status') or CommissionPayment.Status.PENDING
+    ).strip()
+    if (
+        not operation_code
+        or beneficiary_type not in valid_types
+        or status not in valid_statuses
+        or amount <= 0
+    ):
         messages.error(request, 'Revisa los datos del pago antes de guardarlo.')
         return _redirect_cierres()
+    try:
+        collection = CommissionCollection.objects.get(operation_code=operation_code)
+    except CommissionCollection.DoesNotExist:
+        messages.error(request, 'El cierre seleccionado ya no está disponible.')
+        return _redirect_cierres()
+    payment_date = _parse_date_input(request.POST.get('payment_date'))
+    if status == CommissionPayment.Status.PAID and payment_date is None:
+        payment_date = timezone.localdate()
     payment = CommissionPayment(
         operation_code=operation_code,
-        property_name=str(request.POST.get('property_name') or '').strip(),
+        property_name=collection.property_name,
         beneficiary_type=beneficiary_type,
-        beneficiary_name=str(request.POST.get('beneficiary_name') or '').strip(),
+        beneficiary_name=beneficiary_name,
         amount=amount,
+        currency_code=(
+            str(request.POST.get('currency_code') or '').strip().upper()
+            or collection.currency_code
+            or 'USD'
+        ),
         due_date=_parse_date_input(request.POST.get('due_date')),
-        payment_date=_parse_date_input(request.POST.get('payment_date')),
-        status=str(request.POST.get('status') or CommissionPayment.Status.PENDING),
+        payment_date=payment_date,
+        status=status,
         payment_method=str(request.POST.get('payment_method') or '').strip(),
         account=str(request.POST.get('account') or '').strip(),
         voucher=str(request.POST.get('voucher') or '').strip(),
