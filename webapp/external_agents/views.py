@@ -13,6 +13,7 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
@@ -127,6 +128,18 @@ def _agent_name(side):
     if isinstance(agent, dict):
         return str(agent.get('name') or agent.get('full_name') or '—')
     return str(side.get('name') or '—')
+
+
+def _closing_deal_type(item):
+    raw_type = str(
+        item.get('deal_type')
+        or item.get('operation_type_name')
+        or item.get('operation_type')
+        or ''
+    ).strip().lower()
+    if 'alquiler' in raw_type or raw_type in {'rent', 'rental'}:
+        return 'rent'
+    return 'sale'
 
 
 def _normalize_closing(item):
@@ -298,6 +311,7 @@ def _normalize_closing(item):
             if parsed_closing_date
             else '—'
         ),
+        'deal_type': _closing_deal_type(item),
         'amount': amount,
         'currency': currency_code,
         'commission': commission_amount,
@@ -345,6 +359,7 @@ def _sync_commission_collections(rows, request):
         collection, created = CommissionCollection.objects.get_or_create(
             operation_code=key,
             defaults={
+                'deal_type': row.get('deal_type') or 'sale',
                 'property_name': row.get('property') or '',
                 'amount_to_collect': amount,
                 'amount_for_agents': row.get('agents_total', 0),
@@ -358,6 +373,7 @@ def _sync_commission_collections(rows, request):
             },
         )
         if not created:
+            collection.deal_type = row.get('deal_type') or collection.deal_type
             collection.property_name = row.get('property') or collection.property_name
             collection.amount_to_collect = amount
             collection.amount_for_agents = row.get('agents_total', 0)
@@ -565,25 +581,57 @@ def cierres(request):
             clear_web_propify_session(request)
             query = urlencode({'next': request.get_full_path()})
             return redirect(f'/agentes-externos/login/?{query}')
-    normalized_rows = [_normalize_closing(item) for item in (closings or [])]
-    rows = [
-        row for row in normalized_rows
+    normalized_usd_rows = [
+        _normalize_closing(item)
+        for item in (closings or [])
+    ]
+    normalized_usd_rows = [
+        row for row in normalized_usd_rows
         if row.get('currency') == 'USD'
     ]
-    _sync_commission_collections(rows, request)
+    _sync_commission_collections(normalized_usd_rows, request)
+
+    requested_deal = str(request.GET.get('tipo') or 'venta').strip().lower()
+    deal_type = 'rent' if requested_deal in {'alquiler', 'alquileres', 'rent'} else 'sale'
+    deal_slug = 'alquiler' if deal_type == 'rent' else 'venta'
+    deal_label = 'Alquileres' if deal_type == 'rent' else 'Ventas'
+    view_mode = str(request.GET.get('vista') or 'resumen').strip().lower()
+    if view_mode not in {'resumen', 'cierres', 'cobros', 'pagos'}:
+        view_mode = 'resumen'
+    rows = [
+        row for row in normalized_usd_rows
+        if row.get('deal_type') == deal_type
+    ]
+    deal_counts = {
+        'sale': sum(row.get('deal_type') == 'sale' for row in normalized_usd_rows),
+        'rent': sum(row.get('deal_type') == 'rent' for row in normalized_usd_rows),
+    }
+    active_codes = [
+        row['code'] for row in rows
+        if row.get('code') and row['code'] != '—'
+    ]
 
     collections = list(
-        CommissionCollection.objects.filter(currency_code='USD')
+        CommissionCollection.objects.filter(
+            currency_code='USD',
+            deal_type=deal_type,
+        )
     )
     payments = list(
         CommissionPayment.objects
-        .filter(currency_code='USD')
+        .filter(
+            currency_code='USD',
+            operation_code__in=active_codes,
+        )
         .exclude(status=CommissionPayment.Status.ANNULLED)
         .order_by('-payment_date', '-created_at', '-pk')
     )
     collection_entries = list(
         CommissionCollectionEntry.objects
-        .filter(collection__currency_code='USD')
+        .filter(
+            collection__currency_code='USD',
+            collection__deal_type=deal_type,
+        )
         .select_related('collection')
         .order_by('-collection_date', '-created_at', '-pk')[:30]
     )
@@ -643,6 +691,9 @@ def cierres(request):
     summary = {
         'total': len(rows),
         'by_currency': currency_summaries,
+        'deal_type': deal_type,
+        'deal_slug': deal_slug,
+        'deal_label': deal_label,
     }
     closing_data = [
         {
@@ -660,6 +711,11 @@ def cierres(request):
         'rows': rows,
         'summary': summary,
         'error': error,
+        'deal_type': deal_type,
+        'deal_slug': deal_slug,
+        'deal_label': deal_label,
+        'deal_counts': deal_counts,
+        'view_mode': view_mode,
         'closing_data': closing_data,
         'payments': payments[:30],
         'collection_entries': collection_entries,
@@ -678,8 +734,14 @@ def _parse_date_input(value):
         return None
 
 
-def _redirect_cierres():
-    return redirect('external_agents:cierres')
+def _redirect_cierres(deal_type=None, view_mode=None):
+    params = {}
+    if deal_type in {'sale', 'rent'}:
+        params['tipo'] = 'alquiler' if deal_type == 'rent' else 'venta'
+    if view_mode in {'resumen', 'cierres', 'cobros', 'pagos'}:
+        params['vista'] = view_mode
+    url = reverse('external_agents:cierres')
+    return redirect(f'{url}?{urlencode(params)}' if params else url)
 
 
 @never_cache
@@ -687,11 +749,12 @@ def _redirect_cierres():
 def collection_add(request):
     if request.method != 'POST':
         return _redirect_cierres()
+    deal_type = str(request.POST.get('deal_type') or '').strip()
     operation_code = str(request.POST.get('operation_code') or '').strip()
     amount = _first_number(request.POST.get('amount'))
     if not operation_code or amount <= 0:
         messages.error(request, 'Selecciona un cierre y un monto válido.')
-        return _redirect_cierres()
+        return _redirect_cierres(deal_type, 'cobros')
     with transaction.atomic():
         try:
             collection = (
@@ -701,7 +764,7 @@ def collection_add(request):
             )
         except CommissionCollection.DoesNotExist:
             messages.error(request, 'El cierre seleccionado ya no está disponible.')
-            return _redirect_cierres()
+            return _redirect_cierres(deal_type, 'cobros')
         remaining = max(
             float(collection.amount_to_collect or 0)
             - float(collection.collected_amount or 0),
@@ -709,14 +772,14 @@ def collection_add(request):
         )
         if remaining <= 0:
             messages.error(request, 'Este cierre ya no tiene saldo pendiente de cobro.')
-            return _redirect_cierres()
+            return _redirect_cierres(collection.deal_type, 'cobros')
         if amount - remaining > 0.005:
             messages.error(
                 request,
                 f'El abono supera el saldo pendiente de '
                 f'{collection.currency_code} {remaining:,.2f}.',
             )
-            return _redirect_cierres()
+            return _redirect_cierres(collection.deal_type, 'cobros')
         CommissionCollectionEntry.objects.create(
             collection=collection,
             amount=amount,
@@ -742,7 +805,7 @@ def collection_add(request):
             'updated_at',
         ])
     messages.success(request, 'Abono registrado en el historial del cierre.')
-    return _redirect_cierres()
+    return _redirect_cierres(collection.deal_type, 'cobros')
 
 
 @never_cache
@@ -750,6 +813,7 @@ def collection_add(request):
 def payment_add(request):
     if request.method != 'POST':
         return _redirect_cierres()
+    deal_type = str(request.POST.get('deal_type') or '').strip()
     operation_code = str(request.POST.get('operation_code') or '').strip()
     beneficiary_type = str(request.POST.get('beneficiary_type') or '').strip()
     beneficiary_name = str(request.POST.get('beneficiary_name') or '').strip()
@@ -771,12 +835,12 @@ def payment_add(request):
         or amount <= 0
     ):
         messages.error(request, 'Revisa los datos del pago antes de guardarlo.')
-        return _redirect_cierres()
+        return _redirect_cierres(deal_type, 'pagos')
     try:
         collection = CommissionCollection.objects.get(operation_code=operation_code)
     except CommissionCollection.DoesNotExist:
         messages.error(request, 'El cierre seleccionado ya no está disponible.')
-        return _redirect_cierres()
+        return _redirect_cierres(deal_type, 'pagos')
     payment_date = _parse_date_input(request.POST.get('payment_date'))
     if status == CommissionPayment.Status.PAID and payment_date is None:
         payment_date = timezone.localdate()
@@ -804,7 +868,7 @@ def payment_add(request):
     )
     payment.save()
     messages.success(request, 'Pago registrado correctamente.')
-    return _redirect_cierres()
+    return _redirect_cierres(collection.deal_type, 'pagos')
 
 
 @never_cache

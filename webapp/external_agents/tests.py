@@ -458,32 +458,85 @@ class ExternalAgentsViewsTests(TestCase):
             'property_title': 'Cierre en soles que no debe mostrarse',
             'currency_code': 'PEN',
         })
+        rent_closing = self.closing_payload()[0].copy()
+        rent_closing.update({
+            'id': 44,
+            'property_code': 'PROP000888',
+            'property_title': 'Alquiler en USD separado',
+            'deal_type': 'rent',
+        })
         with patch(
             'external_agents.views._propify_closings',
-            return_value=([*self.closing_payload(), pen_closing], None),
+            return_value=(
+                [*self.closing_payload(), rent_closing, pen_closing],
+                None,
+            ),
         ):
             response = self.client.get(reverse('external_agents:cierres'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Agente de Captación')
-        self.assertContains(response, 'Agente Comprador')
         self.assertContains(response, 'Comisión de agentes')
         self.assertContains(response, 'USD 1,554.00')
         self.assertContains(response, 'USD 1,243.20')
+        self.assertContains(response, 'Ventas')
+        self.assertContains(response, 'Alquileres')
+        self.assertContains(response, 'data-open-modal="collection-modal"')
+        self.assertContains(response, 'id="collection-modal"')
+        self.assertContains(response, 'id="payment-modal"')
+        self.assertContains(response, '?tipo=venta&vista=resumen')
         self.assertNotContains(response, 'Pagos a agentes')
         self.assertNotContains(response, 'PROP000999')
+        self.assertNotContains(response, 'PROP000888')
         self.assertNotContains(response, 'Cierre en soles que no debe mostrarse')
-        self.assertEqual(CommissionCollection.objects.count(), 1)
+        self.assertEqual(CommissionCollection.objects.count(), 2)
+
+        with patch(
+            'external_agents.views._propify_closings',
+            return_value=(
+                [*self.closing_payload(), rent_closing, pen_closing],
+                None,
+            ),
+        ):
+            sale_detail = self.client.get(
+                reverse('external_agents:cierres'),
+                {'tipo': 'venta', 'vista': 'cierres'},
+            )
+        self.assertContains(sale_detail, 'Agente de Captación')
+        self.assertContains(sale_detail, 'Agente Comprador')
+        self.assertNotContains(sale_detail, 'PROP000888')
+
+        with patch(
+            'external_agents.views._propify_closings',
+            return_value=(
+                [*self.closing_payload(), rent_closing, pen_closing],
+                None,
+            ),
+        ):
+            rent_summary = self.client.get(
+                reverse('external_agents:cierres'),
+                {'tipo': 'alquiler', 'vista': 'resumen'},
+            )
+        self.assertContains(rent_summary, 'Comisiones de Alquileres en USD')
+        self.assertContains(rent_summary, '1 cierre')
+        self.assertNotContains(rent_summary, 'PROP000261')
 
         collection = CommissionCollection.objects.get(operation_code='PROP000261')
         self.assertEqual(float(collection.amount_to_collect), 1554)
         self.assertEqual(float(collection.amount_for_agents), 310.8)
         self.assertEqual(float(collection.amount_for_propify), 1243.2)
         self.assertEqual(collection.currency_code, 'USD')
+        self.assertEqual(collection.deal_type, 'sale')
+        self.assertEqual(
+            CommissionCollection.objects.get(
+                operation_code='PROP000888'
+            ).deal_type,
+            'rent',
+        )
 
         first = self.client.post(
             reverse('external_agents:collection_add'),
             {
                 'operation_code': 'PROP000261',
+                'deal_type': 'sale',
                 'amount': '1000.00',
                 'collection_date': '2026-11-07',
                 'payment_method': 'Transferencia',
@@ -502,6 +555,8 @@ class ExternalAgentsViewsTests(TestCase):
         )
         self.assertEqual(first.status_code, 302)
         self.assertEqual(second.status_code, 302)
+        self.assertIn('tipo=venta', first['Location'])
+        self.assertIn('vista=cobros', first['Location'])
         collection.refresh_from_db()
         self.assertEqual(float(collection.collected_amount), 1500)
         self.assertEqual(collection.status, CommissionCollection.Status.PARTIAL)
@@ -531,6 +586,7 @@ class ExternalAgentsViewsTests(TestCase):
             reverse('external_agents:payment_add'),
             {
                 'operation_code': 'PROP000261',
+                'deal_type': 'sale',
                 'beneficiary_type': CommissionPayment.BeneficiaryType.BUYER,
                 'beneficiary_name': 'Agente Comprador',
                 'amount': '155.40',
@@ -541,6 +597,7 @@ class ExternalAgentsViewsTests(TestCase):
             },
         )
         self.assertEqual(payment.status_code, 302)
+        self.assertIn('vista=pagos', payment['Location'])
         saved_payment = CommissionPayment.objects.get(operation_code='PROP000261')
         self.assertEqual(saved_payment.beneficiary_name, 'Agente Comprador')
         self.assertEqual(saved_payment.currency_code, 'USD')

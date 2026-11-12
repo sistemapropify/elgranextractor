@@ -284,6 +284,16 @@ class CommissionCollection(models.Model):
         unique=True,
         verbose_name='Código de operación',
     )
+    deal_type = models.CharField(
+        max_length=10,
+        choices=(
+            ('sale', 'Venta'),
+            ('rent', 'Alquiler'),
+        ),
+        default='sale',
+        db_index=True,
+        verbose_name='Tipo de operación',
+    )
     property_name = models.CharField(
         max_length=300,
         blank=True,
