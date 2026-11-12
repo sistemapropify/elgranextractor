@@ -132,9 +132,13 @@ def _normalize_closing(item):
         item.get('closing_amount_usd', item.get('amount', item.get('closing_amount'))),
         0,
     )
+    commission_pct = _first_number(
+        item.get('commission_pct', item.get('commission_final')),
+        0,
+    )
     commission_amount = _first_number(
         item.get('commission_amount'),
-        amount * _first_number(item.get('commission_pct', 0)) / 100,
+        amount * commission_pct / 100,
     )
     payments = item.get('payments') or item.get('deposits') or []
     if isinstance(payments, list):
@@ -158,19 +162,55 @@ def _normalize_closing(item):
         if not isinstance(side, dict):
             continue
         role = str(side.get('role') or '').lower()
-        if 'compra' in role or role in {'buyer', 'comprador'}:
-            label = 'Comprador'
-        elif 'vent' in role or role in {'seller', 'vendedor', 'propietario'}:
-            label = 'Vendedor'
+        if 'capta' in role or 'vent' in role or role in {'seller', 'vendedor'}:
+            side_label = 'Captación'
+        elif 'compra' in role or role in {'buyer', 'comprador'}:
+            side_label = 'Comprador'
         else:
-            label = str(side.get('label') or side.get('role') or 'Agente')
-        pct = _first_number(side.get('agent_pct', side.get('share_pct')), 0)
-        agents.append({
-            'name': _agent_name(side),
-            'label': label,
-            'pct': pct,
-            'amount': commission_amount * pct / 100,
-        })
+            side_label = str(side.get('label') or side.get('role') or 'Agente')
+
+        allocations = (
+            side.get('agents')
+            or side.get('allocations')
+            or side.get('participants')
+            or side.get('shares')
+        )
+        if isinstance(allocations, list) and allocations:
+            for allocation in allocations:
+                if not isinstance(allocation, dict):
+                    continue
+                allocation_pct = _first_number(
+                    allocation.get('agent_pct', allocation.get('share_pct', allocation.get('pct'))),
+                    0,
+                )
+                allocation_amount = _first_number(
+                    allocation.get(
+                        'amount',
+                        allocation.get('agent_amount', allocation.get('commission_amount')),
+                    ),
+                    commission_amount * allocation_pct / 100,
+                )
+                agents.append({
+                    'name': _agent_name(allocation),
+                    'label': side_label,
+                    'pct': allocation_pct,
+                    'amount': allocation_amount,
+                })
+        else:
+            side_pct = _first_number(
+                side.get('agent_pct', side.get('share_pct')),
+                0,
+            )
+            side_amount = _first_number(
+                side.get('agent_amount', side.get('amount')),
+                commission_amount * side_pct / 100,
+            )
+            agents.append({
+                'name': _agent_name(side),
+                'label': side_label,
+                'pct': side_pct,
+                'amount': side_amount,
+            })
     commission_pf = _first_number(item.get('commission_pf'), 0)
     commission_propify = _first_number(
         item.get('commission_propify_amount'),
