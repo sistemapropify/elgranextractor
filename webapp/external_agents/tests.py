@@ -16,7 +16,7 @@ from .models import (
     ExternalAgent,
     ExternalAgentAttachment,
 )
-from .views import _normalize_closing, _propify_closings
+from .views import _normalize_closing
 
 
 class ExternalAgentsViewsTests(TestCase):
@@ -449,43 +449,17 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertEqual(row['agents'][0]['amount'], 2400)
         self.assertEqual(row['commission_propify'], 600)
 
-    def test_propify_closings_follow_all_pagination_pages(self):
-        class FakeResponse:
-            status_code = 200
-
-            def __init__(self, payload):
-                self.payload = payload
-
-            def json(self):
-                return self.payload
-
-        first_page = FakeResponse({
-            'count': 2,
-            'next': '/api/properties/closings/?page=2',
-            'results': [{'property_code': 'PROP000261'}],
-        })
-        second_page = FakeResponse({
-            'count': 2,
-            'next': None,
-            'results': [{'property_code': 'PROP000105'}],
-        })
-        with (
-            patch(
-                'external_agents.views._closings_fallback_urls',
-                return_value=['https://api.propify.pe/api/properties/closings/'],
-            ),
-            patch(
-                'external_agents.views.requests.get',
-                side_effect=[first_page, second_page],
-            ) as request_get,
-        ):
-            rows, error = _propify_closings('test-token')
-        self.assertIsNone(error)
-        self.assertEqual(
-            [row['property_code'] for row in rows],
-            ['PROP000261', 'PROP000105'],
-        )
-        self.assertEqual(request_get.call_count, 2)
+    def test_closing_page_queries_live_database_on_every_request(self):
+        self.authenticate_propify()
+        with patch(
+            'external_agents.views._propify_closings_from_database',
+            return_value=(self.closing_payload(), None),
+        ) as database_source:
+            first = self.client.get(reverse('external_agents:cierres'))
+            second = self.client.get(reverse('external_agents:cierres'))
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(database_source.call_count, 2)
 
     def test_closing_screen_separates_agents_and_preserves_partial_collections(self):
         self.authenticate_propify()
@@ -521,7 +495,7 @@ class ExternalAgentsViewsTests(TestCase):
             ],
         })
         with patch(
-            'external_agents.views._propify_closings',
+            'external_agents.views._propify_closings_from_database',
             return_value=(
                 [*self.closing_payload(), rent_closing],
                 None,
@@ -553,7 +527,7 @@ class ExternalAgentsViewsTests(TestCase):
             amount_to_collect='999999.00',
         )
         with patch(
-            'external_agents.views._propify_closings',
+            'external_agents.views._propify_closings_from_database',
             return_value=(
                 [*self.closing_payload(), rent_closing],
                 None,
@@ -570,7 +544,7 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertNotContains(sale_detail, 'USD 999,999.00')
 
         with patch(
-            'external_agents.views._propify_closings',
+            'external_agents.views._propify_closings_from_database',
             return_value=(
                 [*self.closing_payload(), rent_closing],
                 None,

@@ -3,13 +3,12 @@ import re
 from datetime import date
 from functools import wraps
 from pathlib import Path
-from urllib.parse import urlencode, urljoin
+from urllib.parse import urlencode
 
-import requests
 from django.contrib import messages
 from django.conf import settings
 from django.core.paginator import Paginator
-from django.db import transaction
+from django.db import DatabaseError, connections, transaction
 from django.db.models import Count, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -27,7 +26,6 @@ from prospects.propify_auth import (
     authenticate_propify_credentials,
     clear_web_propify_session,
     get_web_propify_principal,
-    refresh_propify_session,
 )
 
 from .forms import AttachmentForm, DocumentTypeForm, ExternalAgentForm
@@ -45,93 +43,130 @@ MAX_ATTACHMENTS_PER_SUBMISSION = 20
 INITIAL_ATTACHMENT_ROWS = 6
 
 
-def _closings_fallback_urls():
-    urls = [
-        getattr(settings, 'PROPIFY_CLOSINGS_URL', ''),
-        getattr(settings, 'PROPIFY_MY_CLOSINGS_URL', ''),
-    ]
-    return [url for url in urls if url]
-
-
-def _propify_closings(token):
-    """Pide todos los cierres de Propify, siguiendo su paginación."""
-    ultimo_error = 'No se pudo conectar con Propify para cargar los cierres.'
-    permission_error = None
-    for base_url in _closings_fallback_urls():
-        page_url = base_url
-        closings = []
-        visited_urls = set()
-        while page_url:
-            if page_url in visited_urls:
-                return None, {
-                    'status': 502,
-                    'message': 'Propify devolvió una paginación de cierres circular.',
-                }
-            visited_urls.add(page_url)
-            try:
-                response = requests.get(
-                    page_url,
-                    headers={
-                        'Authorization': f'Bearer {token}',
-                        'Accept': 'application/json',
-                    },
-                    timeout=15,
-                )
-            except requests.RequestException:
-                ultimo_error = 'Propify no respondió al cargar los cierres.'
-                break
-            if response.status_code in (401, 403):
-                try:
-                    detail = response.json().get('detail')
-                except ValueError:
-                    detail = None
-                message = str(detail or 'Propify rechazó el acceso a los cierres.')
-                if response.status_code == 403:
-                    permission_error = {
-                        'status': response.status_code,
-                        'message': message,
-                    }
-                    break
-                return None, {
-                    'status': response.status_code,
-                    'message': message,
-                }
-            if response.status_code == 404:
-                ultimo_error = 'Propify no expone el listado de cierres para este usuario.'
-                break
-            if response.status_code != 200:
-                ultimo_error = f'Propify devolvió el estado {response.status_code}.'
-                break
-            try:
-                payload = response.json()
-            except ValueError:
-                ultimo_error = 'Propify devolvió una respuesta inválida.'
-                break
-            if isinstance(payload, list):
-                closings.extend(payload)
-                return closings, None
-            if not isinstance(payload, dict):
-                ultimo_error = 'Propify devolvió un listado de cierres con un formato desconocido.'
-                break
-            page_rows = next(
-                (
-                    payload.get(key)
-                    for key in ('results', 'data', 'closings')
-                    if isinstance(payload.get(key), list)
-                ),
-                None,
+def _propify_closings_from_database():
+    """Lee en vivo los cierres activos desde la base dbpropify_be."""
+    try:
+        with connections['propifai'].cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    c.id,
+                    p.code,
+                    p.title,
+                    c.deal_type,
+                    c.status,
+                    c.closing_date,
+                    c.amount,
+                    cu.code AS currency_code,
+                    c.commission_pct,
+                    c.commission_amount,
+                    c.agents_amount,
+                    c.brokers_amount,
+                    c.propify_amount,
+                    c.is_verified
+                FROM closing c
+                INNER JOIN property p ON p.id = c.property_id
+                LEFT JOIN currency cu ON cu.id = c.currency_id
+                WHERE c.status = %s
+                ORDER BY c.closing_date DESC, c.id DESC
+                """,
+                ['active'],
             )
-            if page_rows is None:
-                ultimo_error = 'Propify devolvió un listado de cierres con un formato desconocido.'
-                break
-            closings.extend(page_rows)
-            next_url = payload.get('next')
-            if not next_url:
-                return closings, None
-            page_url = urljoin(base_url, str(next_url))
-    if permission_error:
-        return None, permission_error
-    return None, {'status': 502, 'message': ultimo_error}
+            columns = [
+                'id',
+                'property_code',
+                'property_title',
+                'deal_type',
+                'status',
+                'closing_date',
+                'amount',
+                'currency_code',
+                'commission_pct',
+                'commission_amount',
+                'agents_amount',
+                'brokers_amount',
+                'propify_amount',
+                'is_verified',
+            ]
+            closings = [
+                dict(zip(columns, row))
+                for row in cursor.fetchall()
+            ]
+            closing_ids = [item['id'] for item in closings]
+            sides_by_closing = {closing_id: [] for closing_id in closing_ids}
+            if closing_ids:
+                placeholders = ', '.join(['%s'] * len(closing_ids))
+                cursor.execute(
+                    f"""
+                    SELECT
+                        s.closing_id,
+                        s.role,
+                        s.share_pct,
+                        s.agent_pct,
+                        s.side_amount,
+                        s.agent_amount,
+                        s.broker_pct,
+                        s.broker_amount,
+                        a.first_name,
+                        a.last_name,
+                        a.username,
+                        b.first_name,
+                        b.last_name,
+                        b.username
+                    FROM closing_side s
+                    LEFT JOIN [user] a ON a.id = s.agent_id
+                    LEFT JOIN [user] b ON b.id = s.broker_id
+                    WHERE s.closing_id IN ({placeholders})
+                    ORDER BY s.closing_id, s.id
+                    """,
+                    closing_ids,
+                )
+                for side_row in cursor.fetchall():
+                    (
+                        closing_id,
+                        role,
+                        share_pct,
+                        agent_pct,
+                        side_amount,
+                        agent_amount,
+                        broker_pct,
+                        broker_amount,
+                        agent_first_name,
+                        agent_last_name,
+                        agent_username,
+                        broker_first_name,
+                        broker_last_name,
+                        broker_username,
+                    ) = side_row
+                    agent_name = (
+                        f'{agent_first_name or ""} {agent_last_name or ""}'.strip()
+                        or agent_username
+                        or '—'
+                    )
+                    broker_name = (
+                        f'{broker_first_name or ""} {broker_last_name or ""}'.strip()
+                        or broker_username
+                        or ''
+                    )
+                    sides_by_closing[closing_id].append({
+                        'role': role,
+                        'share_pct': share_pct,
+                        'agent_pct': agent_pct,
+                        'side_amount': side_amount,
+                        'agent_amount': agent_amount,
+                        'agent_name': agent_name,
+                        'broker_pct': broker_pct,
+                        'broker_amount': broker_amount,
+                        'broker_name': broker_name,
+                    })
+            for item in closings:
+                item['sides'] = sides_by_closing.get(item['id'], [])
+        return closings, None
+    except (KeyError, DatabaseError):
+        return None, {
+            'status': 503,
+            'message': 'No se pudo consultar la base de datos de cierres de Propify.',
+        }
 
 
 def _first_number(value, default=0):
@@ -587,25 +622,7 @@ def logout_view(request):
 @never_cache
 @external_agent_access_required
 def cierres(request):
-    token = str(request.session.get(WEB_TOKEN_SESSION_KEY, '')).strip()
-    closings, error = _propify_closings(token)
-    if error and error.get('status') in (401, 403):
-        refresh_token = str(request.session.get(WEB_REFRESH_SESSION_KEY, '')).strip()
-        if refresh_token:
-            try:
-                refreshed = refresh_propify_session(refresh_token)
-            except PropifyAuthError:
-                clear_web_propify_session(request)
-                query = urlencode({'next': request.get_full_path()})
-                return redirect(f'/agentes-externos/login/?{query}')
-            request.session[WEB_TOKEN_SESSION_KEY] = refreshed['access']
-            if refreshed.get('refresh'):
-                request.session[WEB_REFRESH_SESSION_KEY] = refreshed['refresh']
-            closings, error = _propify_closings(refreshed['access'])
-        else:
-            clear_web_propify_session(request)
-            query = urlencode({'next': request.get_full_path()})
-            return redirect(f'/agentes-externos/login/?{query}')
+    closings, error = _propify_closings_from_database()
     normalized_rows = [
         _normalize_closing(item)
         for item in (closings or [])
