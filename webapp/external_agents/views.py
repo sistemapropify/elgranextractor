@@ -374,6 +374,7 @@ def _normalize_closing(item):
         'deal_type': _closing_deal_type(item),
         'amount': amount,
         'currency': currency_code,
+        'commission_pct': commission_pct,
         'commission': commission_amount,
         'commission_propify': commission_propify,
         'agents_total': agents_total,

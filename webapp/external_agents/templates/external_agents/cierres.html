@@ -120,78 +120,72 @@
     .ea-kpi.green strong { color: #7ee787; }
     .ea-kpi.amber strong { color: #e3b341; }
     .ea-kpi.blue strong { color: #79c0ff; }
-    .ea-closing-list { display: grid; gap: 12px; }
-    .ea-closing-card {
-        overflow: hidden;
+    .ea-grid-wrap {
+        max-height: calc(100vh - 300px);
+        overflow: auto;
         border: 1px solid var(--ea-border);
-        border-radius: 12px;
+        border-radius: 10px;
         background: var(--ea-panel);
     }
-    .ea-closing-head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 14px 16px;
-        border-bottom: 1px solid var(--ea-border);
-        background: var(--ea-panel-raised);
+    .ea-closings-grid {
+        width: 100%;
+        min-width: 1380px;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 11px;
     }
-    .ea-closing-head h3 { margin: 0; color: #f0f6fc; font-size: 14px; }
-    .ea-closing-head p { margin: 4px 0 0; color: var(--ea-muted); font-size: 11px; }
-    .ea-closing-metrics {
-        display: grid;
-        grid-template-columns: repeat(4,minmax(0,1fr));
-        gap: 1px;
-        background: var(--ea-border);
-    }
-    .ea-closing-metrics div { padding: 11px 14px; background: var(--ea-panel); }
-    .ea-closing-metrics span {
-        display: block;
-        color: var(--ea-muted);
+    .ea-closings-grid th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        padding: 8px 9px;
+        border-right: 1px solid var(--ea-border);
+        border-bottom: 1px solid #47515b;
+        background: #20262e;
+        color: #b7c2cc;
+        text-align: left;
         font-size: 9px;
         font-weight: 800;
+        letter-spacing: .3px;
         text-transform: uppercase;
+        white-space: nowrap;
     }
-    .ea-closing-metrics strong {
-        display: block;
-        margin-top: 4px;
-        color: #f0f6fc;
-        font-size: 14px;
+    .ea-closings-grid td {
+        padding: 7px 9px;
+        border-right: 1px solid rgba(48, 54, 61, .72);
+        border-bottom: 1px solid var(--ea-border);
+        color: #c9d1d9;
+        vertical-align: middle;
+    }
+    .ea-closings-grid tbody tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+    .ea-closings-grid tbody tr:hover td { background: rgba(88,166,255,.07); }
+    .ea-closings-grid .num {
+        text-align: right;
+        white-space: nowrap;
         font-variant-numeric: tabular-nums;
     }
-    .ea-participants {
-        display: grid;
-        grid-template-columns: repeat(auto-fit,minmax(210px,1fr));
-        gap: 8px;
-        padding: 13px 16px 16px;
+    .ea-closings-grid .code { color: #79c0ff; font-weight: 750; white-space: nowrap; }
+    .ea-closings-grid .property { min-width: 230px; max-width: 300px; white-space: normal; }
+    .ea-closings-grid .participants-cell { min-width: 300px; }
+    .ea-participant-line {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 1px 0;
+        white-space: nowrap;
     }
-    .ea-participant {
-        padding: 10px 11px;
-        border: 1px solid var(--ea-border);
-        border-radius: 8px;
-        background: rgba(255,255,255,.018);
+    .ea-participant-line span {
+        overflow: hidden;
+        max-width: 225px;
+        text-overflow: ellipsis;
+        color: #c9d1d9;
     }
-    .ea-participant span {
-        display: block;
-        color: var(--ea-muted);
-        font-size: 9px;
-        font-weight: 800;
-        text-transform: uppercase;
-    }
-    .ea-participant strong {
-        display: block;
-        margin-top: 4px;
-        overflow-wrap: anywhere;
-        color: #e6edf3;
-        font-size: 12px;
-    }
-    .ea-participant em {
-        display: block;
-        margin-top: 5px;
+    .ea-participant-line strong {
         color: #79c0ff;
-        font-size: 13px;
-        font-style: normal;
-        font-weight: 800;
+        font-size: 10px;
+        font-weight: 750;
+        font-variant-numeric: tabular-nums;
     }
     .ea-ledger-wrap {
         width: 100%;
@@ -296,12 +290,10 @@
     @media (max-width: 760px) {
         .ea-folders { grid-template-columns: 1fr; }
         .ea-kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .ea-closing-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
         .ea-modal-form { grid-template-columns: 1fr; }
         .ea-modal-form .wide,
         .ea-operation-info,
         .ea-modal-actions { grid-column: auto; }
-        .ea-closing-head { flex-direction: column; }
     }
 </style>
 {% endblock %}
@@ -373,42 +365,66 @@
 </div>
 
 {% if view_mode == 'cierres' %}
-<section class="ea-closing-list">
-    {% for row in rows %}
-    <article class="ea-closing-card">
-        <div class="ea-closing-head">
-            <div>
-                <h3>{{ row.code }} · {{ row.property }}</h3>
-                <p>
-                    {% if row.date_display != '—' %}Cierre {{ row.date_display }}{% else %}Fecha pendiente{% endif %}
-                    {% if row.status %} · {{ row.status }}{% endif %}
-                    {% if row.collection_status %} · Cobro {{ row.collection_status|lower }}{% endif %}
-                </p>
-            </div>
-            <span class="ea-badge blue">{{ deal_label }}</span>
-        </div>
-        <div class="ea-closing-metrics">
-            <div><span>Monto de operación</span><strong>{{ row.currency }} {{ row.amount|floatformat:2|intcomma }}</strong></div>
-            <div><span>Comisión total</span><strong>{{ row.currency }} {{ row.commission|floatformat:2|intcomma }}</strong></div>
-            <div><span>Cobrado</span><strong>{{ row.currency }} {{ row.collected|floatformat:2|intcomma }}</strong></div>
-            <div><span>Saldo por cobrar</span><strong>{{ row.currency }} {{ row.pending|floatformat:2|intcomma }}</strong></div>
-        </div>
-        <div class="ea-participants">
-            {% for payable in row.payables %}
-            <div class="ea-participant">
-                <span>{{ payable.label }}{% if payable.pct %} · {{ payable.pct|floatformat:2 }}%{% endif %}</span>
-                <strong>{{ payable.name }}</strong>
-                <em>{{ row.currency }} {{ payable.amount|floatformat:2|intcomma }}</em>
-            </div>
+<div class="ea-grid-wrap">
+    <table class="ea-closings-grid">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Código</th>
+                <th>Propiedad</th>
+                <th>Cierre</th>
+                <th>Moneda</th>
+                <th class="num">Monto</th>
+                <th class="num">% Comisión</th>
+                <th class="num">Comisión</th>
+                <th class="num">Agentes</th>
+                <th class="num">Propify</th>
+                <th>Participantes</th>
+                <th class="num">Cobrado</th>
+                <th class="num">Saldo</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td class="num">{{ forloop.counter }}</td>
+                <td class="code">{{ row.code }}</td>
+                <td class="property">{{ row.property }}</td>
+                <td>{{ row.date_display }}</td>
+                <td>{{ row.currency }}</td>
+                <td class="num">{{ row.amount|floatformat:2|intcomma }}</td>
+                <td class="num">{{ row.commission_pct|floatformat:2 }}%</td>
+                <td class="num">{{ row.commission|floatformat:2|intcomma }}</td>
+                <td class="num">{{ row.agents_total|floatformat:2|intcomma }}</td>
+                <td class="num">{{ row.commission_propify|floatformat:2|intcomma }}</td>
+                <td class="participants-cell">
+                    {% for payable in row.payables %}
+                    <div class="ea-participant-line">
+                        <span>{{ payable.label }} · {{ payable.name }}</span>
+                        <strong>{{ row.currency }} {{ payable.amount|floatformat:2|intcomma }}</strong>
+                    </div>
+                    {% empty %}
+                    <span class="ea-matrix-empty">Sin participantes</span>
+                    {% endfor %}
+                </td>
+                <td class="num">{{ row.collected|floatformat:2|intcomma }}</td>
+                <td class="num">{{ row.pending|floatformat:2|intcomma }}</td>
+                <td>
+                    {% if row.collection_status %}
+                    <span class="ea-badge {% if row.collection_status == 'Pendiente' %}amber{% else %}green{% endif %}">{{ row.collection_status }}</span>
+                    {% endif %}
+                    {% if row.status %}<span class="ea-badge muted">{{ row.status }}</span>{% endif %}
+                </td>
+            </tr>
             {% empty %}
-            <div class="ea-participant"><span>Comisiones</span><strong>Sin participantes informados.</strong></div>
+            <tr>
+                <td colspan="14" class="ea-matrix-empty" style="padding:26px;text-align:center;">No hay cierres de {{ deal_label|lower }}.</td>
+            </tr>
             {% endfor %}
-        </div>
-    </article>
-    {% empty %}
-    <div class="ea-empty-state">No hay cierres de {{ deal_label|lower }}.</div>
-    {% endfor %}
-</section>
+        </tbody>
+    </table>
+</div>
 {% endif %}
 
 {% if view_mode == 'cobros' %}

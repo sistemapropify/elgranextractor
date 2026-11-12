@@ -514,6 +514,8 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'Fecha de pago')
         self.assertNotContains(response, 'Vencimiento')
         self.assertNotContains(response, 'name="due_date"')
+        self.assertContains(response, 'class="ea-closings-grid"')
+        self.assertNotContains(response, 'class="ea-closing-card"')
         self.assertContains(response, '?tipo=venta&vista=cierres')
         self.assertContains(response, 'Agente de Captación')
         self.assertContains(response, 'Agente Comprador')
