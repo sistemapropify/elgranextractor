@@ -3,7 +3,7 @@ import re
 from datetime import date
 from functools import wraps
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urljoin
 
 import requests
 from django.contrib import messages
@@ -54,56 +54,81 @@ def _closings_fallback_urls():
 
 
 def _propify_closings(token):
-    """Pide la lista de cierres a Propify y la normaliza a una lista plana."""
+    """Pide todos los cierres de Propify, siguiendo su paginación."""
     ultimo_error = 'No se pudo conectar con Propify para cargar los cierres.'
     permission_error = None
-    for url in _closings_fallback_urls():
-        try:
-            response = requests.get(
-                url,
-                headers={
-                    'Authorization': f'Bearer {token}',
-                    'Accept': 'application/json',
-                },
-                timeout=15,
-            )
-        except requests.RequestException:
-            ultimo_error = 'Propify no respondió al cargar los cierres.'
-            continue
-        if response.status_code in (401, 403):
+    for base_url in _closings_fallback_urls():
+        page_url = base_url
+        closings = []
+        visited_urls = set()
+        while page_url:
+            if page_url in visited_urls:
+                return None, {
+                    'status': 502,
+                    'message': 'Propify devolvió una paginación de cierres circular.',
+                }
+            visited_urls.add(page_url)
             try:
-                detail = response.json().get('detail')
-            except ValueError:
-                detail = None
-            message = str(detail or 'Propify rechazó el acceso a los cierres.')
-            if response.status_code == 403:
-                permission_error = {
+                response = requests.get(
+                    page_url,
+                    headers={
+                        'Authorization': f'Bearer {token}',
+                        'Accept': 'application/json',
+                    },
+                    timeout=15,
+                )
+            except requests.RequestException:
+                ultimo_error = 'Propify no respondió al cargar los cierres.'
+                break
+            if response.status_code in (401, 403):
+                try:
+                    detail = response.json().get('detail')
+                except ValueError:
+                    detail = None
+                message = str(detail or 'Propify rechazó el acceso a los cierres.')
+                if response.status_code == 403:
+                    permission_error = {
+                        'status': response.status_code,
+                        'message': message,
+                    }
+                    break
+                return None, {
                     'status': response.status_code,
                     'message': message,
                 }
-                continue
-            return None, {
-                'status': response.status_code,
-                'message': message,
-            }
-        if response.status_code == 404:
-            ultimo_error = 'Propify no expone el listado de cierres para este usuario.'
-            continue
-        if response.status_code != 200:
-            ultimo_error = f'Propify devolvió el estado {response.status_code}.'
-            continue
-        try:
-            payload = response.json()
-        except ValueError:
-            ultimo_error = 'Propify devolvió una respuesta inválida.'
-            continue
-        if isinstance(payload, list):
-            return payload, None
-        if isinstance(payload, dict):
-            for key in ('results', 'data', 'closings'):
-                if isinstance(payload.get(key), list):
-                    return payload[key], None
-        ultimo_error = 'Propify devolvió un listado de cierres con un formato desconocido.'
+            if response.status_code == 404:
+                ultimo_error = 'Propify no expone el listado de cierres para este usuario.'
+                break
+            if response.status_code != 200:
+                ultimo_error = f'Propify devolvió el estado {response.status_code}.'
+                break
+            try:
+                payload = response.json()
+            except ValueError:
+                ultimo_error = 'Propify devolvió una respuesta inválida.'
+                break
+            if isinstance(payload, list):
+                closings.extend(payload)
+                return closings, None
+            if not isinstance(payload, dict):
+                ultimo_error = 'Propify devolvió un listado de cierres con un formato desconocido.'
+                break
+            page_rows = next(
+                (
+                    payload.get(key)
+                    for key in ('results', 'data', 'closings')
+                    if isinstance(payload.get(key), list)
+                ),
+                None,
+            )
+            if page_rows is None:
+                ultimo_error = 'Propify devolvió un listado de cierres con un formato desconocido.'
+                break
+            closings.extend(page_rows)
+            next_url = payload.get('next')
+            if not next_url:
+                return closings, None
+            page_url = urljoin(base_url, str(next_url))
     if permission_error:
         return None, permission_error
     return None, {'status': 502, 'message': ultimo_error}
@@ -581,15 +606,11 @@ def cierres(request):
             clear_web_propify_session(request)
             query = urlencode({'next': request.get_full_path()})
             return redirect(f'/agentes-externos/login/?{query}')
-    normalized_usd_rows = [
+    normalized_rows = [
         _normalize_closing(item)
         for item in (closings or [])
     ]
-    normalized_usd_rows = [
-        row for row in normalized_usd_rows
-        if row.get('currency') == 'USD'
-    ]
-    _sync_commission_collections(normalized_usd_rows, request)
+    _sync_commission_collections(normalized_rows, request)
 
     requested_deal = str(request.GET.get('tipo') or 'venta').strip().lower()
     deal_type = 'rent' if requested_deal in {'alquiler', 'alquileres', 'rent'} else 'sale'
@@ -599,12 +620,12 @@ def cierres(request):
     if view_mode not in {'cierres', 'cobros', 'pagos'}:
         view_mode = 'cierres'
     rows = [
-        row for row in normalized_usd_rows
+        row for row in normalized_rows
         if row.get('deal_type') == deal_type
     ]
     deal_counts = {
-        'sale': sum(row.get('deal_type') == 'sale' for row in normalized_usd_rows),
-        'rent': sum(row.get('deal_type') == 'rent' for row in normalized_usd_rows),
+        'sale': sum(row.get('deal_type') == 'sale' for row in normalized_rows),
+        'rent': sum(row.get('deal_type') == 'rent' for row in normalized_rows),
     }
     active_codes = [
         row['code'] for row in rows
@@ -614,7 +635,6 @@ def cierres(request):
     payments = list(
         CommissionPayment.objects
         .filter(
-            currency_code='USD',
             operation_code__in=active_codes,
         )
         .exclude(status=CommissionPayment.Status.ANNULLED)
@@ -623,7 +643,6 @@ def cierres(request):
     collection_entries = list(
         CommissionCollectionEntry.objects
         .filter(
-            collection__currency_code='USD',
             collection__deal_type=deal_type,
             collection__operation_code__in=active_codes,
         )
@@ -631,18 +650,22 @@ def cierres(request):
         .order_by('-collection_date', '-created_at', '-pk')[:30]
     )
     currency_summaries = []
-    if rows:
+    for currency in sorted({row.get('currency') or 'USD' for row in rows}):
+        currency_rows = [
+            row for row in rows
+            if (row.get('currency') or 'USD') == currency
+        ]
         currency_payments = [
             item for item in payments
-            if (item.currency_code or 'USD') == 'USD'
+            if (item.currency_code or 'USD') == currency
         ]
-        commission = sum(float(row.get('commission') or 0) for row in rows)
-        collected = sum(float(row.get('collected') or 0) for row in rows)
-        agent_commission = sum(float(row.get('agents_total') or 0) for row in rows)
-        broker_commission = sum(float(row.get('brokers_total') or 0) for row in rows)
+        commission = sum(float(row.get('commission') or 0) for row in currency_rows)
+        collected = sum(float(row.get('collected') or 0) for row in currency_rows)
+        agent_commission = sum(float(row.get('agents_total') or 0) for row in currency_rows)
+        broker_commission = sum(float(row.get('brokers_total') or 0) for row in currency_rows)
         propify_commission = sum(
             float(row.get('commission_propify') or 0)
-            for row in rows
+            for row in currency_rows
         )
         agents_paid = sum(
             float(item.amount or 0)
@@ -666,8 +689,8 @@ def cierres(request):
             and item.beneficiary_type == CommissionPayment.BeneficiaryType.OTHER
         )
         currency_summaries.append({
-            'currency': 'USD',
-            'count': len(rows),
+            'currency': currency,
+            'count': len(currency_rows),
             'commission': commission,
             'collected': collected,
             'pending': max(commission - collected, 0),

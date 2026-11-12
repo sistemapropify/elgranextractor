@@ -16,7 +16,7 @@ from .models import (
     ExternalAgent,
     ExternalAgentAttachment,
 )
-from .views import _normalize_closing
+from .views import _normalize_closing, _propify_closings
 
 
 class ExternalAgentsViewsTests(TestCase):
@@ -449,26 +449,81 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertEqual(row['agents'][0]['amount'], 2400)
         self.assertEqual(row['commission_propify'], 600)
 
+    def test_propify_closings_follow_all_pagination_pages(self):
+        class FakeResponse:
+            status_code = 200
+
+            def __init__(self, payload):
+                self.payload = payload
+
+            def json(self):
+                return self.payload
+
+        first_page = FakeResponse({
+            'count': 2,
+            'next': '/api/properties/closings/?page=2',
+            'results': [{'property_code': 'PROP000261'}],
+        })
+        second_page = FakeResponse({
+            'count': 2,
+            'next': None,
+            'results': [{'property_code': 'PROP000105'}],
+        })
+        with (
+            patch(
+                'external_agents.views._closings_fallback_urls',
+                return_value=['https://api.propify.pe/api/properties/closings/'],
+            ),
+            patch(
+                'external_agents.views.requests.get',
+                side_effect=[first_page, second_page],
+            ) as request_get,
+        ):
+            rows, error = _propify_closings('test-token')
+        self.assertIsNone(error)
+        self.assertEqual(
+            [row['property_code'] for row in rows],
+            ['PROP000261', 'PROP000105'],
+        )
+        self.assertEqual(request_get.call_count, 2)
+
     def test_closing_screen_separates_agents_and_preserves_partial_collections(self):
         self.authenticate_propify()
-        pen_closing = self.closing_payload()[0].copy()
-        pen_closing.update({
-            'id': 43,
-            'property_code': 'PROP000999',
-            'property_title': 'Cierre en soles que no debe mostrarse',
-            'currency_code': 'PEN',
-        })
         rent_closing = self.closing_payload()[0].copy()
         rent_closing.update({
             'id': 44,
             'property_code': 'PROP000888',
-            'property_title': 'Alquiler en USD separado',
+            'property_title': 'Alquiler en soles separado',
             'deal_type': 'rent',
+            'amount': '2500.00',
+            'currency_code': 'PEN',
+            'commission_pct': '100.00',
+            'commission_amount': '2500.00',
+            'agents_amount': '2500.00',
+            'propify_amount': '0.00',
+            'sides': [
+                {
+                    'role': 'listing',
+                    'agent_name': 'Agente de Alquiler',
+                    'share_pct': '50.00',
+                    'agent_pct': '100.00',
+                    'side_amount': '1250.00',
+                    'agent_amount': '1250.00',
+                },
+                {
+                    'role': 'buyer',
+                    'agent_name': 'Agente de Alquiler',
+                    'share_pct': '50.00',
+                    'agent_pct': '100.00',
+                    'side_amount': '1250.00',
+                    'agent_amount': '1250.00',
+                },
+            ],
         })
         with patch(
             'external_agents.views._propify_closings',
             return_value=(
-                [*self.closing_payload(), rent_closing, pen_closing],
+                [*self.closing_payload(), rent_closing],
                 None,
             ),
         ):
@@ -487,9 +542,7 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'Agente Comprador')
         self.assertNotContains(response, '>Resumen</a>')
         self.assertNotContains(response, 'Pagos a agentes')
-        self.assertNotContains(response, 'PROP000999')
         self.assertNotContains(response, 'PROP000888')
-        self.assertNotContains(response, 'Cierre en soles que no debe mostrarse')
         self.assertEqual(CommissionCollection.objects.count(), 2)
 
         CommissionCollection.objects.create(
@@ -502,7 +555,7 @@ class ExternalAgentsViewsTests(TestCase):
         with patch(
             'external_agents.views._propify_closings',
             return_value=(
-                [*self.closing_payload(), rent_closing, pen_closing],
+                [*self.closing_payload(), rent_closing],
                 None,
             ),
         ):
@@ -519,7 +572,7 @@ class ExternalAgentsViewsTests(TestCase):
         with patch(
             'external_agents.views._propify_closings',
             return_value=(
-                [*self.closing_payload(), rent_closing, pen_closing],
+                [*self.closing_payload(), rent_closing],
                 None,
             ),
         ):
@@ -527,9 +580,10 @@ class ExternalAgentsViewsTests(TestCase):
                 reverse('external_agents:cierres'),
                 {'tipo': 'alquiler', 'vista': 'cierres'},
             )
-        self.assertContains(rent_summary, 'Comisiones de Alquileres en USD')
+        self.assertContains(rent_summary, 'Comisiones de Alquileres')
         self.assertContains(rent_summary, '1 cierre')
         self.assertContains(rent_summary, 'PROP000888')
+        self.assertContains(rent_summary, 'PEN 2,500.00')
         self.assertNotContains(rent_summary, 'PROP000261')
 
         collection = CommissionCollection.objects.get(operation_code='PROP000261')
@@ -538,12 +592,12 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertEqual(float(collection.amount_for_propify), 1243.2)
         self.assertEqual(collection.currency_code, 'USD')
         self.assertEqual(collection.deal_type, 'sale')
-        self.assertEqual(
-            CommissionCollection.objects.get(
-                operation_code='PROP000888'
-            ).deal_type,
-            'rent',
+        rent_collection = CommissionCollection.objects.get(
+            operation_code='PROP000888'
         )
+        self.assertEqual(rent_collection.deal_type, 'rent')
+        self.assertEqual(rent_collection.currency_code, 'PEN')
+        self.assertEqual(float(rent_collection.amount_to_collect), 2500)
 
         first = self.client.post(
             reverse('external_agents:collection_add'),
