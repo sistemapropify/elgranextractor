@@ -1,0 +1,185 @@
+{% extends "external_agents/base.html" %}
+
+{% block page_title %}Cierres y comisiones{% endblock %}
+{% block hero_title %}Cierres y comisiones{% endblock %}
+{% block hero_subtitle %}Ventas cerradas en Propify con el cobro de comisiones y los pagos pendientes a Propify y a los agentes.{% endblock %}
+
+{% block extra_module_css %}
+<style>
+    .ea-cierres-stats {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+    .ea-cierre-stat {
+        padding: 14px 16px;
+        border: 1px solid var(--ea-border);
+        border-radius: 11px;
+        background: var(--ea-panel);
+    }
+    .ea-cierre-stat strong {
+        display: block;
+        color: #f0f6fc;
+        font-size: 23px;
+        line-height: 1.1;
+    }
+    .ea-cierre-stat span {
+        display: block;
+        margin-top: 5px;
+        color: var(--ea-muted);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .5px;
+        text-transform: uppercase;
+    }
+    .ea-cierre-stat.blue strong { color: #79c0ff; }
+    .ea-cierre-stat.green strong { color: #7ee787; }
+    .ea-cierre-stat.amber strong { color: #e3b341; }
+    .ea-cierre-stat.purple strong { color: #a371f7; }
+    .ea-cierre-stat.red strong { color: #ff958e; }
+    .ea-cierres-wrap {
+        width: 100%;
+        overflow: auto;
+        border: 1px solid var(--ea-border);
+        border-radius: 11px;
+        background: var(--ea-panel);
+    }
+    .ea-cierres {
+        width: 100%;
+        min-width: 1180px;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 12px;
+    }
+    .ea-cierres th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        padding: 11px 10px;
+        border-bottom: 1px solid var(--ea-border);
+        background: var(--ea-panel-raised);
+        color: var(--ea-muted);
+        text-align: left;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: .45px;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .ea-cierres td {
+        padding: 11px 10px;
+        border-bottom: 1px solid var(--ea-border);
+        color: #c9d1d9;
+        vertical-align: top;
+    }
+    .ea-cierres tbody tr:hover td {
+        background: rgba(88, 166, 255, .045);
+    }
+    .ea-cierres tbody tr:last-child td {
+        border-bottom: 0;
+    }
+    .ea-num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .ea-agents {
+        display: grid;
+        gap: 3px;
+        color: #c9d1d9;
+        font-size: 11px;
+    }
+    .ea-agents span {
+        white-space: nowrap;
+    }
+    @media (max-width: 900px) {
+        .ea-cierres-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+</style>
+{% endblock %}
+
+{% block module_content %}
+{% if error %}
+<section class="ea-panel ea-empty">
+    <div class="ea-empty-icon" aria-hidden="true">◫</div>
+    <h3>{{ error.message|default:"No se pudieron cargar los cierres." }}</h3>
+    <p>Revisa la conexión con Propify y vuelve a intentarlo.</p>
+    <a class="ea-btn" href="{% url 'external_agents:cierres' %}">Reintentar</a>
+</section>
+{% else %}
+<section class="ea-cierres-stats" aria-label="Resumen de cierres">
+    <div class="ea-cierre-stat blue">
+        <strong>{{ summary.total }}</strong>
+        <span>Cierres</span>
+    </div>
+    <div class="ea-cierre-stat">
+        <strong>${{ summary.commission|floatformat:2 }}</strong>
+        <span>Comisión total</span>
+    </div>
+    <div class="ea-cierre-stat green">
+        <strong>${{ summary.collected|floatformat:2 }}</strong>
+        <span>Cobrado</span>
+    </div>
+    <div class="ea-cierre-stat amber">
+        <strong>${{ summary.pending|floatformat:2 }}</strong>
+        <span>Por cobrar</span>
+    </div>
+    <div class="ea-cierre-stat purple">
+        <strong>${{ summary.payable_agents|floatformat:2 }}</strong>
+        <span>Pagos a agentes</span>
+    </div>
+</section>
+
+<div class="ea-cierres-wrap">
+    <table class="ea-cierres">
+        <thead>
+            <tr>
+                <th>Operación</th>
+                <th>Propiedad</th>
+                <th>Cierre</th>
+                <th class="ea-num">Monto venta</th>
+                <th class="ea-num">Comisión</th>
+                <th>Agentes</th>
+                <th class="ea-num">Cobrado</th>
+                <th class="ea-num">Saldo</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td>{{ row.code|default:"—" }}</td>
+                <td>{{ row.property }}</td>
+                <td>
+                    {% if row.date != '—' %}{{ row.date|date:"d/m/Y" }}{% else %}—{% endif %}
+                </td>
+                <td class="ea-num">${{ row.amount|floatformat:2 }}</td>
+                <td class="ea-num">${{ row.commission|floatformat:2 }}</td>
+                <td>
+                    <div class="ea-agents">
+                        {% for agent in row.agents %}
+                        <span>{{ agent.label }} · {{ agent.name }} · ${{ agent.amount|floatformat:2 }}</span>
+                        {% empty %}
+                        <span class="ea-matrix-empty">—</span>
+                        {% endfor %}
+                    </div>
+                </td>
+                <td class="ea-num">${{ row.collected|floatformat:2 }}</td>
+                <td class="ea-num">${{ row.pending|floatformat:2 }}</td>
+                <td>
+                    {% if row.status %}<span class="ea-badge blue">{{ row.status }}</span>{% else %}<span class="ea-badge muted">—</span>{% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" class="ea-matrix-empty" style="padding:28px;text-align:center;">
+                    No hay cierres registrados en Propify para esta cuenta.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

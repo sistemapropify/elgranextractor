@@ -378,6 +378,14 @@ PROPIFY_AUTH_TOKEN_URL = env(
 )
 PROPIFY_AUTH_ME_URL = env('PROPIFY_AUTH_ME_URL', default='https://api.propify.pe/api/auth/me/')
 PROPIFY_AUTH_REFRESH_URL = env('PROPIFY_AUTH_REFRESH_URL', default='https://api.propify.pe/api/auth/token/refresh/')
+PROPIFY_CLOSINGS_URL = env(
+    'PROPIFY_CLOSINGS_URL',
+    default='https://api.propify.pe/api/properties/closings/',
+)
+PROPIFY_MY_CLOSINGS_URL = env(
+    'PROPIFY_MY_CLOSINGS_URL',
+    default='https://api.propify.pe/api/properties/properties/my-closings/',
+)
 
 # Inicio operativo del control móvil de intenciones de visita (hora de Lima).
 CRM_ALERTS_START_DATE = env('CRM_ALERTS_START_DATE', default='2026-08-24')

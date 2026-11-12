@@ -1,10 +1,13 @@
 import mimetypes
 import re
+from datetime import date
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlencode
 
+import requests
 from django.contrib import messages
+from django.conf import settings
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import FileResponse, Http404
@@ -23,11 +26,225 @@ from prospects.propify_auth import (
 )
 
 from .forms import AttachmentForm, DocumentTypeForm, ExternalAgentForm
-from .models import DocumentType, ExternalAgent, ExternalAgentAttachment
+from .models import (
+    CommissionCollection,
+    DocumentType,
+    ExternalAgent,
+    ExternalAgentAttachment,
+)
 
 
 MAX_ATTACHMENTS_PER_SUBMISSION = 20
 INITIAL_ATTACHMENT_ROWS = 6
+
+
+def _closings_fallback_urls():
+    urls = [
+        getattr(settings, 'PROPIFY_CLOSINGS_URL', ''),
+        getattr(settings, 'PROPIFY_MY_CLOSINGS_URL', ''),
+    ]
+    return [url for url in urls if url]
+
+
+def _propify_closings(token):
+    """Pide la lista de cierres a Propify y la normaliza a una lista plana."""
+    ultimo_error = 'No se pudo conectar con Propify para cargar los cierres.'
+    for url in _closings_fallback_urls():
+        try:
+            response = requests.get(
+                url,
+                headers={
+                    'Authorization': f'Bearer {token}',
+                    'Accept': 'application/json',
+                },
+                timeout=15,
+            )
+        except requests.RequestException:
+            ultimo_error = 'Propify no respondió al cargar los cierres.'
+            continue
+        if response.status_code == 401:
+            return None, {'status': 401, 'message': 'Tu sesión de Propify venció.'}
+        if response.status_code == 404:
+            ultimo_error = 'Propify no expone el listado de cierres para este usuario.'
+            continue
+        if response.status_code != 200:
+            ultimo_error = f'Propify devolvió el estado {response.status_code}.'
+            continue
+        try:
+            payload = response.json()
+        except ValueError:
+            ultimo_error = 'Propify devolvió una respuesta inválida.'
+            continue
+        if isinstance(payload, list):
+            return payload, None
+        if isinstance(payload, dict):
+            for key in ('results', 'data', 'closings'):
+                if isinstance(payload.get(key), list):
+                    return payload[key], None
+        ultimo_error = 'Propify devolvió un listado de cierres con un formato desconocido.'
+    return None, {'status': 502, 'message': ultimo_error}
+
+
+def _first_number(value, default=0):
+    try:
+        if value in (None, ''):
+            return default
+        number = float(value)
+        return number if number == number else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _agent_name(side):
+    if not isinstance(side, dict):
+        return '—'
+    if side.get('agent_name'):
+        return str(side['agent_name'])
+    agent = side.get('agent')
+    if isinstance(agent, dict):
+        return str(agent.get('name') or agent.get('full_name') or '—')
+    return str(side.get('name') or '—')
+
+
+def _normalize_closing(item):
+    item = item or {}
+    property_value = item.get('property')
+    if isinstance(property_value, dict):
+        property_name = property_value.get('name') or property_value.get('title') or '—'
+    else:
+        property_name = (
+            item.get('property_name')
+            or item.get('property_title')
+            or item.get('address')
+            or '—'
+        )
+    amount = _first_number(
+        item.get('closing_amount_usd', item.get('amount', item.get('closing_amount'))),
+        0,
+    )
+    commission_amount = _first_number(
+        item.get('commission_amount'),
+        amount * _first_number(item.get('commission_pct', 0)) / 100,
+    )
+    payments = item.get('payments') or item.get('deposits') or []
+    if isinstance(payments, list):
+        collected = sum(
+            _first_number(
+                payment.get('amount') if isinstance(payment, dict) else payment,
+                0,
+            )
+            for payment in payments
+        )
+    else:
+        collected = _first_number(
+            item.get('collected_amount', item.get('paid_amount')),
+            0,
+        )
+    commission_propify = _first_number(
+        item.get('commission_propify_amount'),
+        amount * _first_number(item.get('commission_pf', 0)) / 100,
+    )
+    sides = item.get('sides') or item.get('agents_detail') or []
+    if not isinstance(sides, list):
+        sides = []
+    agents = []
+    for side in sides:
+        if not isinstance(side, dict):
+            continue
+        role = str(side.get('role') or '').lower()
+        if 'compra' in role or role in {'buyer', 'comprador'}:
+            label = 'Comprador'
+        elif 'vent' in role or role in {'seller', 'vendedor', 'propietario'}:
+            label = 'Vendedor'
+        else:
+            label = str(side.get('label') or side.get('role') or 'Agente')
+        pct = _first_number(side.get('agent_pct', side.get('share_pct')), 0)
+        agents.append({
+            'name': _agent_name(side),
+            'label': label,
+            'pct': pct,
+            'amount': amount * pct / 100,
+        })
+    pending = max(commission_amount - collected, 0)
+    return {
+        'id': item.get('id') or item.get('pk') or '—',
+        'code': item.get('code') or item.get('operation_code') or '—',
+        'property': property_name,
+        'date': item.get('closing_date') or '—',
+        'amount': amount,
+        'commission': commission_amount,
+        'commission_propify': commission_propify,
+        'collected': collected,
+        'pending': pending,
+        'agents': agents,
+        'status': item.get('status') or item.get('closing_status') or '',
+    }
+
+
+def _closing_key(row):
+    code = str(row.get('code') or '').strip()
+    if code and code != '—':
+        return code
+    identifier = str(row.get('id') or '').strip()
+    return f'CL-{identifier}' if identifier else ''
+
+
+def _parse_closing_date(value):
+    if not value or value == '—':
+        return None
+    if isinstance(value, date):
+        return value
+    text = str(value)[:10]
+    try:
+        year, month, day = [int(part) for part in text.split('-')[:3]]
+        return date(year, month, day)
+    except (TypeError, ValueError):
+        return None
+
+
+def _sync_commission_collections(rows, request):
+    """Crea o actualiza el cobro local para cada cierre detectado."""
+    username = _username(request)
+    for row in rows:
+        key = _closing_key(row)
+        if not key:
+            continue
+        collected = row.get('collected', 0)
+        amount = row.get('commission', 0)
+        if collected <= 0:
+            status = CommissionCollection.Status.PENDING
+        elif collected >= amount > 0:
+            status = CommissionCollection.Status.COLLECTED
+        else:
+            status = CommissionCollection.Status.PARTIAL
+        collection, created = CommissionCollection.objects.get_or_create(
+            operation_code=key,
+            defaults={
+                'property_name': row.get('property') or '',
+                'amount_to_collect': amount,
+                'collected_amount': collected,
+                'closing_date': _parse_closing_date(row.get('date')),
+                'status': status,
+                'created_by_username': username,
+                'updated_by_username': username,
+            },
+        )
+        if not created:
+            collection.property_name = row.get('property') or collection.property_name
+            collection.amount_to_collect = amount
+            collection.collected_amount = collected
+            collection.closing_date = _parse_closing_date(row.get('date')) or collection.closing_date
+            collection.status = status
+            collection.updated_by_username = username
+            collection.save(update_fields=[
+                'property_name',
+                'amount_to_collect',
+                'collected_amount',
+                'closing_date',
+                'status',
+                'updated_by_username',
+                'updated_at',
+            ])
 
 
 def _username(request):
@@ -181,6 +398,32 @@ def login_view(request):
 def logout_view(request):
     clear_web_propify_session(request)
     return redirect('external_agents:login')
+
+
+@never_cache
+@external_agent_access_required
+def cierres(request):
+    token = str(request.session.get(WEB_TOKEN_SESSION_KEY, '')).strip()
+    closings, error = _propify_closings(token)
+    rows = [_normalize_closing(item) for item in (closings or [])]
+    _sync_commission_collections(rows, request)
+
+    summary = {
+        'total': len(rows),
+        'commission': sum(row['commission'] for row in rows),
+        'collected': sum(row['collected'] for row in rows),
+        'pending': sum(row['pending'] for row in rows),
+        'payable_agents': sum(
+            agent['amount']
+            for row in rows
+            for agent in row['agents']
+        ),
+    }
+    return render(request, 'external_agents/cierres.html', {
+        'rows': rows,
+        'summary': summary,
+        'error': error,
+    })
 
 
 @never_cache
