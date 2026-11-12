@@ -595,9 +595,9 @@ def cierres(request):
     deal_type = 'rent' if requested_deal in {'alquiler', 'alquileres', 'rent'} else 'sale'
     deal_slug = 'alquiler' if deal_type == 'rent' else 'venta'
     deal_label = 'Alquileres' if deal_type == 'rent' else 'Ventas'
-    view_mode = str(request.GET.get('vista') or 'resumen').strip().lower()
-    if view_mode not in {'resumen', 'cierres', 'cobros', 'pagos'}:
-        view_mode = 'resumen'
+    view_mode = str(request.GET.get('vista') or 'cierres').strip().lower()
+    if view_mode not in {'cierres', 'cobros', 'pagos'}:
+        view_mode = 'cierres'
     rows = [
         row for row in normalized_usd_rows
         if row.get('deal_type') == deal_type
@@ -738,7 +738,7 @@ def _redirect_cierres(deal_type=None, view_mode=None):
     params = {}
     if deal_type in {'sale', 'rent'}:
         params['tipo'] = 'alquiler' if deal_type == 'rent' else 'venta'
-    if view_mode in {'resumen', 'cierres', 'cobros', 'pagos'}:
+    if view_mode in {'cierres', 'cobros', 'pagos'}:
         params['vista'] = view_mode
     url = reverse('external_agents:cierres')
     return redirect(f'{url}?{urlencode(params)}' if params else url)

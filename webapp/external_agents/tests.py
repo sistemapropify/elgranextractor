@@ -474,7 +474,7 @@ class ExternalAgentsViewsTests(TestCase):
         ):
             response = self.client.get(reverse('external_agents:cierres'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Comisión de agentes')
+        self.assertContains(response, '<span>Agentes</span>')
         self.assertContains(response, 'USD 1,554.00')
         self.assertContains(response, 'USD 1,243.20')
         self.assertContains(response, 'Ventas')
@@ -482,7 +482,10 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'data-open-modal="collection-modal"')
         self.assertContains(response, 'id="collection-modal"')
         self.assertContains(response, 'id="payment-modal"')
-        self.assertContains(response, '?tipo=venta&vista=resumen')
+        self.assertContains(response, '?tipo=venta&vista=cierres')
+        self.assertContains(response, 'Agente de Captación')
+        self.assertContains(response, 'Agente Comprador')
+        self.assertNotContains(response, '>Resumen</a>')
         self.assertNotContains(response, 'Pagos a agentes')
         self.assertNotContains(response, 'PROP000999')
         self.assertNotContains(response, 'PROP000888')
@@ -513,10 +516,11 @@ class ExternalAgentsViewsTests(TestCase):
         ):
             rent_summary = self.client.get(
                 reverse('external_agents:cierres'),
-                {'tipo': 'alquiler', 'vista': 'resumen'},
+                {'tipo': 'alquiler', 'vista': 'cierres'},
             )
         self.assertContains(rent_summary, 'Comisiones de Alquileres en USD')
         self.assertContains(rent_summary, '1 cierre')
+        self.assertContains(rent_summary, 'PROP000888')
         self.assertNotContains(rent_summary, 'PROP000261')
 
         collection = CommissionCollection.objects.get(operation_code='PROP000261')

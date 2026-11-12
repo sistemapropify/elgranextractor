@@ -86,54 +86,40 @@
         font-size: 12px;
         line-height: 1.5;
     }
-    .ea-finance-grid {
+    .ea-kpi-strip {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-        gap: 14px;
-        margin-bottom: 18px;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 14px;
     }
-    .ea-currency-card {
-        overflow: hidden;
+    .ea-kpi {
+        min-width: 0;
+        padding: 10px 11px;
         border: 1px solid var(--ea-border);
-        border-radius: 12px;
+        border-radius: 9px;
         background: var(--ea-panel);
     }
-    .ea-currency-card h2 {
-        display: flex;
-        justify-content: space-between;
-        margin: 0;
-        padding: 13px 16px;
-        border-bottom: 1px solid var(--ea-border);
-        background: var(--ea-panel-raised);
-        color: #f0f6fc;
-        font-size: 14px;
-    }
-    .ea-currency-card h2 span { color: var(--ea-muted); font-size: 11px; }
-    .ea-currency-values {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0,1fr));
-        gap: 1px;
-        background: var(--ea-border);
-    }
-    .ea-currency-values div { padding: 13px 15px; background: var(--ea-panel); }
-    .ea-currency-values span {
+    .ea-kpi span {
         display: block;
         color: var(--ea-muted);
-        font-size: 9px;
+        font-size: 8px;
         font-weight: 800;
-        letter-spacing: .4px;
+        letter-spacing: .35px;
         text-transform: uppercase;
     }
-    .ea-currency-values strong {
+    .ea-kpi strong {
         display: block;
-        margin-top: 5px;
+        margin-top: 4px;
+        overflow: hidden;
         color: #f0f6fc;
-        font-size: 17px;
+        font-size: 13px;
         font-variant-numeric: tabular-nums;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
-    .ea-currency-values .green strong { color: #7ee787; }
-    .ea-currency-values .amber strong { color: #e3b341; }
-    .ea-currency-values .blue strong { color: #79c0ff; }
+    .ea-kpi.green strong { color: #7ee787; }
+    .ea-kpi.amber strong { color: #e3b341; }
+    .ea-kpi.blue strong { color: #79c0ff; }
     .ea-closing-list { display: grid; gap: 12px; }
     .ea-closing-card {
         overflow: hidden;
@@ -304,8 +290,12 @@
         color: var(--ea-muted);
         text-align: center;
     }
+    @media (max-width: 1100px) {
+        .ea-kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
     @media (max-width: 760px) {
         .ea-folders { grid-template-columns: 1fr; }
+        .ea-kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .ea-closing-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
         .ea-modal-form { grid-template-columns: 1fr; }
         .ea-modal-form .wide,
@@ -326,52 +316,61 @@
 </section>
 {% else %}
 <nav class="ea-folders" aria-label="Tipos de comisión">
-    <a class="ea-folder {% if deal_type == 'sale' %}active{% endif %}" href="?tipo=venta&vista=resumen">
+    <a class="ea-folder {% if deal_type == 'sale' %}active{% endif %}" href="?tipo=venta&vista=cierres">
         <span class="ea-folder-label"><span class="ea-folder-icon" aria-hidden="true">▰</span> Ventas</span>
         <span class="ea-folder-count">{{ deal_counts.sale }} cierre{{ deal_counts.sale|pluralize:"s" }}<br>USD</span>
     </a>
-    <a class="ea-folder {% if deal_type == 'rent' %}active{% endif %}" href="?tipo=alquiler&vista=resumen">
+    <a class="ea-folder {% if deal_type == 'rent' %}active{% endif %}" href="?tipo=alquiler&vista=cierres">
         <span class="ea-folder-label"><span class="ea-folder-icon" aria-hidden="true">▰</span> Alquileres</span>
         <span class="ea-folder-count">{{ deal_counts.rent }} cierre{{ deal_counts.rent|pluralize:"s" }}<br>USD</span>
     </a>
 </nav>
 
 <nav class="ea-section-tabs" aria-label="Secciones de {{ deal_label }}">
-    <a class="ea-section-tab {% if view_mode == 'resumen' %}active{% endif %}" href="?tipo={{ deal_slug }}&vista=resumen">Resumen</a>
     <a class="ea-section-tab {% if view_mode == 'cierres' %}active{% endif %}" href="?tipo={{ deal_slug }}&vista=cierres">Cierres</a>
     <a class="ea-section-tab {% if view_mode == 'cobros' %}active{% endif %}" href="?tipo={{ deal_slug }}&vista=cobros">Cobros recibidos</a>
     <a class="ea-section-tab {% if view_mode == 'pagos' %}active{% endif %}" href="?tipo={{ deal_slug }}&vista=pagos">Pagos realizados</a>
 </nav>
 
+<section class="ea-kpi-strip" aria-label="Resumen compacto de {{ deal_label }}">
+    {% for item in summary.by_currency %}
+    <div class="ea-kpi">
+        <span>Comisión total</span>
+        <strong title="USD {{ item.commission|floatformat:2|intcomma }}">USD {{ item.commission|floatformat:2|intcomma }}</strong>
+    </div>
+    <div class="ea-kpi green">
+        <span>Cobrado</span>
+        <strong title="USD {{ item.collected|floatformat:2|intcomma }}">USD {{ item.collected|floatformat:2|intcomma }}</strong>
+    </div>
+    <div class="ea-kpi amber">
+        <span>Por cobrar</span>
+        <strong title="USD {{ item.pending|floatformat:2|intcomma }}">USD {{ item.pending|floatformat:2|intcomma }}</strong>
+    </div>
+    <div class="ea-kpi blue">
+        <span>Agentes</span>
+        <strong title="USD {{ item.agent_commission|floatformat:2|intcomma }}">USD {{ item.agent_commission|floatformat:2|intcomma }}</strong>
+    </div>
+    <div class="ea-kpi blue">
+        <span>Propify</span>
+        <strong title="USD {{ item.propify_commission|floatformat:2|intcomma }}">USD {{ item.propify_commission|floatformat:2|intcomma }}</strong>
+    </div>
+    <div class="ea-kpi">
+        <span>Cierres USD</span>
+        <strong>{{ item.count }}</strong>
+    </div>
+    {% empty %}
+    <div class="ea-kpi"><span>Comisión total</span><strong>USD 0.00</strong></div>
+    <div class="ea-kpi green"><span>Cobrado</span><strong>USD 0.00</strong></div>
+    <div class="ea-kpi amber"><span>Por cobrar</span><strong>USD 0.00</strong></div>
+    <div class="ea-kpi blue"><span>Agentes</span><strong>USD 0.00</strong></div>
+    <div class="ea-kpi blue"><span>Propify</span><strong>USD 0.00</strong></div>
+    <div class="ea-kpi"><span>Cierres USD</span><strong>0</strong></div>
+    {% endfor %}
+</section>
+
 <div class="ea-usd-note">
     Carpeta <strong>{{ deal_label }}</strong>. Solo se incluyen cierres valorizados originalmente en <strong>USD</strong>. Los cierres en soles no se convierten, no se suman y no aparecen en el selector.
 </div>
-
-{% if view_mode == 'resumen' %}
-<section class="ea-finance-grid" aria-label="Resumen de {{ deal_label }}">
-    {% for item in summary.by_currency %}
-    <article class="ea-currency-card">
-        <h2>USD · {{ deal_label }} <span>{{ item.count }} cierre{{ item.count|pluralize:"s" }}</span></h2>
-        <div class="ea-currency-values">
-            <div><span>Comisión por cobrar</span><strong>USD {{ item.commission|floatformat:2|intcomma }}</strong></div>
-            <div class="green"><span>Cobrado al propietario</span><strong>USD {{ item.collected|floatformat:2|intcomma }}</strong></div>
-            <div class="amber"><span>Saldo por cobrar</span><strong>USD {{ item.pending|floatformat:2|intcomma }}</strong></div>
-            <div class="blue"><span>Comisión de agentes</span><strong>USD {{ item.agent_commission|floatformat:2|intcomma }}</strong></div>
-            <div><span>Pagado a agentes</span><strong>USD {{ item.agents_paid|floatformat:2|intcomma }}</strong></div>
-            <div class="amber"><span>Pendiente a agentes</span><strong>USD {{ item.agents_pending|floatformat:2|intcomma }}</strong></div>
-            <div class="blue"><span>Comisión de brokers</span><strong>USD {{ item.broker_commission|floatformat:2|intcomma }}</strong></div>
-            <div><span>Pagado a brokers</span><strong>USD {{ item.brokers_paid|floatformat:2|intcomma }}</strong></div>
-            <div class="amber"><span>Pendiente a brokers</span><strong>USD {{ item.brokers_pending|floatformat:2|intcomma }}</strong></div>
-            <div><span>Comisión de Propify</span><strong>USD {{ item.propify_commission|floatformat:2|intcomma }}</strong></div>
-            <div class="green"><span>Pagado a Propify</span><strong>USD {{ item.propify_paid|floatformat:2|intcomma }}</strong></div>
-            <div class="amber"><span>Pendiente a Propify</span><strong>USD {{ item.propify_pending|floatformat:2|intcomma }}</strong></div>
-        </div>
-    </article>
-    {% empty %}
-    <div class="ea-empty-state">No hay cierres de {{ deal_label|lower }} valuados en USD.</div>
-    {% endfor %}
-</section>
-{% endif %}
 
 {% if view_mode == 'cierres' %}
 <section class="ea-closing-list">
