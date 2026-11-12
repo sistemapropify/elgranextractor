@@ -860,7 +860,7 @@ def payment_add(request):
     valid_types = {value for value, _ in CommissionPayment.BeneficiaryType.choices}
     valid_statuses = {value for value, _ in CommissionPayment.Status.choices}
     status = str(
-        request.POST.get('status') or CommissionPayment.Status.PENDING
+        request.POST.get('status') or CommissionPayment.Status.PAID
     ).strip()
     if (
         not operation_code
@@ -875,9 +875,10 @@ def payment_add(request):
     except CommissionCollection.DoesNotExist:
         messages.error(request, 'El cierre seleccionado ya no está disponible.')
         return _redirect_cierres(deal_type, 'pagos')
-    payment_date = _parse_date_input(request.POST.get('payment_date'))
-    if status == CommissionPayment.Status.PAID and payment_date is None:
-        payment_date = timezone.localdate()
+    payment_date = (
+        _parse_date_input(request.POST.get('payment_date'))
+        or timezone.localdate()
+    )
     payment = CommissionPayment(
         operation_code=operation_code,
         property_name=collection.property_name,
@@ -889,7 +890,7 @@ def payment_add(request):
             or collection.currency_code
             or 'USD'
         ),
-        due_date=_parse_date_input(request.POST.get('due_date')),
+        due_date=None,
         payment_date=payment_date,
         status=status,
         payment_method=str(request.POST.get('payment_method') or '').strip(),

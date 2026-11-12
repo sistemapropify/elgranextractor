@@ -514,9 +514,8 @@
             <input type="hidden" id="pago-moneda" name="currency_code">
             <div class="ea-operation-info" id="pago-info">Selecciona un cierre y el beneficiario.</div>
             <div class="ea-field"><label class="ea-label" for="pago-monto">Importe a pagar</label><input class="ea-input" id="pago-monto" name="amount" type="number" step="0.01" min="0.01" required></div>
-            <div class="ea-field"><label class="ea-label" for="pago-vencimiento">Vencimiento</label><input class="ea-input" id="pago-vencimiento" name="due_date" type="date"></div>
-            <div class="ea-field"><label class="ea-label" for="pago-fecha">Fecha de pago</label><input class="ea-input" id="pago-fecha" name="payment_date" type="date"></div>
-            <div class="ea-field"><label class="ea-label" for="pago-estado">Estado</label><select class="ea-select" id="pago-estado" name="status"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></select></div>
+            <div class="ea-field"><label class="ea-label" for="pago-fecha">Fecha de pago</label><input class="ea-input" id="pago-fecha" name="payment_date" type="date" required></div>
+            <div class="ea-field"><label class="ea-label" for="pago-estado">Estado</label><select class="ea-select" id="pago-estado" name="status"><option value="pagado" selected>Pagado</option><option value="pendiente">Pendiente</option></select></div>
             <div class="ea-field"><label class="ea-label" for="pago-medio">Medio de pago</label><input class="ea-input" id="pago-medio" name="payment_method"></div>
             <div class="ea-field"><label class="ea-label" for="pago-cuenta">Cuenta de salida</label><input class="ea-input" id="pago-cuenta" name="account"></div>
             <div class="ea-field"><label class="ea-label" for="pago-comprobante">Comprobante</label><input class="ea-input" id="pago-comprobante" name="voucher"></div>
@@ -639,7 +638,7 @@
         });
     });
     document.querySelectorAll('input[type="date"]').forEach(input => {
-        if (!input.value && input.id === 'cobro-fecha') {
+        if (!input.value) {
             const now = new Date();
             input.value = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
                 .toISOString().slice(0, 10);
