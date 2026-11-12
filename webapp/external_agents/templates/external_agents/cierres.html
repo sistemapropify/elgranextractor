@@ -1,9 +1,9 @@
 {% extends "external_agents/base.html" %}
 {% load humanize %}
 
-{% block page_title %}Cobros y pagos de comisiones{% endblock %}
-{% block hero_title %}Cobros y pagos de comisiones{% endblock %}
-{% block hero_subtitle %}Controla los abonos del propietario y los pagos a Propify, al agente de captación y al agente comprador usando los cierres reales de Propify.{% endblock %}
+{% block page_title %}Cobros y pagos de comisiones en USD{% endblock %}
+{% block hero_title %}Cobros y pagos de comisiones en USD{% endblock %}
+{% block hero_subtitle %}Cierres de Propify expresados únicamente en dólares. No se convierten monedas ni se incluyen cierres en soles.{% endblock %}
 
 {% block head_actions %}
 <a class="ea-btn" href="{% url 'external_agents:dashboard' %}">Volver al directorio</a>
@@ -257,6 +257,9 @@
     <a class="ea-btn" href="{% url 'external_agents:cierres' %}">Reintentar</a>
 </section>
 {% else %}
+<section class="ea-panel" style="margin-bottom:14px;padding:12px 16px;color:var(--ea-muted);font-size:12px;line-height:1.5;">
+    Solo se incluyen cierres valuados en <strong style="color:#f0f6fc;">USD</strong>. Los cierres en <strong style="color:#f0f6fc;">PEN</strong> quedan fuera de los totales y del selector; sus importes no se convierten.
+</section>
 <section class="ea-finance-grid" aria-label="Resumen de cobros y comisiones">
     {% for item in summary.by_currency %}
     <article class="ea-currency-card">
@@ -286,6 +289,18 @@
                 <span>Pendiente a agentes</span>
                 <strong>{{ item.currency }} {{ item.agents_pending|floatformat:2|intcomma }}</strong>
             </div>
+            <div class="blue">
+                <span>Comisión de brokers</span>
+                <strong>{{ item.currency }} {{ item.broker_commission|floatformat:2|intcomma }}</strong>
+            </div>
+            <div>
+                <span>Pagado a brokers</span>
+                <strong>{{ item.currency }} {{ item.brokers_paid|floatformat:2|intcomma }}</strong>
+            </div>
+            <div class="amber">
+                <span>Pendiente a brokers</span>
+                <strong>{{ item.currency }} {{ item.brokers_pending|floatformat:2|intcomma }}</strong>
+            </div>
             <div>
                 <span>Comisión de Propify</span>
                 <strong>{{ item.currency }} {{ item.propify_commission|floatformat:2|intcomma }}</strong>
@@ -293,6 +308,10 @@
             <div class="green">
                 <span>Pagado a Propify</span>
                 <strong>{{ item.currency }} {{ item.propify_paid|floatformat:2|intcomma }}</strong>
+            </div>
+            <div class="amber">
+                <span>Pendiente a Propify</span>
+                <strong>{{ item.currency }} {{ item.propify_pending|floatformat:2|intcomma }}</strong>
             </div>
         </div>
     </article>

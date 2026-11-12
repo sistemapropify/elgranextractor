@@ -565,17 +565,25 @@ def cierres(request):
             clear_web_propify_session(request)
             query = urlencode({'next': request.get_full_path()})
             return redirect(f'/agentes-externos/login/?{query}')
-    rows = [_normalize_closing(item) for item in (closings or [])]
+    normalized_rows = [_normalize_closing(item) for item in (closings or [])]
+    rows = [
+        row for row in normalized_rows
+        if row.get('currency') == 'USD'
+    ]
     _sync_commission_collections(rows, request)
 
-    collections = list(CommissionCollection.objects.all())
+    collections = list(
+        CommissionCollection.objects.filter(currency_code='USD')
+    )
     payments = list(
         CommissionPayment.objects
+        .filter(currency_code='USD')
         .exclude(status=CommissionPayment.Status.ANNULLED)
         .order_by('-payment_date', '-created_at', '-pk')
     )
     collection_entries = list(
         CommissionCollectionEntry.objects
+        .filter(collection__currency_code='USD')
         .select_related('collection')
         .order_by('-collection_date', '-created_at', '-pk')[:30]
     )
@@ -592,6 +600,7 @@ def cierres(request):
         commission = sum(float(item.amount_to_collect or 0) for item in currency_collections)
         collected = sum(float(item.collected_amount or 0) for item in currency_collections)
         agent_commission = sum(float(item.amount_for_agents or 0) for item in currency_collections)
+        broker_commission = sum(float(item.amount_for_brokers or 0) for item in currency_collections)
         propify_commission = sum(float(item.amount_for_propify or 0) for item in currency_collections)
         agents_paid = sum(
             float(item.amount or 0)
@@ -608,6 +617,12 @@ def cierres(request):
             if item.status == CommissionPayment.Status.PAID
             and item.beneficiary_type == CommissionPayment.BeneficiaryType.PROPIFFY
         )
+        brokers_paid = sum(
+            float(item.amount or 0)
+            for item in currency_payments
+            if item.status == CommissionPayment.Status.PAID
+            and item.beneficiary_type == CommissionPayment.BeneficiaryType.OTHER
+        )
         currency_summaries.append({
             'currency': currency,
             'count': len(currency_collections),
@@ -617,6 +632,9 @@ def cierres(request):
             'agent_commission': agent_commission,
             'agents_paid': agents_paid,
             'agents_pending': max(agent_commission - agents_paid, 0),
+            'broker_commission': broker_commission,
+            'brokers_paid': brokers_paid,
+            'brokers_pending': max(broker_commission - brokers_paid, 0),
             'propify_commission': propify_commission,
             'propify_paid': propify_paid,
             'propify_pending': max(propify_commission - propify_paid, 0),

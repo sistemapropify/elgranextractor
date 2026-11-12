@@ -451,9 +451,16 @@ class ExternalAgentsViewsTests(TestCase):
 
     def test_closing_screen_separates_agents_and_preserves_partial_collections(self):
         self.authenticate_propify()
+        pen_closing = self.closing_payload()[0].copy()
+        pen_closing.update({
+            'id': 43,
+            'property_code': 'PROP000999',
+            'property_title': 'Cierre en soles que no debe mostrarse',
+            'currency_code': 'PEN',
+        })
         with patch(
             'external_agents.views._propify_closings',
-            return_value=(self.closing_payload(), None),
+            return_value=([*self.closing_payload(), pen_closing], None),
         ):
             response = self.client.get(reverse('external_agents:cierres'))
         self.assertEqual(response.status_code, 200)
@@ -463,6 +470,9 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'USD 1,554.00')
         self.assertContains(response, 'USD 1,243.20')
         self.assertNotContains(response, 'Pagos a agentes')
+        self.assertNotContains(response, 'PROP000999')
+        self.assertNotContains(response, 'Cierre en soles que no debe mostrarse')
+        self.assertEqual(CommissionCollection.objects.count(), 1)
 
         collection = CommissionCollection.objects.get(operation_code='PROP000261')
         self.assertEqual(float(collection.amount_to_collect), 1554)
