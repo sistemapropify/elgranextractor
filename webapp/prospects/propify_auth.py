@@ -17,6 +17,7 @@ from .models import MobileProspectUser
 
 WEB_TOKEN_SESSION_KEY = 'prospects_propify_access_token'
 WEB_PROFILE_SESSION_KEY = 'prospects_propify_profile'
+WEB_REFRESH_SESSION_KEY = 'prospects_propify_refresh_token'
 
 
 class PropifyAuthError(Exception):

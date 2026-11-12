@@ -17,12 +17,14 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from prospects.propify_auth import (
+    WEB_REFRESH_SESSION_KEY,
     WEB_PROFILE_SESSION_KEY,
     WEB_TOKEN_SESSION_KEY,
     PropifyAuthError,
     authenticate_propify_credentials,
     clear_web_propify_session,
     get_web_propify_principal,
+    refresh_propify_session,
 )
 
 from .forms import AttachmentForm, DocumentTypeForm, ExternalAgentForm
@@ -62,8 +64,16 @@ def _propify_closings(token):
         except requests.RequestException:
             ultimo_error = 'Propify no respondió al cargar los cierres.'
             continue
-        if response.status_code == 401:
-            return None, {'status': 401, 'message': 'Tu sesión de Propify venció.'}
+        if response.status_code in (401, 403):
+            try:
+                detail = response.json().get('detail')
+            except ValueError:
+                detail = None
+            message = str(detail or 'Propify rechazó el acceso a los cierres.')
+            return None, {
+                'status': response.status_code,
+                'message': message,
+            }
         if response.status_code == 404:
             ultimo_error = 'Propify no expone el listado de cierres para este usuario.'
             continue
@@ -385,6 +395,9 @@ def login_view(request):
             else:
                 request.session[WEB_TOKEN_SESSION_KEY] = principal.token
                 request.session[WEB_PROFILE_SESSION_KEY] = principal.profile
+                refresh_token = str(_.get('refresh') or '').strip()
+                if refresh_token:
+                    request.session[WEB_REFRESH_SESSION_KEY] = refresh_token
                 request.session.set_expiry(60 * 60 * 24 * 30)
                 return redirect(next_url)
 
@@ -405,6 +418,23 @@ def logout_view(request):
 def cierres(request):
     token = str(request.session.get(WEB_TOKEN_SESSION_KEY, '')).strip()
     closings, error = _propify_closings(token)
+    if error and error.get('status') in (401, 403):
+        refresh_token = str(request.session.get(WEB_REFRESH_SESSION_KEY, '')).strip()
+        if refresh_token:
+            try:
+                refreshed = refresh_propify_session(refresh_token)
+            except PropifyAuthError:
+                clear_web_propify_session(request)
+                query = urlencode({'next': request.get_full_path()})
+                return redirect(f'/agentes-externos/login/?{query}')
+            request.session[WEB_TOKEN_SESSION_KEY] = refreshed['access']
+            if refreshed.get('refresh'):
+                request.session[WEB_REFRESH_SESSION_KEY] = refreshed['refresh']
+            closings, error = _propify_closings(refreshed['access'])
+        else:
+            clear_web_propify_session(request)
+            query = urlencode({'next': request.get_full_path()})
+            return redirect(f'/agentes-externos/login/?{query}')
     rows = [_normalize_closing(item) for item in (closings or [])]
     _sync_commission_collections(rows, request)
 

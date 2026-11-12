@@ -497,9 +497,6 @@
         <a href="{% url 'external_agents:agent_create' %}" class="ea-nav-link {% if '/agentes-externos/nuevo/' in request.path %}active{% endif %}">
             <span aria-hidden="true">＋</span> Registrar agente
         </a>
-        <a href="{% url 'external_agents:cierres' %}" class="ea-nav-link {% if '/agentes-externos/cierres/' in request.path %}active{% endif %}">
-            <span aria-hidden="true">◫</span> Cierres
-        </a>
         <a href="{% url 'external_agents:configuration' %}" class="ea-nav-link {% if '/agentes-externos/configuracion/' in request.path %}active{% endif %}">
             <span aria-hidden="true">⚙</span> Tipos de documento
         </a>
