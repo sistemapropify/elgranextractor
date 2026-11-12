@@ -1,6 +1,7 @@
+import calendar
 import mimetypes
 import re
-from datetime import date
+from datetime import date, timedelta
 from functools import wraps
 from pathlib import Path
 from urllib.parse import quote, urlencode
@@ -36,6 +37,7 @@ from .models import (
     DocumentType,
     ExternalAgent,
     ExternalAgentAttachment,
+    ServicePayment,
 )
 
 
@@ -936,6 +938,185 @@ def payment_add(request):
     return _redirect_cierres(collection.deal_type, 'pagos')
 
 
+def _add_months(value, months):
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def _next_service_due_date(value, recurrence):
+    months = {
+        ServicePayment.Recurrence.MONTHLY: 1,
+        ServicePayment.Recurrence.BIMONTHLY: 2,
+        ServicePayment.Recurrence.QUARTERLY: 3,
+        ServicePayment.Recurrence.ANNUAL: 12,
+    }.get(recurrence)
+    return _add_months(value, months) if months else None
+
+
+@never_cache
+@external_agent_access_required
+def service_payments(request):
+    query = str(request.GET.get('q') or '').strip()
+    status_filter = str(request.GET.get('estado') or 'pendientes').strip()
+    category_filter = str(request.GET.get('categoria') or '').strip()
+    payments = ServicePayment.objects.all()
+    if query:
+        payments = payments.filter(
+            Q(concept__icontains=query)
+            | Q(provider__icontains=query)
+            | Q(reference__icontains=query)
+            | Q(notes__icontains=query)
+        )
+    if category_filter in ServicePayment.Category.values:
+        payments = payments.filter(category=category_filter)
+    today = timezone.localdate()
+    if status_filter == 'pagados':
+        payments = payments.filter(status=ServicePayment.Status.PAID)
+    elif status_filter == 'vencidos':
+        payments = payments.filter(
+            status=ServicePayment.Status.PENDING,
+            due_date__lt=today,
+        )
+    elif status_filter == 'todos':
+        pass
+    else:
+        payments = payments.filter(status=ServicePayment.Status.PENDING)
+
+    rows = []
+    for payment in payments:
+        if payment.status == ServicePayment.Status.PAID:
+            display_status = 'Pagado'
+            status_class = 'green'
+        elif payment.due_date < today:
+            display_status = 'Vencido'
+            status_class = 'red'
+        elif payment.due_date == today:
+            display_status = 'Vence hoy'
+            status_class = 'amber'
+        else:
+            display_status = 'Pendiente'
+            status_class = 'amber'
+        alarm_date = payment.due_date - timedelta(
+            days=payment.reminder_days_before
+        )
+        rows.append({
+            'payment': payment,
+            'display_status': display_status,
+            'status_class': status_class,
+            'alarm_date': alarm_date,
+            'alarm_active': (
+                payment.status == ServicePayment.Status.PENDING
+                and alarm_date <= today
+            ),
+        })
+
+    pending = ServicePayment.objects.filter(status=ServicePayment.Status.PENDING)
+    summary = {
+        'pending': pending.count(),
+        'due_today': pending.filter(due_date=today).count(),
+        'overdue': pending.filter(due_date__lt=today).count(),
+        'paid_month': ServicePayment.objects.filter(
+            status=ServicePayment.Status.PAID,
+            payment_date__year=today.year,
+            payment_date__month=today.month,
+        ).count(),
+    }
+    return render(request, 'external_agents/pagos_servicios.html', {
+        'rows': rows,
+        'summary': summary,
+        'query': query,
+        'status_filter': status_filter,
+        'category_filter': category_filter,
+        'categories': ServicePayment.Category.choices,
+    })
+
+
+@never_cache
+@external_agent_access_required
+def service_payment_add(request):
+    if request.method != 'POST':
+        return redirect('external_agents:service_payments')
+    valid_categories = set(ServicePayment.Category.values)
+    valid_recurrences = set(ServicePayment.Recurrence.values)
+    concept = str(request.POST.get('concept') or '').strip()
+    category = str(request.POST.get('category') or '').strip()
+    recurrence = str(request.POST.get('recurrence') or '').strip()
+    due_date = _parse_date_input(request.POST.get('due_date'))
+    if (
+        not concept
+        or category not in valid_categories
+        or recurrence not in valid_recurrences
+        or due_date is None
+    ):
+        messages.error(request, 'Completa el concepto, categoría, periodicidad y vencimiento.')
+        return redirect('external_agents:service_payments')
+    ServicePayment.objects.create(
+        concept=concept,
+        provider=str(request.POST.get('provider') or '').strip(),
+        reference=str(request.POST.get('reference') or '').strip(),
+        category=category,
+        recurrence=recurrence,
+        currency_code=(
+            str(request.POST.get('currency_code') or '').strip().upper()
+            or 'PEN'
+        ),
+        estimated_amount=_first_number(request.POST.get('estimated_amount')),
+        due_date=due_date,
+        reminder_days_before=max(
+            int(_first_number(request.POST.get('reminder_days_before'), 3)),
+            0,
+        ),
+        notes=str(request.POST.get('notes') or '').strip(),
+        created_by_username=_username(request),
+        updated_by_username=_username(request),
+    )
+    messages.success(request, 'Pago programado correctamente.')
+    return redirect('external_agents:service_payments')
+
+
+@never_cache
+@external_agent_access_required
+def service_payment_pay(request, pk):
+    payment = get_object_or_404(ServicePayment, pk=pk)
+    if request.method != 'POST':
+        return redirect('external_agents:service_payments')
+    payment.paid_amount = (
+        _first_number(request.POST.get('paid_amount'))
+        or _first_number(payment.estimated_amount)
+    )
+    payment.payment_date = (
+        _parse_date_input(request.POST.get('payment_date'))
+        or timezone.localdate()
+    )
+    payment.status = ServicePayment.Status.PAID
+    payment.payment_method = str(request.POST.get('payment_method') or '').strip()
+    payment.account = str(request.POST.get('account') or '').strip()
+    payment.voucher = str(request.POST.get('voucher') or '').strip()
+    payment.notes = str(request.POST.get('notes') or payment.notes).strip()
+    payment.updated_by_username = _username(request)
+    payment.save()
+    next_due_date = _next_service_due_date(payment.due_date, payment.recurrence)
+    if next_due_date:
+        ServicePayment.objects.create(
+            concept=payment.concept,
+            provider=payment.provider,
+            reference=payment.reference,
+            category=payment.category,
+            recurrence=payment.recurrence,
+            currency_code=payment.currency_code,
+            estimated_amount=payment.estimated_amount,
+            due_date=next_due_date,
+            reminder_days_before=payment.reminder_days_before,
+            created_by_username=_username(request),
+            updated_by_username=_username(request),
+        )
+    messages.success(request, 'Pago registrado. Estado actualizado a Pagado.')
+    return redirect('external_agents:service_payments')
+
+
 @never_cache
 @external_agent_access_required
 def dashboard(request):
@@ -962,10 +1143,10 @@ def dashboard(request):
             | Q(mobile__icontains=query)
             | Q(observations__icontains=query)
         )
-    if status == 'activos':
-        agents = agents.filter(is_active=True)
-    elif status == 'inactivos':
+    if status == 'inactivos':
         agents = agents.filter(is_active=False)
+    elif status != 'todos':
+        agents = agents.filter(is_active=True)
     if document_type.isdigit():
         agents = agents.filter(personal_document_type_id=int(document_type))
     if level in ExternalAgent.Level.values:
@@ -1100,6 +1281,49 @@ def agent_detail(request, pk):
             empty_attachment_form.fields['document_type'].queryset.exists()
         ),
     })
+
+
+@never_cache
+@external_agent_access_required
+def agent_toggle_active(request, pk):
+    agent = get_object_or_404(ExternalAgent, pk=pk)
+    if request.method == 'POST':
+        agent.is_active = not agent.is_active
+        agent.updated_by_username = _username(request)
+        agent.save(update_fields=['is_active', 'updated_by_username', 'updated_at'])
+        state = 'reactivado' if agent.is_active else 'desactivado'
+        messages.success(
+            request,
+            f'Agente {state}. '
+            + (
+                'Vuelve a aparecer en el directorio.'
+                if agent.is_active
+                else 'Se ocultó del directorio, pero se conservaron sus datos y documentos.'
+            ),
+        )
+    return redirect('external_agents:agent_detail', pk=pk)
+
+
+@never_cache
+@external_agent_access_required
+def agent_delete(request, pk):
+    agent = get_object_or_404(ExternalAgent, pk=pk)
+    if request.method == 'POST':
+        display_name = agent.display_name
+        attachments = list(agent.attachments.all())
+        with transaction.atomic():
+            for attachment in attachments:
+                try:
+                    attachment.file.delete(save=False)
+                except Exception:
+                    # La ficha se elimina aunque Azure no pueda borrar un archivo.
+                    pass
+            agent.delete()
+        messages.success(
+            request,
+            f'Registro de {display_name} eliminado definitivamente.',
+        )
+    return redirect('external_agents:dashboard')
 
 
 @external_agent_access_required

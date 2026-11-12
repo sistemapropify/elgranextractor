@@ -4,6 +4,7 @@ from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from prospects.propify_auth import WEB_PROFILE_SESSION_KEY, WEB_TOKEN_SESSION_KEY
 
@@ -15,6 +16,7 @@ from .models import (
     DocumentType,
     ExternalAgent,
     ExternalAgentAttachment,
+    ServicePayment,
 )
 from .views import _normalize_closing
 
@@ -74,6 +76,75 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'class="ea-agent-card"')
         self.assertContains(response, 'vista=matriz')
         self.assertIn('no-store', response['Cache-Control'])
+        self.assertContains(response, 'Gestión de Agentes')
+        self.assertContains(response, 'Agregar nuevo agente')
+        self.assertContains(response, 'Gestión Financiera')
+        self.assertContains(response, 'Comisiones por Cierres')
+        self.assertNotContains(response, 'Dashboard General')
+
+    def test_agent_can_be_deactivated_without_deleting_history(self):
+        self.authenticate_propify()
+        attachment = ExternalAgentAttachment.objects.create(
+            agent=self.agent,
+            document_type=self.attachment_type,
+            file='agentes-externos/historial.pdf',
+            original_name='historial.pdf',
+        )
+        response = self.client.post(
+            reverse(
+                'external_agents:agent_toggle_active',
+                kwargs={'pk': self.agent.pk},
+            )
+        )
+        self.assertRedirects(
+            response,
+            reverse('external_agents:agent_detail', kwargs={'pk': self.agent.pk}),
+        )
+        self.agent.refresh_from_db()
+        self.assertFalse(self.agent.is_active)
+        self.assertTrue(
+            ExternalAgentAttachment.objects.filter(pk=attachment.pk).exists()
+        )
+        dashboard = self.client.get(reverse('external_agents:dashboard'))
+        self.assertNotContains(dashboard, 'Ana Quispe Rojas')
+        inactive = self.client.get(
+            reverse('external_agents:dashboard'),
+            {'estado': 'inactivos'},
+        )
+        self.assertContains(inactive, 'Ana Quispe Rojas')
+
+        reactivate = self.client.post(
+            reverse(
+                'external_agents:agent_toggle_active',
+                kwargs={'pk': self.agent.pk},
+            )
+        )
+        self.assertEqual(reactivate.status_code, 302)
+        self.agent.refresh_from_db()
+        self.assertTrue(self.agent.is_active)
+
+    def test_agent_registration_can_be_deleted_permanently(self):
+        self.authenticate_propify()
+        attachment = ExternalAgentAttachment.objects.create(
+            agent=self.agent,
+            document_type=self.attachment_type,
+            file='agentes-externos/error.pdf',
+            original_name='error.pdf',
+        )
+        storage = ExternalAgentAttachment._meta.get_field('file').storage
+        with patch.object(storage, 'delete') as storage_delete:
+            response = self.client.post(
+                reverse(
+                    'external_agents:agent_delete',
+                    kwargs={'pk': self.agent.pk},
+                )
+            )
+        self.assertRedirects(response, reverse('external_agents:dashboard'))
+        self.assertFalse(ExternalAgent.objects.filter(pk=self.agent.pk).exists())
+        self.assertFalse(
+            ExternalAgentAttachment.objects.filter(pk=attachment.pk).exists()
+        )
+        storage_delete.assert_called_once_with('agentes-externos/error.pdf')
 
     def test_dashboard_renders_excel_style_matrix(self):
         self.authenticate_propify()
@@ -105,6 +176,72 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'Ana Quispe Rojas')
         self.assertContains(response, 'Disponible para proyectos en Arequipa.')
         self.assertContains(response, 'DNI y certificado.pdf')
+
+    def test_service_payments_dashboard_renders_excel_grid_and_alarm(self):
+        self.authenticate_propify()
+        today = timezone.localdate()
+        ServicePayment.objects.create(
+            concept='Recibo de luz',
+            provider='Seal',
+            reference='SU-001',
+            category=ServicePayment.Category.ELECTRICITY,
+            recurrence=ServicePayment.Recurrence.MONTHLY,
+            currency_code='PEN',
+            estimated_amount='320.00',
+            due_date=today,
+            reminder_days_before=3,
+        )
+        response = self.client.get(reverse('external_agents:service_payments'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Pagos de Servicios')
+        self.assertContains(response, 'class="sp-grid"')
+        self.assertContains(response, 'Recibo de luz')
+        self.assertContains(response, 'Vence hoy')
+        self.assertContains(response, '3 días antes')
+        self.assertContains(response, 'id="service-add-modal"')
+        self.assertContains(response, 'id="service-pay-modal"')
+
+    def test_service_payment_can_be_scheduled_and_paid(self):
+        self.authenticate_propify()
+        today = timezone.localdate()
+        create_response = self.client.post(
+            reverse('external_agents:service_payment_add'),
+            {
+                'concept': 'Internet oficina',
+                'provider': 'Movistar',
+                'reference': 'INT-001',
+                'category': ServicePayment.Category.INTERNET,
+                'recurrence': ServicePayment.Recurrence.MONTHLY,
+                'currency_code': 'PEN',
+                'estimated_amount': '180.00',
+                'due_date': today.isoformat(),
+                'reminder_days_before': '3',
+            },
+        )
+        self.assertEqual(create_response.status_code, 302)
+        payment = ServicePayment.objects.get(concept='Internet oficina')
+        self.assertEqual(payment.status, ServicePayment.Status.PENDING)
+
+        pay_response = self.client.post(
+            reverse(
+                'external_agents:service_payment_pay',
+                kwargs={'pk': payment.pk},
+            ),
+            {
+                'payment_date': today.isoformat(),
+                'paid_amount': '185.50',
+                'payment_method': 'Transferencia',
+                'voucher': 'PAGO-001',
+            },
+        )
+        self.assertEqual(pay_response.status_code, 302)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, ServicePayment.Status.PAID)
+        self.assertEqual(str(payment.payment_date), today.isoformat())
+        self.assertEqual(float(payment.paid_amount), 185.5)
+        next_payment = ServicePayment.objects.exclude(pk=payment.pk).get()
+        self.assertEqual(next_payment.status, ServicePayment.Status.PENDING)
+        self.assertGreater(next_payment.due_date, today)
 
     def test_all_module_pages_render(self):
         login_response = self.client.get(reverse('external_agents:login'))
@@ -339,6 +476,8 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'id="eaAttachmentPreviewDialog"')
         self.assertContains(response, 'id="eaAttachmentPreviewOpen"')
         self.assertContains(response, 'class="ea-file-preview-button"')
+        self.assertContains(response, 'Marcar inactivo')
+        self.assertContains(response, 'Eliminar registro')
         self.assertContains(response, 'Disponible para proyectos en Arequipa.')
         self.assertIn('no-store', response['Cache-Control'])
 

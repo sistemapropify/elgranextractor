@@ -1,0 +1,383 @@
+{% extends "external_agents/base.html" %}
+{% load humanize %}
+
+{% block page_title %}Pagos de Servicios{% endblock %}
+{% block hero_title %}Pagos de Servicios{% endblock %}
+{% block hero_subtitle %}Programa vencimientos, alarmas y pagos operativos de la oficina.{% endblock %}
+
+{% block head_actions %}
+<a class="ea-btn" href="{% url 'external_agents:service_payments' %}">Actualizar</a>
+<button class="ea-btn ea-btn-blue" type="button" data-open-modal="service-add-modal">＋ Agregar pago</button>
+{% endblock %}
+
+{% block extra_module_css %}
+<style>
+    .sp-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 9px;
+        margin-bottom: 14px;
+    }
+    .sp-kpi {
+        padding: 11px 13px;
+        border: 1px solid var(--ea-border);
+        border-radius: 9px;
+        background: var(--ea-panel);
+    }
+    .sp-kpi span {
+        display: block;
+        color: var(--ea-muted);
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: .4px;
+        text-transform: uppercase;
+    }
+    .sp-kpi strong {
+        display: block;
+        margin-top: 4px;
+        color: #f0f6fc;
+        font-size: 22px;
+    }
+    .sp-kpi.amber strong { color: #e3b341; }
+    .sp-kpi.red strong { color: #ff6b64; }
+    .sp-kpi.green strong { color: #7ee787; }
+    .sp-filters {
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) 170px 190px auto;
+        gap: 9px;
+        align-items: end;
+        margin-bottom: 14px;
+        padding: 13px;
+        border: 1px solid var(--ea-border);
+        border-radius: 10px;
+        background: var(--ea-panel);
+    }
+    .sp-grid-wrap {
+        max-height: calc(100vh - 330px);
+        overflow: auto;
+        border: 1px solid var(--ea-border);
+        border-radius: 10px;
+        background: var(--ea-panel);
+    }
+    .sp-grid {
+        width: 100%;
+        min-width: 1450px;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 11px;
+    }
+    .sp-grid th {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        padding: 8px 9px;
+        border-right: 1px solid var(--ea-border);
+        border-bottom: 1px solid #47515b;
+        background: #20262e;
+        color: #b7c2cc;
+        text-align: left;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: .3px;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .sp-grid td {
+        padding: 8px 9px;
+        border-right: 1px solid rgba(48,54,61,.72);
+        border-bottom: 1px solid var(--ea-border);
+        color: #c9d1d9;
+        vertical-align: middle;
+    }
+    .sp-grid tbody tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+    .sp-grid tbody tr:hover td { background: rgba(88,166,255,.07); }
+    .sp-grid .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .sp-grid .concept { min-width: 190px; color: #f0f6fc; font-weight: 700; }
+    .sp-grid .alarm { min-width: 145px; }
+    .sp-grid .actions-cell {
+        position: sticky;
+        right: 0;
+        z-index: 1;
+        min-width: 64px;
+        border-left: 1px solid #47515b;
+        background: #171d24;
+        box-shadow: -8px 0 14px rgba(1,4,9,.24);
+    }
+    .sp-grid th.actions-cell { z-index: 4; background: #20262e; }
+    .ea-badge.red {
+        border-color: rgba(248,81,73,.42);
+        background: rgba(248,81,73,.12);
+        color: #ff8f87;
+    }
+    .sp-pay {
+        width: 100%;
+        padding: 4px 5px;
+        border: 1px solid #da3633;
+        border-radius: 5px;
+        background: #b62324;
+        color: #fff;
+        font: inherit;
+        font-size: 9px;
+        font-weight: 850;
+        cursor: pointer;
+    }
+    .sp-alarm-active {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: #ff8f87;
+        font-weight: 750;
+    }
+    .sp-empty {
+        padding: 42px 20px;
+        border: 1px solid var(--ea-border);
+        border-radius: 10px;
+        background: var(--ea-panel);
+        color: var(--ea-muted);
+        text-align: center;
+    }
+    .sp-modal {
+        width: min(720px, calc(100vw - 28px));
+        max-height: calc(100vh - 30px);
+        padding: 0;
+        overflow: auto;
+        border: 1px solid #44515f;
+        border-radius: 13px;
+        background: var(--ea-panel);
+        color: var(--ea-text);
+        box-shadow: 0 24px 80px rgba(0,0,0,.58);
+    }
+    .sp-modal::backdrop { background: rgba(1,4,9,.76); backdrop-filter: blur(3px); }
+    .sp-modal-head {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--ea-border);
+        background: var(--ea-panel-raised);
+    }
+    .sp-modal-head h2 { margin: 0; color: #f0f6fc; font-size: 17px; }
+    .sp-modal-head p { margin: 4px 0 0; color: var(--ea-muted); font-size: 11px; }
+    .sp-close {
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--ea-border);
+        border-radius: 7px;
+        background: var(--ea-panel);
+        color: var(--ea-text);
+        font-size: 19px;
+        cursor: pointer;
+    }
+    .sp-form {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 11px;
+        padding: 16px 18px 18px;
+    }
+    .sp-form .wide { grid-column: 1 / -1; }
+    .sp-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 7px;
+        grid-column: 1 / -1;
+        padding-top: 5px;
+    }
+    @media (max-width: 900px) {
+        .sp-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+        .sp-filters { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 620px) {
+        .sp-filters, .sp-form { grid-template-columns: 1fr; }
+        .sp-form .wide, .sp-actions { grid-column: auto; }
+    }
+</style>
+{% endblock %}
+
+{% block module_content %}
+<section class="sp-kpis" aria-label="Resumen de pagos">
+    <div class="sp-kpi amber"><span>Pendientes</span><strong>{{ summary.pending }}</strong></div>
+    <div class="sp-kpi amber"><span>Vencen hoy</span><strong>{{ summary.due_today }}</strong></div>
+    <div class="sp-kpi red"><span>Vencidos</span><strong>{{ summary.overdue }}</strong></div>
+    <div class="sp-kpi green"><span>Pagados este mes</span><strong>{{ summary.paid_month }}</strong></div>
+</section>
+
+<form class="sp-filters" method="get">
+    <div class="ea-field">
+        <label class="ea-label" for="sp-q">Buscar</label>
+        <input class="ea-input" id="sp-q" type="search" name="q" value="{{ query }}" placeholder="Concepto, proveedor o referencia">
+    </div>
+    <div class="ea-field">
+        <label class="ea-label" for="sp-status">Estado</label>
+        <select class="ea-select" id="sp-status" name="estado">
+            <option value="pendientes" {% if status_filter == 'pendientes' %}selected{% endif %}>Pendientes</option>
+            <option value="vencidos" {% if status_filter == 'vencidos' %}selected{% endif %}>Vencidos</option>
+            <option value="pagados" {% if status_filter == 'pagados' %}selected{% endif %}>Pagados</option>
+            <option value="todos" {% if status_filter == 'todos' %}selected{% endif %}>Todos</option>
+        </select>
+    </div>
+    <div class="ea-field">
+        <label class="ea-label" for="sp-category">Categoría</label>
+        <select class="ea-select" id="sp-category" name="categoria">
+            <option value="">Todas</option>
+            {% for value, label in categories %}
+            <option value="{{ value }}" {% if category_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button class="ea-btn ea-btn-blue" type="submit">Aplicar</button>
+</form>
+
+{% if rows %}
+<div class="sp-grid-wrap">
+    <table class="sp-grid">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Concepto</th>
+                <th>Proveedor</th>
+                <th>Referencia</th>
+                <th>Categoría</th>
+                <th>Periodicidad</th>
+                <th>Vencimiento</th>
+                <th>Alarma</th>
+                <th>Moneda</th>
+                <th class="num">Monto estimado</th>
+                <th>Fecha de pago</th>
+                <th class="num">Monto pagado</th>
+                <th>Estado</th>
+                <th class="actions-cell">Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            {% with payment=row.payment %}
+            <tr>
+                <td class="num">{{ forloop.counter }}</td>
+                <td class="concept">{{ payment.concept }}</td>
+                <td>{{ payment.provider|default:"—" }}</td>
+                <td>{{ payment.reference|default:"—" }}</td>
+                <td>{{ payment.get_category_display }}</td>
+                <td>{{ payment.get_recurrence_display }}</td>
+                <td>{{ payment.due_date|date:"d/m/Y" }}</td>
+                <td class="alarm">
+                    <span class="{% if row.alarm_active %}sp-alarm-active{% endif %}">
+                        {% if row.alarm_active %}🔔{% endif %}
+                        {{ payment.reminder_days_before }} día{{ payment.reminder_days_before|pluralize }} antes
+                    </span>
+                    <small>{{ row.alarm_date|date:"d/m/Y" }}</small>
+                </td>
+                <td>{{ payment.currency_code }}</td>
+                <td class="num">{{ payment.estimated_amount|floatformat:0|intcomma }}</td>
+                <td>{% if payment.payment_date %}{{ payment.payment_date|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+                <td class="num">{% if payment.paid_amount %}{{ payment.paid_amount|floatformat:0|intcomma }}{% else %}—{% endif %}</td>
+                <td><span class="ea-badge {{ row.status_class }}">{{ row.display_status }}</span></td>
+                <td class="actions-cell">
+                    {% if payment.status == 'pendiente' %}
+                    <button
+                        class="sp-pay"
+                        type="button"
+                        data-pay-payment="{{ payment.pk }}"
+                        data-pay-concept="{{ payment.concept }}"
+                        data-pay-amount="{{ payment.estimated_amount|floatformat:2 }}"
+                        data-pay-currency="{{ payment.currency_code }}"
+                        data-pay-url="{% url 'external_agents:service_payment_pay' pk=payment.pk %}"
+                    >Pagar</button>
+                    {% else %}
+                    <span class="ea-badge green">Pagado</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endwith %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="sp-empty">
+    <strong>No hay pagos para este filtro.</strong>
+    <p>Usa “Agregar pago” para programar el primer servicio.</p>
+</div>
+{% endif %}
+
+<dialog class="sp-modal" id="service-add-modal">
+    <form method="post" action="{% url 'external_agents:service_payment_add' %}">
+        {% csrf_token %}
+        <header class="sp-modal-head">
+            <div>
+                <h2>Agregar pago de servicio</h2>
+                <p>Programa el vencimiento y la anticipación de la alarma.</p>
+            </div>
+            <button class="sp-close" type="button" data-close-modal>×</button>
+        </header>
+        <div class="sp-form">
+            <div class="ea-field wide"><label class="ea-label">Concepto</label><input class="ea-input" name="concept" required placeholder="Ej. Recibo de luz"></div>
+            <div class="ea-field"><label class="ea-label">Proveedor</label><input class="ea-input" name="provider" placeholder="Ej. Seal"></div>
+            <div class="ea-field"><label class="ea-label">Referencia</label><input class="ea-input" name="reference" placeholder="Nro. contrato, suministro o celular"></div>
+            <div class="ea-field"><label class="ea-label">Categoría</label><select class="ea-select" name="category" required>{% for value,label in categories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+            <div class="ea-field"><label class="ea-label">Periodicidad</label><select class="ea-select" name="recurrence"><option value="unico">Único</option><option value="mensual">Mensual</option><option value="bimestral">Bimestral</option><option value="trimestral">Trimestral</option><option value="anual">Anual</option></select></div>
+            <div class="ea-field"><label class="ea-label">Moneda</label><select class="ea-select" name="currency_code"><option value="PEN">PEN</option><option value="USD">USD</option></select></div>
+            <div class="ea-field"><label class="ea-label">Monto estimado</label><input class="ea-input" name="estimated_amount" type="number" min="0" step="0.01" required></div>
+            <div class="ea-field"><label class="ea-label">Vencimiento</label><input class="ea-input" name="due_date" type="date" required></div>
+            <div class="ea-field"><label class="ea-label">Alarma</label><select class="ea-select" name="reminder_days_before"><option value="7">7 días antes</option><option value="3" selected>3 días antes</option><option value="1">1 día antes</option><option value="0">El mismo día</option></select></div>
+            <div class="ea-field wide"><label class="ea-label">Observaciones</label><input class="ea-input" name="notes"></div>
+            <div class="sp-actions"><button class="ea-btn" type="button" data-close-modal>Cancelar</button><button class="ea-btn ea-btn-blue" type="submit">Guardar pago programado</button></div>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="sp-modal" id="service-pay-modal">
+    <form method="post" id="service-pay-form">
+        {% csrf_token %}
+        <header class="sp-modal-head">
+            <div>
+                <h2>Registrar pago</h2>
+                <p id="service-pay-caption">Completa los datos del pago realizado.</p>
+            </div>
+            <button class="sp-close" type="button" data-close-modal>×</button>
+        </header>
+        <div class="sp-form">
+            <div class="ea-field"><label class="ea-label">Fecha de pago</label><input class="ea-input" id="service-payment-date" name="payment_date" type="date" required></div>
+            <div class="ea-field"><label class="ea-label">Monto pagado</label><input class="ea-input" id="service-paid-amount" name="paid_amount" type="number" min="0" step="0.01" required></div>
+            <div class="ea-field"><label class="ea-label">Medio de pago</label><input class="ea-input" name="payment_method" placeholder="Transferencia, efectivo, tarjeta"></div>
+            <div class="ea-field"><label class="ea-label">Cuenta de salida</label><input class="ea-input" name="account"></div>
+            <div class="ea-field"><label class="ea-label">Comprobante</label><input class="ea-input" name="voucher"></div>
+            <div class="ea-field"><label class="ea-label">Observaciones</label><input class="ea-input" name="notes"></div>
+            <div class="sp-actions"><button class="ea-btn" type="button" data-close-modal>Cancelar</button><button class="ea-btn ea-btn-blue" type="submit">Confirmar pago</button></div>
+        </div>
+    </form>
+</dialog>
+
+<script>
+(function () {
+    document.querySelectorAll('[data-open-modal]').forEach(button => {
+        button.addEventListener('click', () => {
+            document.getElementById(button.dataset.openModal)?.showModal();
+        });
+    });
+    document.querySelectorAll('[data-close-modal]').forEach(button => {
+        button.addEventListener('click', () => button.closest('dialog')?.close());
+    });
+    document.querySelectorAll('dialog').forEach(dialog => {
+        dialog.addEventListener('click', event => {
+            if (event.target === dialog) dialog.close();
+        });
+    });
+    document.querySelectorAll('[data-pay-payment]').forEach(button => {
+        button.addEventListener('click', () => {
+            const form = document.getElementById('service-pay-form');
+            form.action = button.dataset.payUrl;
+            document.getElementById('service-pay-caption').textContent =
+                `${button.dataset.payConcept} · ${button.dataset.payCurrency}`;
+            document.getElementById('service-paid-amount').value =
+                button.dataset.payAmount;
+            document.getElementById('service-payment-date').value =
+                new Date().toISOString().slice(0, 10);
+            document.getElementById('service-pay-modal').showModal();
+        });
+    });
+})();
+</script>
+{% endblock %}

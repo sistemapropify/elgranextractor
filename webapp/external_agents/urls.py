@@ -11,6 +11,9 @@ urlpatterns = [
     path('cierres/', views.cierres, name='cierres'),
     path('cierres/cobrar/', views.collection_add, name='collection_add'),
     path('cierres/pagar/', views.payment_add, name='payment_add'),
+    path('pagos-servicios/', views.service_payments, name='service_payments'),
+    path('pagos-servicios/nuevo/', views.service_payment_add, name='service_payment_add'),
+    path('pagos-servicios/<int:pk>/pagar/', views.service_payment_pay, name='service_payment_pay'),
     path('nuevo/', views.agent_create, name='agent_create'),
     path('configuracion/', views.configuration, name='configuration'),
     path(
@@ -30,6 +33,8 @@ urlpatterns = [
     ),
     path('<int:pk>/', views.agent_detail, name='agent_detail'),
     path('<int:pk>/editar/', views.agent_edit, name='agent_edit'),
+    path('<int:pk>/estado/', views.agent_toggle_active, name='agent_toggle_active'),
+    path('<int:pk>/eliminar/', views.agent_delete, name='agent_delete'),
     path(
         '<int:pk>/adjuntos/',
         views.attachment_upload,

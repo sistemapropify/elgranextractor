@@ -7,6 +7,16 @@
 {% block head_actions %}
 <a class="ea-btn" href="{% url 'external_agents:dashboard' %}">Volver al directorio</a>
 <a class="ea-btn ea-btn-blue" href="{% url 'external_agents:agent_edit' pk=agent.pk %}">Editar datos</a>
+<form class="ea-inline-form" method="post" action="{% url 'external_agents:agent_toggle_active' pk=agent.pk %}">
+    {% csrf_token %}
+    <button class="ea-btn" type="submit">
+        {% if agent.is_active %}Marcar inactivo{% else %}Reactivar agente{% endif %}
+    </button>
+</form>
+<form class="ea-inline-form" method="post" action="{% url 'external_agents:agent_delete' pk=agent.pk %}" onsubmit="return confirm('¿Eliminar definitivamente este registro y sus documentos? Esta acción no se puede deshacer.');">
+    {% csrf_token %}
+    <button class="ea-btn ea-btn-danger" type="submit">Eliminar registro</button>
+</form>
 {% endblock %}
 
 {% block extra_module_css %}

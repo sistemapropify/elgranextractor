@@ -301,7 +301,7 @@
 
 {% block module_content %}
 <section class="ea-stats" aria-label="Resumen de agentes">
-    <a class="ea-stat" href="{% url 'external_agents:dashboard' %}">
+    <a class="ea-stat" href="{% url 'external_agents:dashboard' %}?estado=todos">
         <strong>{{ stats.total }}</strong>
         <span>Agentes registrados</span>
     </a>
@@ -327,9 +327,9 @@
     <div class="ea-field">
         <label class="ea-label" for="ea-status">Estado</label>
         <select class="ea-select" id="ea-status" name="estado">
-            <option value="">Todos</option>
-            <option value="activos" {% if status_filter == 'activos' %}selected{% endif %}>Activos</option>
+            <option value="activos" {% if status_filter == 'activos' or not status_filter %}selected{% endif %}>Activos</option>
             <option value="inactivos" {% if status_filter == 'inactivos' %}selected{% endif %}>Inactivos</option>
+            <option value="todos" {% if status_filter == 'todos' %}selected{% endif %}>Todos</option>
         </select>
     </div>
     <div class="ea-field">

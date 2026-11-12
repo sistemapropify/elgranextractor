@@ -2,6 +2,60 @@
 
 {% block title %}{% block page_title %}Agentes externos{% endblock %} · Propifai{% endblock %}
 
+{% block sidebar_brand %}
+<div class="sidebar-brand">
+    <div class="brand-icon">A</div>
+    <div>
+        <div class="brand-text">Gestión de Agentes</div>
+        <div class="brand-subtext">Administración y finanzas</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block sidebar_menu %}
+<div class="nav-section-title">Gestión de Agentes</div>
+<div class="nav-item has-submenu open {% if '/agentes-externos/cierres/' not in request.path %}active{% endif %}">
+    <a href="#" class="nav-link submenu-toggle">
+        <span class="nav-icon">👥</span>
+        <span>Gestión de Agentes</span>
+        <span class="submenu-arrow">▼</span>
+    </a>
+    <div class="submenu-items">
+        <a href="{% url 'external_agents:dashboard' %}" class="submenu-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+            <span class="submenu-icon">▦</span>
+            <span>Dashboard</span>
+        </a>
+        <a href="{% url 'external_agents:agent_create' %}" class="submenu-item {% if request.resolver_match.url_name == 'agent_create' %}active{% endif %}">
+            <span class="submenu-icon">＋</span>
+            <span>Agregar nuevo agente</span>
+        </a>
+        <a href="{% url 'external_agents:configuration' %}" class="submenu-item {% if request.resolver_match.url_name == 'configuration' or request.resolver_match.url_name == 'document_type_create' or request.resolver_match.url_name == 'document_type_update' %}active{% endif %}">
+            <span class="submenu-icon">⚙</span>
+            <span>Configuración</span>
+        </a>
+    </div>
+</div>
+
+<div class="nav-section-title" style="margin-top:12px;">Gestión Financiera</div>
+<div class="nav-item has-submenu open {% if '/agentes-externos/cierres/' in request.path %}active{% endif %}">
+    <a href="#" class="nav-link submenu-toggle">
+        <span class="nav-icon">💰</span>
+        <span>Gestión Financiera</span>
+        <span class="submenu-arrow">▼</span>
+    </a>
+    <div class="submenu-items">
+        <a href="{% url 'external_agents:cierres' %}" class="submenu-item {% if request.resolver_match.url_name == 'cierres' or request.resolver_match.url_name == 'collection_add' or request.resolver_match.url_name == 'payment_add' %}active{% endif %}">
+            <span class="submenu-icon">◫</span>
+            <span>Comisiones por Cierres</span>
+        </a>
+        <a href="{% url 'external_agents:service_payments' %}" class="submenu-item {% if request.resolver_match.url_name == 'service_payments' or request.resolver_match.url_name == 'service_payment_add' or request.resolver_match.url_name == 'service_payment_pay' %}active{% endif %}">
+            <span class="submenu-icon">▤</span>
+            <span>Pagos de Servicios</span>
+        </a>
+    </div>
+</div>
+{% endblock %}
+
 {% block extra_css %}
 {{ block.super }}
 <style>
@@ -151,41 +205,6 @@
         min-height: 32px;
         padding: 6px 10px;
         font-size: 12px;
-    }
-
-    .ea-module-nav {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        padding: 5px;
-        margin: 0 0 20px;
-        border: 1px solid var(--ea-border);
-        border-radius: 11px;
-        background: var(--ea-panel);
-        overflow-x: auto;
-    }
-
-    .ea-nav-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        padding: 9px 13px;
-        border-radius: 7px;
-        color: var(--ea-muted);
-        text-decoration: none;
-        white-space: nowrap;
-        font-size: 13px;
-        font-weight: 600;
-    }
-
-    .ea-nav-link:hover {
-        color: var(--ea-text);
-        background: var(--ea-panel-raised);
-    }
-
-    .ea-nav-link.active {
-        color: #fff;
-        background: #1f6feb;
     }
 
     .ea-messages {
@@ -489,20 +508,6 @@
             {% endblock %}
         </div>
     </header>
-
-    {% if '/agentes-externos/cierres/' not in request.path %}
-    <nav class="ea-module-nav" aria-label="Navegación de agentes externos">
-        <a href="{% url 'external_agents:dashboard' %}" class="ea-nav-link {% if '/agentes-externos/configuracion/' not in request.path and '/agentes-externos/nuevo/' not in request.path %}active{% endif %}">
-            <span aria-hidden="true">▦</span> Directorio
-        </a>
-        <a href="{% url 'external_agents:agent_create' %}" class="ea-nav-link {% if '/agentes-externos/nuevo/' in request.path %}active{% endif %}">
-            <span aria-hidden="true">＋</span> Registrar agente
-        </a>
-        <a href="{% url 'external_agents:configuration' %}" class="ea-nav-link {% if '/agentes-externos/configuracion/' in request.path %}active{% endif %}">
-            <span aria-hidden="true">⚙</span> Tipos de documento
-        </a>
-    </nav>
-    {% endif %}
 
     {% if messages %}
     <div class="ea-messages" aria-live="polite">

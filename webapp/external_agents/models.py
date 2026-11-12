@@ -424,6 +424,138 @@ class CommissionCollectionEntry(models.Model):
         return f'{self.collection.operation_code} · {self.amount}'
 
 
+class ServicePayment(models.Model):
+    """Pago programado o realizado de un servicio operativo."""
+
+    class Category(models.TextChoices):
+        WATER = 'agua', 'Agua'
+        ELECTRICITY = 'luz', 'Luz'
+        INTERNET = 'internet', 'Internet'
+        PHONE = 'telefono', 'Teléfonos'
+        SECURITY = 'seguridad', 'Seguridad'
+        GARDENING = 'jardineria', 'Jardinería'
+        CLEANING = 'limpieza', 'Limpieza'
+        SOFTWARE = 'software', 'Software / IA'
+        MAINTENANCE = 'mantenimiento', 'Mantenimiento'
+        OTHER = 'otros', 'Otros'
+
+    class Recurrence(models.TextChoices):
+        ONCE = 'unico', 'Único'
+        MONTHLY = 'mensual', 'Mensual'
+        BIMONTHLY = 'bimestral', 'Bimestral'
+        QUARTERLY = 'trimestral', 'Trimestral'
+        ANNUAL = 'anual', 'Anual'
+
+    class Status(models.TextChoices):
+        PENDING = 'pendiente', 'Pendiente'
+        PAID = 'pagado', 'Pagado'
+        ANNULLED = 'anulado', 'Anulado'
+
+    concept = models.CharField(max_length=200, verbose_name='Concepto')
+    provider = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='Proveedor',
+    )
+    reference = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='Referencia',
+    )
+    category = models.CharField(
+        max_length=30,
+        choices=Category.choices,
+        default=Category.OTHER,
+        db_index=True,
+        verbose_name='Categoría',
+    )
+    recurrence = models.CharField(
+        max_length=20,
+        choices=Recurrence.choices,
+        default=Recurrence.ONCE,
+        verbose_name='Periodicidad',
+    )
+    currency_code = models.CharField(
+        max_length=3,
+        default='PEN',
+        verbose_name='Moneda',
+    )
+    estimated_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Monto estimado',
+    )
+    paid_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Monto pagado',
+    )
+    due_date = models.DateField(
+        db_index=True,
+        verbose_name='Fecha de vencimiento',
+    )
+    payment_date = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Fecha de pago',
+    )
+    reminder_days_before = models.PositiveSmallIntegerField(
+        default=3,
+        verbose_name='Días de anticipación',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+        verbose_name='Estado',
+    )
+    payment_method = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='Medio de pago',
+    )
+    account = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name='Cuenta de salida',
+    )
+    voucher = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name='Comprobante',
+    )
+    notes = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='Observaciones',
+    )
+    created_by_username = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name='Registrado por',
+    )
+    updated_by_username = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name='Actualizado por',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Creado el')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Actualizado el')
+
+    class Meta:
+        db_table = 'external_agents_service_payment'
+        ordering = ['due_date', 'pk']
+        verbose_name = 'Pago de servicio'
+        verbose_name_plural = 'Pagos de servicios'
+
+    def __str__(self):
+        return f'{self.concept} · {self.get_status_display()}'
+
+
 class ExternalAgentAttachment(models.Model):
     """Documento digital asociado a un agente externo."""
 
