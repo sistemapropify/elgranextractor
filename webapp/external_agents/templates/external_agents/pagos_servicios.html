@@ -43,7 +43,7 @@
     .sp-kpi.green strong { color: #7ee787; }
     .sp-filters {
         display: grid;
-        grid-template-columns: minmax(240px, 1fr) 170px 190px auto;
+        grid-template-columns: minmax(220px, 1fr) 150px 165px 170px auto;
         gap: 9px;
         align-items: end;
         margin-bottom: 14px;
@@ -217,6 +217,10 @@
             <option value="pagados" {% if status_filter == 'pagados' %}selected{% endif %}>Pagados</option>
             <option value="todos" {% if status_filter == 'todos' %}selected{% endif %}>Todos</option>
         </select>
+    </div>
+    <div class="ea-field">
+        <label class="ea-label" for="sp-month">Mes correspondiente</label>
+        <input class="ea-input" id="sp-month" type="month" name="mes" value="{{ month_value }}">
     </div>
     <div class="ea-field">
         <label class="ea-label" for="sp-subcategory">Subcategoría</label>

@@ -1032,9 +1032,14 @@ def _next_service_due_date(value, recurrence):
 @external_agent_access_required
 def service_payments(request):
     query = str(request.GET.get('q') or '').strip()
-    status_filter = str(request.GET.get('estado') or 'pendientes').strip()
+    status_filter = str(request.GET.get('estado') or 'todos').strip()
     subcategory_filter = str(request.GET.get('subcategoria') or '').strip()
+    month_filter = _parse_month_input(request.GET.get('mes'))
+    if not request.GET.get('mes'):
+        month_filter = timezone.localdate().replace(day=1)
     payments = ServicePayment.objects.all()
+    if month_filter:
+        payments = payments.filter(service_month=month_filter)
     if query:
         payments = payments.filter(
             Q(concept__icontains=query)
@@ -1085,15 +1090,16 @@ def service_payments(request):
             ),
         })
 
-    pending = ServicePayment.objects.filter(status=ServicePayment.Status.PENDING)
+    month_payments = ServicePayment.objects.all()
+    if month_filter:
+        month_payments = month_payments.filter(service_month=month_filter)
+    pending = month_payments.filter(status=ServicePayment.Status.PENDING)
     summary = {
         'pending': pending.count(),
         'due_today': pending.filter(due_date=today).count(),
         'overdue': pending.filter(due_date__lt=today).count(),
-        'paid_month': ServicePayment.objects.filter(
+        'paid_month': month_payments.filter(
             status=ServicePayment.Status.PAID,
-            payment_date__year=today.year,
-            payment_date__month=today.month,
         ).count(),
     }
     return render(request, 'external_agents/pagos_servicios.html', {
@@ -1102,6 +1108,8 @@ def service_payments(request):
         'query': query,
         'status_filter': status_filter,
         'subcategory_filter': subcategory_filter,
+        'month_filter': month_filter,
+        'month_value': month_filter.strftime('%Y-%m') if month_filter else '',
         'subcategories': ServicePayment.Subcategory.choices,
     })
 
@@ -1176,21 +1184,28 @@ def service_payment_pay(request, pk):
     payment.save()
     next_due_date = _next_service_due_date(payment.due_date, payment.recurrence)
     if next_due_date:
-        ServicePayment.objects.create(
-            concept=payment.concept,
-            provider=payment.provider,
+        next_month = next_due_date.replace(day=1)
+        already_exists = ServicePayment.objects.filter(
+            provider__iexact=payment.provider,
             reference=payment.reference,
-            financial_category=payment.financial_category,
-            subcategory=payment.subcategory,
-            recurrence=payment.recurrence,
-            currency_code=payment.currency_code,
-            estimated_amount=payment.estimated_amount,
-            service_month=next_due_date.replace(day=1),
-            due_date=next_due_date,
-            reminder_days_before=payment.reminder_days_before,
-            created_by_username=_username(request),
-            updated_by_username=_username(request),
-        )
+            service_month=next_month,
+        ).exists()
+        if not already_exists:
+            ServicePayment.objects.create(
+                concept=payment.concept,
+                provider=payment.provider,
+                reference=payment.reference,
+                financial_category=payment.financial_category,
+                subcategory=payment.subcategory,
+                recurrence=payment.recurrence,
+                currency_code=payment.currency_code,
+                estimated_amount=payment.estimated_amount,
+                service_month=next_month,
+                due_date=next_due_date,
+                reminder_days_before=payment.reminder_days_before,
+                created_by_username=_username(request),
+                updated_by_username=_username(request),
+            )
     messages.success(request, 'Pago registrado. Estado actualizado a Pagado.')
     return redirect('external_agents:service_payments')
 
@@ -1388,21 +1403,29 @@ def operating_expense_pay(request, kind, pk):
         expense.save()
         next_due_date = _next_service_due_date(expense.due_date, expense.recurrence)
         if next_due_date:
-            OperatingExpense.objects.create(
+            next_month = next_due_date.replace(day=1)
+            already_exists = OperatingExpense.objects.filter(
                 expense_category=expense.expense_category,
-                subcategory=expense.subcategory,
-                concept=expense.concept,
-                provider=expense.provider,
+                provider__iexact=expense.provider,
                 reference=expense.reference,
-                recurrence=expense.recurrence,
-                currency_code=expense.currency_code,
-                amount=expense.amount,
-                expense_month=next_due_date.replace(day=1),
-                due_date=next_due_date,
-                reminder_days_before=expense.reminder_days_before,
-                created_by_username=_username(request),
-                updated_by_username=_username(request),
-            )
+                expense_month=next_month,
+            ).exists()
+            if not already_exists:
+                OperatingExpense.objects.create(
+                    expense_category=expense.expense_category,
+                    subcategory=expense.subcategory,
+                    concept=expense.concept,
+                    provider=expense.provider,
+                    reference=expense.reference,
+                    recurrence=expense.recurrence,
+                    currency_code=expense.currency_code,
+                    amount=expense.amount,
+                    expense_month=next_month,
+                    due_date=next_due_date,
+                    reminder_days_before=expense.reminder_days_before,
+                    created_by_username=_username(request),
+                    updated_by_username=_username(request),
+                )
         messages.success(request, 'Gasto registrado como pagado.')
     return redirect(
         'external_agents:marketing_expenses'

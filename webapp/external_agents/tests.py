@@ -22,7 +22,7 @@ from .models import (
     PayrollEntry,
     ServicePayment,
 )
-from .views import _normalize_closing
+from .views import _add_months, _normalize_closing
 
 
 class ExternalAgentsViewsTests(TestCase):
@@ -264,6 +264,79 @@ class ExternalAgentsViewsTests(TestCase):
         next_payment = ServicePayment.objects.exclude(pk=payment.pk).get()
         self.assertEqual(next_payment.status, ServicePayment.Status.PENDING)
         self.assertGreater(next_payment.due_date, today)
+
+    def test_service_dashboard_defaults_to_current_month_and_all_states(self):
+        self.authenticate_propify()
+        today = timezone.localdate()
+        current_month = today.replace(day=1)
+        previous_month = _add_months(current_month, -1)
+        ServicePayment.objects.create(
+            concept='Servicio pendiente actual',
+            subcategory=ServicePayment.Subcategory.OTHER,
+            service_month=current_month,
+            due_date=today,
+            estimated_amount='100.00',
+        )
+        ServicePayment.objects.create(
+            concept='Servicio pagado actual',
+            subcategory=ServicePayment.Subcategory.OTHER,
+            service_month=current_month,
+            due_date=today,
+            estimated_amount='200.00',
+            paid_amount='200.00',
+            payment_date=today,
+            status=ServicePayment.Status.PAID,
+        )
+        ServicePayment.objects.create(
+            concept='Servicio mes anterior',
+            subcategory=ServicePayment.Subcategory.OTHER,
+            service_month=previous_month,
+            due_date=previous_month,
+            estimated_amount='300.00',
+        )
+        response = self.client.get(reverse('external_agents:service_payments'))
+        self.assertContains(response, 'Servicio pendiente actual')
+        self.assertContains(response, 'Servicio pagado actual')
+        self.assertNotContains(response, 'Servicio mes anterior')
+        html = response.content.decode()
+        self.assertIn('value="'+current_month.strftime('%Y-%m')+'"', html)
+        self.assertIn('<option value="todos" selected>', html)
+
+    def test_recurring_payment_does_not_duplicate_existing_next_month(self):
+        self.authenticate_propify()
+        today = timezone.localdate()
+        payment = ServicePayment.objects.create(
+            concept='Internet recurrente',
+            provider='Movistar',
+            reference='INT-REC-1',
+            subcategory=ServicePayment.Subcategory.INTERNET,
+            recurrence=ServicePayment.Recurrence.MONTHLY,
+            service_month=today.replace(day=1),
+            due_date=today,
+            estimated_amount='150.00',
+        )
+        next_month = _add_months(today.replace(day=1), 1)
+        ServicePayment.objects.create(
+            concept='Internet recurrente',
+            provider='Movistar',
+            reference='INT-REC-1',
+            subcategory=ServicePayment.Subcategory.INTERNET,
+            recurrence=ServicePayment.Recurrence.MONTHLY,
+            service_month=next_month,
+            due_date=_add_months(today, 1),
+            estimated_amount='150.00',
+        )
+        self.client.post(
+            reverse('external_agents:service_payment_pay', kwargs={'pk': payment.pk}),
+            {'payment_date': today.isoformat(), 'paid_amount': '150.00'},
+        )
+        self.assertEqual(
+            ServicePayment.objects.filter(
+                provider='Movistar',
+                reference='INT-REC-1',
+            ).count(),
+            2,
+        )
 
     def test_payroll_employee_can_be_added_and_month_generated(self):
         self.authenticate_propify()
