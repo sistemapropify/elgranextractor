@@ -1,5 +1,5 @@
 {% extends "external_agents/base.html" %}
-{% load humanize %}
+{% load humanize l10n %}
 
 {% block page_title %}Pagos de Servicios{% endblock %}
 {% block hero_title %}Pagos de Servicios{% endblock %}
@@ -147,6 +147,19 @@
         border: 1px solid #da3633;
         border-radius: 5px;
         background: #b62324;
+        color: #fff;
+        font: inherit;
+        font-size: 8px;
+        font-weight: 850;
+        cursor: pointer;
+    }
+    .sp-table-actions { display: grid; gap: 3px; }
+    .sp-edit {
+        width: 100%;
+        padding: 3px 5px;
+        border: 1px solid #388bfd;
+        border-radius: 5px;
+        background: #1f6feb;
         color: #fff;
         font: inherit;
         font-size: 8px;
@@ -307,6 +320,30 @@
                 <td class="num">{% if payment.paid_amount %}{{ payment.paid_amount|floatformat:0|intcomma }}{% else %}—{% endif %}</td>
                 <td><span class="ea-badge {{ row.status_class }}">{{ row.display_status }}</span></td>
                 <td class="actions-cell">
+                    <div class="sp-table-actions">
+                    <button
+                        class="sp-edit"
+                        type="button"
+                        data-edit-payment="{{ payment.pk }}"
+                        data-edit-concept="{{ payment.concept }}"
+                        data-edit-provider="{{ payment.provider }}"
+                        data-edit-reference="{{ payment.reference }}"
+                        data-edit-subcategory="{{ payment.subcategory }}"
+                        data-edit-recurrence="{{ payment.recurrence }}"
+                        data-edit-status="{{ payment.status }}"
+                        data-edit-currency-code="{{ payment.currency_code }}"
+                        data-edit-estimated="{{ payment.estimated_amount|unlocalize }}"
+                        data-edit-paid="{{ payment.paid_amount|unlocalize }}"
+                        data-edit-service-month="{{ payment.service_month|date:'Y-m-d' }}"
+                        data-edit-due="{{ payment.due_date|date:'Y-m-d' }}"
+                        data-edit-payment-date="{% if payment.payment_date %}{{ payment.payment_date|date:'Y-m-d' }}{% endif %}"
+                        data-edit-reminder="{{ payment.reminder_days_before }}"
+                        data-edit-payment-method="{{ payment.payment_method }}"
+                        data-edit-account="{{ payment.account }}"
+                        data-edit-voucher="{{ payment.voucher }}"
+                        data-edit-notes="{{ payment.notes }}"
+                        data-edit-url="{% url 'external_agents:service_payment_edit' pk=payment.pk %}"
+                    >Editar</button>
                     {% if payment.status == 'pendiente' %}
                     <button
                         class="sp-pay"
@@ -320,6 +357,7 @@
                     {% else %}
                     <span class="ea-badge green">Pagado</span>
                     {% endif %}
+                    </div>
                 </td>
             </tr>
             {% endwith %}
@@ -352,13 +390,47 @@
             <div class="ea-field"><label class="ea-label">Categoría</label><input class="ea-input" value="Servicios" disabled></div>
             <div class="ea-field"><label class="ea-label">Subcategoría</label><select class="ea-select" name="subcategory" required>{% for value,label in subcategories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
             <div class="ea-field"><label class="ea-label">Periodicidad</label><select class="ea-select" name="recurrence"><option value="unico">Único</option><option value="mensual">Mensual</option><option value="bimestral">Bimestral</option><option value="trimestral">Trimestral</option><option value="anual">Anual</option></select></div>
-            <div class="ea-field"><label class="ea-label">Moneda</label><select class="ea-select" name="currency_code"><option value="PEN">PEN</option><option value="USD">USD</option></select></div>
+            <div class="ea-field"><label class="ea-label">Moneda</label><select class="ea-select" name="currency_code"><option value="PEN">PEN</option><option value="USD">USD</option><option value="EUR">EUR</option></select></div>
             <div class="ea-field"><label class="ea-label">Monto estimado</label><input class="ea-input" name="estimated_amount" type="number" min="0" step="0.01" required></div>
             <div class="ea-field"><label class="ea-label">Mes correspondiente</label><input class="ea-input" name="service_month" type="month" required></div>
             <div class="ea-field"><label class="ea-label">Vencimiento</label><input class="ea-input" name="due_date" type="date" required></div>
             <div class="ea-field"><label class="ea-label">Alarma</label><select class="ea-select" name="reminder_days_before"><option value="7">7 días antes</option><option value="3" selected>3 días antes</option><option value="1">1 día antes</option><option value="0">El mismo día</option></select></div>
             <div class="ea-field wide"><label class="ea-label">Observaciones</label><input class="ea-input" name="notes"></div>
             <div class="sp-actions"><button class="ea-btn" type="button" data-close-modal>Cancelar</button><button class="ea-btn ea-btn-blue" type="submit">Guardar pago programado</button></div>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="sp-modal" id="service-edit-modal">
+    <form method="post" id="service-edit-form" data-single-submit>
+        {% csrf_token %}
+        <input type="hidden" name="submission_token" value="{{ service_edit_submission_token }}">
+        <header class="sp-modal-head">
+            <div>
+                <h2 id="service-edit-title">Editar pago de servicio</h2>
+                <p>Corrige moneda, importes, fechas o estado del registro.</p>
+            </div>
+            <button class="sp-close" type="button" data-close-modal>×</button>
+        </header>
+        <div class="sp-form">
+            <div class="ea-field wide"><label class="ea-label">Concepto</label><input class="ea-input" name="concept" required></div>
+            <div class="ea-field"><label class="ea-label">Proveedor</label><input class="ea-input" name="provider"></div>
+            <div class="ea-field"><label class="ea-label">Referencia</label><input class="ea-input" name="reference"></div>
+            <div class="ea-field"><label class="ea-label">Subcategoría</label><select class="ea-select" name="subcategory">{% for value,label in subcategories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+            <div class="ea-field"><label class="ea-label">Periodicidad</label><select class="ea-select" name="recurrence"><option value="unico">Único</option><option value="mensual">Mensual</option><option value="bimestral">Bimestral</option><option value="trimestral">Trimestral</option><option value="anual">Anual</option></select></div>
+            <div class="ea-field"><label class="ea-label">Estado</label><select class="ea-select" name="status"><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option><option value="anulado">Anulado</option></select></div>
+            <div class="ea-field"><label class="ea-label">Moneda</label><select class="ea-select" name="currency_code"><option value="PEN">PEN</option><option value="USD">USD</option><option value="EUR">EUR</option></select></div>
+            <div class="ea-field"><label class="ea-label">Monto estimado</label><input class="ea-input" name="estimated_amount" type="number" min="0" step="0.01" required></div>
+            <div class="ea-field"><label class="ea-label">Monto pagado</label><input class="ea-input" name="paid_amount" type="number" min="0" step="0.01"></div>
+            <div class="ea-field"><label class="ea-label">Mes correspondiente</label><input class="ea-input" name="service_month" type="month" required></div>
+            <div class="ea-field"><label class="ea-label">Vencimiento</label><input class="ea-input" name="due_date" type="date" required></div>
+            <div class="ea-field"><label class="ea-label">Fecha de pago</label><input class="ea-input" name="payment_date" type="date"></div>
+            <div class="ea-field"><label class="ea-label">Alarma</label><select class="ea-select" name="reminder_days_before"><option value="7">7 días antes</option><option value="3">3 días antes</option><option value="1">1 día antes</option><option value="0">El mismo día</option></select></div>
+            <div class="ea-field"><label class="ea-label">Medio de pago</label><input class="ea-input" name="payment_method"></div>
+            <div class="ea-field"><label class="ea-label">Cuenta de salida</label><input class="ea-input" name="account"></div>
+            <div class="ea-field"><label class="ea-label">Comprobante</label><input class="ea-input" name="voucher"></div>
+            <div class="ea-field wide"><label class="ea-label">Observaciones</label><input class="ea-input" name="notes"></div>
+            <div class="sp-actions"><button class="ea-btn" type="button" data-close-modal>Cancelar</button><button class="ea-btn ea-btn-blue" type="submit">Guardar cambios</button></div>
         </div>
     </form>
 </dialog>
@@ -412,6 +484,38 @@
             document.getElementById('service-payment-date').value =
                 new Date().toISOString().slice(0, 10);
             document.getElementById('service-pay-modal').showModal();
+        });
+    });
+    document.querySelectorAll('[data-edit-payment]').forEach(button => {
+        button.addEventListener('click', () => {
+            const form = document.getElementById('service-edit-form');
+            form.action = button.dataset.editUrl;
+            document.getElementById('service-edit-title').textContent =
+                `Editar · ${button.dataset.editConcept}`;
+            const values = {
+                concept: button.dataset.editConcept,
+                provider: button.dataset.editProvider,
+                reference: button.dataset.editReference,
+                subcategory: button.dataset.editSubcategory,
+                recurrence: button.dataset.editRecurrence,
+                status: button.dataset.editStatus,
+                currency_code: button.dataset.editCurrencyCode,
+                estimated_amount: button.dataset.editEstimated,
+                paid_amount: button.dataset.editPaid,
+                service_month: button.dataset.editServiceMonth?.slice(0, 7),
+                due_date: button.dataset.editDue,
+                payment_date: button.dataset.editPaymentDate,
+                reminder_days_before: button.dataset.editReminder,
+                payment_method: button.dataset.editPaymentMethod,
+                account: button.dataset.editAccount,
+                voucher: button.dataset.editVoucher,
+                notes: button.dataset.editNotes,
+            };
+            Object.entries(values).forEach(([name, value]) => {
+                const field = form.elements.namedItem(name);
+                if (field) field.value = value || '';
+            });
+            document.getElementById('service-edit-modal').showModal();
         });
     });
 })();

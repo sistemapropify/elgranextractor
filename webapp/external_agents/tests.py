@@ -23,7 +23,7 @@ from .models import (
     PayrollEntry,
     ServicePayment,
 )
-from .views import _add_months, _normalize_closing
+from .views import _add_months, _amount_to_usd, _normalize_closing
 
 
 class ExternalAgentsViewsTests(TestCase):
@@ -314,6 +314,62 @@ class ExternalAgentsViewsTests(TestCase):
         html = response.content.decode()
         self.assertIn('value="'+current_month.strftime('%Y-%m')+'"', html)
         self.assertIn('<option value="todos" selected>', html)
+
+    def test_service_payment_can_be_edited_with_eur_currency(self):
+        self.authenticate_propify()
+        period = timezone.localdate().replace(day=1)
+        payment = ServicePayment.objects.create(
+            concept='Servicio por editar',
+            provider='Proveedor',
+            reference='EDIT-1',
+            subcategory=ServicePayment.Subcategory.OTHER,
+            recurrence=ServicePayment.Recurrence.MONTHLY,
+            currency_code='USD',
+            estimated_amount='12.00',
+            service_month=period,
+            due_date=period,
+        )
+        response = self.client.post(
+            reverse(
+                'external_agents:service_payment_edit',
+                kwargs={'pk': payment.pk},
+            ),
+            self.finance_payload({
+                'concept': 'Servicio en euros',
+                'provider': 'Proveedor EUR',
+                'reference': 'EDIT-2',
+                'subcategory': ServicePayment.Subcategory.SOFTWARE,
+                'recurrence': ServicePayment.Recurrence.MONTHLY,
+                'status': ServicePayment.Status.PENDING,
+                'currency_code': 'EUR',
+                'estimated_amount': '14.15',
+                'paid_amount': '0',
+                'service_month': period.strftime('%Y-%m'),
+                'due_date': period.isoformat(),
+                'reminder_days_before': '3',
+                'notes': 'Corregido a euros',
+            }),
+        )
+        self.assertEqual(response.status_code, 302)
+        payment.refresh_from_db()
+        self.assertEqual(payment.concept, 'Servicio en euros')
+        self.assertEqual(payment.currency_code, 'EUR')
+        self.assertEqual(payment.estimated_amount, Decimal('14.15'))
+        dashboard = self.client.get(reverse('external_agents:service_payments'))
+        self.assertContains(dashboard, 'id="service-edit-modal"')
+        self.assertContains(dashboard, 'data-edit-payment=')
+        self.assertContains(dashboard, '<option value="EUR">EUR</option>')
+
+    def test_balance_converts_eur_to_usd(self):
+        self.assertEqual(
+            _amount_to_usd(
+                Decimal('10.00'),
+                'EUR',
+                Decimal('3.75'),
+                Decimal('1.08'),
+            ),
+            Decimal('10.80'),
+        )
 
     def test_recurring_payment_does_not_duplicate_existing_next_month(self):
         self.authenticate_propify()

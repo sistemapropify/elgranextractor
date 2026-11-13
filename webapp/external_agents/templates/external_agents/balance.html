@@ -205,6 +205,7 @@
 
 <div class="bal-rate">
     <span>Conversión: 1 USD = {{ exchange_rate|floatformat:4 }} PEN</span>
+    <span>Conversión: 1 EUR = {{ eur_exchange_rate|floatformat:4 }} USD</span>
     <span>
         {% if rate_source == 'exchange_rate' %}
         Tasa registrada en Propify · {{ rate_date }}

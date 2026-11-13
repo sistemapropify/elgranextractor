@@ -1151,6 +1151,7 @@ def service_payments(request):
         'month_value': month_filter.strftime('%Y-%m') if month_filter else '',
         'subcategories': ServicePayment.Subcategory.choices,
         'service_add_submission_token': _new_finance_submission_token(),
+        'service_edit_submission_token': _new_finance_submission_token(),
         'service_pay_submission_token': _new_finance_submission_token(),
     })
 
@@ -1165,12 +1166,17 @@ def service_payment_add(request):
     concept = str(request.POST.get('concept') or '').strip()
     subcategory = str(request.POST.get('subcategory') or '').strip()
     recurrence = str(request.POST.get('recurrence') or '').strip()
+    currency_code = (
+        str(request.POST.get('currency_code') or '').strip().upper()
+        or 'PEN'
+    )
     service_month = _parse_month_input(request.POST.get('service_month'))
     due_date = _parse_date_input(request.POST.get('due_date'))
     if (
         not concept
         or subcategory not in valid_subcategories
         or recurrence not in valid_recurrences
+        or currency_code not in {'PEN', 'USD', 'EUR'}
         or service_month is None
         or due_date is None
     ):
@@ -1187,10 +1193,7 @@ def service_payment_add(request):
             financial_category=ServicePayment.FinancialCategory.SERVICES,
             subcategory=subcategory,
             recurrence=recurrence,
-            currency_code=(
-                str(request.POST.get('currency_code') or '').strip().upper()
-                or 'PEN'
-            ),
+            currency_code=currency_code,
             estimated_amount=_first_number(request.POST.get('estimated_amount')),
             service_month=service_month,
             due_date=due_date,
@@ -1203,6 +1206,80 @@ def service_payment_add(request):
             updated_by_username=_username(request),
         )
     messages.success(request, 'Pago programado correctamente.')
+    return redirect('external_agents:service_payments')
+
+
+@never_cache
+@external_agent_access_required
+def service_payment_edit(request, pk):
+    payment = get_object_or_404(ServicePayment, pk=pk)
+    if request.method != 'POST':
+        return redirect('external_agents:service_payments')
+    valid_subcategories = set(ServicePayment.Subcategory.values)
+    valid_recurrences = set(ServicePayment.Recurrence.values)
+    valid_statuses = set(ServicePayment.Status.values)
+    concept = str(request.POST.get('concept') or '').strip()
+    subcategory = str(request.POST.get('subcategory') or '').strip()
+    recurrence = str(request.POST.get('recurrence') or '').strip()
+    status = str(request.POST.get('status') or '').strip()
+    currency_code = str(
+        request.POST.get('currency_code') or payment.currency_code or 'PEN'
+    ).strip().upper()
+    service_month = _parse_month_input(request.POST.get('service_month'))
+    due_date = _parse_date_input(request.POST.get('due_date'))
+    if (
+        not concept
+        or subcategory not in valid_subcategories
+        or recurrence not in valid_recurrences
+        or status not in valid_statuses
+        or currency_code not in {'PEN', 'USD', 'EUR'}
+        or service_month is None
+        or due_date is None
+    ):
+        messages.error(request, 'Revisa el concepto, categoría, moneda y fechas.')
+        return redirect('external_agents:service_payments')
+    with transaction.atomic():
+        if not _claim_finance_submission(request, 'service_payment_edit'):
+            _duplicate_finance_submission_message(request)
+            return redirect('external_agents:service_payments')
+        payment = ServicePayment.objects.select_for_update().get(pk=payment.pk)
+        estimated_amount = _money_input(
+            request.POST.get('estimated_amount')
+        )
+        payment.concept = concept
+        payment.provider = str(request.POST.get('provider') or '').strip()
+        payment.reference = str(request.POST.get('reference') or '').strip()
+        payment.subcategory = subcategory
+        payment.recurrence = recurrence
+        payment.currency_code = currency_code
+        payment.estimated_amount = estimated_amount
+        payment.service_month = service_month
+        payment.due_date = due_date
+        payment.reminder_days_before = max(
+            int(_first_number(request.POST.get('reminder_days_before'), 3)),
+            0,
+        )
+        payment.status = status
+        payment.notes = str(request.POST.get('notes') or '').strip()
+        payment.payment_method = str(request.POST.get('payment_method') or '').strip()
+        payment.account = str(request.POST.get('account') or '').strip()
+        payment.voucher = str(request.POST.get('voucher') or '').strip()
+        if status == ServicePayment.Status.PAID:
+            payment.paid_amount = (
+                _money_input(request.POST.get('paid_amount'))
+                or estimated_amount
+            )
+            payment.payment_date = (
+                _parse_date_input(request.POST.get('payment_date'))
+                or payment.payment_date
+                or timezone.localdate()
+            )
+        else:
+            payment.paid_amount = Decimal('0')
+            payment.payment_date = None
+        payment.updated_by_username = _username(request)
+        payment.save()
+    messages.success(request, 'Pago de servicio actualizado.')
     return redirect('external_agents:service_payments')
 
 
@@ -1552,10 +1629,48 @@ def _usd_pen_rate():
     return default_rate, 'default', None
 
 
-def _amount_to_usd(amount, currency_code, pen_per_usd):
+def _usd_eur_rate():
+    default_rate = Decimal(str(getattr(settings, 'DEFAULT_EUR_USD_RATE', '1.08')))
+    if 'propifai' in connections.settings:
+        try:
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT TOP 1
+                        er.rate,
+                        er.rate_date,
+                        base.code AS base_code,
+                        quote.code AS quote_code
+                    FROM exchange_rate er
+                    INNER JOIN currency base ON base.id = er.base_currency_id
+                    INNER JOIN currency quote ON quote.id = er.quote_currency_id
+                    WHERE er.is_active = %s
+                      AND (
+                          (base.code = 'EUR' AND quote.code = 'USD')
+                          OR (base.code = 'USD' AND quote.code = 'EUR')
+                      )
+                    ORDER BY er.rate_date DESC
+                    """,
+                    [True],
+                )
+                row = cursor.fetchone()
+            if row:
+                rate, rate_date, base_code, quote_code = row
+                usd_per_eur = Decimal(rate)
+                if base_code == 'USD':
+                    usd_per_eur = Decimal('1') / usd_per_eur
+                return usd_per_eur, 'exchange_rate', rate_date.date().isoformat()
+        except (KeyError, DatabaseError, ArithmeticError, ConnectionDoesNotExist):
+            pass
+    return default_rate, 'default', None
+
+
+def _amount_to_usd(amount, currency_code, pen_per_usd, usd_per_eur):
     value = Decimal(amount or 0)
     if currency_code == 'PEN':
         return (value / pen_per_usd).quantize(Decimal('0.01'))
+    if currency_code == 'EUR':
+        return (value * usd_per_eur).quantize(Decimal('0.01'))
     return value.quantize(Decimal('0.01'))
 
 
@@ -1566,6 +1681,7 @@ def financial_balance(request):
     period = _parse_payroll_period(request.GET.get('periodo'))
     period_end = _add_months(period, 1)
     rate, rate_source, rate_date = _usd_pen_rate()
+    eur_usd_rate, eur_rate_source, eur_rate_date = _usd_eur_rate()
 
     commission_rows = list(
         CommissionCollection.objects.filter(
@@ -1582,11 +1698,13 @@ def financial_balance(request):
             row.amount_for_propify,
             row.currency_code,
             rate,
+            eur_usd_rate,
         )
         agents_amount = _amount_to_usd(
             row.amount_for_agents,
             row.currency_code,
             rate,
+            eur_usd_rate,
         )
         income_commission += propify_amount
         expense_agents += agents_amount
@@ -1618,7 +1736,12 @@ def financial_balance(request):
     )
     for row in service_rows:
         amount = row.paid_amount if row.status == ServicePayment.Status.PAID else row.estimated_amount
-        converted = _amount_to_usd(amount, row.currency_code, rate)
+        converted = _amount_to_usd(
+            amount,
+            row.currency_code,
+            rate,
+            eur_usd_rate,
+        )
         service_total += converted
         provider_reference = ' · '.join(
             value for value in [row.provider, row.reference] if value
@@ -1648,7 +1771,12 @@ def financial_balance(request):
     )
     for row in expense_rows:
         amount = row.paid_amount if row.status == OperatingExpense.Status.PAID else row.amount
-        converted = _amount_to_usd(amount, row.currency_code, rate)
+        converted = _amount_to_usd(
+            amount,
+            row.currency_code,
+            rate,
+            eur_usd_rate,
+        )
         detail = {
             'label': row.concept,
             'meta': ' · '.join(
@@ -1673,7 +1801,12 @@ def financial_balance(request):
     payroll_details = []
     payroll_rows = PayrollEntry.objects.filter(period=period).select_related('employee')
     for row in payroll_rows:
-        converted = _amount_to_usd(row.employer_cost, row.currency_code, rate)
+        converted = _amount_to_usd(
+            row.employer_cost,
+            row.currency_code,
+            rate,
+            eur_usd_rate,
+        )
         payroll_total += converted
         payroll_details.append({
             'label': row.employee.full_name,
@@ -1756,6 +1889,9 @@ def financial_balance(request):
         'exchange_rate': rate,
         'rate_source': rate_source,
         'rate_date': rate_date,
+        'eur_exchange_rate': eur_usd_rate,
+        'eur_rate_source': eur_rate_source,
+        'eur_rate_date': eur_rate_date,
     })
 
 

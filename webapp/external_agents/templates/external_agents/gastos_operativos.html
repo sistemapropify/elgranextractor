@@ -92,7 +92,7 @@
         <div class="ea-field"><label class="ea-label">Referencia</label><input class="ea-input" name="reference"></div>
         <div class="ea-field"><label class="ea-label">Subcategoría</label><select class="ea-select" name="subcategory" required>{% for value,label in subcategories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
         <div class="ea-field"><label class="ea-label">Periodicidad</label><select class="ea-select" name="recurrence"><option value="unico">Único</option><option value="mensual">Mensual</option><option value="bimestral">Bimestral</option><option value="trimestral">Trimestral</option><option value="anual">Anual</option></select></div>
-        <div class="ea-field"><label class="ea-label">Moneda</label><select class="ea-select" name="currency_code"><option value="PEN">PEN</option><option value="USD">USD</option></select></div>
+        <div class="ea-field"><label class="ea-label">Moneda</label><select class="ea-select" name="currency_code"><option value="PEN">PEN</option><option value="USD">USD</option><option value="EUR">EUR</option></select></div>
         <div class="ea-field"><label class="ea-label">Monto</label><input class="ea-input" type="number" min="0" step="0.01" name="amount" required></div>
         <div class="ea-field"><label class="ea-label">Mes correspondiente</label><input class="ea-input" type="month" name="expense_month" required></div>
         <div class="ea-field"><label class="ea-label">Vencimiento</label><input class="ea-input" type="date" name="due_date" required></div>

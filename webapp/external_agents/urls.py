@@ -13,6 +13,7 @@ urlpatterns = [
     path('cierres/pagar/', views.payment_add, name='payment_add'),
     path('pagos-servicios/', views.service_payments, name='service_payments'),
     path('pagos-servicios/nuevo/', views.service_payment_add, name='service_payment_add'),
+    path('pagos-servicios/<int:pk>/editar/', views.service_payment_edit, name='service_payment_edit'),
     path('pagos-servicios/<int:pk>/pagar/', views.service_payment_pay, name='service_payment_pay'),
     path('gastos-fijos/', views.fixed_expenses, name='fixed_expenses'),
     path('gastos-marketing/', views.marketing_expenses, name='marketing_expenses'),

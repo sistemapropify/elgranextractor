@@ -54,7 +54,7 @@
             <span class="submenu-icon">◫</span>
             <span>Comisiones por Cierres</span>
         </a>
-        <a href="{% url 'external_agents:service_payments' %}" class="submenu-item {% if request.resolver_match.url_name == 'service_payments' or request.resolver_match.url_name == 'service_payment_add' or request.resolver_match.url_name == 'service_payment_pay' %}active{% endif %}">
+        <a href="{% url 'external_agents:service_payments' %}" class="submenu-item {% if request.resolver_match.url_name == 'service_payments' or request.resolver_match.url_name == 'service_payment_add' or request.resolver_match.url_name == 'service_payment_edit' or request.resolver_match.url_name == 'service_payment_pay' %}active{% endif %}">
             <span class="submenu-icon">▤</span>
             <span>Pagos de Servicios</span>
         </a>
