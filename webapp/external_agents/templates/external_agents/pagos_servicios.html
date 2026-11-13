@@ -241,10 +241,6 @@
             <tr>
                 <th>#</th>
                 <th>Concepto</th>
-                <th>Proveedor</th>
-                <th>Referencia</th>
-                <th>Categoría</th>
-                <th>Subcategoría</th>
                 <th>Periodicidad</th>
                 <th>Mes correspondiente</th>
                 <th>Vencimiento</th>
@@ -263,10 +259,6 @@
             <tr>
                 <td class="num">{{ forloop.counter }}</td>
                 <td class="concept">{{ payment.concept }}</td>
-                <td>{{ payment.provider|default:"—" }}</td>
-                <td>{{ payment.reference|default:"—" }}</td>
-                <td>{{ payment.get_financial_category_display }}</td>
-                <td>{{ payment.get_subcategory_display }}</td>
                 <td>{{ payment.get_recurrence_display }}</td>
                 <td>{{ payment.service_month|date:"m/Y" }}</td>
                 <td>{{ payment.due_date|date:"d/m/Y" }}</td>
