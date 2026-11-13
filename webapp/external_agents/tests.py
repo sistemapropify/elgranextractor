@@ -208,6 +208,8 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Pagos de Servicios')
         self.assertContains(response, 'class="sp-grid"')
+        self.assertContains(response, 'table-layout: fixed')
+        self.assertNotContains(response, 'min-width: 1610px')
         self.assertContains(response, 'Recibo de luz')
         self.assertNotContains(response, '<th>Proveedor</th>')
         self.assertNotContains(response, '<th>Referencia</th>')
