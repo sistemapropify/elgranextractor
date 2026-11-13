@@ -14,6 +14,11 @@ urlpatterns = [
     path('pagos-servicios/', views.service_payments, name='service_payments'),
     path('pagos-servicios/nuevo/', views.service_payment_add, name='service_payment_add'),
     path('pagos-servicios/<int:pk>/pagar/', views.service_payment_pay, name='service_payment_pay'),
+    path('planillas/', views.payroll_dashboard, name='payroll_dashboard'),
+    path('planillas/trabajadores/nuevo/', views.payroll_employee_add, name='payroll_employee_add'),
+    path('planillas/generar/', views.payroll_generate, name='payroll_generate'),
+    path('planillas/<int:pk>/editar/', views.payroll_entry_update, name='payroll_entry_update'),
+    path('planillas/<int:pk>/pagar/', views.payroll_entry_pay, name='payroll_entry_pay'),
     path('nuevo/', views.agent_create, name='agent_create'),
     path('configuracion/', views.configuration, name='configuration'),
     path(

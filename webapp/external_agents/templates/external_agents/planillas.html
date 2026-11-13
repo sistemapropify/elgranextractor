@@ -1,0 +1,373 @@
+{% extends "external_agents/base.html" %}
+{% load humanize %}
+
+{% block page_title %}Planillas de Sueldos{% endblock %}
+{% block hero_title %}Planillas de Sueldos{% endblock %}
+{% block hero_subtitle %}Control mensual de sueldo base, AFP, seguro, comisiones y neto a pagar.{% endblock %}
+
+{% block head_actions %}
+<button class="ea-btn" type="button" data-open-modal="employee-modal">＋ Agregar trabajador</button>
+<button class="ea-btn ea-btn-blue" type="button" data-open-modal="generate-modal">Generar planilla</button>
+{% endblock %}
+
+{% block extra_module_css %}
+<style>
+    .pr-toolbar {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 13px;
+        padding: 12px 14px;
+        border: 1px solid var(--ea-border);
+        border-radius: 9px;
+        background: var(--ea-panel);
+    }
+    .pr-toolbar form { display: flex; align-items: end; gap: 8px; }
+    .pr-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit,minmax(130px,1fr));
+        gap: 8px;
+        margin-bottom: 13px;
+    }
+    .pr-kpi {
+        padding: 10px 12px;
+        border: 1px solid var(--ea-border);
+        border-radius: 8px;
+        background: var(--ea-panel);
+    }
+    .pr-kpi span {
+        display: block;
+        color: var(--ea-muted);
+        font-size: 8px;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .pr-kpi strong {
+        display: block;
+        margin-top: 4px;
+        color: #f0f6fc;
+        font-size: 15px;
+    }
+    .pr-grid-wrap {
+        max-height: calc(100vh - 320px);
+        overflow: auto;
+        border: 1px solid var(--ea-border);
+        border-radius: 10px;
+        background: var(--ea-panel);
+    }
+    .pr-grid {
+        width: 100%;
+        min-width: 1700px;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 10px;
+    }
+    .pr-grid th {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        padding: 7px 8px;
+        border-right: 1px solid var(--ea-border);
+        border-bottom: 1px solid #47515b;
+        background: #20262e;
+        color: #b7c2cc;
+        text-align: left;
+        font-size: 8px;
+        font-weight: 800;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .pr-grid td {
+        padding: 7px 8px;
+        border-right: 1px solid rgba(48,54,61,.72);
+        border-bottom: 1px solid var(--ea-border);
+        color: #c9d1d9;
+        vertical-align: middle;
+    }
+    .pr-grid tbody tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+    .pr-grid tbody tr:hover td { background: rgba(88,166,255,.07); }
+    .pr-grid .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .pr-grid .worker { min-width: 170px; color: #f0f6fc; font-weight: 750; }
+    .pr-grid .actions-cell {
+        position: sticky;
+        right: 0;
+        z-index: 1;
+        min-width: 66px;
+        border-left: 1px solid #47515b;
+        background: #171d24;
+    }
+    .pr-grid th.actions-cell { z-index: 4; }
+    .pr-actions { display: grid; gap: 3px; }
+    .pr-action {
+        padding: 3px 5px;
+        border: 1px solid #388bfd;
+        border-radius: 4px;
+        background: #1f6feb;
+        color: #fff;
+        font: inherit;
+        font-size: 8px;
+        font-weight: 800;
+        cursor: pointer;
+    }
+    .pr-action.pay { border-color: #2ea043; background: #238636; }
+    .pr-modal {
+        width: min(760px,calc(100vw - 28px));
+        max-height: calc(100vh - 28px);
+        padding: 0;
+        overflow: auto;
+        border: 1px solid #44515f;
+        border-radius: 13px;
+        background: var(--ea-panel);
+        color: var(--ea-text);
+    }
+    .pr-modal::backdrop { background: rgba(1,4,9,.76); backdrop-filter: blur(3px); }
+    .pr-modal-head {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 15px 18px;
+        border-bottom: 1px solid var(--ea-border);
+        background: var(--ea-panel-raised);
+    }
+    .pr-modal-head h2 { margin: 0; color: #f0f6fc; font-size: 17px; }
+    .pr-close {
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--ea-border);
+        border-radius: 7px;
+        background: var(--ea-panel);
+        color: var(--ea-text);
+        cursor: pointer;
+    }
+    .pr-form {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 10px;
+        padding: 15px 18px 18px;
+    }
+    .pr-form .wide { grid-column: 1 / -1; }
+    .pr-form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 7px;
+        grid-column: 1 / -1;
+    }
+    .pr-empty {
+        padding: 42px 20px;
+        border: 1px solid var(--ea-border);
+        border-radius: 10px;
+        background: var(--ea-panel);
+        color: var(--ea-muted);
+        text-align: center;
+    }
+    @media(max-width:620px){.pr-form{grid-template-columns:1fr}.pr-form .wide,.pr-form-actions{grid-column:auto}}
+</style>
+{% endblock %}
+
+{% block module_content %}
+<div class="pr-toolbar">
+    <form method="get">
+        <div class="ea-field">
+            <label class="ea-label" for="pr-period">Periodo</label>
+            <input class="ea-input" id="pr-period" type="month" name="periodo" value="{{ period_value }}">
+        </div>
+        <div class="ea-field">
+            <label class="ea-label" for="pr-status">Estado</label>
+            <select class="ea-select" id="pr-status" name="estado">
+                <option value="todos" {% if status_filter == 'todos' %}selected{% endif %}>Todos</option>
+                <option value="pendientes" {% if status_filter == 'pendientes' %}selected{% endif %}>Pendientes</option>
+                <option value="pagados" {% if status_filter == 'pagados' %}selected{% endif %}>Pagados</option>
+            </select>
+        </div>
+        <button class="ea-btn ea-btn-small ea-btn-blue" type="submit">Ver planilla</button>
+    </form>
+    <span class="ea-help">{{ active_employees }} trabajador{{ active_employees|pluralize:"es" }} activo{{ active_employees|pluralize }}</span>
+</div>
+
+{% for total in totals %}
+<section class="pr-summary">
+<div class="pr-kpi"><span>Remuneración bruta</span><strong>{{ total.currency }} {{ total.gross|floatformat:0|intcomma }}</strong></div>
+    <div class="pr-kpi"><span>AFP / ONP</span><strong>{{ total.currency }} {{ total.pension|floatformat:0|intcomma }}</strong></div>
+    <div class="pr-kpi"><span>Seguro empleador</span><strong>{{ total.currency }} {{ total.essalud|floatformat:0|intcomma }}</strong></div>
+    <div class="pr-kpi"><span>Comisiones</span><strong>{{ total.currency }} {{ total.commissions|floatformat:0|intcomma }}</strong></div>
+    <div class="pr-kpi"><span>Neto a pagar</span><strong>{{ total.currency }} {{ total.net|floatformat:0|intcomma }}</strong></div>
+    <div class="pr-kpi"><span>Pendiente</span><strong>{{ total.currency }} {{ total.pending|floatformat:0|intcomma }}</strong></div>
+    <div class="pr-kpi"><span>Pagado</span><strong>{{ total.currency }} {{ total.paid|floatformat:0|intcomma }}</strong></div>
+</section>
+{% endfor %}
+
+{% if rows %}
+<div class="pr-grid-wrap">
+    <table class="pr-grid">
+        <thead>
+            <tr>
+                <th>#</th><th>Trabajador</th><th>DNI</th><th>Cargo</th><th>Área</th><th>Movimiento</th>
+                <th class="num">Sueldo base</th><th class="num">Asignación familiar</th>
+                <th class="num">Bonificaciones</th><th class="num">Horas extras</th>
+                <th class="num">Comisiones</th><th class="num">Remuneración bruta</th>
+                <th class="num">AFP / ONP</th><th class="num">Renta</th><th class="num">Otros descuentos</th>
+                <th class="num">Seguro</th><th class="num">Neto a pagar</th><th>Estado</th><th class="actions-cell">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in rows %}
+            <tr>
+                <td class="num">{{ forloop.counter }}</td>
+                <td class="worker">{{ entry.employee.full_name }}</td>
+                <td>{{ entry.employee.document_number|default:"—" }}</td>
+                <td>{{ entry.employee.position|default:"—" }}</td>
+                <td>{{ entry.employee.area|default:"—" }}</td>
+                <td><span class="ea-badge red">Egreso · Planillas</span></td>
+                <td class="num">{{ entry.base_salary|floatformat:0|intcomma }}</td>
+                <td class="num">{{ entry.family_allowance|floatformat:0|intcomma }}</td>
+                <td class="num">{{ entry.bonuses|floatformat:0|intcomma }}</td>
+                <td class="num">{{ entry.overtime|floatformat:0|intcomma }}</td>
+                <td class="num">{{ entry.commissions|floatformat:0|intcomma }}</td>
+                <td class="num">{{ entry.gross_remuneration|floatformat:0|intcomma }}</td>
+                <td class="num">{{ entry.pension_deduction|floatformat:0|intcomma }}</td>
+                <td class="num">{{ entry.income_tax|floatformat:0|intcomma }}</td>
+                <td class="num">{{ entry.other_deductions|floatformat:0|intcomma }}</td>
+                <td class="num">{{ entry.essalud_amount|floatformat:0|intcomma }}</td>
+                <td class="num">{{ entry.net_pay|floatformat:0|intcomma }}</td>
+                <td><span class="ea-badge {% if entry.status == 'pagado' %}green{% else %}amber{% endif %}">{{ entry.get_status_display }}</span></td>
+                <td class="actions-cell">
+                    <div class="pr-actions">
+                        <button
+                            class="pr-action"
+                            type="button"
+                            data-edit-entry="{{ entry.pk }}"
+                            data-edit-name="{{ entry.employee.full_name }}"
+                            data-edit-base="{{ entry.base_salary }}"
+                            data-edit-family="{{ entry.family_allowance }}"
+                            data-edit-bonuses="{{ entry.bonuses }}"
+                            data-edit-overtime="{{ entry.overtime }}"
+                            data-edit-other-income="{{ entry.other_income }}"
+                            data-edit-commissions="{{ entry.commissions }}"
+                            data-edit-pension="{{ entry.pension_deduction }}"
+                            data-edit-tax="{{ entry.income_tax }}"
+                            data-edit-other-deductions="{{ entry.other_deductions }}"
+                            data-edit-essalud="{{ entry.essalud_rate }}"
+                            data-edit-notes="{{ entry.notes }}"
+                            data-edit-url="{% url 'external_agents:payroll_entry_update' pk=entry.pk %}"
+                        >Editar</button>
+                        {% if entry.status == 'pendiente' %}
+                        <button
+                            class="pr-action pay"
+                            type="button"
+                            data-pay-entry="{{ entry.pk }}"
+                            data-pay-name="{{ entry.employee.full_name }}"
+                            data-pay-url="{% url 'external_agents:payroll_entry_pay' pk=entry.pk %}"
+                        >Pagar</button>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="pr-empty">
+    <strong>No hay planilla generada para {{ period_value }}.</strong>
+    <p>Agrega trabajadores y pulsa “Generar planilla”.</p>
+</div>
+{% endif %}
+
+<dialog class="pr-modal" id="employee-modal">
+    <form method="post" action="{% url 'external_agents:payroll_employee_add' %}">
+        {% csrf_token %}
+        <header class="pr-modal-head"><h2>Agregar trabajador</h2><button class="pr-close" type="button" data-close>×</button></header>
+        <div class="pr-form">
+            <div class="ea-field wide"><label class="ea-label">Nombres y apellidos</label><input class="ea-input" name="full_name" required></div>
+            <div class="ea-field"><label class="ea-label">DNI</label><input class="ea-input" name="document_number"></div>
+            <div class="ea-field"><label class="ea-label">Cargo</label><input class="ea-input" name="position"></div>
+            <div class="ea-field"><label class="ea-label">Área</label><input class="ea-input" name="area"></div>
+            <div class="ea-field"><label class="ea-label">Sueldo base</label><input class="ea-input" type="number" step="0.01" min="0" name="base_salary" required></div>
+            <div class="ea-field"><label class="ea-label">Moneda</label><select class="ea-select" name="currency_code"><option value="PEN">PEN</option><option value="USD">USD</option></select></div>
+            <div class="ea-field"><label class="ea-label">Sistema de pensión</label><select class="ea-select" name="pension_system"><option value="afp">AFP</option><option value="onp">ONP</option><option value="ninguno">Sin pensión</option></select></div>
+            <div class="ea-field"><label class="ea-label">% AFP / ONP</label><input class="ea-input" type="number" step="0.01" min="0" name="pension_pct" value="10.00"></div>
+            <div class="ea-field"><label class="ea-label">Cuenta bancaria</label><input class="ea-input" name="bank_account"></div>
+            <div class="ea-field"><label class="ea-label">Fecha de ingreso</label><input class="ea-input" type="date" name="hire_date"></div>
+            <div class="pr-form-actions"><button class="ea-btn" type="button" data-close>Cancelar</button><button class="ea-btn ea-btn-blue" type="submit">Guardar trabajador</button></div>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="pr-modal" id="generate-modal">
+    <form method="post" action="{% url 'external_agents:payroll_generate' %}">
+        {% csrf_token %}
+        <header class="pr-modal-head"><h2>Generar planilla mensual</h2><button class="pr-close" type="button" data-close>×</button></header>
+        <div class="pr-form">
+            <div class="ea-field wide"><label class="ea-label">Periodo</label><input class="ea-input" type="month" name="period" value="{{ period_value }}" required></div>
+            <p class="ea-help wide">Se crearán filas para todos los trabajadores activos, calculando AFP/ONP sobre el sueldo base.</p>
+            <div class="pr-form-actions"><button class="ea-btn" type="button" data-close>Cancelar</button><button class="ea-btn ea-btn-blue" type="submit">Generar</button></div>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="pr-modal" id="edit-modal">
+    <form method="post" id="edit-entry-form">
+        {% csrf_token %}
+        <header class="pr-modal-head"><h2 id="edit-entry-title">Editar fila</h2><button class="pr-close" type="button" data-close>×</button></header>
+        <div class="pr-form">
+            <div class="ea-field"><label class="ea-label">Sueldo base</label><input class="ea-input" type="number" step="0.01" name="base_salary" id="edit-base"></div>
+            <div class="ea-field"><label class="ea-label">Asignación familiar</label><input class="ea-input" type="number" step="0.01" name="family_allowance" id="edit-family"></div>
+            <div class="ea-field"><label class="ea-label">Bonificaciones</label><input class="ea-input" type="number" step="0.01" name="bonuses" id="edit-bonuses"></div>
+            <div class="ea-field"><label class="ea-label">Horas extras</label><input class="ea-input" type="number" step="0.01" name="overtime" id="edit-overtime"></div>
+            <div class="ea-field"><label class="ea-label">Otros ingresos</label><input class="ea-input" type="number" step="0.01" name="other_income" id="edit-other-income"></div>
+            <div class="ea-field"><label class="ea-label">Comisiones</label><input class="ea-input" type="number" step="0.01" name="commissions" id="edit-commissions"></div>
+            <div class="ea-field"><label class="ea-label">AFP / ONP</label><input class="ea-input" type="number" step="0.01" name="pension_deduction" id="edit-pension"></div>
+            <div class="ea-field"><label class="ea-label">Retención renta</label><input class="ea-input" type="number" step="0.01" name="income_tax" id="edit-tax"></div>
+            <div class="ea-field"><label class="ea-label">Otros descuentos</label><input class="ea-input" type="number" step="0.01" name="other_deductions" id="edit-other-deductions"></div>
+            <div class="ea-field"><label class="ea-label">% Seguro empleador</label><input class="ea-input" type="number" step="0.01" name="essalud_rate" id="edit-essalud"></div>
+            <div class="ea-field wide"><label class="ea-label">Observaciones</label><input class="ea-input" name="notes" id="edit-notes"></div>
+            <div class="pr-form-actions"><button class="ea-btn" type="button" data-close>Cancelar</button><button class="ea-btn ea-btn-blue" type="submit">Guardar fila</button></div>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="pr-modal" id="pay-modal">
+    <form method="post" id="pay-entry-form">
+        {% csrf_token %}
+        <header class="pr-modal-head"><h2 id="pay-entry-title">Registrar pago de sueldo</h2><button class="pr-close" type="button" data-close>×</button></header>
+        <div class="pr-form">
+            <div class="ea-field wide"><label class="ea-label">Fecha de pago</label><input class="ea-input" type="date" name="payment_date" id="pay-entry-date" required></div>
+            <div class="pr-form-actions"><button class="ea-btn" type="button" data-close>Cancelar</button><button class="ea-btn ea-btn-blue" type="submit">Confirmar pago</button></div>
+        </div>
+    </form>
+</dialog>
+
+<script>
+(function(){
+    document.querySelectorAll('[data-open-modal]').forEach(b=>b.addEventListener('click',()=>document.getElementById(b.dataset.openModal)?.showModal()));
+    document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>b.closest('dialog')?.close()));
+    document.querySelectorAll('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d)d.close()}));
+    document.querySelectorAll('[data-edit-entry]').forEach(button=>{
+        button.addEventListener('click',()=>{
+            const form=document.getElementById('edit-entry-form');
+            form.action=button.dataset.editUrl;
+            document.getElementById('edit-entry-title').textContent=`Editar · ${button.dataset.editName}`;
+            const map={
+                base:'edit-base',family:'edit-family',bonuses:'edit-bonuses',overtime:'edit-overtime',
+                'other-income':'edit-other-income',commissions:'edit-commissions',pension:'edit-pension',
+                tax:'edit-tax','other-deductions':'edit-other-deductions',essalud:'edit-essalud',notes:'edit-notes'
+            };
+            Object.entries(map).forEach(([key,id])=>document.getElementById(id).value=button.dataset['edit'+key.split('-').map(v=>v.charAt(0).toUpperCase()+v.slice(1)).join('')]||'');
+            document.getElementById('edit-modal').showModal();
+        });
+    });
+    document.querySelectorAll('[data-pay-entry]').forEach(button=>{
+        button.addEventListener('click',()=>{
+            document.getElementById('pay-entry-form').action=button.dataset.payUrl;
+            document.getElementById('pay-entry-title').textContent=`Pagar sueldo · ${button.dataset.payName}`;
+            document.getElementById('pay-entry-date').value=new Date().toISOString().slice(0,10);
+            document.getElementById('pay-modal').showModal();
+        });
+    });
+})();
+</script>
+{% endblock %}

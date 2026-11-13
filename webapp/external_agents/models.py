@@ -1,4 +1,5 @@
 from pathlib import Path
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.validators import FileExtensionValidator
 from django.db import models
@@ -427,7 +428,11 @@ class CommissionCollectionEntry(models.Model):
 class ServicePayment(models.Model):
     """Pago programado o realizado de un servicio operativo."""
 
-    class Category(models.TextChoices):
+    class FinancialCategory(models.TextChoices):
+        SERVICES = 'servicios', 'Servicios'
+        COMMISSIONS = 'comisiones', 'Pago de comisiones'
+
+    class Subcategory(models.TextChoices):
         WATER = 'agua', 'Agua'
         ELECTRICITY = 'luz', 'Luz'
         INTERNET = 'internet', 'Internet'
@@ -462,12 +467,19 @@ class ServicePayment(models.Model):
         blank=True,
         verbose_name='Referencia',
     )
-    category = models.CharField(
+    financial_category = models.CharField(
         max_length=30,
-        choices=Category.choices,
-        default=Category.OTHER,
+        choices=FinancialCategory.choices,
+        default=FinancialCategory.SERVICES,
         db_index=True,
-        verbose_name='Categoría',
+        verbose_name='Categoría financiera',
+    )
+    subcategory = models.CharField(
+        max_length=30,
+        choices=Subcategory.choices,
+        default=Subcategory.OTHER,
+        db_index=True,
+        verbose_name='Subcategoría',
     )
     recurrence = models.CharField(
         max_length=20,
@@ -554,6 +566,234 @@ class ServicePayment(models.Model):
 
     def __str__(self):
         return f'{self.concept} · {self.get_status_display()}'
+
+
+class PayrollEmployee(models.Model):
+    """Trabajador incluido en la planilla mensual."""
+
+    class PensionSystem(models.TextChoices):
+        AFP = 'afp', 'AFP'
+        ONP = 'onp', 'ONP'
+        NONE = 'ninguno', 'Sin pensión'
+
+    full_name = models.CharField(max_length=200, verbose_name='Trabajador')
+    document_number = models.CharField(
+        max_length=20,
+        blank=True,
+        db_index=True,
+        verbose_name='DNI',
+    )
+    position = models.CharField(max_length=150, blank=True, verbose_name='Cargo')
+    area = models.CharField(max_length=150, blank=True, verbose_name='Área')
+    base_salary = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Sueldo base',
+    )
+    currency_code = models.CharField(
+        max_length=3,
+        default='PEN',
+        verbose_name='Moneda',
+    )
+    pension_system = models.CharField(
+        max_length=20,
+        choices=PensionSystem.choices,
+        default=PensionSystem.AFP,
+        verbose_name='Sistema de pensión',
+    )
+    pension_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('10.00'),
+        verbose_name='% descuento pensionario',
+    )
+    bank_account = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name='Cuenta bancaria',
+    )
+    hire_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Fecha de ingreso',
+    )
+    is_active = models.BooleanField(default=True, db_index=True, verbose_name='Activo')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Creado el')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Actualizado el')
+
+    class Meta:
+        db_table = 'external_agents_payroll_employee'
+        ordering = ['full_name', 'pk']
+        verbose_name = 'Trabajador de planilla'
+        verbose_name_plural = 'Trabajadores de planilla'
+
+    def __str__(self):
+        return self.full_name
+
+
+class PayrollEntry(models.Model):
+    """Fila mensual de planilla para un trabajador."""
+
+    class MovementType(models.TextChoices):
+        INCOME = 'ingreso', 'Ingreso'
+        EXPENSE = 'egreso', 'Egreso'
+
+    class Status(models.TextChoices):
+        PENDING = 'pendiente', 'Pendiente'
+        PAID = 'pagado', 'Pagado'
+
+    employee = models.ForeignKey(
+        PayrollEmployee,
+        on_delete=models.CASCADE,
+        related_name='payroll_entries',
+        verbose_name='Trabajador',
+    )
+    period = models.DateField(db_index=True, verbose_name='Periodo')
+    financial_category = models.CharField(
+        max_length=30,
+        default='planillas',
+        db_index=True,
+        verbose_name='Categoría financiera',
+    )
+    movement_type = models.CharField(
+        max_length=20,
+        choices=MovementType.choices,
+        default=MovementType.EXPENSE,
+        db_index=True,
+        verbose_name='Tipo de movimiento',
+    )
+    base_salary = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Sueldo base',
+    )
+    family_allowance = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Asignación familiar',
+    )
+    bonuses = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Bonificaciones',
+    )
+    overtime = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Horas extras',
+    )
+    other_income = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Otros ingresos',
+    )
+    commissions = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Comisiones',
+    )
+    pension_deduction = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Descuento AFP / ONP',
+    )
+    income_tax = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Retención renta',
+    )
+    other_deductions = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Otros descuentos',
+    )
+    essalud_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('9.00'),
+        verbose_name='% EsSalud empleador',
+    )
+    currency_code = models.CharField(
+        max_length=3,
+        default='PEN',
+        verbose_name='Moneda',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+        verbose_name='Estado',
+    )
+    payment_date = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Fecha de pago',
+    )
+    notes = models.TextField(blank=True, default='', verbose_name='Observaciones')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Creado el')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Actualizado el')
+
+    class Meta:
+        db_table = 'external_agents_payroll_entry'
+        ordering = ['employee__full_name', 'pk']
+        verbose_name = 'Fila de planilla'
+        verbose_name_plural = 'Planillas'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['employee', 'period'],
+                name='unique_payroll_employee_period',
+            ),
+        ]
+
+    @staticmethod
+    def _money(value):
+        return Decimal(value or 0).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def gross_remuneration(self):
+        return self._money(
+            self.base_salary
+            + self.family_allowance
+            + self.bonuses
+            + self.overtime
+            + self.other_income
+            + self.commissions
+        )
+
+    @property
+    def net_pay(self):
+        return self._money(
+            max(
+                self.gross_remuneration
+                - self.pension_deduction
+                - self.income_tax
+                - self.other_deductions,
+                Decimal('0'),
+            )
+        )
+
+    @property
+    def essalud_amount(self):
+        return self._money(self.gross_remuneration * self.essalud_rate / 100)
+
+    @property
+    def employer_cost(self):
+        return self._money(self.gross_remuneration + self.essalud_amount)
+
+    def __str__(self):
+        return f'{self.employee} · {self.period:%Y-%m}'
 
 
 class ExternalAgentAttachment(models.Model):

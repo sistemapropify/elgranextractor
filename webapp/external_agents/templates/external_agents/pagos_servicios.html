@@ -61,7 +61,7 @@
     }
     .sp-grid {
         width: 100%;
-        min-width: 1450px;
+        min-width: 1530px;
         border-collapse: separate;
         border-spacing: 0;
         font-size: 11px;
@@ -219,11 +219,11 @@
         </select>
     </div>
     <div class="ea-field">
-        <label class="ea-label" for="sp-category">Categoría</label>
-        <select class="ea-select" id="sp-category" name="categoria">
+        <label class="ea-label" for="sp-subcategory">Subcategoría</label>
+        <select class="ea-select" id="sp-subcategory" name="subcategoria">
             <option value="">Todas</option>
-            {% for value, label in categories %}
-            <option value="{{ value }}" {% if category_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% for value, label in subcategories %}
+            <option value="{{ value }}" {% if subcategory_filter == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
         </select>
     </div>
@@ -240,6 +240,7 @@
                 <th>Proveedor</th>
                 <th>Referencia</th>
                 <th>Categoría</th>
+                <th>Subcategoría</th>
                 <th>Periodicidad</th>
                 <th>Vencimiento</th>
                 <th>Alarma</th>
@@ -259,7 +260,8 @@
                 <td class="concept">{{ payment.concept }}</td>
                 <td>{{ payment.provider|default:"—" }}</td>
                 <td>{{ payment.reference|default:"—" }}</td>
-                <td>{{ payment.get_category_display }}</td>
+                <td>{{ payment.get_financial_category_display }}</td>
+                <td>{{ payment.get_subcategory_display }}</td>
                 <td>{{ payment.get_recurrence_display }}</td>
                 <td>{{ payment.due_date|date:"d/m/Y" }}</td>
                 <td class="alarm">
@@ -316,7 +318,8 @@
             <div class="ea-field wide"><label class="ea-label">Concepto</label><input class="ea-input" name="concept" required placeholder="Ej. Recibo de luz"></div>
             <div class="ea-field"><label class="ea-label">Proveedor</label><input class="ea-input" name="provider" placeholder="Ej. Seal"></div>
             <div class="ea-field"><label class="ea-label">Referencia</label><input class="ea-input" name="reference" placeholder="Nro. contrato, suministro o celular"></div>
-            <div class="ea-field"><label class="ea-label">Categoría</label><select class="ea-select" name="category" required>{% for value,label in categories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+            <div class="ea-field"><label class="ea-label">Categoría</label><input class="ea-input" value="Servicios" disabled></div>
+            <div class="ea-field"><label class="ea-label">Subcategoría</label><select class="ea-select" name="subcategory" required>{% for value,label in subcategories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
             <div class="ea-field"><label class="ea-label">Periodicidad</label><select class="ea-select" name="recurrence"><option value="unico">Único</option><option value="mensual">Mensual</option><option value="bimestral">Bimestral</option><option value="trimestral">Trimestral</option><option value="anual">Anual</option></select></div>
             <div class="ea-field"><label class="ea-label">Moneda</label><select class="ea-select" name="currency_code"><option value="PEN">PEN</option><option value="USD">USD</option></select></div>
             <div class="ea-field"><label class="ea-label">Monto estimado</label><input class="ea-input" name="estimated_amount" type="number" min="0" step="0.01" required></div>

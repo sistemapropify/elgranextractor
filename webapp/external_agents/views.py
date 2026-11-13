@@ -2,6 +2,7 @@ import calendar
 import mimetypes
 import re
 from datetime import date, timedelta
+from decimal import Decimal
 from functools import wraps
 from pathlib import Path
 from urllib.parse import quote, urlencode
@@ -37,6 +38,8 @@ from .models import (
     DocumentType,
     ExternalAgent,
     ExternalAgentAttachment,
+    PayrollEmployee,
+    PayrollEntry,
     ServicePayment,
 )
 
@@ -961,7 +964,7 @@ def _next_service_due_date(value, recurrence):
 def service_payments(request):
     query = str(request.GET.get('q') or '').strip()
     status_filter = str(request.GET.get('estado') or 'pendientes').strip()
-    category_filter = str(request.GET.get('categoria') or '').strip()
+    subcategory_filter = str(request.GET.get('subcategoria') or '').strip()
     payments = ServicePayment.objects.all()
     if query:
         payments = payments.filter(
@@ -970,8 +973,8 @@ def service_payments(request):
             | Q(reference__icontains=query)
             | Q(notes__icontains=query)
         )
-    if category_filter in ServicePayment.Category.values:
-        payments = payments.filter(category=category_filter)
+    if subcategory_filter in ServicePayment.Subcategory.values:
+        payments = payments.filter(subcategory=subcategory_filter)
     today = timezone.localdate()
     if status_filter == 'pagados':
         payments = payments.filter(status=ServicePayment.Status.PAID)
@@ -1029,8 +1032,8 @@ def service_payments(request):
         'summary': summary,
         'query': query,
         'status_filter': status_filter,
-        'category_filter': category_filter,
-        'categories': ServicePayment.Category.choices,
+        'subcategory_filter': subcategory_filter,
+        'subcategories': ServicePayment.Subcategory.choices,
     })
 
 
@@ -1039,15 +1042,15 @@ def service_payments(request):
 def service_payment_add(request):
     if request.method != 'POST':
         return redirect('external_agents:service_payments')
-    valid_categories = set(ServicePayment.Category.values)
+    valid_subcategories = set(ServicePayment.Subcategory.values)
     valid_recurrences = set(ServicePayment.Recurrence.values)
     concept = str(request.POST.get('concept') or '').strip()
-    category = str(request.POST.get('category') or '').strip()
+    subcategory = str(request.POST.get('subcategory') or '').strip()
     recurrence = str(request.POST.get('recurrence') or '').strip()
     due_date = _parse_date_input(request.POST.get('due_date'))
     if (
         not concept
-        or category not in valid_categories
+        or subcategory not in valid_subcategories
         or recurrence not in valid_recurrences
         or due_date is None
     ):
@@ -1057,7 +1060,8 @@ def service_payment_add(request):
         concept=concept,
         provider=str(request.POST.get('provider') or '').strip(),
         reference=str(request.POST.get('reference') or '').strip(),
-        category=category,
+        financial_category=ServicePayment.FinancialCategory.SERVICES,
+        subcategory=subcategory,
         recurrence=recurrence,
         currency_code=(
             str(request.POST.get('currency_code') or '').strip().upper()
@@ -1104,7 +1108,8 @@ def service_payment_pay(request, pk):
             concept=payment.concept,
             provider=payment.provider,
             reference=payment.reference,
-            category=payment.category,
+            financial_category=payment.financial_category,
+            subcategory=payment.subcategory,
             recurrence=payment.recurrence,
             currency_code=payment.currency_code,
             estimated_amount=payment.estimated_amount,
@@ -1115,6 +1120,164 @@ def service_payment_pay(request, pk):
         )
     messages.success(request, 'Pago registrado. Estado actualizado a Pagado.')
     return redirect('external_agents:service_payments')
+
+
+def _parse_payroll_period(value):
+    text = str(value or '').strip()
+    try:
+        year, month = [int(part) for part in text.split('-')[:2]]
+        return date(year, month, 1)
+    except (TypeError, ValueError):
+        today = timezone.localdate()
+        return date(today.year, today.month, 1)
+
+
+def _money_input(value):
+    return Decimal(str(_first_number(value))).quantize(Decimal('0.01'))
+
+
+@never_cache
+@external_agent_access_required
+def payroll_dashboard(request):
+    period = _parse_payroll_period(request.GET.get('periodo'))
+    status_filter = str(request.GET.get('estado') or 'todos').strip()
+    entries = (
+        PayrollEntry.objects
+        .filter(period=period)
+        .select_related('employee')
+    )
+    if status_filter == 'pendientes':
+        entries = entries.filter(status=PayrollEntry.Status.PENDING)
+    elif status_filter == 'pagados':
+        entries = entries.filter(status=PayrollEntry.Status.PAID)
+    rows = list(entries)
+    totals = {}
+    for row in rows:
+        currency = row.currency_code or 'PEN'
+        bucket = totals.setdefault(currency, {
+            'currency': currency,
+            'gross': Decimal('0'),
+            'pension': Decimal('0'),
+            'essalud': Decimal('0'),
+            'commissions': Decimal('0'),
+            'net': Decimal('0'),
+            'pending': Decimal('0'),
+            'paid': Decimal('0'),
+        })
+        bucket['gross'] += row.gross_remuneration
+        bucket['pension'] += row.pension_deduction
+        bucket['essalud'] += row.essalud_amount
+        bucket['commissions'] += row.commissions
+        bucket['net'] += row.net_pay
+        bucket['pending' if row.status == PayrollEntry.Status.PENDING else 'paid'] += row.net_pay
+    return render(request, 'external_agents/planillas.html', {
+        'period': period,
+        'period_value': period.strftime('%Y-%m'),
+        'rows': rows,
+        'totals': list(totals.values()),
+        'status_filter': status_filter,
+        'active_employees': PayrollEmployee.objects.filter(is_active=True).count(),
+    })
+
+
+@never_cache
+@external_agent_access_required
+def payroll_employee_add(request):
+    if request.method != 'POST':
+        return redirect('external_agents:payroll_dashboard')
+    full_name = str(request.POST.get('full_name') or '').strip()
+    pension_system = str(request.POST.get('pension_system') or '').strip()
+    if (
+        not full_name
+        or pension_system not in set(PayrollEmployee.PensionSystem.values)
+    ):
+        messages.error(request, 'Completa el nombre y el sistema de pensión.')
+        return redirect('external_agents:payroll_dashboard')
+    PayrollEmployee.objects.create(
+        full_name=full_name,
+        document_number=str(request.POST.get('document_number') or '').strip(),
+        position=str(request.POST.get('position') or '').strip(),
+        area=str(request.POST.get('area') or '').strip(),
+        base_salary=_money_input(request.POST.get('base_salary')),
+        currency_code=(
+            str(request.POST.get('currency_code') or '').strip().upper()
+            or 'PEN'
+        ),
+        pension_system=pension_system,
+        pension_pct=_money_input(request.POST.get('pension_pct')),
+        bank_account=str(request.POST.get('bank_account') or '').strip(),
+        hire_date=_parse_date_input(request.POST.get('hire_date')),
+    )
+    messages.success(request, 'Trabajador agregado a planilla.')
+    return redirect('external_agents:payroll_dashboard')
+
+
+@never_cache
+@external_agent_access_required
+def payroll_generate(request):
+    if request.method != 'POST':
+        return redirect('external_agents:payroll_dashboard')
+    period = _parse_payroll_period(request.POST.get('period'))
+    created = 0
+    for employee in PayrollEmployee.objects.filter(is_active=True):
+        if PayrollEntry.objects.filter(employee=employee, period=period).exists():
+            continue
+        pension = (
+            employee.base_salary * employee.pension_pct / 100
+        ).quantize(Decimal('0.01'))
+        PayrollEntry.objects.create(
+            employee=employee,
+            period=period,
+            base_salary=employee.base_salary,
+            pension_deduction=pension,
+            currency_code=employee.currency_code,
+        )
+        created += 1
+    messages.success(
+        request,
+        f'Planilla generada: {created} trabajador{"es" if created != 1 else ""}.',
+    )
+    return redirect(f'/agentes-externos/planillas/?periodo={period:%Y-%m}')
+
+
+@never_cache
+@external_agent_access_required
+def payroll_entry_update(request, pk):
+    entry = get_object_or_404(PayrollEntry, pk=pk)
+    if request.method == 'POST':
+        entry.base_salary = _money_input(request.POST.get('base_salary'))
+        entry.family_allowance = _money_input(request.POST.get('family_allowance'))
+        entry.bonuses = _money_input(request.POST.get('bonuses'))
+        entry.overtime = _money_input(request.POST.get('overtime'))
+        entry.other_income = _money_input(request.POST.get('other_income'))
+        entry.commissions = _money_input(request.POST.get('commissions'))
+        entry.pension_deduction = _money_input(request.POST.get('pension_deduction'))
+        entry.income_tax = _money_input(request.POST.get('income_tax'))
+        entry.other_deductions = _money_input(request.POST.get('other_deductions'))
+        entry.essalud_rate = _money_input(request.POST.get('essalud_rate'))
+        entry.notes = str(request.POST.get('notes') or '').strip()
+        entry.save()
+        messages.success(request, 'Fila de planilla actualizada.')
+    return redirect(
+        f'/agentes-externos/planillas/?periodo={entry.period:%Y-%m}'
+    )
+
+
+@never_cache
+@external_agent_access_required
+def payroll_entry_pay(request, pk):
+    entry = get_object_or_404(PayrollEntry, pk=pk)
+    if request.method == 'POST':
+        entry.status = PayrollEntry.Status.PAID
+        entry.payment_date = (
+            _parse_date_input(request.POST.get('payment_date'))
+            or timezone.localdate()
+        )
+        entry.save(update_fields=['status', 'payment_date', 'updated_at'])
+        messages.success(request, 'Sueldo marcado como pagado.')
+    return redirect(
+        f'/agentes-externos/planillas/?periodo={entry.period:%Y-%m}'
+    )
 
 
 @never_cache

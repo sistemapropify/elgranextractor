@@ -16,6 +16,8 @@ from .models import (
     DocumentType,
     ExternalAgent,
     ExternalAgentAttachment,
+    PayrollEmployee,
+    PayrollEntry,
     ServicePayment,
 )
 from .views import _normalize_closing
@@ -184,7 +186,7 @@ class ExternalAgentsViewsTests(TestCase):
             concept='Recibo de luz',
             provider='Seal',
             reference='SU-001',
-            category=ServicePayment.Category.ELECTRICITY,
+            subcategory=ServicePayment.Subcategory.ELECTRICITY,
             recurrence=ServicePayment.Recurrence.MONTHLY,
             currency_code='PEN',
             estimated_amount='320.00',
@@ -196,6 +198,8 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'Pagos de Servicios')
         self.assertContains(response, 'class="sp-grid"')
         self.assertContains(response, 'Recibo de luz')
+        self.assertContains(response, '>Servicios<')
+        self.assertContains(response, '>Luz<')
         self.assertContains(response, 'Vence hoy')
         self.assertContains(response, '3 días antes')
         self.assertContains(response, 'id="service-add-modal"')
@@ -210,7 +214,7 @@ class ExternalAgentsViewsTests(TestCase):
                 'concept': 'Internet oficina',
                 'provider': 'Movistar',
                 'reference': 'INT-001',
-                'category': ServicePayment.Category.INTERNET,
+                'subcategory': ServicePayment.Subcategory.INTERNET,
                 'recurrence': ServicePayment.Recurrence.MONTHLY,
                 'currency_code': 'PEN',
                 'estimated_amount': '180.00',
@@ -221,6 +225,11 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertEqual(create_response.status_code, 302)
         payment = ServicePayment.objects.get(concept='Internet oficina')
         self.assertEqual(payment.status, ServicePayment.Status.PENDING)
+        self.assertEqual(
+            payment.financial_category,
+            ServicePayment.FinancialCategory.SERVICES,
+        )
+        self.assertEqual(payment.subcategory, ServicePayment.Subcategory.INTERNET)
 
         pay_response = self.client.post(
             reverse(
@@ -242,6 +251,96 @@ class ExternalAgentsViewsTests(TestCase):
         next_payment = ServicePayment.objects.exclude(pk=payment.pk).get()
         self.assertEqual(next_payment.status, ServicePayment.Status.PENDING)
         self.assertGreater(next_payment.due_date, today)
+
+    def test_payroll_employee_can_be_added_and_month_generated(self):
+        self.authenticate_propify()
+        response = self.client.post(
+            reverse('external_agents:payroll_employee_add'),
+            {
+                'full_name': 'María López',
+                'document_number': '70001111',
+                'position': 'Asistente administrativa',
+                'area': 'Administración',
+                'base_salary': '3000.00',
+                'currency_code': 'PEN',
+                'pension_system': 'afp',
+                'pension_pct': '10.00',
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        employee = PayrollEmployee.objects.get(full_name='María López')
+        period = timezone.localdate().strftime('%Y-%m')
+        generated = self.client.post(
+            reverse('external_agents:payroll_generate'),
+            {'period': period},
+        )
+        self.assertEqual(generated.status_code, 302)
+        entry = PayrollEntry.objects.get(employee=employee)
+        self.assertEqual(float(entry.base_salary), 3000)
+        self.assertEqual(float(entry.pension_deduction), 300)
+        dashboard = self.client.get(
+            reverse('external_agents:payroll_dashboard'),
+            {'periodo': period},
+        )
+        self.assertContains(dashboard, 'María López')
+        self.assertContains(dashboard, 'AFP / ONP')
+        self.assertContains(dashboard, 'Seguro')
+        self.assertContains(dashboard, 'Comisiones')
+        self.assertContains(dashboard, 'Remuneración bruta')
+        self.assertContains(dashboard, 'Egreso · Planillas')
+        self.assertNotContains(dashboard, 'Total ingresos')
+
+    def test_payroll_entry_supports_commissions_seguro_and_payment(self):
+        self.authenticate_propify()
+        period = timezone.localdate().replace(day=1)
+        employee = PayrollEmployee.objects.create(
+            full_name='Carlos Pérez',
+            base_salary='2500.00',
+            pension_pct='10.00',
+        )
+        entry = PayrollEntry.objects.create(
+            employee=employee,
+            period=period,
+            base_salary='2500.00',
+            pension_deduction='250.00',
+        )
+        update = self.client.post(
+            reverse(
+                'external_agents:payroll_entry_update',
+                kwargs={'pk': entry.pk},
+            ),
+            {
+                'base_salary': '2500.00',
+                'family_allowance': '0',
+                'bonuses': '100.00',
+                'overtime': '50.00',
+                'other_income': '0',
+                'commissions': '400.00',
+                'pension_deduction': '250.00',
+                'income_tax': '80.00',
+                'other_deductions': '20.00',
+                'essalud_rate': '9.00',
+                'notes': 'Comisión mensual',
+            },
+        )
+        self.assertEqual(update.status_code, 302)
+        entry.refresh_from_db()
+        self.assertEqual(float(entry.gross_remuneration), 3050)
+        self.assertEqual(entry.financial_category, 'planillas')
+        self.assertEqual(entry.movement_type, PayrollEntry.MovementType.EXPENSE)
+        self.assertEqual(float(entry.essalud_amount), 274.5)
+        self.assertEqual(float(entry.net_pay), 2700)
+        pay = self.client.post(
+            reverse(
+                'external_agents:payroll_entry_pay',
+                kwargs={'pk': entry.pk},
+            ),
+            {'payment_date': timezone.localdate().isoformat()},
+        )
+        self.assertEqual(pay.status_code, 302)
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, PayrollEntry.Status.PAID)
+        self.assertEqual(entry.payment_date, timezone.localdate())
 
     def test_all_module_pages_render(self):
         login_response = self.client.get(reverse('external_agents:login'))

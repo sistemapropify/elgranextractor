@@ -52,6 +52,10 @@
             <span class="submenu-icon">▤</span>
             <span>Pagos de Servicios</span>
         </a>
+        <a href="{% url 'external_agents:payroll_dashboard' %}" class="submenu-item {% if request.resolver_match.url_name == 'payroll_dashboard' or request.resolver_match.url_name == 'payroll_employee_add' or request.resolver_match.url_name == 'payroll_generate' or request.resolver_match.url_name == 'payroll_entry_update' or request.resolver_match.url_name == 'payroll_entry_pay' %}active{% endif %}">
+            <span class="submenu-icon">▥</span>
+            <span>Planillas de Sueldos</span>
+        </a>
     </div>
 </div>
 {% endblock %}
@@ -367,6 +371,12 @@
         border-color: rgba(210, 153, 34, .35);
         background: rgba(210, 153, 34, .11);
         color: #e3b341;
+    }
+
+    .ea-badge.red {
+        border-color: rgba(248, 81, 73, .4);
+        background: rgba(248, 81, 73, .12);
+        color: #ff8f87;
     }
 
     .ea-badge.muted {
