@@ -61,7 +61,7 @@
     }
     .sp-grid {
         width: 100%;
-        min-width: 1530px;
+        min-width: 1610px;
         border-collapse: separate;
         border-spacing: 0;
         font-size: 11px;
@@ -242,6 +242,7 @@
                 <th>Categoría</th>
                 <th>Subcategoría</th>
                 <th>Periodicidad</th>
+                <th>Mes correspondiente</th>
                 <th>Vencimiento</th>
                 <th>Alarma</th>
                 <th>Moneda</th>
@@ -263,6 +264,7 @@
                 <td>{{ payment.get_financial_category_display }}</td>
                 <td>{{ payment.get_subcategory_display }}</td>
                 <td>{{ payment.get_recurrence_display }}</td>
+                <td>{{ payment.service_month|date:"m/Y" }}</td>
                 <td>{{ payment.due_date|date:"d/m/Y" }}</td>
                 <td class="alarm">
                     <span class="{% if row.alarm_active %}sp-alarm-active{% endif %}">
@@ -323,6 +325,7 @@
             <div class="ea-field"><label class="ea-label">Periodicidad</label><select class="ea-select" name="recurrence"><option value="unico">Único</option><option value="mensual">Mensual</option><option value="bimestral">Bimestral</option><option value="trimestral">Trimestral</option><option value="anual">Anual</option></select></div>
             <div class="ea-field"><label class="ea-label">Moneda</label><select class="ea-select" name="currency_code"><option value="PEN">PEN</option><option value="USD">USD</option></select></div>
             <div class="ea-field"><label class="ea-label">Monto estimado</label><input class="ea-input" name="estimated_amount" type="number" min="0" step="0.01" required></div>
+            <div class="ea-field"><label class="ea-label">Mes correspondiente</label><input class="ea-input" name="service_month" type="month" required></div>
             <div class="ea-field"><label class="ea-label">Vencimiento</label><input class="ea-input" name="due_date" type="date" required></div>
             <div class="ea-field"><label class="ea-label">Alarma</label><select class="ea-select" name="reminder_days_before"><option value="7">7 días antes</option><option value="3" selected>3 días antes</option><option value="1">1 día antes</option><option value="0">El mismo día</option></select></div>
             <div class="ea-field wide"><label class="ea-label">Observaciones</label><input class="ea-input" name="notes"></div>

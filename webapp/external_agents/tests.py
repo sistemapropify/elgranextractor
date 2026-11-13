@@ -1,4 +1,5 @@
 from unittest.mock import patch
+from decimal import Decimal
 
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -16,6 +17,7 @@ from .models import (
     DocumentType,
     ExternalAgent,
     ExternalAgentAttachment,
+    OperatingExpense,
     PayrollEmployee,
     PayrollEntry,
     ServicePayment,
@@ -53,13 +55,20 @@ class ExternalAgentsViewsTests(TestCase):
             updated_by_username='tester',
         )
 
-    def authenticate_propify(self):
+    def authenticate_propify(
+        self,
+        *,
+        is_superuser=True,
+        role='Gerente General',
+    ):
         session = self.client.session
         session[WEB_TOKEN_SESSION_KEY] = 'test-token'
         session[WEB_PROFILE_SESSION_KEY] = {
             'id': '99',
             'username': 'tester',
             'email': 'tester@example.com',
+            'is_superuser': is_superuser,
+            'role': {'name': role},
         }
         session.save()
 
@@ -81,6 +90,7 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'Gestión de Agentes')
         self.assertContains(response, 'Agregar nuevo agente')
         self.assertContains(response, 'Gestión Financiera')
+        self.assertContains(response, 'Balance General')
         self.assertContains(response, 'Comisiones por Cierres')
         self.assertNotContains(response, 'Dashboard General')
 
@@ -190,6 +200,7 @@ class ExternalAgentsViewsTests(TestCase):
             recurrence=ServicePayment.Recurrence.MONTHLY,
             currency_code='PEN',
             estimated_amount='320.00',
+            service_month=today.replace(day=1),
             due_date=today,
             reminder_days_before=3,
         )
@@ -201,6 +212,7 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, '>Servicios<')
         self.assertContains(response, '>Luz<')
         self.assertContains(response, 'Vence hoy')
+        self.assertContains(response, 'Mes correspondiente')
         self.assertContains(response, '3 días antes')
         self.assertContains(response, 'id="service-add-modal"')
         self.assertContains(response, 'id="service-pay-modal"')
@@ -218,6 +230,7 @@ class ExternalAgentsViewsTests(TestCase):
                 'recurrence': ServicePayment.Recurrence.MONTHLY,
                 'currency_code': 'PEN',
                 'estimated_amount': '180.00',
+                'service_month': today.strftime('%Y-%m'),
                 'due_date': today.isoformat(),
                 'reminder_days_before': '3',
             },
@@ -287,6 +300,7 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(dashboard, 'Seguro')
         self.assertContains(dashboard, 'Comisiones')
         self.assertContains(dashboard, 'Remuneración bruta')
+        self.assertContains(dashboard, 'Mes correspondiente')
         self.assertContains(dashboard, 'Egreso · Planillas')
         self.assertNotContains(dashboard, 'Total ingresos')
 
@@ -341,6 +355,161 @@ class ExternalAgentsViewsTests(TestCase):
         entry.refresh_from_db()
         self.assertEqual(entry.status, PayrollEntry.Status.PAID)
         self.assertEqual(entry.payment_date, timezone.localdate())
+
+    def test_fixed_and_marketing_expenses_have_separate_templates(self):
+        self.authenticate_propify()
+        today = timezone.localdate()
+        OperatingExpense.objects.create(
+            expense_category=OperatingExpense.ExpenseCategory.FIXED,
+            subcategory=OperatingExpense.Subcategory.RENT,
+            concept='Alquiler oficina',
+            amount='2500.00',
+            expense_month=today.replace(day=1),
+            due_date=today,
+        )
+        OperatingExpense.objects.create(
+            expense_category=OperatingExpense.ExpenseCategory.MARKETING,
+            subcategory=OperatingExpense.Subcategory.META_ADS,
+            concept='Meta Ads noviembre',
+            amount='800.00',
+            expense_month=today.replace(day=1),
+            due_date=today,
+        )
+        fixed = self.client.get(reverse('external_agents:fixed_expenses'))
+        marketing = self.client.get(reverse('external_agents:marketing_expenses'))
+        self.assertContains(fixed, 'Gastos Fijos')
+        self.assertContains(fixed, 'Mes correspondiente')
+        self.assertContains(fixed, 'Alquiler oficina')
+        self.assertNotContains(fixed, 'Meta Ads noviembre')
+        self.assertContains(marketing, 'Gastos de Marketing')
+        self.assertContains(marketing, 'Meta Ads noviembre')
+        self.assertNotContains(marketing, 'Alquiler oficina')
+        self.assertContains(fixed, 'id="expense-modal"')
+        self.assertContains(marketing, 'id="expense-pay-modal"')
+
+    def test_marketing_expense_can_be_scheduled_and_paid(self):
+        self.authenticate_propify()
+        today = timezone.localdate()
+        response = self.client.post(
+            reverse(
+                'external_agents:operating_expense_add',
+                kwargs={'kind': 'marketing'},
+            ),
+            {
+                'concept': 'Campaña Google',
+                'provider': 'Google',
+                'reference': 'ADS-001',
+                'subcategory': OperatingExpense.Subcategory.GOOGLE_ADS,
+                'recurrence': 'mensual',
+                'currency_code': 'USD',
+                'amount': '300.00',
+                'expense_month': today.strftime('%Y-%m'),
+                'due_date': today.isoformat(),
+                'reminder_days_before': '3',
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        expense = OperatingExpense.objects.get(concept='Campaña Google')
+        pay = self.client.post(
+            reverse(
+                'external_agents:operating_expense_pay',
+                kwargs={'kind': 'marketing', 'pk': expense.pk},
+            ),
+            {
+                'paid_amount': '310.00',
+                'payment_date': today.isoformat(),
+                'payment_method': 'Tarjeta',
+            },
+        )
+        self.assertEqual(pay.status_code, 302)
+        expense.refresh_from_db()
+        self.assertEqual(expense.status, OperatingExpense.Status.PAID)
+        self.assertEqual(float(expense.paid_amount), 310)
+        next_expense = OperatingExpense.objects.exclude(pk=expense.pk).get()
+        self.assertEqual(next_expense.status, OperatingExpense.Status.PENDING)
+        self.assertGreater(next_expense.due_date, today)
+
+    def test_financial_balance_converts_pen_and_aggregates_all_modules(self):
+        self.authenticate_propify()
+        period = timezone.localdate().replace(day=1)
+        CommissionCollection.objects.create(
+            operation_code='BAL-001',
+            property_name='Cierre balance',
+            deal_type='sale',
+            currency_code='USD',
+            amount_to_collect='1400.00',
+            amount_for_agents='400.00',
+            amount_for_propify='1000.00',
+            closing_date=period,
+        )
+        ServicePayment.objects.create(
+            concept='Servicio balance',
+            subcategory=ServicePayment.Subcategory.OTHER,
+            currency_code='PEN',
+            estimated_amount='375.00',
+            service_month=period,
+            due_date=period,
+        )
+        OperatingExpense.objects.create(
+            expense_category=OperatingExpense.ExpenseCategory.FIXED,
+            subcategory=OperatingExpense.Subcategory.RENT,
+            concept='Gasto fijo balance',
+            currency_code='USD',
+            amount='200.00',
+            expense_month=period,
+            due_date=period,
+        )
+        OperatingExpense.objects.create(
+            expense_category=OperatingExpense.ExpenseCategory.MARKETING,
+            subcategory=OperatingExpense.Subcategory.META_ADS,
+            concept='Marketing balance',
+            currency_code='PEN',
+            amount='187.50',
+            expense_month=period,
+            due_date=period,
+        )
+        employee = PayrollEmployee.objects.create(
+            full_name='Trabajador balance',
+            base_salary='3750.00',
+            currency_code='PEN',
+            pension_pct='0.00',
+        )
+        PayrollEntry.objects.create(
+            employee=employee,
+            period=period,
+            base_salary='3750.00',
+            pension_deduction='0.00',
+            currency_code='PEN',
+        )
+        with patch(
+            'external_agents.views._usd_pen_rate',
+            return_value=(Decimal('3.75'), 'exchange_rate', '2026-11-13'),
+        ):
+            response = self.client.get(
+                reverse('external_agents:financial_balance'),
+                {'periodo': period.strftime('%Y-%m')},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['income_total'], Decimal('1000.00'))
+        self.assertEqual(response.context['expense_total'], Decimal('1840.00'))
+        self.assertEqual(response.context['balance'], Decimal('-840.00'))
+        self.assertContains(response, 'Comisión de servicios Propify')
+        self.assertNotContains(response, 'Comisiones de brokers')
+        self.assertContains(response, 'income-concept')
+        self.assertContains(response, 'expense-concept')
+        self.assertContains(response, '1 USD = 3.7500 PEN')
+
+    def test_financial_balance_is_restricted_to_manager_and_superadmin(self):
+        self.authenticate_propify(is_superuser=False, role='Agente Interno')
+        dashboard = self.client.get(reverse('external_agents:dashboard'))
+        self.assertNotContains(dashboard, 'Balance General')
+        self.client.raise_request_exception = False
+        denied = self.client.get(reverse('external_agents:financial_balance'))
+        self.assertEqual(denied.status_code, 403)
+
+        self.authenticate_propify(is_superuser=False, role='Gerente General')
+        allowed = self.client.get(reverse('external_agents:financial_balance'))
+        self.assertEqual(allowed.status_code, 200)
 
     def test_all_module_pages_render(self):
         login_response = self.client.get(reverse('external_agents:login'))

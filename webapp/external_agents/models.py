@@ -504,6 +504,10 @@ class ServicePayment(models.Model):
         default=0,
         verbose_name='Monto pagado',
     )
+    service_month = models.DateField(
+        db_index=True,
+        verbose_name='Mes correspondiente',
+    )
     due_date = models.DateField(
         db_index=True,
         verbose_name='Fecha de vencimiento',
@@ -794,6 +798,118 @@ class PayrollEntry(models.Model):
 
     def __str__(self):
         return f'{self.employee} · {self.period:%Y-%m}'
+
+
+class OperatingExpense(models.Model):
+    """Egreso fijo o de marketing programado por el área administrativa."""
+
+    class ExpenseCategory(models.TextChoices):
+        FIXED = 'gastos_fijos', 'Gastos Fijos'
+        MARKETING = 'marketing', 'Gastos de Marketing'
+
+    class Subcategory(models.TextChoices):
+        RENT = 'alquiler', 'Alquiler'
+        MAINTENANCE = 'mantenimiento', 'Mantenimiento'
+        INSURANCE = 'seguros', 'Seguros'
+        ADMINISTRATIVE = 'administracion', 'Administración'
+        SOFTWARE = 'software', 'Software'
+        TAXES = 'impuestos', 'Impuestos'
+        META_ADS = 'meta_ads', 'Meta Ads'
+        GOOGLE_ADS = 'google_ads', 'Google Ads'
+        CONTENT = 'contenido', 'Contenido'
+        DESIGN = 'diseno', 'Diseño'
+        PHOTO = 'fotografia', 'Fotografía'
+        EVENTS = 'eventos', 'Eventos'
+        INFLUENCERS = 'influencers', 'Influencers'
+        PRINTING = 'impresiones', 'Impresiones'
+        OTHER = 'otros', 'Otros'
+
+    class Recurrence(models.TextChoices):
+        ONCE = 'unico', 'Único'
+        MONTHLY = 'mensual', 'Mensual'
+        BIMONTHLY = 'bimestral', 'Bimestral'
+        QUARTERLY = 'trimestral', 'Trimestral'
+        ANNUAL = 'anual', 'Anual'
+
+    class Status(models.TextChoices):
+        PENDING = 'pendiente', 'Pendiente'
+        PAID = 'pagado', 'Pagado'
+        ANNULLED = 'anulado', 'Anulado'
+
+    expense_category = models.CharField(
+        max_length=30,
+        choices=ExpenseCategory.choices,
+        db_index=True,
+        verbose_name='Categoría',
+    )
+    subcategory = models.CharField(
+        max_length=30,
+        choices=Subcategory.choices,
+        default=Subcategory.OTHER,
+        db_index=True,
+        verbose_name='Subcategoría',
+    )
+    concept = models.CharField(max_length=200, verbose_name='Concepto')
+    provider = models.CharField(max_length=200, blank=True, verbose_name='Proveedor')
+    reference = models.CharField(max_length=200, blank=True, verbose_name='Referencia')
+    recurrence = models.CharField(
+        max_length=20,
+        choices=Recurrence.choices,
+        default=Recurrence.ONCE,
+        verbose_name='Periodicidad',
+    )
+    currency_code = models.CharField(max_length=3, default='PEN', verbose_name='Moneda')
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Monto',
+    )
+    paid_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Monto pagado',
+    )
+    expense_month = models.DateField(
+        db_index=True,
+        verbose_name='Mes correspondiente',
+    )
+    due_date = models.DateField(db_index=True, verbose_name='Vencimiento')
+    payment_date = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Fecha de pago',
+    )
+    reminder_days_before = models.PositiveSmallIntegerField(
+        default=3,
+        verbose_name='Días de anticipación',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+        verbose_name='Estado',
+    )
+    payment_method = models.CharField(max_length=50, blank=True, verbose_name='Medio de pago')
+    account = models.CharField(max_length=100, blank=True, verbose_name='Cuenta de salida')
+    voucher = models.CharField(max_length=100, blank=True, verbose_name='Comprobante')
+    notes = models.TextField(blank=True, default='', verbose_name='Observaciones')
+    created_by_username = models.CharField(max_length=150, blank=True, verbose_name='Registrado por')
+    updated_by_username = models.CharField(max_length=150, blank=True, verbose_name='Actualizado por')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Creado el')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Actualizado el')
+
+    class Meta:
+        db_table = 'external_agents_operating_expense'
+        ordering = ['due_date', 'pk']
+        verbose_name = 'Gasto operativo'
+        verbose_name_plural = 'Gastos operativos'
+
+    def __str__(self):
+        return f'{self.concept} · {self.get_expense_category_display()}'
 
 
 class ExternalAgentAttachment(models.Model):

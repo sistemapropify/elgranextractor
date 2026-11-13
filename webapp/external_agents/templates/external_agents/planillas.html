@@ -58,7 +58,7 @@
     }
     .pr-grid {
         width: 100%;
-        min-width: 1700px;
+        min-width: 1780px;
         border-collapse: separate;
         border-spacing: 0;
         font-size: 10px;
@@ -205,7 +205,7 @@
     <table class="pr-grid">
         <thead>
             <tr>
-                <th>#</th><th>Trabajador</th><th>DNI</th><th>Cargo</th><th>Área</th><th>Movimiento</th>
+                <th>#</th><th>Mes correspondiente</th><th>Trabajador</th><th>DNI</th><th>Cargo</th><th>Área</th><th>Movimiento</th>
                 <th class="num">Sueldo base</th><th class="num">Asignación familiar</th>
                 <th class="num">Bonificaciones</th><th class="num">Horas extras</th>
                 <th class="num">Comisiones</th><th class="num">Remuneración bruta</th>
@@ -217,6 +217,7 @@
             {% for entry in rows %}
             <tr>
                 <td class="num">{{ forloop.counter }}</td>
+                <td>{{ entry.period|date:"m/Y" }}</td>
                 <td class="worker">{{ entry.employee.full_name }}</td>
                 <td>{{ entry.employee.document_number|default:"—" }}</td>
                 <td>{{ entry.employee.position|default:"—" }}</td>

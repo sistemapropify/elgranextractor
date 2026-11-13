@@ -1,6 +1,7 @@
 import calendar
 import mimetypes
 import re
+import unicodedata
 from datetime import date, timedelta
 from decimal import Decimal
 from functools import wraps
@@ -10,8 +11,10 @@ from urllib.parse import quote, urlencode
 from django.contrib import messages
 from django.conf import settings
 from django.core.paginator import Paginator
+from django.core.exceptions import PermissionDenied
 from django.db import DatabaseError, connections, transaction
 from django.db.models import Count, Q
+from django.db.utils import ConnectionDoesNotExist
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -38,6 +41,7 @@ from .models import (
     DocumentType,
     ExternalAgent,
     ExternalAgentAttachment,
+    OperatingExpense,
     PayrollEmployee,
     PayrollEntry,
     ServicePayment,
@@ -178,7 +182,7 @@ def _propify_closings_from_database():
             for item in closings:
                 item['sides'] = sides_by_closing.get(item['id'], [])
         return closings, None
-    except (KeyError, DatabaseError):
+    except (KeyError, DatabaseError, ConnectionDoesNotExist):
         return None, {
             'status': 503,
             'message': 'No se pudo consultar la base de datos de cierres de Propify.',
@@ -503,6 +507,46 @@ def _username(request):
     return str(getattr(principal, 'username', '') or '').strip()
 
 
+def _principal_can_view_financial_balance(principal):
+    profile = getattr(principal, 'profile', {}) or {}
+    profile_id = str(profile.get('id') or profile.get('pk') or '').strip()
+    username = str(
+        getattr(principal, 'username', '')
+        or profile.get('username')
+        or ''
+    ).strip()
+    if 'propifai' in connections.settings:
+        try:
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT TOP 1 u.is_superuser, r.name
+                    FROM [user] u
+                    LEFT JOIN role r ON r.id = u.role_id
+                    WHERE u.id = %s OR u.username = %s
+                    ORDER BY CASE WHEN u.id = %s THEN 0 ELSE 1 END
+                    """,
+                    [profile_id or '-1', username, profile_id or '-1'],
+                )
+                row = cursor.fetchone()
+            if row:
+                role_name = unicodedata.normalize(
+                    'NFKD',
+                    str(row[1] or ''),
+                ).encode('ascii', 'ignore').decode().strip().casefold()
+                return bool(row[0]) or role_name == 'gerente general'
+        except (KeyError, DatabaseError, ConnectionDoesNotExist):
+            pass
+    role = profile.get('role')
+    if isinstance(role, dict):
+        role = role.get('name')
+    role_name = unicodedata.normalize(
+        'NFKD',
+        str(role or ''),
+    ).encode('ascii', 'ignore').decode().strip().casefold()
+    return bool(profile.get('is_superuser')) or role_name == 'gerente general'
+
+
 def _safe_next(request, default='/agentes-externos/'):
     candidate = request.POST.get('next') or request.GET.get('next') or ''
     if candidate and url_has_allowed_host_and_scheme(
@@ -611,6 +655,21 @@ def external_agent_access_required(view_func):
             query = urlencode({'next': request.get_full_path()})
             return redirect(f'/agentes-externos/login/?{query}')
         request.propify_user = principal
+        request.can_view_financial_balance = _principal_can_view_financial_balance(
+            principal
+        )
+        return view_func(request, *args, **kwargs)
+
+    return wrapped
+
+
+def financial_balance_required(view_func):
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        if not getattr(request, 'can_view_financial_balance', False):
+            raise PermissionDenied(
+                'Balance General está disponible solo para Gerente General y superadmin.'
+            )
         return view_func(request, *args, **kwargs)
 
     return wrapped
@@ -800,6 +859,16 @@ def _parse_date_input(value):
     try:
         return date.fromisoformat(text)
     except ValueError:
+        return None
+
+
+def _parse_month_input(value):
+    if not value:
+        return None
+    try:
+        year, month = [int(part) for part in str(value).strip().split('-')[:2]]
+        return date(year, month, 1)
+    except (TypeError, ValueError):
         return None
 
 
@@ -1047,11 +1116,13 @@ def service_payment_add(request):
     concept = str(request.POST.get('concept') or '').strip()
     subcategory = str(request.POST.get('subcategory') or '').strip()
     recurrence = str(request.POST.get('recurrence') or '').strip()
+    service_month = _parse_month_input(request.POST.get('service_month'))
     due_date = _parse_date_input(request.POST.get('due_date'))
     if (
         not concept
         or subcategory not in valid_subcategories
         or recurrence not in valid_recurrences
+        or service_month is None
         or due_date is None
     ):
         messages.error(request, 'Completa el concepto, categoría, periodicidad y vencimiento.')
@@ -1068,6 +1139,7 @@ def service_payment_add(request):
             or 'PEN'
         ),
         estimated_amount=_first_number(request.POST.get('estimated_amount')),
+        service_month=service_month,
         due_date=due_date,
         reminder_days_before=max(
             int(_first_number(request.POST.get('reminder_days_before'), 3)),
@@ -1113,6 +1185,7 @@ def service_payment_pay(request, pk):
             recurrence=payment.recurrence,
             currency_code=payment.currency_code,
             estimated_amount=payment.estimated_amount,
+            service_month=next_due_date.replace(day=1),
             due_date=next_due_date,
             reminder_days_before=payment.reminder_days_before,
             created_by_username=_username(request),
@@ -1120,6 +1193,352 @@ def service_payment_pay(request, pk):
         )
     messages.success(request, 'Pago registrado. Estado actualizado a Pagado.')
     return redirect('external_agents:service_payments')
+
+
+EXPENSE_SUBCATEGORIES = {
+    OperatingExpense.ExpenseCategory.FIXED: [
+        (OperatingExpense.Subcategory.RENT.value, OperatingExpense.Subcategory.RENT.label),
+        (OperatingExpense.Subcategory.MAINTENANCE.value, OperatingExpense.Subcategory.MAINTENANCE.label),
+        (OperatingExpense.Subcategory.INSURANCE.value, OperatingExpense.Subcategory.INSURANCE.label),
+        (OperatingExpense.Subcategory.ADMINISTRATIVE.value, OperatingExpense.Subcategory.ADMINISTRATIVE.label),
+        (OperatingExpense.Subcategory.SOFTWARE.value, OperatingExpense.Subcategory.SOFTWARE.label),
+        (OperatingExpense.Subcategory.TAXES.value, OperatingExpense.Subcategory.TAXES.label),
+        (OperatingExpense.Subcategory.OTHER.value, OperatingExpense.Subcategory.OTHER.label),
+    ],
+    OperatingExpense.ExpenseCategory.MARKETING: [
+        (OperatingExpense.Subcategory.META_ADS.value, OperatingExpense.Subcategory.META_ADS.label),
+        (OperatingExpense.Subcategory.GOOGLE_ADS.value, OperatingExpense.Subcategory.GOOGLE_ADS.label),
+        (OperatingExpense.Subcategory.CONTENT.value, OperatingExpense.Subcategory.CONTENT.label),
+        (OperatingExpense.Subcategory.DESIGN.value, OperatingExpense.Subcategory.DESIGN.label),
+        (OperatingExpense.Subcategory.PHOTO.value, OperatingExpense.Subcategory.PHOTO.label),
+        (OperatingExpense.Subcategory.EVENTS.value, OperatingExpense.Subcategory.EVENTS.label),
+        (OperatingExpense.Subcategory.INFLUENCERS.value, OperatingExpense.Subcategory.INFLUENCERS.label),
+        (OperatingExpense.Subcategory.PRINTING.value, OperatingExpense.Subcategory.PRINTING.label),
+        (OperatingExpense.Subcategory.OTHER.value, OperatingExpense.Subcategory.OTHER.label),
+    ],
+}
+
+
+def _expense_category_from_kind(kind):
+    return (
+        OperatingExpense.ExpenseCategory.MARKETING
+        if kind == 'marketing'
+        else OperatingExpense.ExpenseCategory.FIXED
+    )
+
+
+def _expense_page(request, kind):
+    category = _expense_category_from_kind(kind)
+    query = str(request.GET.get('q') or '').strip()
+    status_filter = str(request.GET.get('estado') or 'pendientes').strip()
+    subcategory_filter = str(request.GET.get('subcategoria') or '').strip()
+    allowed_subcategories = EXPENSE_SUBCATEGORIES[category]
+    allowed_values = {value for value, _ in allowed_subcategories}
+    queryset = OperatingExpense.objects.filter(expense_category=category)
+    if query:
+        queryset = queryset.filter(
+            Q(concept__icontains=query)
+            | Q(provider__icontains=query)
+            | Q(reference__icontains=query)
+        )
+    if subcategory_filter in allowed_values:
+        queryset = queryset.filter(subcategory=subcategory_filter)
+    today = timezone.localdate()
+    if status_filter == 'pagados':
+        queryset = queryset.filter(status=OperatingExpense.Status.PAID)
+    elif status_filter == 'vencidos':
+        queryset = queryset.filter(
+            status=OperatingExpense.Status.PENDING,
+            due_date__lt=today,
+        )
+    elif status_filter != 'todos':
+        queryset = queryset.filter(status=OperatingExpense.Status.PENDING)
+
+    rows = []
+    for expense in queryset:
+        if expense.status == OperatingExpense.Status.PAID:
+            display_status, status_class = 'Pagado', 'green'
+        elif expense.due_date < today:
+            display_status, status_class = 'Vencido', 'red'
+        elif expense.due_date == today:
+            display_status, status_class = 'Vence hoy', 'amber'
+        else:
+            display_status, status_class = 'Pendiente', 'amber'
+        alarm_date = expense.due_date - timedelta(days=expense.reminder_days_before)
+        rows.append({
+            'expense': expense,
+            'display_status': display_status,
+            'status_class': status_class,
+            'alarm_date': alarm_date,
+            'alarm_active': (
+                expense.status == OperatingExpense.Status.PENDING
+                and alarm_date <= today
+            ),
+        })
+
+    pending = OperatingExpense.objects.filter(
+        expense_category=category,
+        status=OperatingExpense.Status.PENDING,
+    )
+    summary = {
+        'pending': pending.count(),
+        'due_today': pending.filter(due_date=today).count(),
+        'overdue': pending.filter(due_date__lt=today).count(),
+        'paid_month': OperatingExpense.objects.filter(
+            expense_category=category,
+            status=OperatingExpense.Status.PAID,
+            payment_date__year=today.year,
+            payment_date__month=today.month,
+        ).count(),
+    }
+    return render(request, 'external_agents/gastos_operativos.html', {
+        'rows': rows,
+        'summary': summary,
+        'query': query,
+        'status_filter': status_filter,
+        'subcategory_filter': subcategory_filter,
+        'subcategories': allowed_subcategories,
+        'expense_kind': kind,
+        'expense_category': category.value,
+        'expense_label': (
+            'Gastos de Marketing'
+            if category == OperatingExpense.ExpenseCategory.MARKETING
+            else 'Gastos Fijos'
+        ),
+    })
+
+
+@never_cache
+@external_agent_access_required
+def fixed_expenses(request):
+    return _expense_page(request, 'fijos')
+
+
+@never_cache
+@external_agent_access_required
+def marketing_expenses(request):
+    return _expense_page(request, 'marketing')
+
+
+@never_cache
+@external_agent_access_required
+def operating_expense_add(request, kind):
+    if request.method != 'POST':
+        return redirect('external_agents:fixed_expenses')
+    category = _expense_category_from_kind(kind)
+    allowed_values = {value for value, _ in EXPENSE_SUBCATEGORIES[category]}
+    concept = str(request.POST.get('concept') or '').strip()
+    subcategory = str(request.POST.get('subcategory') or '').strip()
+    expense_month = _parse_month_input(request.POST.get('expense_month'))
+    due_date = _parse_date_input(request.POST.get('due_date'))
+    if (
+        not concept
+        or subcategory not in allowed_values
+        or expense_month is None
+        or due_date is None
+    ):
+        messages.error(request, 'Completa concepto, subcategoría, mes y vencimiento.')
+    else:
+        OperatingExpense.objects.create(
+            expense_category=category,
+            subcategory=subcategory,
+            concept=concept,
+            provider=str(request.POST.get('provider') or '').strip(),
+            reference=str(request.POST.get('reference') or '').strip(),
+            recurrence=str(request.POST.get('recurrence') or 'unico'),
+            currency_code=str(request.POST.get('currency_code') or 'PEN').upper(),
+            amount=_money_input(request.POST.get('amount')),
+            expense_month=expense_month,
+            due_date=due_date,
+            reminder_days_before=max(
+                int(_first_number(request.POST.get('reminder_days_before'), 3)),
+                0,
+            ),
+            notes=str(request.POST.get('notes') or '').strip(),
+            created_by_username=_username(request),
+            updated_by_username=_username(request),
+        )
+        messages.success(request, 'Gasto programado correctamente.')
+    return redirect(
+        'external_agents:marketing_expenses'
+        if kind == 'marketing'
+        else 'external_agents:fixed_expenses'
+    )
+
+
+@never_cache
+@external_agent_access_required
+def operating_expense_pay(request, kind, pk):
+    expense = get_object_or_404(OperatingExpense, pk=pk)
+    if request.method == 'POST':
+        expense.paid_amount = (
+            _money_input(request.POST.get('paid_amount'))
+            or expense.amount
+        )
+        expense.payment_date = (
+            _parse_date_input(request.POST.get('payment_date'))
+            or timezone.localdate()
+        )
+        expense.status = OperatingExpense.Status.PAID
+        expense.payment_method = str(request.POST.get('payment_method') or '').strip()
+        expense.account = str(request.POST.get('account') or '').strip()
+        expense.voucher = str(request.POST.get('voucher') or '').strip()
+        expense.notes = str(request.POST.get('notes') or expense.notes).strip()
+        expense.updated_by_username = _username(request)
+        expense.save()
+        next_due_date = _next_service_due_date(expense.due_date, expense.recurrence)
+        if next_due_date:
+            OperatingExpense.objects.create(
+                expense_category=expense.expense_category,
+                subcategory=expense.subcategory,
+                concept=expense.concept,
+                provider=expense.provider,
+                reference=expense.reference,
+                recurrence=expense.recurrence,
+                currency_code=expense.currency_code,
+                amount=expense.amount,
+                expense_month=next_due_date.replace(day=1),
+                due_date=next_due_date,
+                reminder_days_before=expense.reminder_days_before,
+                created_by_username=_username(request),
+                updated_by_username=_username(request),
+            )
+        messages.success(request, 'Gasto registrado como pagado.')
+    return redirect(
+        'external_agents:marketing_expenses'
+        if kind == 'marketing'
+        else 'external_agents:fixed_expenses'
+    )
+
+
+def _usd_pen_rate():
+    default_rate = Decimal(str(getattr(settings, 'DEFAULT_USD_PEN_RATE', '3.75')))
+    if 'propifai' in connections.settings:
+        try:
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT TOP 1
+                        er.rate,
+                        er.rate_date,
+                        base.code AS base_code,
+                        quote.code AS quote_code
+                    FROM exchange_rate er
+                    INNER JOIN currency base ON base.id = er.base_currency_id
+                    INNER JOIN currency quote ON quote.id = er.quote_currency_id
+                    WHERE er.is_active = %s
+                      AND (
+                          (base.code = 'USD' AND quote.code = 'PEN')
+                          OR (base.code = 'PEN' AND quote.code = 'USD')
+                      )
+                    ORDER BY er.rate_date DESC
+                    """,
+                    [True],
+                )
+                row = cursor.fetchone()
+            if row:
+                rate, rate_date, base_code, quote_code = row
+                pen_per_usd = Decimal(rate)
+                if base_code == 'PEN':
+                    pen_per_usd = Decimal('1') / pen_per_usd
+                return pen_per_usd, 'exchange_rate', rate_date.date().isoformat()
+        except (KeyError, DatabaseError, ArithmeticError, ConnectionDoesNotExist):
+            pass
+    return default_rate, 'default', None
+
+
+def _amount_to_usd(amount, currency_code, pen_per_usd):
+    value = Decimal(amount or 0)
+    if currency_code == 'PEN':
+        return (value / pen_per_usd).quantize(Decimal('0.01'))
+    return value.quantize(Decimal('0.01'))
+
+
+@never_cache
+@external_agent_access_required
+@financial_balance_required
+def financial_balance(request):
+    period = _parse_payroll_period(request.GET.get('periodo'))
+    period_end = _add_months(period, 1)
+    rate, rate_source, rate_date = _usd_pen_rate()
+
+    commission_rows = CommissionCollection.objects.filter(
+        closing_date__gte=period,
+        closing_date__lt=period_end,
+    )
+    income_commission = Decimal('0')
+    expense_agents = Decimal('0')
+    for row in commission_rows:
+        income_commission += _amount_to_usd(
+            row.amount_for_propify,
+            row.currency_code,
+            rate,
+        )
+        expense_agents += _amount_to_usd(
+            row.amount_for_agents,
+            row.currency_code,
+            rate,
+        )
+
+    service_total = Decimal('0')
+    for row in ServicePayment.objects.exclude(status=ServicePayment.Status.ANNULLED).filter(
+        due_date__gte=period,
+        due_date__lt=period_end,
+    ):
+        amount = row.paid_amount if row.status == ServicePayment.Status.PAID else row.estimated_amount
+        service_total += _amount_to_usd(amount, row.currency_code, rate)
+
+    fixed_total = Decimal('0')
+    marketing_total = Decimal('0')
+    for row in OperatingExpense.objects.exclude(status=OperatingExpense.Status.ANNULLED).filter(
+        due_date__gte=period,
+        due_date__lt=period_end,
+    ):
+        amount = row.paid_amount if row.status == OperatingExpense.Status.PAID else row.amount
+        converted = _amount_to_usd(amount, row.currency_code, rate)
+        if row.expense_category == OperatingExpense.ExpenseCategory.MARKETING:
+            marketing_total += converted
+        else:
+            fixed_total += converted
+
+    payroll_total = Decimal('0')
+    for row in PayrollEntry.objects.filter(period=period):
+        payroll_total += _amount_to_usd(row.employer_cost, row.currency_code, rate)
+
+    income_total = income_commission
+    expense_total = (
+        expense_agents
+        + service_total
+        + fixed_total
+        + marketing_total
+        + payroll_total
+    )
+    balance = income_total - expense_total
+    margin = (
+        balance / income_total * 100
+        if income_total > 0
+        else Decimal('0')
+    )
+    rows = [
+        {'concept': 'Comisión de servicios Propify', 'income': income_commission, 'expense': Decimal('0')},
+        {'concept': 'Comisiones de agentes', 'income': Decimal('0'), 'expense': expense_agents},
+        {'concept': 'Pagos de servicios', 'income': Decimal('0'), 'expense': service_total},
+        {'concept': 'Gastos fijos', 'income': Decimal('0'), 'expense': fixed_total},
+        {'concept': 'Gastos de marketing', 'income': Decimal('0'), 'expense': marketing_total},
+        {'concept': 'Planillas de sueldos', 'income': Decimal('0'), 'expense': payroll_total},
+    ]
+    return render(request, 'external_agents/balance.html', {
+        'period': period,
+        'period_value': period.strftime('%Y-%m'),
+        'rows': rows,
+        'income_total': income_total,
+        'expense_total': expense_total,
+        'balance': balance,
+        'margin': margin,
+        'exchange_rate': rate,
+        'rate_source': rate_source,
+        'rate_date': rate_date,
+    })
 
 
 def _parse_payroll_period(value):

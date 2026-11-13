@@ -1,0 +1,169 @@
+{% extends "external_agents/base.html" %}
+{% load humanize %}
+
+{% block page_title %}Balance General{% endblock %}
+{% block hero_title %}Balance General{% endblock %}
+{% block hero_subtitle %}Ingresos y egresos consolidados en dólares para medir la rentabilidad mensual.{% endblock %}
+
+{% block head_actions %}
+<form method="get" class="ea-inline-form" style="align-items:end;gap:7px;">
+    <div class="ea-field">
+        <label class="ea-label" for="balance-period">Periodo</label>
+        <input class="ea-input" id="balance-period" type="month" name="periodo" value="{{ period_value }}">
+    </div>
+    <button class="ea-btn ea-btn-blue" type="submit">Ver balance</button>
+</form>
+{% endblock %}
+
+{% block extra_module_css %}
+<style>
+    .bal-kpis {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 9px;
+        margin-bottom: 13px;
+    }
+    .bal-kpi {
+        padding: 12px 14px;
+        border: 1px solid var(--ea-border);
+        border-radius: 9px;
+        background: var(--ea-panel);
+    }
+    .bal-kpi span {
+        display: block;
+        color: var(--ea-muted);
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: .4px;
+        text-transform: uppercase;
+    }
+    .bal-kpi strong {
+        display: block;
+        margin-top: 5px;
+        color: #f0f6fc;
+        font-size: 21px;
+        font-variant-numeric: tabular-nums;
+    }
+    .bal-kpi.income strong { color: #79c0ff; }
+    .bal-kpi.expense strong { color: #ff6b64; }
+    .bal-kpi.balance strong { color: #7ee787; }
+    .bal-kpi.balance.negative strong { color: #ff6b64; }
+    .bal-rate {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+        padding: 9px 12px;
+        border: 1px solid rgba(88,166,255,.28);
+        border-radius: 8px;
+        background: rgba(88,166,255,.06);
+        color: #b8c5d1;
+        font-size: 11px;
+    }
+    .bal-table-wrap {
+        overflow: auto;
+        border: 1px solid var(--ea-border);
+        border-radius: 10px;
+        background: var(--ea-panel);
+    }
+    .bal-table {
+        width: 100%;
+        min-width: 760px;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 12px;
+    }
+    .bal-table th {
+        padding: 10px 13px;
+        border-bottom: 1px solid #47515b;
+        background: #20262e;
+        color: #b7c2cc;
+        font-size: 9px;
+        text-transform: uppercase;
+        text-align: left;
+    }
+    .bal-table th.num { text-align: right; }
+    .bal-table td {
+        padding: 9px 13px;
+        border-bottom: 1px solid var(--ea-border);
+        color: #c9d1d9;
+    }
+    .bal-table td.num {
+        width: 190px;
+        text-align: right;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+    .bal-table .income-concept { color: #79c0ff; font-weight: 750; }
+    .bal-table .expense-concept { color: #ff6b64; font-weight: 750; }
+    .bal-table .income-value { color: #79c0ff; font-weight: 750; }
+    .bal-table .expense-value { color: #ff6b64; font-weight: 750; }
+    .bal-table tfoot td {
+        padding: 11px 13px;
+        border-top: 2px solid #47515b;
+        border-bottom: 0;
+        background: #20262e;
+        color: #f0f6fc;
+        font-size: 13px;
+        font-weight: 850;
+    }
+    @media (max-width: 900px) {
+        .bal-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    }
+</style>
+{% endblock %}
+
+{% block module_content %}
+<section class="bal-kpis">
+    <div class="bal-kpi income"><span>Ingresos</span><strong>USD {{ income_total|floatformat:0|intcomma }}</strong></div>
+    <div class="bal-kpi expense"><span>Egresos</span><strong>USD {{ expense_total|floatformat:0|intcomma }}</strong></div>
+    <div class="bal-kpi balance {% if balance < 0 %}negative{% endif %}"><span>Balance neto</span><strong>USD {{ balance|floatformat:0|intcomma }}</strong></div>
+    <div class="bal-kpi {% if balance < 0 %}expense{% else %}balance{% endif %}"><span>Rentabilidad</span><strong>{{ margin|floatformat:1 }}%</strong></div>
+</section>
+
+<div class="bal-rate">
+    <span>Conversión: 1 USD = {{ exchange_rate|floatformat:4 }} PEN</span>
+    <span>
+        {% if rate_source == 'exchange_rate' %}
+        Tasa registrada en Propify · {{ rate_date }}
+        {% else %}
+        Tasa referencial: configura el tipo de cambio en Propify.
+        {% endif %}
+    </span>
+</div>
+
+<div class="bal-table-wrap">
+    <table class="bal-table">
+        <thead>
+            <tr>
+                <th>Concepto</th>
+                <th class="num">Ingreso USD</th>
+                <th class="num">Egreso USD</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td class="{% if row.income %}income-concept{% else %}expense-concept{% endif %}">
+                    {{ row.concept }}
+                </td>
+                <td class="num income-value">
+                    {% if row.income %}USD {{ row.income|floatformat:0|intcomma }}{% else %}—{% endif %}
+                </td>
+                <td class="num expense-value">
+                    {% if row.expense %}USD {{ row.expense|floatformat:0|intcomma }}{% else %}—{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td>Total del periodo</td>
+                <td class="num">USD {{ income_total|floatformat:0|intcomma }}</td>
+                <td class="num">USD {{ expense_total|floatformat:0|intcomma }}</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% endblock %}

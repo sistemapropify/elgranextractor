@@ -1,0 +1,132 @@
+{% extends "external_agents/base.html" %}
+{% load humanize %}
+
+{% block page_title %}{{ expense_label }}{% endblock %}
+{% block hero_title %}{{ expense_label }}{% endblock %}
+{% block hero_subtitle %}Programación y control de egresos de la empresa.{% endblock %}
+
+{% block head_actions %}
+<button class="ea-btn ea-btn-blue" type="button" data-open-modal="expense-modal">＋ Agregar gasto</button>
+{% endblock %}
+
+{% block extra_module_css %}
+<style>
+    .op-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:13px}
+    .op-kpi{padding:11px 13px;border:1px solid var(--ea-border);border-radius:9px;background:var(--ea-panel)}
+    .op-kpi span{display:block;color:var(--ea-muted);font-size:8px;font-weight:800;text-transform:uppercase}
+    .op-kpi strong{display:block;margin-top:4px;color:#f0f6fc;font-size:21px}
+    .op-kpi.red strong{color:#ff6b64}.op-kpi.green strong{color:#7ee787}.op-kpi.amber strong{color:#e3b341}
+    .op-filters{display:grid;grid-template-columns:minmax(240px,1fr) 170px 190px auto;gap:9px;align-items:end;margin-bottom:13px;padding:12px;border:1px solid var(--ea-border);border-radius:9px;background:var(--ea-panel)}
+    .op-wrap{max-height:calc(100vh - 330px);overflow:auto;border:1px solid var(--ea-border);border-radius:10px;background:var(--ea-panel)}
+    .op-grid{width:100%;min-width:1450px;border-collapse:separate;border-spacing:0;font-size:11px}
+    .op-grid th{position:sticky;top:0;z-index:3;padding:8px 9px;border-right:1px solid var(--ea-border);border-bottom:1px solid #47515b;background:#20262e;color:#b7c2cc;text-align:left;font-size:9px;text-transform:uppercase;white-space:nowrap}
+    .op-grid td{padding:8px 9px;border-right:1px solid rgba(48,54,61,.72);border-bottom:1px solid var(--ea-border);color:#c9d1d9}
+    .op-grid tbody tr:nth-child(even) td{background:rgba(255,255,255,.015)}
+    .op-grid tbody tr:hover td{background:rgba(88,166,255,.07)}
+    .op-grid .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+    .op-grid .concept{min-width:180px;color:#f0f6fc;font-weight:750}
+    .op-grid .actions-cell{position:sticky;right:0;z-index:1;min-width:66px;border-left:1px solid #47515b;background:#171d24}
+    .op-pay{width:100%;padding:4px 5px;border:1px solid #da3633;border-radius:4px;background:#b62324;color:#fff;font:inherit;font-size:9px;font-weight:800;cursor:pointer}
+    .op-alarm-active{color:#ff8f87;font-weight:750}
+    .op-modal{width:min(720px,calc(100vw - 28px));max-height:calc(100vh - 28px);padding:0;overflow:auto;border:1px solid #44515f;border-radius:13px;background:var(--ea-panel);color:var(--ea-text)}
+    .op-modal::backdrop{background:rgba(1,4,9,.76);backdrop-filter:blur(3px)}
+    .op-modal-head{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--ea-border);background:var(--ea-panel-raised)}
+    .op-modal-head h2{margin:0;color:#f0f6fc;font-size:17px}
+    .op-close{width:32px;height:32px;border:1px solid var(--ea-border);border-radius:7px;background:var(--ea-panel);color:var(--ea-text);cursor:pointer}
+    .op-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:15px 18px 18px}
+    .op-form .wide{grid-column:1/-1}.op-actions{display:flex;justify-content:flex-end;gap:7px;grid-column:1/-1}
+    .op-empty{padding:42px;border:1px solid var(--ea-border);border-radius:10px;background:var(--ea-panel);color:var(--ea-muted);text-align:center}
+    @media(max-width:900px){.op-kpis{grid-template-columns:repeat(2,1fr)}.op-filters{grid-template-columns:1fr 1fr}}
+    @media(max-width:620px){.op-filters,.op-form{grid-template-columns:1fr}.op-form .wide,.op-actions{grid-column:auto}}
+</style>
+{% endblock %}
+
+{% block module_content %}
+<section class="op-kpis">
+    <div class="op-kpi amber"><span>Pendientes</span><strong>{{ summary.pending }}</strong></div>
+    <div class="op-kpi amber"><span>Vencen hoy</span><strong>{{ summary.due_today }}</strong></div>
+    <div class="op-kpi red"><span>Vencidos</span><strong>{{ summary.overdue }}</strong></div>
+    <div class="op-kpi green"><span>Pagados este mes</span><strong>{{ summary.paid_month }}</strong></div>
+</section>
+
+<form class="op-filters" method="get">
+    <div class="ea-field"><label class="ea-label">Buscar</label><input class="ea-input" type="search" name="q" value="{{ query }}" placeholder="Concepto, proveedor o referencia"></div>
+    <div class="ea-field"><label class="ea-label">Estado</label><select class="ea-select" name="estado">
+        <option value="pendientes" {% if status_filter == 'pendientes' %}selected{% endif %}>Pendientes</option>
+        <option value="vencidos" {% if status_filter == 'vencidos' %}selected{% endif %}>Vencidos</option>
+        <option value="pagados" {% if status_filter == 'pagados' %}selected{% endif %}>Pagados</option>
+        <option value="todos" {% if status_filter == 'todos' %}selected{% endif %}>Todos</option>
+    </select></div>
+    <div class="ea-field"><label class="ea-label">Subcategoría</label><select class="ea-select" name="subcategoria">
+        <option value="">Todas</option>
+        {% for value,label in subcategories %}<option value="{{ value }}" {% if subcategory_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select></div>
+    <button class="ea-btn ea-btn-blue" type="submit">Aplicar</button>
+</form>
+
+{% if rows %}
+<div class="op-wrap"><table class="op-grid">
+    <thead><tr><th>#</th><th>Concepto</th><th>Proveedor</th><th>Referencia</th><th>Categoría</th><th>Subcategoría</th><th>Periodicidad</th><th>Mes correspondiente</th><th>Vencimiento</th><th>Alarma</th><th>Moneda</th><th class="num">Monto</th><th>Pago</th><th class="num">Pagado</th><th>Estado</th><th class="actions-cell">Acción</th></tr></thead>
+    <tbody>{% for row in rows %}{% with expense=row.expense %}
+        <tr>
+            <td class="num">{{ forloop.counter }}</td><td class="concept">{{ expense.concept }}</td>
+            <td>{{ expense.provider|default:"—" }}</td><td>{{ expense.reference|default:"—" }}</td>
+            <td>{{ expense.get_expense_category_display }}</td><td>{{ expense.get_subcategory_display }}</td>
+            <td>{{ expense.get_recurrence_display }}</td><td>{{ expense.expense_month|date:"m/Y" }}</td><td>{{ expense.due_date|date:"d/m/Y" }}</td>
+            <td><span class="{% if row.alarm_active %}op-alarm-active{% endif %}">{% if row.alarm_active %}🔔{% endif %} {{ expense.reminder_days_before }} días antes</span><br><small>{{ row.alarm_date|date:"d/m/Y" }}</small></td>
+            <td>{{ expense.currency_code }}</td><td class="num">{{ expense.amount|floatformat:0|intcomma }}</td>
+            <td>{% if expense.payment_date %}{{ expense.payment_date|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+            <td class="num">{% if expense.paid_amount %}{{ expense.paid_amount|floatformat:0|intcomma }}{% else %}—{% endif %}</td>
+            <td><span class="ea-badge {{ row.status_class }}">{{ row.display_status }}</span></td>
+            <td class="actions-cell">{% if expense.status == 'pendiente' %}<button class="op-pay" type="button" data-pay-expense="{{ expense.pk }}" data-pay-name="{{ expense.concept }}" data-pay-amount="{{ expense.amount }}" data-pay-currency="{{ expense.currency_code }}" data-pay-url="{% url 'external_agents:operating_expense_pay' kind=expense_kind pk=expense.pk %}">Pagar</button>{% else %}<span class="ea-badge green">Pagado</span>{% endif %}</td>
+        </tr>
+    {% endwith %}{% endfor %}</tbody>
+</table></div>
+{% else %}<div class="op-empty"><strong>No hay {{ expense_label|lower }} para este filtro.</strong><p>Usa “Agregar gasto” para programar el primero.</p></div>{% endif %}
+
+<dialog class="op-modal" id="expense-modal"><form method="post" action="{% url 'external_agents:operating_expense_add' kind=expense_kind %}">
+    {% csrf_token %}<header class="op-modal-head"><h2>Agregar {{ expense_label|lower }}</h2><button class="op-close" type="button" data-close>×</button></header>
+    <div class="op-form">
+        <div class="ea-field wide"><label class="ea-label">Concepto</label><input class="ea-input" name="concept" required></div>
+        <div class="ea-field"><label class="ea-label">Proveedor</label><input class="ea-input" name="provider"></div>
+        <div class="ea-field"><label class="ea-label">Referencia</label><input class="ea-input" name="reference"></div>
+        <div class="ea-field"><label class="ea-label">Subcategoría</label><select class="ea-select" name="subcategory" required>{% for value,label in subcategories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+        <div class="ea-field"><label class="ea-label">Periodicidad</label><select class="ea-select" name="recurrence"><option value="unico">Único</option><option value="mensual">Mensual</option><option value="bimestral">Bimestral</option><option value="trimestral">Trimestral</option><option value="anual">Anual</option></select></div>
+        <div class="ea-field"><label class="ea-label">Moneda</label><select class="ea-select" name="currency_code"><option value="PEN">PEN</option><option value="USD">USD</option></select></div>
+        <div class="ea-field"><label class="ea-label">Monto</label><input class="ea-input" type="number" min="0" step="0.01" name="amount" required></div>
+        <div class="ea-field"><label class="ea-label">Mes correspondiente</label><input class="ea-input" type="month" name="expense_month" required></div>
+        <div class="ea-field"><label class="ea-label">Vencimiento</label><input class="ea-input" type="date" name="due_date" required></div>
+        <div class="ea-field"><label class="ea-label">Alarma</label><select class="ea-select" name="reminder_days_before"><option value="7">7 días antes</option><option value="3" selected>3 días antes</option><option value="1">1 día antes</option><option value="0">El mismo día</option></select></div>
+        <div class="ea-field wide"><label class="ea-label">Observaciones</label><input class="ea-input" name="notes"></div>
+        <div class="op-actions"><button class="ea-btn" type="button" data-close>Cancelar</button><button class="ea-btn ea-btn-blue" type="submit">Guardar gasto</button></div>
+    </div>
+</form></dialog>
+
+<dialog class="op-modal" id="expense-pay-modal"><form method="post" id="expense-pay-form">
+    {% csrf_token %}<header class="op-modal-head"><h2 id="expense-pay-title">Registrar pago</h2><button class="op-close" type="button" data-close>×</button></header>
+    <div class="op-form">
+        <div class="ea-field"><label class="ea-label">Fecha de pago</label><input class="ea-input" type="date" name="payment_date" id="expense-pay-date" required></div>
+        <div class="ea-field"><label class="ea-label">Monto pagado</label><input class="ea-input" type="number" step="0.01" name="paid_amount" id="expense-pay-amount" required></div>
+        <div class="ea-field"><label class="ea-label">Medio de pago</label><input class="ea-input" name="payment_method"></div>
+        <div class="ea-field"><label class="ea-label">Cuenta de salida</label><input class="ea-input" name="account"></div>
+        <div class="ea-field"><label class="ea-label">Comprobante</label><input class="ea-input" name="voucher"></div>
+        <div class="ea-field"><label class="ea-label">Observaciones</label><input class="ea-input" name="notes"></div>
+        <div class="op-actions"><button class="ea-btn" type="button" data-close>Cancelar</button><button class="ea-btn ea-btn-blue" type="submit">Confirmar pago</button></div>
+    </div>
+</form></dialog>
+
+<script>
+(function(){
+ document.querySelectorAll('[data-open-modal]').forEach(b=>b.addEventListener('click',()=>document.getElementById(b.dataset.openModal)?.showModal()));
+ document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>b.closest('dialog')?.close()));
+ document.querySelectorAll('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d)d.close()}));
+ document.querySelectorAll('[data-pay-expense]').forEach(b=>b.addEventListener('click',()=>{
+   document.getElementById('expense-pay-form').action=b.dataset.payUrl;
+   document.getElementById('expense-pay-title').textContent=`Pagar · ${b.dataset.payName}`;
+   document.getElementById('expense-pay-amount').value=b.dataset.payAmount;
+   document.getElementById('expense-pay-date').value=new Date().toISOString().slice(0,10);
+   document.getElementById('expense-pay-modal').showModal();
+ }));
+})();
+</script>
+{% endblock %}
