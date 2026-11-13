@@ -99,6 +99,86 @@
     .bal-table .expense-concept { color: #ff6b64; font-weight: 750; }
     .bal-table .income-value { color: #79c0ff; font-weight: 750; }
     .bal-table .expense-value { color: #ff6b64; font-weight: 750; }
+    .bal-concept-toggle {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .bal-concept-toggle:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .bal-concept-toggle .bal-detail-count {
+        padding: 2px 7px;
+        border: 1px solid rgba(240,246,252,.22);
+        border-radius: 99px;
+        color: #f0f6fc;
+        font-size: 9px;
+        font-weight: 750;
+    }
+    .bal-chevron {
+        margin-left: auto;
+        color: currentColor;
+        font-size: 11px;
+        transition: transform .16s ease;
+    }
+    .bal-concept-toggle[aria-expanded="true"] .bal-chevron {
+        transform: rotate(180deg);
+    }
+    .bal-detail-row[hidden] { display: none; }
+    .bal-detail-row td {
+        padding: 0 !important;
+        border-bottom: 1px solid #47515b;
+        background: #10151b;
+    }
+    .bal-detail-list {
+        display: grid;
+        gap: 1px;
+        padding: 6px 10px 9px 34px;
+    }
+    .bal-detail-item {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) 190px;
+        gap: 18px;
+        align-items: center;
+        min-height: 45px;
+        padding: 7px 12px;
+        border-left: 2px solid rgba(240,246,252,.32);
+        background: rgba(255,255,255,.025);
+        color: #fff;
+    }
+    .bal-detail-copy { display: grid; gap: 3px; min-width: 0; }
+    .bal-detail-label {
+        color: #fff;
+        font-size: 11px;
+        font-weight: 750;
+        overflow-wrap: anywhere;
+    }
+    .bal-detail-meta {
+        color: #fff;
+        font-size: 9px;
+        line-height: 1.35;
+        opacity: .8;
+    }
+    .bal-detail-amount {
+        color: #fff;
+        text-align: right;
+        white-space: nowrap;
+        font-size: 11px;
+        font-weight: 750;
+        font-variant-numeric: tabular-nums;
+    }
+    .bal-detail-empty {
+        padding: 10px 12px;
+        color: #fff;
+        font-size: 10px;
+        opacity: .82;
+    }
     .bal-table tfoot td {
         padding: 11px 13px;
         border-top: 2px solid #47515b;
@@ -110,6 +190,7 @@
     }
     @media (max-width: 900px) {
         .bal-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+        .bal-detail-item { grid-template-columns: minmax(0,1fr) 120px; }
     }
 </style>
 {% endblock %}
@@ -144,15 +225,47 @@
         </thead>
         <tbody>
             {% for row in rows %}
-            <tr>
+            <tr class="bal-summary-row">
                 <td class="{% if row.income %}income-concept{% else %}expense-concept{% endif %}">
-                    {{ row.concept }}
+                    <button
+                        class="bal-concept-toggle"
+                        type="button"
+                        data-balance-toggle
+                        aria-expanded="false"
+                        aria-controls="balance-details-{{ row.key }}"
+                    >
+                        <span>{{ row.concept }}</span>
+                        <span class="bal-detail-count">{{ row.details|length }}</span>
+                        <span class="bal-chevron" aria-hidden="true">⌄</span>
+                    </button>
                 </td>
                 <td class="num income-value">
                     {% if row.income %}USD {{ row.income|floatformat:0|intcomma }}{% else %}—{% endif %}
                 </td>
                 <td class="num expense-value">
                     {% if row.expense %}USD {{ row.expense|floatformat:0|intcomma }}{% else %}—{% endif %}
+                </td>
+            </tr>
+            <tr
+                class="bal-detail-row"
+                id="balance-details-{{ row.key }}"
+                data-balance-details
+                hidden
+            >
+                <td colspan="3">
+                    <div class="bal-detail-list">
+                        {% for detail in row.details %}
+                        <div class="bal-detail-item">
+                            <div class="bal-detail-copy">
+                                <span class="bal-detail-label">↳ {{ detail.label }}</span>
+                                <span class="bal-detail-meta">{{ detail.meta }}</span>
+                            </div>
+                            <span class="bal-detail-amount">USD {{ detail.amount|floatformat:2|intcomma }}</span>
+                        </div>
+                        {% empty %}
+                        <div class="bal-detail-empty">Sin movimientos registrados para este concepto en el periodo.</div>
+                        {% endfor %}
+                    </div>
                 </td>
             </tr>
             {% endfor %}
@@ -166,4 +279,17 @@
         </tfoot>
     </table>
 </div>
+<script>
+(function () {
+    document.querySelectorAll('[data-balance-toggle]').forEach(button => {
+        button.addEventListener('click', () => {
+            const detailRow = document.getElementById(button.getAttribute('aria-controls'));
+            if (!detailRow) return;
+            const expanded = button.getAttribute('aria-expanded') === 'true';
+            button.setAttribute('aria-expanded', String(!expanded));
+            detailRow.hidden = expanded;
+        });
+    });
+})();
+</script>
 {% endblock %}

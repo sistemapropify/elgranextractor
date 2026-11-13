@@ -582,8 +582,9 @@
             </div>
             <button class="ea-modal-close" type="button" data-close-modal aria-label="Cerrar">×</button>
         </div>
-        <form class="ea-modal-form" method="post" action="{% url 'external_agents:collection_add' %}">
+        <form class="ea-modal-form" method="post" action="{% url 'external_agents:collection_add' %}" data-single-submit>
             {% csrf_token %}
+            <input type="hidden" name="submission_token" value="{{ collection_submission_token }}">
             <input type="hidden" name="deal_type" value="{{ deal_type }}">
             <div class="ea-field wide">
                 <label class="ea-label" for="cobro-operacion">Código de operación / propiedad</label>
@@ -613,8 +614,9 @@
             </div>
             <button class="ea-modal-close" type="button" data-close-modal aria-label="Cerrar">×</button>
         </div>
-        <form class="ea-modal-form" method="post" action="{% url 'external_agents:payment_add' %}">
+        <form class="ea-modal-form" method="post" action="{% url 'external_agents:payment_add' %}" data-single-submit>
             {% csrf_token %}
+            <input type="hidden" name="submission_token" value="{{ payment_submission_token }}">
             <input type="hidden" name="deal_type" value="{{ deal_type }}">
             <div class="ea-field wide">
                 <label class="ea-label" for="pago-operacion">Código de operación / propiedad</label>

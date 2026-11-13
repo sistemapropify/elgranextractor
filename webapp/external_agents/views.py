@@ -2,6 +2,7 @@ import calendar
 import mimetypes
 import re
 import unicodedata
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 from functools import wraps
@@ -14,7 +15,7 @@ from django.core.paginator import Paginator
 from django.core.exceptions import PermissionDenied
 from django.db import DatabaseError, connections, transaction
 from django.db.models import Count, Q
-from django.db.utils import ConnectionDoesNotExist
+from django.db.utils import ConnectionDoesNotExist, IntegrityError
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -41,6 +42,7 @@ from .models import (
     DocumentType,
     ExternalAgent,
     ExternalAgentAttachment,
+    FinanceSubmissionToken,
     OperatingExpense,
     PayrollEmployee,
     PayrollEntry,
@@ -507,6 +509,34 @@ def _username(request):
     return str(getattr(principal, 'username', '') or '').strip()
 
 
+def _new_finance_submission_token():
+    return uuid.uuid4().hex
+
+
+def _claim_finance_submission(request, operation):
+    """Registra un envío una sola vez dentro de la transacción de la vista."""
+    token = str(request.POST.get('submission_token') or '').strip()
+    if len(token) < 16 or len(token) > 64:
+        return False
+    try:
+        with transaction.atomic():
+            FinanceSubmissionToken.objects.create(
+                token=token,
+                operation=operation,
+                actor_username=_username(request),
+            )
+    except IntegrityError:
+        return False
+    return True
+
+
+def _duplicate_finance_submission_message(request):
+    messages.info(
+        request,
+        'La operación ya fue registrada. Se ignoró el segundo envío para evitar duplicados.',
+    )
+
+
 def _principal_can_view_financial_balance(principal):
     profile = getattr(principal, 'profile', {}) or {}
     profile_id = str(profile.get('id') or profile.get('pk') or '').strip()
@@ -849,6 +879,8 @@ def cierres(request):
         'collection_entries': collection_entries,
         'beneficiary_types': CommissionPayment.BeneficiaryType.choices,
         'payment_statuses': CommissionPayment.Status.choices,
+        'collection_submission_token': _new_finance_submission_token(),
+        'payment_submission_token': _new_finance_submission_token(),
     })
 
 
@@ -894,6 +926,9 @@ def collection_add(request):
         messages.error(request, 'Selecciona un cierre y un monto válido.')
         return _redirect_cierres(deal_type, 'cobros')
     with transaction.atomic():
+        if not _claim_finance_submission(request, 'collection_add'):
+            _duplicate_finance_submission_message(request)
+            return _redirect_cierres(deal_type, 'cobros')
         try:
             collection = (
                 CommissionCollection.objects
@@ -979,33 +1014,37 @@ def payment_add(request):
     except CommissionCollection.DoesNotExist:
         messages.error(request, 'El cierre seleccionado ya no está disponible.')
         return _redirect_cierres(deal_type, 'pagos')
-    payment_date = (
-        _parse_date_input(request.POST.get('payment_date'))
-        or timezone.localdate()
-    )
-    payment = CommissionPayment(
-        operation_code=operation_code,
-        property_name=collection.property_name,
-        beneficiary_type=beneficiary_type,
-        beneficiary_name=beneficiary_name,
-        amount=amount,
-        currency_code=(
-            str(request.POST.get('currency_code') or '').strip().upper()
-            or collection.currency_code
-            or 'USD'
-        ),
-        due_date=None,
-        payment_date=payment_date,
-        status=status,
-        payment_method=str(request.POST.get('payment_method') or '').strip(),
-        account=str(request.POST.get('account') or '').strip(),
-        voucher=str(request.POST.get('voucher') or '').strip(),
-        approved_by=str(request.POST.get('approved_by') or '').strip(),
-        notes=str(request.POST.get('notes') or '').strip(),
-        created_by_username=_username(request),
-        updated_by_username=_username(request),
-    )
-    payment.save()
+    with transaction.atomic():
+        if not _claim_finance_submission(request, 'commission_payment_add'):
+            _duplicate_finance_submission_message(request)
+            return _redirect_cierres(collection.deal_type, 'pagos')
+        payment_date = (
+            _parse_date_input(request.POST.get('payment_date'))
+            or timezone.localdate()
+        )
+        payment = CommissionPayment(
+            operation_code=operation_code,
+            property_name=collection.property_name,
+            beneficiary_type=beneficiary_type,
+            beneficiary_name=beneficiary_name,
+            amount=amount,
+            currency_code=(
+                str(request.POST.get('currency_code') or '').strip().upper()
+                or collection.currency_code
+                or 'USD'
+            ),
+            due_date=None,
+            payment_date=payment_date,
+            status=status,
+            payment_method=str(request.POST.get('payment_method') or '').strip(),
+            account=str(request.POST.get('account') or '').strip(),
+            voucher=str(request.POST.get('voucher') or '').strip(),
+            approved_by=str(request.POST.get('approved_by') or '').strip(),
+            notes=str(request.POST.get('notes') or '').strip(),
+            created_by_username=_username(request),
+            updated_by_username=_username(request),
+        )
+        payment.save()
     messages.success(request, 'Pago registrado correctamente.')
     return _redirect_cierres(collection.deal_type, 'pagos')
 
@@ -1111,6 +1150,8 @@ def service_payments(request):
         'month_filter': month_filter,
         'month_value': month_filter.strftime('%Y-%m') if month_filter else '',
         'subcategories': ServicePayment.Subcategory.choices,
+        'service_add_submission_token': _new_finance_submission_token(),
+        'service_pay_submission_token': _new_finance_submission_token(),
     })
 
 
@@ -1135,28 +1176,32 @@ def service_payment_add(request):
     ):
         messages.error(request, 'Completa el concepto, categoría, periodicidad y vencimiento.')
         return redirect('external_agents:service_payments')
-    ServicePayment.objects.create(
-        concept=concept,
-        provider=str(request.POST.get('provider') or '').strip(),
-        reference=str(request.POST.get('reference') or '').strip(),
-        financial_category=ServicePayment.FinancialCategory.SERVICES,
-        subcategory=subcategory,
-        recurrence=recurrence,
-        currency_code=(
-            str(request.POST.get('currency_code') or '').strip().upper()
-            or 'PEN'
-        ),
-        estimated_amount=_first_number(request.POST.get('estimated_amount')),
-        service_month=service_month,
-        due_date=due_date,
-        reminder_days_before=max(
-            int(_first_number(request.POST.get('reminder_days_before'), 3)),
-            0,
-        ),
-        notes=str(request.POST.get('notes') or '').strip(),
-        created_by_username=_username(request),
-        updated_by_username=_username(request),
-    )
+    with transaction.atomic():
+        if not _claim_finance_submission(request, 'service_payment_add'):
+            _duplicate_finance_submission_message(request)
+            return redirect('external_agents:service_payments')
+        ServicePayment.objects.create(
+            concept=concept,
+            provider=str(request.POST.get('provider') or '').strip(),
+            reference=str(request.POST.get('reference') or '').strip(),
+            financial_category=ServicePayment.FinancialCategory.SERVICES,
+            subcategory=subcategory,
+            recurrence=recurrence,
+            currency_code=(
+                str(request.POST.get('currency_code') or '').strip().upper()
+                or 'PEN'
+            ),
+            estimated_amount=_first_number(request.POST.get('estimated_amount')),
+            service_month=service_month,
+            due_date=due_date,
+            reminder_days_before=max(
+                int(_first_number(request.POST.get('reminder_days_before'), 3)),
+                0,
+            ),
+            notes=str(request.POST.get('notes') or '').strip(),
+            created_by_username=_username(request),
+            updated_by_username=_username(request),
+        )
     messages.success(request, 'Pago programado correctamente.')
     return redirect('external_agents:service_payments')
 
@@ -1167,45 +1212,53 @@ def service_payment_pay(request, pk):
     payment = get_object_or_404(ServicePayment, pk=pk)
     if request.method != 'POST':
         return redirect('external_agents:service_payments')
-    payment.paid_amount = (
-        _first_number(request.POST.get('paid_amount'))
-        or _first_number(payment.estimated_amount)
-    )
-    payment.payment_date = (
-        _parse_date_input(request.POST.get('payment_date'))
-        or timezone.localdate()
-    )
-    payment.status = ServicePayment.Status.PAID
-    payment.payment_method = str(request.POST.get('payment_method') or '').strip()
-    payment.account = str(request.POST.get('account') or '').strip()
-    payment.voucher = str(request.POST.get('voucher') or '').strip()
-    payment.notes = str(request.POST.get('notes') or payment.notes).strip()
-    payment.updated_by_username = _username(request)
-    payment.save()
-    next_due_date = _next_service_due_date(payment.due_date, payment.recurrence)
-    if next_due_date:
-        next_month = next_due_date.replace(day=1)
-        already_exists = ServicePayment.objects.filter(
-            provider__iexact=payment.provider,
-            reference=payment.reference,
-            service_month=next_month,
-        ).exists()
-        if not already_exists:
-            ServicePayment.objects.create(
-                concept=payment.concept,
-                provider=payment.provider,
+    with transaction.atomic():
+        if not _claim_finance_submission(request, 'service_payment_pay'):
+            _duplicate_finance_submission_message(request)
+            return redirect('external_agents:service_payments')
+        payment = ServicePayment.objects.select_for_update().get(pk=payment.pk)
+        if payment.status == ServicePayment.Status.PAID:
+            messages.info(request, 'Este pago de servicio ya estaba registrado.')
+            return redirect('external_agents:service_payments')
+        payment.paid_amount = (
+            _first_number(request.POST.get('paid_amount'))
+            or _first_number(payment.estimated_amount)
+        )
+        payment.payment_date = (
+            _parse_date_input(request.POST.get('payment_date'))
+            or timezone.localdate()
+        )
+        payment.status = ServicePayment.Status.PAID
+        payment.payment_method = str(request.POST.get('payment_method') or '').strip()
+        payment.account = str(request.POST.get('account') or '').strip()
+        payment.voucher = str(request.POST.get('voucher') or '').strip()
+        payment.notes = str(request.POST.get('notes') or payment.notes).strip()
+        payment.updated_by_username = _username(request)
+        payment.save()
+        next_due_date = _next_service_due_date(payment.due_date, payment.recurrence)
+        if next_due_date:
+            next_month = next_due_date.replace(day=1)
+            already_exists = ServicePayment.objects.filter(
+                provider__iexact=payment.provider,
                 reference=payment.reference,
-                financial_category=payment.financial_category,
-                subcategory=payment.subcategory,
-                recurrence=payment.recurrence,
-                currency_code=payment.currency_code,
-                estimated_amount=payment.estimated_amount,
                 service_month=next_month,
-                due_date=next_due_date,
-                reminder_days_before=payment.reminder_days_before,
-                created_by_username=_username(request),
-                updated_by_username=_username(request),
-            )
+            ).exists()
+            if not already_exists:
+                ServicePayment.objects.create(
+                    concept=payment.concept,
+                    provider=payment.provider,
+                    reference=payment.reference,
+                    financial_category=payment.financial_category,
+                    subcategory=payment.subcategory,
+                    recurrence=payment.recurrence,
+                    currency_code=payment.currency_code,
+                    estimated_amount=payment.estimated_amount,
+                    service_month=next_month,
+                    due_date=next_due_date,
+                    reminder_days_before=payment.reminder_days_before,
+                    created_by_username=_username(request),
+                    updated_by_username=_username(request),
+                )
     messages.success(request, 'Pago registrado. Estado actualizado a Pagado.')
     return redirect('external_agents:service_payments')
 
@@ -1320,6 +1373,8 @@ def _expense_page(request, kind):
             if category == OperatingExpense.ExpenseCategory.MARKETING
             else 'Gastos Fijos'
         ),
+        'expense_add_submission_token': _new_finance_submission_token(),
+        'expense_pay_submission_token': _new_finance_submission_token(),
     })
 
 
@@ -1354,25 +1409,33 @@ def operating_expense_add(request, kind):
     ):
         messages.error(request, 'Completa concepto, subcategoría, mes y vencimiento.')
     else:
-        OperatingExpense.objects.create(
-            expense_category=category,
-            subcategory=subcategory,
-            concept=concept,
-            provider=str(request.POST.get('provider') or '').strip(),
-            reference=str(request.POST.get('reference') or '').strip(),
-            recurrence=str(request.POST.get('recurrence') or 'unico'),
-            currency_code=str(request.POST.get('currency_code') or 'PEN').upper(),
-            amount=_money_input(request.POST.get('amount')),
-            expense_month=expense_month,
-            due_date=due_date,
-            reminder_days_before=max(
-                int(_first_number(request.POST.get('reminder_days_before'), 3)),
-                0,
-            ),
-            notes=str(request.POST.get('notes') or '').strip(),
-            created_by_username=_username(request),
-            updated_by_username=_username(request),
-        )
+        with transaction.atomic():
+            if not _claim_finance_submission(request, f'operating_expense_add:{kind}'):
+                _duplicate_finance_submission_message(request)
+                return redirect(
+                    'external_agents:marketing_expenses'
+                    if kind == 'marketing'
+                    else 'external_agents:fixed_expenses'
+                )
+            OperatingExpense.objects.create(
+                expense_category=category,
+                subcategory=subcategory,
+                concept=concept,
+                provider=str(request.POST.get('provider') or '').strip(),
+                reference=str(request.POST.get('reference') or '').strip(),
+                recurrence=str(request.POST.get('recurrence') or 'unico'),
+                currency_code=str(request.POST.get('currency_code') or 'PEN').upper(),
+                amount=_money_input(request.POST.get('amount')),
+                expense_month=expense_month,
+                due_date=due_date,
+                reminder_days_before=max(
+                    int(_first_number(request.POST.get('reminder_days_before'), 3)),
+                    0,
+                ),
+                notes=str(request.POST.get('notes') or '').strip(),
+                created_by_username=_username(request),
+                updated_by_username=_username(request),
+            )
         messages.success(request, 'Gasto programado correctamente.')
     return redirect(
         'external_agents:marketing_expenses'
@@ -1386,46 +1449,65 @@ def operating_expense_add(request, kind):
 def operating_expense_pay(request, kind, pk):
     expense = get_object_or_404(OperatingExpense, pk=pk)
     if request.method == 'POST':
-        expense.paid_amount = (
-            _money_input(request.POST.get('paid_amount'))
-            or expense.amount
-        )
-        expense.payment_date = (
-            _parse_date_input(request.POST.get('payment_date'))
-            or timezone.localdate()
-        )
-        expense.status = OperatingExpense.Status.PAID
-        expense.payment_method = str(request.POST.get('payment_method') or '').strip()
-        expense.account = str(request.POST.get('account') or '').strip()
-        expense.voucher = str(request.POST.get('voucher') or '').strip()
-        expense.notes = str(request.POST.get('notes') or expense.notes).strip()
-        expense.updated_by_username = _username(request)
-        expense.save()
-        next_due_date = _next_service_due_date(expense.due_date, expense.recurrence)
-        if next_due_date:
-            next_month = next_due_date.replace(day=1)
-            already_exists = OperatingExpense.objects.filter(
-                expense_category=expense.expense_category,
-                provider__iexact=expense.provider,
-                reference=expense.reference,
-                expense_month=next_month,
-            ).exists()
-            if not already_exists:
-                OperatingExpense.objects.create(
-                    expense_category=expense.expense_category,
-                    subcategory=expense.subcategory,
-                    concept=expense.concept,
-                    provider=expense.provider,
-                    reference=expense.reference,
-                    recurrence=expense.recurrence,
-                    currency_code=expense.currency_code,
-                    amount=expense.amount,
-                    expense_month=next_month,
-                    due_date=next_due_date,
-                    reminder_days_before=expense.reminder_days_before,
-                    created_by_username=_username(request),
-                    updated_by_username=_username(request),
+        with transaction.atomic():
+            if not _claim_finance_submission(
+                request,
+                f'operating_expense_pay:{kind}',
+            ):
+                _duplicate_finance_submission_message(request)
+                return redirect(
+                    'external_agents:marketing_expenses'
+                    if kind == 'marketing'
+                    else 'external_agents:fixed_expenses'
                 )
+            expense = OperatingExpense.objects.select_for_update().get(pk=expense.pk)
+            if expense.status == OperatingExpense.Status.PAID:
+                messages.info(request, 'Este gasto ya estaba registrado como pagado.')
+                return redirect(
+                    'external_agents:marketing_expenses'
+                    if kind == 'marketing'
+                    else 'external_agents:fixed_expenses'
+                )
+            expense.paid_amount = (
+                _money_input(request.POST.get('paid_amount'))
+                or expense.amount
+            )
+            expense.payment_date = (
+                _parse_date_input(request.POST.get('payment_date'))
+                or timezone.localdate()
+            )
+            expense.status = OperatingExpense.Status.PAID
+            expense.payment_method = str(request.POST.get('payment_method') or '').strip()
+            expense.account = str(request.POST.get('account') or '').strip()
+            expense.voucher = str(request.POST.get('voucher') or '').strip()
+            expense.notes = str(request.POST.get('notes') or expense.notes).strip()
+            expense.updated_by_username = _username(request)
+            expense.save()
+            next_due_date = _next_service_due_date(expense.due_date, expense.recurrence)
+            if next_due_date:
+                next_month = next_due_date.replace(day=1)
+                already_exists = OperatingExpense.objects.filter(
+                    expense_category=expense.expense_category,
+                    provider__iexact=expense.provider,
+                    reference=expense.reference,
+                    expense_month=next_month,
+                ).exists()
+                if not already_exists:
+                    OperatingExpense.objects.create(
+                        expense_category=expense.expense_category,
+                        subcategory=expense.subcategory,
+                        concept=expense.concept,
+                        provider=expense.provider,
+                        reference=expense.reference,
+                        recurrence=expense.recurrence,
+                        currency_code=expense.currency_code,
+                        amount=expense.amount,
+                        expense_month=next_month,
+                        due_date=next_due_date,
+                        reminder_days_before=expense.reminder_days_before,
+                        created_by_username=_username(request),
+                        updated_by_username=_username(request),
+                    )
         messages.success(request, 'Gasto registrado como pagado.')
     return redirect(
         'external_agents:marketing_expenses'
@@ -1485,48 +1567,125 @@ def financial_balance(request):
     period_end = _add_months(period, 1)
     rate, rate_source, rate_date = _usd_pen_rate()
 
-    commission_rows = CommissionCollection.objects.filter(
-        closing_date__gte=period,
-        closing_date__lt=period_end,
+    commission_rows = list(
+        CommissionCollection.objects.filter(
+            closing_date__gte=period,
+            closing_date__lt=period_end,
+        )
     )
     income_commission = Decimal('0')
     expense_agents = Decimal('0')
+    commission_income_details = []
+    commission_agent_details = []
     for row in commission_rows:
-        income_commission += _amount_to_usd(
+        propify_amount = _amount_to_usd(
             row.amount_for_propify,
             row.currency_code,
             rate,
         )
-        expense_agents += _amount_to_usd(
+        agents_amount = _amount_to_usd(
             row.amount_for_agents,
             row.currency_code,
             rate,
         )
+        income_commission += propify_amount
+        expense_agents += agents_amount
+        detail_base = {
+            'label': f'{row.operation_code} · {row.property_name}',
+            'meta': (
+                f'{row.closing_date:%d/%m/%Y} · '
+                f'{row.currency_code} · Cierre {row.get_deal_type_display().lower()}'
+            ),
+        }
+        if propify_amount:
+            commission_income_details.append({
+                **detail_base,
+                'amount': propify_amount,
+            })
+        if agents_amount:
+            commission_agent_details.append({
+                **detail_base,
+                'amount': agents_amount,
+            })
 
     service_total = Decimal('0')
-    for row in ServicePayment.objects.exclude(status=ServicePayment.Status.ANNULLED).filter(
+    service_details = []
+    service_rows = ServicePayment.objects.exclude(
+        status=ServicePayment.Status.ANNULLED,
+    ).filter(
         due_date__gte=period,
         due_date__lt=period_end,
-    ):
+    )
+    for row in service_rows:
         amount = row.paid_amount if row.status == ServicePayment.Status.PAID else row.estimated_amount
-        service_total += _amount_to_usd(amount, row.currency_code, rate)
+        converted = _amount_to_usd(amount, row.currency_code, rate)
+        service_total += converted
+        provider_reference = ' · '.join(
+            value for value in [row.provider, row.reference] if value
+        )
+        service_details.append({
+            'label': row.concept,
+            'meta': ' · '.join(
+                value for value in [
+                    provider_reference,
+                    f'Vence {row.due_date:%d/%m/%Y}',
+                    row.get_status_display(),
+                    f'{row.currency_code} {amount:,.2f}',
+                ] if value
+            ),
+            'amount': converted,
+        })
 
     fixed_total = Decimal('0')
     marketing_total = Decimal('0')
-    for row in OperatingExpense.objects.exclude(status=OperatingExpense.Status.ANNULLED).filter(
+    fixed_details = []
+    marketing_details = []
+    expense_rows = OperatingExpense.objects.exclude(
+        status=OperatingExpense.Status.ANNULLED,
+    ).filter(
         due_date__gte=period,
         due_date__lt=period_end,
-    ):
+    )
+    for row in expense_rows:
         amount = row.paid_amount if row.status == OperatingExpense.Status.PAID else row.amount
         converted = _amount_to_usd(amount, row.currency_code, rate)
+        detail = {
+            'label': row.concept,
+            'meta': ' · '.join(
+                value for value in [
+                    row.get_subcategory_display(),
+                    row.provider,
+                    f'Vence {row.due_date:%d/%m/%Y}',
+                    row.get_status_display(),
+                    f'{row.currency_code} {amount:,.2f}',
+                ] if value
+            ),
+            'amount': converted,
+        }
         if row.expense_category == OperatingExpense.ExpenseCategory.MARKETING:
             marketing_total += converted
+            marketing_details.append(detail)
         else:
             fixed_total += converted
+            fixed_details.append(detail)
 
     payroll_total = Decimal('0')
-    for row in PayrollEntry.objects.filter(period=period):
-        payroll_total += _amount_to_usd(row.employer_cost, row.currency_code, rate)
+    payroll_details = []
+    payroll_rows = PayrollEntry.objects.filter(period=period).select_related('employee')
+    for row in payroll_rows:
+        converted = _amount_to_usd(row.employer_cost, row.currency_code, rate)
+        payroll_total += converted
+        payroll_details.append({
+            'label': row.employee.full_name,
+            'meta': ' · '.join(
+                value for value in [
+                    row.employee.position,
+                    f'Costo empleador {row.currency_code} {row.employer_cost:,.2f}',
+                    row.get_status_display(),
+                ] if value
+            ),
+            'amount': converted,
+        })
 
     income_total = income_commission
     expense_total = (
@@ -1543,12 +1702,48 @@ def financial_balance(request):
         else Decimal('0')
     )
     rows = [
-        {'concept': 'Comisión de servicios Propify', 'income': income_commission, 'expense': Decimal('0')},
-        {'concept': 'Comisiones de agentes', 'income': Decimal('0'), 'expense': expense_agents},
-        {'concept': 'Pagos de servicios', 'income': Decimal('0'), 'expense': service_total},
-        {'concept': 'Gastos fijos', 'income': Decimal('0'), 'expense': fixed_total},
-        {'concept': 'Gastos de marketing', 'income': Decimal('0'), 'expense': marketing_total},
-        {'concept': 'Planillas de sueldos', 'income': Decimal('0'), 'expense': payroll_total},
+        {
+            'key': 'commission-income',
+            'concept': 'Comisión de servicios Propify',
+            'income': income_commission,
+            'expense': Decimal('0'),
+            'details': commission_income_details,
+        },
+        {
+            'key': 'commission-agents',
+            'concept': 'Comisiones de agentes',
+            'income': Decimal('0'),
+            'expense': expense_agents,
+            'details': commission_agent_details,
+        },
+        {
+            'key': 'service-payments',
+            'concept': 'Pagos de servicios',
+            'income': Decimal('0'),
+            'expense': service_total,
+            'details': service_details,
+        },
+        {
+            'key': 'fixed-expenses',
+            'concept': 'Gastos fijos',
+            'income': Decimal('0'),
+            'expense': fixed_total,
+            'details': fixed_details,
+        },
+        {
+            'key': 'marketing-expenses',
+            'concept': 'Gastos de marketing',
+            'income': Decimal('0'),
+            'expense': marketing_total,
+            'details': marketing_details,
+        },
+        {
+            'key': 'payroll',
+            'concept': 'Planillas de sueldos',
+            'income': Decimal('0'),
+            'expense': payroll_total,
+            'details': payroll_details,
+        },
     ]
     return render(request, 'external_agents/balance.html', {
         'period': period,
@@ -1619,6 +1814,10 @@ def payroll_dashboard(request):
         'totals': list(totals.values()),
         'status_filter': status_filter,
         'active_employees': PayrollEmployee.objects.filter(is_active=True).count(),
+        'employee_submission_token': _new_finance_submission_token(),
+        'generate_submission_token': _new_finance_submission_token(),
+        'edit_submission_token': _new_finance_submission_token(),
+        'pay_submission_token': _new_finance_submission_token(),
     })
 
 
@@ -1635,21 +1834,25 @@ def payroll_employee_add(request):
     ):
         messages.error(request, 'Completa el nombre y el sistema de pensión.')
         return redirect('external_agents:payroll_dashboard')
-    PayrollEmployee.objects.create(
-        full_name=full_name,
-        document_number=str(request.POST.get('document_number') or '').strip(),
-        position=str(request.POST.get('position') or '').strip(),
-        area=str(request.POST.get('area') or '').strip(),
-        base_salary=_money_input(request.POST.get('base_salary')),
-        currency_code=(
-            str(request.POST.get('currency_code') or '').strip().upper()
-            or 'PEN'
-        ),
-        pension_system=pension_system,
-        pension_pct=_money_input(request.POST.get('pension_pct')),
-        bank_account=str(request.POST.get('bank_account') or '').strip(),
-        hire_date=_parse_date_input(request.POST.get('hire_date')),
-    )
+    with transaction.atomic():
+        if not _claim_finance_submission(request, 'payroll_employee_add'):
+            _duplicate_finance_submission_message(request)
+            return redirect('external_agents:payroll_dashboard')
+        PayrollEmployee.objects.create(
+            full_name=full_name,
+            document_number=str(request.POST.get('document_number') or '').strip(),
+            position=str(request.POST.get('position') or '').strip(),
+            area=str(request.POST.get('area') or '').strip(),
+            base_salary=_money_input(request.POST.get('base_salary')),
+            currency_code=(
+                str(request.POST.get('currency_code') or '').strip().upper()
+                or 'PEN'
+            ),
+            pension_system=pension_system,
+            pension_pct=_money_input(request.POST.get('pension_pct')),
+            bank_account=str(request.POST.get('bank_account') or '').strip(),
+            hire_date=_parse_date_input(request.POST.get('hire_date')),
+        )
     messages.success(request, 'Trabajador agregado a planilla.')
     return redirect('external_agents:payroll_dashboard')
 
@@ -1661,20 +1864,29 @@ def payroll_generate(request):
         return redirect('external_agents:payroll_dashboard')
     period = _parse_payroll_period(request.POST.get('period'))
     created = 0
-    for employee in PayrollEmployee.objects.filter(is_active=True):
-        if PayrollEntry.objects.filter(employee=employee, period=period).exists():
-            continue
-        pension = (
-            employee.base_salary * employee.pension_pct / 100
-        ).quantize(Decimal('0.01'))
-        PayrollEntry.objects.create(
-            employee=employee,
-            period=period,
-            base_salary=employee.base_salary,
-            pension_deduction=pension,
-            currency_code=employee.currency_code,
-        )
-        created += 1
+    with transaction.atomic():
+        if not _claim_finance_submission(request, 'payroll_generate'):
+            _duplicate_finance_submission_message(request)
+            return redirect(
+                f'/agentes-externos/planillas/?periodo={period:%Y-%m}'
+            )
+        for employee in PayrollEmployee.objects.filter(is_active=True):
+            if PayrollEntry.objects.filter(
+                employee=employee,
+                period=period,
+            ).exists():
+                continue
+            pension = (
+                employee.base_salary * employee.pension_pct / 100
+            ).quantize(Decimal('0.01'))
+            PayrollEntry.objects.create(
+                employee=employee,
+                period=period,
+                base_salary=employee.base_salary,
+                pension_deduction=pension,
+                currency_code=employee.currency_code,
+            )
+            created += 1
     messages.success(
         request,
         f'Planilla generada: {created} trabajador{"es" if created != 1 else ""}.',
@@ -1687,18 +1899,25 @@ def payroll_generate(request):
 def payroll_entry_update(request, pk):
     entry = get_object_or_404(PayrollEntry, pk=pk)
     if request.method == 'POST':
-        entry.base_salary = _money_input(request.POST.get('base_salary'))
-        entry.family_allowance = _money_input(request.POST.get('family_allowance'))
-        entry.bonuses = _money_input(request.POST.get('bonuses'))
-        entry.overtime = _money_input(request.POST.get('overtime'))
-        entry.other_income = _money_input(request.POST.get('other_income'))
-        entry.commissions = _money_input(request.POST.get('commissions'))
-        entry.pension_deduction = _money_input(request.POST.get('pension_deduction'))
-        entry.income_tax = _money_input(request.POST.get('income_tax'))
-        entry.other_deductions = _money_input(request.POST.get('other_deductions'))
-        entry.essalud_rate = _money_input(request.POST.get('essalud_rate'))
-        entry.notes = str(request.POST.get('notes') or '').strip()
-        entry.save()
+        with transaction.atomic():
+            if not _claim_finance_submission(request, 'payroll_entry_update'):
+                _duplicate_finance_submission_message(request)
+                return redirect(
+                    f'/agentes-externos/planillas/?periodo={entry.period:%Y-%m}'
+                )
+            entry = PayrollEntry.objects.select_for_update().get(pk=entry.pk)
+            entry.base_salary = _money_input(request.POST.get('base_salary'))
+            entry.family_allowance = _money_input(request.POST.get('family_allowance'))
+            entry.bonuses = _money_input(request.POST.get('bonuses'))
+            entry.overtime = _money_input(request.POST.get('overtime'))
+            entry.other_income = _money_input(request.POST.get('other_income'))
+            entry.commissions = _money_input(request.POST.get('commissions'))
+            entry.pension_deduction = _money_input(request.POST.get('pension_deduction'))
+            entry.income_tax = _money_input(request.POST.get('income_tax'))
+            entry.other_deductions = _money_input(request.POST.get('other_deductions'))
+            entry.essalud_rate = _money_input(request.POST.get('essalud_rate'))
+            entry.notes = str(request.POST.get('notes') or '').strip()
+            entry.save()
         messages.success(request, 'Fila de planilla actualizada.')
     return redirect(
         f'/agentes-externos/planillas/?periodo={entry.period:%Y-%m}'
@@ -1710,12 +1929,24 @@ def payroll_entry_update(request, pk):
 def payroll_entry_pay(request, pk):
     entry = get_object_or_404(PayrollEntry, pk=pk)
     if request.method == 'POST':
-        entry.status = PayrollEntry.Status.PAID
-        entry.payment_date = (
-            _parse_date_input(request.POST.get('payment_date'))
-            or timezone.localdate()
-        )
-        entry.save(update_fields=['status', 'payment_date', 'updated_at'])
+        with transaction.atomic():
+            if not _claim_finance_submission(request, 'payroll_entry_pay'):
+                _duplicate_finance_submission_message(request)
+                return redirect(
+                    f'/agentes-externos/planillas/?periodo={entry.period:%Y-%m}'
+                )
+            entry = PayrollEntry.objects.select_for_update().get(pk=entry.pk)
+            if entry.status == PayrollEntry.Status.PAID:
+                messages.info(request, 'Este sueldo ya estaba registrado como pagado.')
+                return redirect(
+                    f'/agentes-externos/planillas/?periodo={entry.period:%Y-%m}'
+                )
+            entry.status = PayrollEntry.Status.PAID
+            entry.payment_date = (
+                _parse_date_input(request.POST.get('payment_date'))
+                or timezone.localdate()
+            )
+            entry.save(update_fields=['status', 'payment_date', 'updated_at'])
         messages.success(request, 'Sueldo marcado como pagado.')
     return redirect(
         f'/agentes-externos/planillas/?periodo={entry.period:%Y-%m}'

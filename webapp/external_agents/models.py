@@ -912,6 +912,28 @@ class OperatingExpense(models.Model):
         return f'{self.concept} · {self.get_expense_category_display()}'
 
 
+class FinanceSubmissionToken(models.Model):
+    """Evita que un mismo formulario financiero se procese dos veces."""
+
+    token = models.CharField(max_length=64, unique=True, verbose_name='Token')
+    operation = models.CharField(max_length=80, db_index=True, verbose_name='Operación')
+    actor_username = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name='Usuario',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'external_agents_finance_submission_token'
+        ordering = ['-created_at', '-pk']
+        verbose_name = 'Token de envío financiero'
+        verbose_name_plural = 'Tokens de envío financiero'
+
+    def __str__(self):
+        return f'{self.operation} · {self.token[:12]}'
+
+
 class ExternalAgentAttachment(models.Model):
     """Documento digital asociado a un agente externo."""
 

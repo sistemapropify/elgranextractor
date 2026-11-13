@@ -543,4 +543,72 @@
 
     {% block module_content %}{% endblock %}
 </main>
+<script>
+(function () {
+    const forms = Array.from(document.querySelectorAll('form[data-single-submit]'));
+
+    function createSubmissionToken() {
+        if (window.crypto?.randomUUID) {
+            return window.crypto.randomUUID().replaceAll('-', '');
+        }
+        if (window.crypto?.getRandomValues) {
+            const bytes = new Uint8Array(16);
+            window.crypto.getRandomValues(bytes);
+            return Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+        }
+        return `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+    }
+
+    function prepareForm(form) {
+        const tokenInput = form.querySelector('input[name="submission_token"]');
+        if (tokenInput && !tokenInput.value) {
+            tokenInput.value = createSubmissionToken();
+        }
+        form.dataset.submitting = 'false';
+        form.removeAttribute('aria-busy');
+        form.querySelectorAll('button[type="submit"]').forEach(button => {
+            if (!button.dataset.idleLabel) {
+                button.dataset.idleLabel = button.textContent.trim();
+            }
+            button.disabled = false;
+            button.textContent = button.dataset.idleLabel;
+        });
+    }
+
+    function lockForm(form) {
+        form.dataset.submitting = 'true';
+        form.setAttribute('aria-busy', 'true');
+        form.querySelectorAll('button[type="submit"]').forEach(button => {
+            button.disabled = true;
+            button.textContent = 'Guardando…';
+        });
+        const tokenInput = form.querySelector('input[name="submission_token"]');
+        if (tokenInput && !tokenInput.value) {
+            tokenInput.value = createSubmissionToken();
+        }
+    }
+
+    forms.forEach(form => {
+        prepareForm(form);
+        form.addEventListener('submit', event => {
+            if (form.dataset.submitting === 'true') {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                return;
+            }
+            lockForm(form);
+        });
+    });
+
+    window.addEventListener('pageshow', event => {
+        if (event.persisted) {
+            forms.forEach(form => {
+                prepareForm(form);
+                const tokenInput = form.querySelector('input[name="submission_token"]');
+                if (tokenInput) tokenInput.value = createSubmissionToken();
+            });
+        }
+    });
+})();
+</script>
 {% endblock %}

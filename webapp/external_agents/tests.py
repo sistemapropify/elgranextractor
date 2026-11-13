@@ -1,5 +1,6 @@
 from unittest.mock import patch
 from decimal import Decimal
+import uuid
 
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -71,6 +72,12 @@ class ExternalAgentsViewsTests(TestCase):
             'role': {'name': role},
         }
         session.save()
+
+    def finance_payload(self, data):
+        return {
+            **data,
+            'submission_token': data.get('submission_token') or uuid.uuid4().hex,
+        }
 
     def test_private_module_redirects_to_its_propify_login(self):
         response = self.client.get(reverse('external_agents:dashboard'))
@@ -228,7 +235,7 @@ class ExternalAgentsViewsTests(TestCase):
         today = timezone.localdate()
         create_response = self.client.post(
             reverse('external_agents:service_payment_add'),
-            {
+            self.finance_payload({
                 'concept': 'Internet oficina',
                 'provider': 'Movistar',
                 'reference': 'INT-001',
@@ -239,7 +246,7 @@ class ExternalAgentsViewsTests(TestCase):
                 'service_month': today.strftime('%Y-%m'),
                 'due_date': today.isoformat(),
                 'reminder_days_before': '3',
-            },
+            }),
         )
         self.assertEqual(create_response.status_code, 302)
         payment = ServicePayment.objects.get(concept='Internet oficina')
@@ -255,12 +262,12 @@ class ExternalAgentsViewsTests(TestCase):
                 'external_agents:service_payment_pay',
                 kwargs={'pk': payment.pk},
             ),
-            {
+            self.finance_payload({
                 'payment_date': today.isoformat(),
                 'paid_amount': '185.50',
                 'payment_method': 'Transferencia',
                 'voucher': 'PAGO-001',
-            },
+            }),
         )
         self.assertEqual(pay_response.status_code, 302)
         payment.refresh_from_db()
@@ -334,7 +341,10 @@ class ExternalAgentsViewsTests(TestCase):
         )
         self.client.post(
             reverse('external_agents:service_payment_pay', kwargs={'pk': payment.pk}),
-            {'payment_date': today.isoformat(), 'paid_amount': '150.00'},
+            self.finance_payload({
+                'payment_date': today.isoformat(),
+                'paid_amount': '150.00',
+            }),
         )
         self.assertEqual(
             ServicePayment.objects.filter(
@@ -344,11 +354,126 @@ class ExternalAgentsViewsTests(TestCase):
             2,
         )
 
+    def test_double_submission_creates_one_service_and_one_recurring_payment(self):
+        self.authenticate_propify()
+        today = timezone.localdate()
+        token = uuid.uuid4().hex
+        payload = self.finance_payload({
+            'submission_token': token,
+            'concept': 'Internet doble envío',
+            'provider': 'Movistar',
+            'reference': 'INT-DUP-1',
+            'subcategory': ServicePayment.Subcategory.INTERNET,
+            'recurrence': ServicePayment.Recurrence.MONTHLY,
+            'currency_code': 'PEN',
+            'estimated_amount': '180.00',
+            'service_month': today.strftime('%Y-%m'),
+            'due_date': today.isoformat(),
+            'reminder_days_before': '3',
+        })
+        add_url = reverse('external_agents:service_payment_add')
+        self.client.post(add_url, payload)
+        self.client.post(add_url, payload)
+
+        payment = ServicePayment.objects.get(concept='Internet doble envío')
+        self.assertEqual(ServicePayment.objects.count(), 1)
+        pay_url = reverse(
+            'external_agents:service_payment_pay',
+            kwargs={'pk': payment.pk},
+        )
+        pay_payload = self.finance_payload({
+            'submission_token': uuid.uuid4().hex,
+            'paid_amount': '180.00',
+            'payment_date': today.isoformat(),
+        })
+        self.client.post(pay_url, pay_payload)
+        self.client.post(pay_url, pay_payload)
+        self.client.post(
+            pay_url,
+            self.finance_payload({
+                'paid_amount': '180.00',
+                'payment_date': today.isoformat(),
+            }),
+        )
+        self.assertEqual(ServicePayment.objects.count(), 2)
+
+    def test_double_submission_creates_one_rent_expense(self):
+        self.authenticate_propify()
+        today = timezone.localdate()
+        payload = self.finance_payload({
+            'submission_token': uuid.uuid4().hex,
+            'concept': 'Alquiler oficina doble',
+            'provider': 'Arrendador',
+            'reference': 'ALQ-DUP-1',
+            'subcategory': OperatingExpense.Subcategory.RENT,
+            'recurrence': OperatingExpense.Recurrence.MONTHLY,
+            'currency_code': 'PEN',
+            'amount': '2500.00',
+            'expense_month': today.strftime('%Y-%m'),
+            'due_date': today.isoformat(),
+            'reminder_days_before': '3',
+        })
+        add_url = reverse(
+            'external_agents:operating_expense_add',
+            kwargs={'kind': 'fijos'},
+        )
+        self.client.post(add_url, payload)
+        self.client.post(add_url, payload)
+        expense = OperatingExpense.objects.get(concept='Alquiler oficina doble')
+        self.assertEqual(OperatingExpense.objects.count(), 1)
+
+        pay_url = reverse(
+            'external_agents:operating_expense_pay',
+            kwargs={'kind': 'fijos', 'pk': expense.pk},
+        )
+        pay_payload = self.finance_payload({
+            'submission_token': uuid.uuid4().hex,
+            'paid_amount': '2500.00',
+            'payment_date': today.isoformat(),
+        })
+        self.client.post(pay_url, pay_payload)
+        self.client.post(pay_url, pay_payload)
+        self.client.post(
+            pay_url,
+            self.finance_payload({
+                'paid_amount': '2500.00',
+                'payment_date': today.isoformat(),
+            }),
+        )
+        self.assertEqual(OperatingExpense.objects.count(), 2)
+
+    def test_double_submission_creates_one_worker_and_one_payroll(self):
+        self.authenticate_propify()
+        employee_payload = self.finance_payload({
+            'submission_token': uuid.uuid4().hex,
+            'full_name': 'Trabajador doble',
+            'base_salary': '2000.00',
+            'currency_code': 'PEN',
+            'pension_system': 'afp',
+            'pension_pct': '10.00',
+        })
+        employee_url = reverse('external_agents:payroll_employee_add')
+        self.client.post(employee_url, employee_payload)
+        self.client.post(employee_url, employee_payload)
+        self.assertEqual(
+            PayrollEmployee.objects.filter(full_name='Trabajador doble').count(),
+            1,
+        )
+
+        payroll_payload = self.finance_payload({
+            'submission_token': uuid.uuid4().hex,
+            'period': timezone.localdate().strftime('%Y-%m'),
+        })
+        payroll_url = reverse('external_agents:payroll_generate')
+        self.client.post(payroll_url, payroll_payload)
+        self.client.post(payroll_url, payroll_payload)
+        self.assertEqual(PayrollEntry.objects.count(), 1)
+
     def test_payroll_employee_can_be_added_and_month_generated(self):
         self.authenticate_propify()
         response = self.client.post(
             reverse('external_agents:payroll_employee_add'),
-            {
+            self.finance_payload({
                 'full_name': 'María López',
                 'document_number': '70001111',
                 'position': 'Asistente administrativa',
@@ -357,14 +482,14 @@ class ExternalAgentsViewsTests(TestCase):
                 'currency_code': 'PEN',
                 'pension_system': 'afp',
                 'pension_pct': '10.00',
-            },
+            }),
         )
         self.assertEqual(response.status_code, 302)
         employee = PayrollEmployee.objects.get(full_name='María López')
         period = timezone.localdate().strftime('%Y-%m')
         generated = self.client.post(
             reverse('external_agents:payroll_generate'),
-            {'period': period},
+            self.finance_payload({'period': period}),
         )
         self.assertEqual(generated.status_code, 302)
         entry = PayrollEntry.objects.get(employee=employee)
@@ -402,7 +527,7 @@ class ExternalAgentsViewsTests(TestCase):
                 'external_agents:payroll_entry_update',
                 kwargs={'pk': entry.pk},
             ),
-            {
+            self.finance_payload({
                 'base_salary': '2500.00',
                 'family_allowance': '0',
                 'bonuses': '100.00',
@@ -414,7 +539,7 @@ class ExternalAgentsViewsTests(TestCase):
                 'other_deductions': '20.00',
                 'essalud_rate': '9.00',
                 'notes': 'Comisión mensual',
-            },
+            }),
         )
         self.assertEqual(update.status_code, 302)
         entry.refresh_from_db()
@@ -428,7 +553,9 @@ class ExternalAgentsViewsTests(TestCase):
                 'external_agents:payroll_entry_pay',
                 kwargs={'pk': entry.pk},
             ),
-            {'payment_date': timezone.localdate().isoformat()},
+            self.finance_payload({
+                'payment_date': timezone.localdate().isoformat(),
+            }),
         )
         self.assertEqual(pay.status_code, 302)
         entry.refresh_from_db()
@@ -474,7 +601,7 @@ class ExternalAgentsViewsTests(TestCase):
                 'external_agents:operating_expense_add',
                 kwargs={'kind': 'marketing'},
             ),
-            {
+            self.finance_payload({
                 'concept': 'Campaña Google',
                 'provider': 'Google',
                 'reference': 'ADS-001',
@@ -485,7 +612,7 @@ class ExternalAgentsViewsTests(TestCase):
                 'expense_month': today.strftime('%Y-%m'),
                 'due_date': today.isoformat(),
                 'reminder_days_before': '3',
-            },
+            }),
         )
         self.assertEqual(response.status_code, 302)
         expense = OperatingExpense.objects.get(concept='Campaña Google')
@@ -494,11 +621,11 @@ class ExternalAgentsViewsTests(TestCase):
                 'external_agents:operating_expense_pay',
                 kwargs={'kind': 'marketing', 'pk': expense.pk},
             ),
-            {
+            self.finance_payload({
                 'paid_amount': '310.00',
                 'payment_date': today.isoformat(),
                 'payment_method': 'Tarjeta',
-            },
+            }),
         )
         self.assertEqual(pay.status_code, 302)
         expense.refresh_from_db()
@@ -507,6 +634,37 @@ class ExternalAgentsViewsTests(TestCase):
         next_expense = OperatingExpense.objects.exclude(pk=expense.pk).get()
         self.assertEqual(next_expense.status, OperatingExpense.Status.PENDING)
         self.assertGreater(next_expense.due_date, today)
+
+    def test_double_submission_creates_one_commission_payment(self):
+        self.authenticate_propify()
+        CommissionCollection.objects.create(
+            operation_code='DUP-PAY-001',
+            property_name='Cierre pago duplicado',
+            deal_type='sale',
+            currency_code='USD',
+            amount_to_collect='1000.00',
+            amount_for_agents='200.00',
+            amount_for_propify='800.00',
+            closing_date=timezone.localdate(),
+        )
+        payload = self.finance_payload({
+            'submission_token': uuid.uuid4().hex,
+            'operation_code': 'DUP-PAY-001',
+            'deal_type': 'sale',
+            'beneficiary_type': CommissionPayment.BeneficiaryType.BUYER,
+            'beneficiary_name': 'Agente destino',
+            'amount': '200.00',
+            'currency_code': 'USD',
+            'status': CommissionPayment.Status.PAID,
+            'payment_date': timezone.localdate().isoformat(),
+        })
+        url = reverse('external_agents:payment_add')
+        self.client.post(url, payload)
+        self.client.post(url, payload)
+        self.assertEqual(
+            CommissionPayment.objects.filter(operation_code='DUP-PAY-001').count(),
+            1,
+        )
 
     def test_financial_balance_converts_pen_and_aggregates_all_modules(self):
         self.authenticate_propify()
@@ -577,6 +735,13 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'income-concept')
         self.assertContains(response, 'expense-concept')
         self.assertContains(response, '1 USD = 3.7500 PEN')
+        self.assertContains(response, 'data-balance-toggle')
+        self.assertContains(response, 'BAL-001 · Cierre balance')
+        self.assertContains(response, 'Servicio balance')
+        self.assertContains(response, 'Gasto fijo balance')
+        self.assertContains(response, 'Marketing balance')
+        self.assertContains(response, 'Trabajador balance')
+        self.assertContains(response, 'color: #fff;')
 
     def test_financial_balance_is_restricted_to_manager_and_superadmin(self):
         self.authenticate_propify(is_superuser=False, role='Agente Interno')
@@ -1090,24 +1255,24 @@ class ExternalAgentsViewsTests(TestCase):
 
         first = self.client.post(
             reverse('external_agents:collection_add'),
-            {
+            self.finance_payload({
                 'operation_code': 'PROP000261',
                 'deal_type': 'sale',
                 'amount': '1000.00',
                 'collection_date': '2026-11-07',
                 'payment_method': 'Transferencia',
                 'voucher': 'OP-001',
-            },
+            }),
         )
         second = self.client.post(
             reverse('external_agents:collection_add'),
-            {
+            self.finance_payload({
                 'operation_code': 'PROP000261',
                 'amount': '500.00',
                 'collection_date': '2026-11-08',
                 'payment_method': 'Transferencia',
                 'voucher': 'OP-002',
-            },
+            }),
         )
         self.assertEqual(first.status_code, 302)
         self.assertEqual(second.status_code, 302)
@@ -1127,11 +1292,11 @@ class ExternalAgentsViewsTests(TestCase):
 
         overpaid = self.client.post(
             reverse('external_agents:collection_add'),
-            {
+            self.finance_payload({
                 'operation_code': 'PROP000261',
                 'amount': '100.00',
                 'collection_date': '2026-11-09',
-            },
+            }),
         )
         self.assertEqual(overpaid.status_code, 302)
         collection.refresh_from_db()
@@ -1140,7 +1305,7 @@ class ExternalAgentsViewsTests(TestCase):
 
         payment = self.client.post(
             reverse('external_agents:payment_add'),
-            {
+            self.finance_payload({
                 'operation_code': 'PROP000261',
                 'deal_type': 'sale',
                 'beneficiary_type': CommissionPayment.BeneficiaryType.BUYER,
@@ -1150,7 +1315,7 @@ class ExternalAgentsViewsTests(TestCase):
                 'status': CommissionPayment.Status.PAID,
                 'payment_date': '2026-11-09',
                 'voucher': 'PAGO-001',
-            },
+            }),
         )
         self.assertEqual(payment.status_code, 302)
         self.assertIn('vista=pagos', payment['Location'])

@@ -279,8 +279,9 @@
 {% endif %}
 
 <dialog class="pr-modal" id="employee-modal">
-    <form method="post" action="{% url 'external_agents:payroll_employee_add' %}">
+    <form method="post" action="{% url 'external_agents:payroll_employee_add' %}" data-single-submit>
         {% csrf_token %}
+        <input type="hidden" name="submission_token" value="{{ employee_submission_token }}">
         <header class="pr-modal-head"><h2>Agregar trabajador</h2><button class="pr-close" type="button" data-close>×</button></header>
         <div class="pr-form">
             <div class="ea-field wide"><label class="ea-label">Nombres y apellidos</label><input class="ea-input" name="full_name" required></div>
@@ -299,8 +300,9 @@
 </dialog>
 
 <dialog class="pr-modal" id="generate-modal">
-    <form method="post" action="{% url 'external_agents:payroll_generate' %}">
+    <form method="post" action="{% url 'external_agents:payroll_generate' %}" data-single-submit>
         {% csrf_token %}
+        <input type="hidden" name="submission_token" value="{{ generate_submission_token }}">
         <header class="pr-modal-head"><h2>Generar planilla mensual</h2><button class="pr-close" type="button" data-close>×</button></header>
         <div class="pr-form">
             <div class="ea-field wide"><label class="ea-label">Periodo</label><input class="ea-input" type="month" name="period" value="{{ period_value }}" required></div>
@@ -311,8 +313,9 @@
 </dialog>
 
 <dialog class="pr-modal" id="edit-modal">
-    <form method="post" id="edit-entry-form">
+    <form method="post" id="edit-entry-form" data-single-submit>
         {% csrf_token %}
+        <input type="hidden" name="submission_token" value="{{ edit_submission_token }}">
         <header class="pr-modal-head"><h2 id="edit-entry-title">Editar fila</h2><button class="pr-close" type="button" data-close>×</button></header>
         <div class="pr-form">
             <div class="ea-field"><label class="ea-label">Sueldo base</label><input class="ea-input" type="number" step="0.01" name="base_salary" id="edit-base"></div>
@@ -332,8 +335,9 @@
 </dialog>
 
 <dialog class="pr-modal" id="pay-modal">
-    <form method="post" id="pay-entry-form">
+    <form method="post" id="pay-entry-form" data-single-submit>
         {% csrf_token %}
+        <input type="hidden" name="submission_token" value="{{ pay_submission_token }}">
         <header class="pr-modal-head"><h2 id="pay-entry-title">Registrar pago de sueldo</h2><button class="pr-close" type="button" data-close>×</button></header>
         <div class="pr-form">
             <div class="ea-field wide"><label class="ea-label">Fecha de pago</label><input class="ea-input" type="date" name="payment_date" id="pay-entry-date" required></div>

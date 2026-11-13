@@ -335,8 +335,9 @@
 {% endif %}
 
 <dialog class="sp-modal" id="service-add-modal">
-    <form method="post" action="{% url 'external_agents:service_payment_add' %}">
+    <form method="post" action="{% url 'external_agents:service_payment_add' %}" data-single-submit>
         {% csrf_token %}
+        <input type="hidden" name="submission_token" value="{{ service_add_submission_token }}">
         <header class="sp-modal-head">
             <div>
                 <h2>Agregar pago de servicio</h2>
@@ -363,8 +364,9 @@
 </dialog>
 
 <dialog class="sp-modal" id="service-pay-modal">
-    <form method="post" id="service-pay-form">
+    <form method="post" id="service-pay-form" data-single-submit>
         {% csrf_token %}
+        <input type="hidden" name="submission_token" value="{{ service_pay_submission_token }}">
         <header class="sp-modal-head">
             <div>
                 <h2>Registrar pago</h2>
