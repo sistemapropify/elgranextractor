@@ -41,6 +41,11 @@
     const progress=el('master-migration-progress');progress.max=Math.max(1,source);progress.value=Math.min(source,linked);
     const button=el('migrate-master');button.disabled=migrationBusy||running;
     button.textContent='Migrar TODOS los pendientes al Catastro Maestro';
+    const districtButton=el('migrate-district');
+    if(districtButton){
+      districtButton.disabled=migrationBusy||running||!source||!pending;
+      districtButton.textContent=running?'Migrando distrito seleccionado…':'Migrar distrito seleccionado al Catastro Maestro';
+    }
     if(running)migrationMessage('Azure está migrando en segundo plano. Puedes cerrar esta página o apagar tu computadora; el avance queda guardado en D1.',false);
     else if(stale)migrationMessage('La ejecución anterior se interrumpió. El vigilante de Azure la reanudará automáticamente; también puedes continuarla manualmente.',true);
     else if(job.status==='error')migrationMessage(job.message||'La migración se detuvo. Puedes reanudarla con el botón.',true);
@@ -64,6 +69,7 @@
     const button=el('migrate-master');
     button.disabled=migrationBusy||running;
     button.textContent=running?'Migrando TODOS los distritos…':'Migrar TODOS los pendientes al Catastro Maestro';
+    if((running||stale)&&el('migrate-district'))el('migrate-district').disabled=true;
     if(running||stale){
       migrationScope='all';
       el('master-audit-status').textContent=stale?'Reanudando':'En curso';
@@ -90,7 +96,13 @@
       if(renderGlobalJob(global.job||{}))return;
       const data=await api('maestro/migracion/estado/?ubigeo='+encodeURIComponent(el('district').value));
       const job=data.job||{};
-      if(job.status==='running'||job.status==='stale'){migrationScope='district';scheduleMigrationPoll();}
+      if(job.status==='running'||job.status==='stale'){
+        migrationScope='district';
+        const districtButton=el('migrate-district');
+        if(districtButton)districtButton.disabled=true;
+        migrationMessage(job.message||'Migrando el distrito seleccionado en segundo plano…',job.status==='stale');
+        scheduleMigrationPoll();
+      }
       else{migrationScope='district';await loadMigration();}
     }catch(error){migrationMessage(error.message,true);scheduleMigrationPoll();}
   }
@@ -113,6 +125,21 @@
     }
     const button=el('migrate-master');
     if(button && !globalActive)button.disabled=migrationBusy;
+    if(globalActive && el('migrate-district'))el('migrate-district').disabled=true;
+  }
+  async function migrateDistrict(){
+    if(migrationBusy)return;
+    const district=el('district')?.value;
+    if(!district)return;
+    migrationBusy=true;
+    const button=el('migrate-district');
+    button.disabled=true;button.textContent='Iniciando migración del distrito…';
+    try{
+      const data=await api('maestro/migracion/iniciar/',{ubigeo:district,batch_size:200});
+      migrationScope='district';
+      migrationMessage(data.started?'Migración del distrito iniciada. El avance queda guardado en D1.':'La migración del distrito ya estaba ejecutándose.');
+    }catch(error){migrationMessage(error.message,true);}
+    finally{migrationBusy=false;await loadMigration();}
   }
   async function migrateToMaster(){
     if(migrationBusy)return;
@@ -187,6 +214,7 @@
   el('district').addEventListener('change',refresh);
   el('refresh-collection').addEventListener('click',async()=>{migrationDistrict=null;await Promise.all([refresh(),loadMigration()]);});
   el('migrate-master').addEventListener('click',migrateToMaster);
+  el('migrate-district').addEventListener('click',migrateDistrict);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeout(timer);else{refresh();if(migrationPollTimer){clearTimeout(migrationPollTimer);pollMigration();}}});
   refresh();loadMigration();
 })();

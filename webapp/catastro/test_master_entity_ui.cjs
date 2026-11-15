@@ -83,6 +83,8 @@ assert.match(dashboard, /maestro\/migracion\/iniciar\//);
 assert.match(dashboard, /maestro\/migracion\/estado\//);
 assert.match(dashboard, /Migrando TODOS los distritos/);
 assert.match(dashboard, /Migrar TODOS los pendientes al Catastro Maestro/);
+assert.match(dashboard, /migrate-district/);
+assert.match(dashboard, /maestro\/migracion\/iniciar\/.*ubigeo:district/);
 assert.match(dashboard, /ubigeo:'all'/);
 assert.match(dashboard, /apagar tu computadora/);
 assert.match(dashboard, /vigilante de Azure/);
