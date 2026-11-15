@@ -75,6 +75,15 @@ class State:
             except sqlite3.OperationalError:
                 if 'workers' not in {r['name'] for r in self.db.execute('PRAGMA table_info(jobs)')}:
                     raise
+        if 'auto_migrate' not in {r['name'] for r in self.db.execute('PRAGMA table_info(jobs)')}:
+            try:
+                self.db.execute(
+                    'ALTER TABLE jobs ADD COLUMN auto_migrate INTEGER NOT NULL DEFAULT 0')
+            except sqlite3.OperationalError:
+                if 'auto_migrate' not in {
+                        r['name'] for r in self.db.execute(
+                            'PRAGMA table_info(jobs)')}:
+                    raise
         self.db.commit()
 
     def close(self):
@@ -110,7 +119,8 @@ class State:
         self.db.execute('UPDATE lots SET bytes=? WHERE lot_id=?', (size, lot_id))
         self.db.commit()
 
-    def create_job(self, ubigeo, limit_lots, lot_id=None, retry_missing=False, executor='server', workers=10):
+    def create_job(self, ubigeo, limit_lots, lot_id=None, retry_missing=False,
+                   executor='server', workers=10, auto_migrate=False):
         from .parallel import worker_count
         workers = worker_count(workers)
         self.db.execute('BEGIN IMMEDIATE')
@@ -123,7 +133,9 @@ class State:
             job_id = uuid.uuid4().hex
             self.db.execute('INSERT INTO jobs (id,ubigeo,limit_lots,lot_id,retry_missing,status,created,heartbeat) VALUES (?,?,?,?,?,?,?,?)',
                             (job_id, ubigeo, limit_lots, lot_id, int(retry_missing), 'queued', time.time(), time.time()))
-            self.db.execute('UPDATE jobs SET executor=?,workers=? WHERE id=?', (executor, workers, job_id))
+            self.db.execute(
+                'UPDATE jobs SET executor=?,workers=?,auto_migrate=? WHERE id=?',
+                (executor, workers, int(bool(auto_migrate)), job_id))
             self.db.commit()
             return job_id
         except Exception:
@@ -136,7 +148,8 @@ class State:
 
     def update_job(self, job_id, **values):
         allowed = {'status', 'heartbeat', 'processed', 'message', 'stop', 'pid',
-                   'source_objects', 'skipped_objects', 'selected_objects', 'remaining_objects'}
+                   'source_objects', 'skipped_objects', 'selected_objects',
+                   'remaining_objects', 'auto_migrate'}
         if not values.keys() <= allowed:
             raise ValueError('Campos de ejecución no válidos.')
         values['heartbeat'] = time.time()

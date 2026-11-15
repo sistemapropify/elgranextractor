@@ -291,6 +291,79 @@ def migration_status(gateway, ubigeo='040126', cloud=None, inventory=None,
     linked_formal = {str(row['source_feature_id']) for row in formal_rows}
     pending = sorted(set(ids) - linked)
     formal_pending = sorted(formal_ids - linked_formal)
+    coverage_queries = [
+        {
+            'sql': '''SELECT v.source_id,COUNT(DISTINCT e.id) AS count
+                      FROM entities e
+                      JOIN identities i ON i.entity_id=e.id AND i.layer='lote'
+                      JOIN versions v ON v.id=i.version_id
+                      WHERE e.ubigeo=? AND e.kind='lote'
+                        AND v.source_id IN (?,?)
+                      GROUP BY v.source_id''',
+            'params': [
+                ubigeo, 'cofopri-pcdpi-' + ubigeo,
+                'cofopri-formalizacion-' + ubigeo,
+            ],
+        },
+        {
+            'sql': '''SELECT COUNT(*) AS total_lots,
+                      SUM(CASE WHEN EXISTS (
+                        SELECT 1 FROM media m WHERE m.entity_id=e.id
+                      ) THEN 1 ELSE 0 END) AS document_lots
+                      FROM entities e
+                      WHERE e.ubigeo=? AND e.kind='lote' ''',
+            'params': [ubigeo],
+        },
+        {
+            'sql': '''SELECT COUNT(DISTINCT e.id) AS pcdpi_document_lots
+                      FROM entities e
+                      JOIN identities i ON i.entity_id=e.id AND i.layer='lote'
+                      JOIN versions v ON v.id=i.version_id
+                      WHERE e.ubigeo=? AND e.kind='lote'
+                        AND v.source_id=? AND EXISTS (
+                          SELECT 1 FROM media m WHERE m.entity_id=e.id
+                        )''',
+            'params': [ubigeo, 'cofopri-pcdpi-' + ubigeo],
+        },
+        {
+            'sql': '''SELECT COUNT(DISTINCT i.entity_id) AS detail_lots
+                      FROM identities i
+                      JOIN versions v ON v.id=i.version_id
+                      WHERE v.source_id=? AND i.layer='lote' ''',
+            'params': ['cofopri-formalizacion-detalle-' + ubigeo],
+        },
+    ]
+    read_many = getattr(gateway, 'read_many', None)
+    coverage_rows = (
+        read_many(coverage_queries)
+        if callable(read_many)
+        else [
+            gateway.read(query['sql'], query['params'])
+            for query in coverage_queries
+        ]
+    )
+    source_rows, entity_rows, pcdpi_document_rows, detail_rows = coverage_rows
+    d1_sources = {
+        str(row['source_id']): int(row['count'])
+        for row in source_rows
+    }
+    d1_entities = entity_rows[0] if entity_rows else {}
+    pcdpi_vector_lots = d1_sources.get(
+        'cofopri-pcdpi-' + ubigeo, 0)
+    formalization_vector_lots = d1_sources.get(
+        'cofopri-formalizacion-' + ubigeo, len(formal_ids))
+    r2_pcdpi_lots = len(ids)
+    r2_pcdpi_linked_lots = len(linked.intersection(ids))
+    pcdpi_with_documents = int(
+        (pcdpi_document_rows[0]
+         if pcdpi_document_rows else {}).get(
+             'pcdpi_document_lots') or 0)
+    formalization_detail_lots = int(
+        (detail_rows[0] if detail_rows else {}).get(
+            'detail_lots') or 0)
+    d1_lots = int(d1_entities.get('total_lots') or (
+        pcdpi_vector_lots + formalization_vector_lots))
+    document_lots = int(d1_entities.get('document_lots') or 0)
     revision = None
     if ids:
         body, _ = cloud.get('geollaqta/' + ubigeo + '/' + ids[0] + '/datos.json')
@@ -308,6 +381,25 @@ def migration_status(gateway, ubigeo='040126', cloud=None, inventory=None,
         'formalization_linked_lots': len(
             linked_formal.intersection(formal_ids)),
         'formalization_pending_lots': len(formal_pending),
+        'vector_lots': d1_lots,
+        'pcdpi_vector_lots': pcdpi_vector_lots,
+        'formalization_vector_lots': formalization_vector_lots,
+        'r2_pcdpi_lots': r2_pcdpi_lots,
+        'r2_pcdpi_linked_lots': r2_pcdpi_linked_lots,
+        'r2_pcdpi_pending_downloads': max(
+            0, pcdpi_vector_lots - r2_pcdpi_lots),
+        'pcdpi_document_lots': pcdpi_with_documents,
+        'pcdpi_without_documents': max(
+            0, pcdpi_vector_lots - pcdpi_with_documents),
+        'formalization_detail_lots': formalization_detail_lots,
+        'formalization_detail_pending': max(
+            0, formalization_vector_lots - formalization_detail_lots),
+        'd1_document_lots': document_lots,
+        'documentation_complete': (
+            pcdpi_vector_lots > 0
+            and pcdpi_vector_lots <= r2_pcdpi_lots
+            and formalization_vector_lots <= formalization_detail_lots
+        ),
         'listing_truncated': truncated,
         'manifest_revision': revision,
         'source_format': 'JSON por lote + PDF/fotos',

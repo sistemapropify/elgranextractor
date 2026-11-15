@@ -913,7 +913,7 @@
             window.dispatchEvent(new CustomEvent('catastro-master-district',{detail:{ubigeo:''}}));
             return;
         }
-        district=requested;selected=null;closeDetailCard(false);
+        district=requested;selected=null;lotSourceTouched=false;closeDetailCard(false);
         const url=new URL(location.href);url.searchParams.set('ubigeo',district);history.replaceState(null,'',url);sourcesPanel();loadClassifications();refresh(fitAfter);
         window.dispatchEvent(new CustomEvent('catastro-master-district',{detail:{ubigeo:district}}));
     }

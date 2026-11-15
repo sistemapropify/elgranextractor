@@ -54,7 +54,8 @@ def collect_with_recovery(job, state, progress, checkpoint):
         _wait_before_retry(delay, checkpoint)
 
 
-def start_job(ubigeo, limit=None, lot_id=None, retry_missing=False, launch=True, workers=None):
+def start_job(ubigeo, limit=None, lot_id=None, retry_missing=False,
+              launch=True, workers=None, auto_migrate=False):
     from .master_pipeline import require_collection_ready
     require_collection_ready()
     if os.environ.get('CATASTRO_DISABLE_LOCAL_COLLECTION') == '1':
@@ -71,7 +72,10 @@ def start_job(ubigeo, limit=None, lot_id=None, retry_missing=False, launch=True,
             raise ValueError('El recolector externo está pendiente de configuración.')
     state = State()
     try:
-        job_id = state.create_job(ubigeo, int(limit) if limit is not None else 0, lot_id, retry_missing, executor=executor, workers=workers)
+        job_id = state.create_job(
+            ubigeo, int(limit) if limit is not None else 0, lot_id,
+            retry_missing, executor=executor, workers=workers,
+            auto_migrate=auto_migrate)
         if executor == 'external':
             state.update_job(job_id, message='Esperando conexión del recolector. La descarga comenzará cuando esté disponible.')
         if launch and executor == 'server':
@@ -102,6 +106,19 @@ def start_job(ubigeo, limit=None, lot_id=None, retry_missing=False, launch=True,
         return job_id
     finally:
         state.close()
+
+
+def start_automatic_migration(job):
+    """Continue an opted-in one-click capture with the existing R2-to-D1 flow."""
+    if not job or not job.get('auto_migrate'):
+        return None
+    if job.get('status') == 'stopped':
+        return None
+    from . import migration_runner
+    result = migration_runner.start(
+        job['ubigeo'], actor='pipeline-un-clic',
+        batch_size=migration_runner.SAFE_BATCH_SIZE)
+    return result
 
 
 def run_job(job_id):
@@ -135,11 +152,28 @@ def run_job(job_id):
         next_step = (f"Quedan {remaining} registros sin archivar; puedes reanudar desde el avance guardado."
                      if remaining else "Inventario consultado archivado; los documentos pendientes pueden reintentarse."
                      if result['partial'] or not result['complete'] else "Descarga completa para el ámbito seleccionado.")
-        state.update_job(job_id, status='failed' if result['failed'] else 'completed',
+        final_status = 'failed' if result['failed'] else 'completed'
+        state.update_job(job_id, status=final_status,
                          processed=result['processed'], remaining_objects=remaining,
                          message=f"{result['processed']} lotes procesados; {result['uploaded']} archivados en R2; "
                                  f"{result['partial']} con documentos pendientes; {result['failed']} con errores. "
                                  f"{result.get('last_error', '')} {next_step}")
+        try:
+            started = start_automatic_migration({
+                **job, 'status': final_status})
+            if started is not None:
+                state.update_job(
+                    job_id,
+                    message=(state.job(job_id)['message'] + ' ' +
+                             ('R2 → D1 iniciado automáticamente.'
+                              if started.get('started')
+                              else 'R2 → D1 ya estaba en curso.'))[:500])
+        except (RuntimeError, ValueError) as exc:
+            state.update_job(
+                job_id,
+                message=(state.job(job_id)['message'] +
+                         ' La descarga terminó, pero R2 → D1 requiere reintento: ' +
+                         str(exc))[:500])
         return result
     except Stopped as exc:
         state.update_job(job_id, status='stopped', message=str(exc))

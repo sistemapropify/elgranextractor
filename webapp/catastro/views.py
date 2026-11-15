@@ -84,9 +84,19 @@ def start(request):
         params = json.loads(request.body)
         if not isinstance(params, dict) or not isinstance(params.get('retry_missing', False), bool):
             raise ValueError('Parámetros no válidos.')
-        job_id = start_job(params.get('ubigeo'), params.get('limit'), params.get('lot_id') or None,
-                           params.get('retry_missing', False), workers=params.get('workers'))
-        return JsonResponse({'job_id': job_id}, status=202)
+        auto_migrate = params.get('auto_migrate', False)
+        if not isinstance(auto_migrate, bool):
+            raise ValueError('La continuación automática no es válida.')
+        job_id = start_job(
+            params.get('ubigeo'), params.get('limit'),
+            params.get('lot_id') or None,
+            params.get('retry_missing', False),
+            workers=params.get('workers'),
+            auto_migrate=auto_migrate)
+        return JsonResponse({
+            'job_id': job_id,
+            'auto_migrate': auto_migrate,
+        }, status=202)
     except (ValueError, TypeError, RuntimeError) as exc:
         return JsonResponse({'error': str(exc)}, status=400)
 

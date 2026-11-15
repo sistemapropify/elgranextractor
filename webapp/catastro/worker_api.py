@@ -137,6 +137,27 @@ def job_action(request, data, job_id, action):
             values['message'] = 'Detención solicitada; conservando el avance.'
         state.db.execute('UPDATE collector_presence SET heartbeat=? WHERE id=1',(time.time(),))
         state.update_job(job_id,**values)
+        if action == 'finish' and job.get('auto_migrate') and values.get('status') != 'stopped':
+            from .jobs import start_automatic_migration
+            try:
+                started = start_automatic_migration({
+                    **job,
+                    'status': values.get('status', job.get('status')),
+                })
+                if started is not None:
+                    state.update_job(
+                        job_id,
+                        message=(str(values.get('message') or
+                                    state.job(job_id).get('message') or '') + ' ' +
+                                 ('R2 → D1 iniciado automáticamente.'
+                                  if started.get('started')
+                                  else 'R2 → D1 ya estaba en curso.'))[:500])
+            except (RuntimeError, ValueError) as exc:
+                state.update_job(
+                    job_id,
+                    message=(str(values.get('message') or '') +
+                             ' La descarga terminó, pero R2 → D1 requiere reintento: ' +
+                             str(exc))[:500])
         if action=='lot' and row['uploaded'] and not held:
             from . import source_manager
             if source_manager.durable():

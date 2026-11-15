@@ -29,11 +29,19 @@
   function migrationMessage(text,error=false){const node=el('master-migration-status');if(!node)return;node.textContent=text;node.classList.toggle('error-message',error);}
   function renderMigration(data){
     const source=Number(data.source_lots||0),linked=Number(data.linked_lots||0),pending=Number(data.pending_lots||0);
+    const vector=Number(data.vector_lots||0),pcdpi=Number(data.pcdpi_vector_lots||0),formal=Number(data.formalization_vector_lots||0);
+    const r2Pcdpi=Number(data.r2_pcdpi_lots||0),pcdpiDocs=Number(data.pcdpi_document_lots||0),pcdpiMissing=Number(data.pcdpi_without_documents||data.r2_pcdpi_pending_downloads||0);
+    const r2Linked=Number(data.r2_pcdpi_linked_lots||0);
+    const details=Number(data.formalization_detail_lots||0),documentationComplete=!!data.documentation_complete;
     const job=data.job||{},running=job.status==='running',stale=job.status==='stale';
     const audit=job.audit||{},auditStatus=audit.status||'pending';
-    el('master-source-lots').textContent=source.toLocaleString('es-PE');
-    el('master-linked-lots').textContent=linked.toLocaleString('es-PE');
+    el('master-vector-lots').textContent=vector.toLocaleString('es-PE');
+    el('master-source-lots').textContent=r2Pcdpi.toLocaleString('es-PE')+' / '+pcdpi.toLocaleString('es-PE');
+    el('master-linked-lots').textContent=r2Linked.toLocaleString('es-PE');
     el('master-pending-lots').textContent=pending.toLocaleString('es-PE');
+    el('master-pcdpi-documents').textContent=pcdpiDocs.toLocaleString('es-PE');
+    el('master-pcdpi-missing-documents').textContent=pcdpiMissing.toLocaleString('es-PE');
+    el('master-formalization-details').textContent=details.toLocaleString('es-PE')+' / '+formal.toLocaleString('es-PE');
     el('master-audit-status').textContent=auditStatus==='passed'?'Aprobada':auditStatus==='warnings'?'Aprobada con avisos':auditStatus==='failed'?'Falló':running&&!pending?'En curso':'Pendiente';
     el('master-last-revision').textContent=Number.isFinite(Number(job.last_batch_revision))?Number(job.last_batch_revision).toLocaleString('es-PE'):Number.isFinite(Number(audit.revision))?Number(audit.revision).toLocaleString('es-PE'):'—';
     el('master-audit-status').classList.toggle('warn',auditStatus==='warnings');
@@ -49,6 +57,7 @@
     if(running)migrationMessage('Azure está migrando en segundo plano. Puedes cerrar esta página o apagar tu computadora; el avance queda guardado en D1.',false);
     else if(stale)migrationMessage('La ejecución anterior se interrumpió. El vigilante de Azure la reanudará automáticamente; también puedes continuarla manualmente.',true);
     else if(job.status==='error')migrationMessage(job.message||'La migración se detuvo. Puedes reanudarla con el botón.',true);
+    else if(job.status==='done'&&!pending&&!documentationComplete)migrationMessage('R2 → D1 está al día, pero el distrito aún no está completo: '+pcdpiMissing.toLocaleString('es-PE')+' lotes PCDPI no tienen documentos en R2 y '+(formal-details).toLocaleString('es-PE')+' detalles de formalización no están en D1.',true);
     else if(job.status==='done'&&!pending)migrationMessage((job.message||('Auditoría aprobada: '+linked.toLocaleString('es-PE')+' lotes verificados.'))+(audit.warnings?.length?' Avisos: '+audit.warnings.length+'.':''),false);
     else if(data.listing_truncated)migrationMessage('El inventario R2 supera el límite de listado; procesa el distrito por bloques antes de continuar.',true);
     else if(!source)migrationMessage('No hay manifiestos JSON archivados para este distrito.',true);
@@ -169,6 +178,7 @@
     const resumable = previous && ['stopped','interrupted','failed'].includes(previous.status);
     el('start-collection').textContent = !collectionEnabled ? 'Descarga detenida' : resumable ? 'Reanudar distrito' : 'Descargar distrito completo';
     el('start-collection').disabled = busy || !configured || !!active || !collectionEnabled;
+    if(el('complete-pipeline'))el('complete-pipeline').disabled = busy || !configured || !!active || !collectionEnabled;
     el('stop-collection').hidden = !active;
     el('stop-collection').disabled = busy || !!active?.stop;
     el('collection-workers').disabled = busy || !!active;
@@ -204,12 +214,31 @@
     try { const data=await api('status/?ubigeo=' + encodeURIComponent(el('district').value));if(current!==generation)return;render(data); if(refreshFailed)message('');refreshFailed=false;if(active)timer=setTimeout(refresh,5000); }
     catch(error) { if(current!==generation)return;refreshFailed=true;message(error.message,true);if(!document.hidden)timer=setTimeout(refresh,10000); }
   }
+  async function queueCollection(autoMigrate){
+    if(busy || active || !configured || !collectionEnabled)return;
+    busy=true;
+    el('start-collection').disabled=true;
+    if(el('complete-pipeline'))el('complete-pipeline').disabled=true;
+    el('collection-workers').disabled=true;
+    try{
+      await api('start/',{
+        ubigeo:el('district').value,
+        lot_id:el('lot-id').value.trim() || null,
+        retry_missing:autoMigrate || el('retry-missing').checked,
+        workers:Number(el('collection-workers').value),
+        auto_migrate:autoMigrate
+      });
+      message(autoMigrate
+        ? 'Proceso completo iniciado. Al terminar COFOPRI → R2, el servidor continuará automáticamente con R2 → D1; no necesitas mantener esta página abierta.'
+        : 'Descarga iniciada: hasta '+el('collection-workers').value+' lotes simultáneos. Continúa desde los pendientes; R2 → D1 se inicia por separado.');
+    }catch(error){message(error.message,true);}
+    finally{busy=false;await refresh();}
+  }
   el('collection-form').addEventListener('submit',async event => {
-    event.preventDefault(); if(busy || active || !configured || !collectionEnabled)return;busy=true;el('start-collection').disabled=true;el('collection-workers').disabled=true;
-    try { await api('start/',{ubigeo:el('district').value,lot_id:el('lot-id').value.trim() || null,retry_missing:el('retry-missing').checked,workers:Number(el('collection-workers').value)});message('Descarga iniciada: hasta ' + el('collection-workers').value + ' lotes simultáneos. Continúa desde los pendientes. Puedes salir de esta página y volver para revisar el avance.'); }
-    catch(error) { message(error.message,true); }
-    finally { busy=false;await refresh(); }
+    event.preventDefault();
+    await queueCollection(false);
   });
+  el('complete-pipeline').addEventListener('click',()=>queueCollection(true));
   el('stop-collection').addEventListener('click',async()=>{if(!active || busy)return;busy=true;try{await api('jobs/' + active.id + '/stop/',{});message('Pausa solicitada. Terminarán las solicitudes en curso y el avance quedará guardado. Para continuar, vuelve a iniciar la descarga del mismo distrito.');}catch(error){message(error.message,true);}finally{busy=false;await refresh();}});
   el('district').addEventListener('change',refresh);
   el('refresh-collection').addEventListener('click',async()=>{migrationDistrict=null;await Promise.all([refresh(),loadMigration()]);});

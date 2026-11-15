@@ -24,9 +24,13 @@
       <li><span>05</span><strong>Mapa y ficha maestros</strong><small>El mapa del Catastro y el ACM leen únicamente los registros consolidados de D1.</small></li>
     </ol>
     <div class="catastro-pipeline-summary" aria-live="polite">
-      <article><span>JSON disponibles en R2</span><strong id="master-source-lots">—</strong></article>
-      <article><span>Lotes vinculados en D1</span><strong id="master-linked-lots">—</strong></article>
-      <article><span>Pendientes de vincular</span><strong id="master-pending-lots">—</strong></article>
+      <article><span>Vectores únicos en D1</span><strong id="master-vector-lots">—</strong></article>
+      <article><span>Manifiestos PCDPI en R2</span><strong id="master-source-lots">—</strong></article>
+      <article><span>Manifiestos vinculados en D1</span><strong id="master-linked-lots">—</strong></article>
+      <article><span>Pendientes R2 → D1</span><strong id="master-pending-lots">—</strong></article>
+      <article><span>PCDPI con documentos</span><strong id="master-pcdpi-documents">—</strong></article>
+      <article><span>PCDPI sin documentos</span><strong id="master-pcdpi-missing-documents">—</strong></article>
+      <article><span>Detalles formalización en D1</span><strong id="master-formalization-details">—</strong></article>
       <article><span>Auditoría D1</span><strong id="master-audit-status">Pendiente</strong></article>
       <article><span>Última revisión D1</span><strong id="master-last-revision">—</strong></article>
     </div>
@@ -37,7 +41,7 @@
       <a class="catastro-button btn btn-secondary" href="/catastro/maestro/planos/">Ver etapas y calidad</a>
     </div>
     <p id="master-migration-status" class="catastro-help" role="status">Consultando la vinculación global del Catastro Maestro…</p>
-    <p class="catastro-help"><strong>Un solo clic:</strong> procesa todos los distritos con información disponible en R2, incluyendo manifiestos de lotes, vectores, fichas formalizadas, titulares, documentos, fotografías y auditoría D1. Continúa desde el último avance.</p>
+    <p class="catastro-help"><strong>Un solo clic:</strong> procesa en D1 los manifiestos y detalles que ya existen en R2. No puede completar documentos que todavía no fueron descargados desde COFOPRI; esos lotes aparecen como “PCDPI sin documentos”.</p>
     <p class="catastro-help"><strong>Descarga frente a migración:</strong> “Descargar distrito completo” requiere el recolector COFOPRI y puede quedar esperando conexión. “Migrar distrito seleccionado” sólo procesa en D1 lo que ya está archivado en R2.</p>
     <p class="catastro-help"><strong>Registro del proceso:</strong> D1 guarda el estado, actor, lotes procesados, pendientes, revisiones, errores y auditoría bajo la clave <code>migration:geollaqta:040126</code>. Los lotes normalizados se conservan en <code>versions</code>, <code>identities</code>, <code>current_attributes</code>, <code>media</code>, titulares y procedencia.</p>
     <details class="catastro-help"><summary><strong>Qué hace exactamente la migración R2 → D1</strong></summary><ol><li>Consulta qué lotes de R2 todavía no están vinculados.</li><li>Descarga los manifiestos en tandas pequeñas y verifica lote, distrito y versión de extracción.</li><li>Convierte los campos COFOPRI al modelo del maestro y asigna un UUID estable al inmueble.</li><li>Guarda la versión original normalizada y sus aportes como evidencia inmutable.</li><li>Activa el lote y sus unidades en D1 sin duplicar identidades.</li><li>Relaciona geometría, atributos actuales, propietarios, documentos, fotos y procedencia.</li><li>Registra el avance y la revisión D1 después de cada tanda.</li><li>Al terminar, ejecuta la auditoría antes de permitir la publicación en mapa y ACM.</li></ol></details>
@@ -52,7 +56,7 @@
         <select id="collection-workers" name="workers"><option value="1">1 lote</option><option value="2">2 lotes</option><option value="4">4 lotes</option><option value="6">6 lotes</option><option value="10" selected>10 lotes</option><option value="20">20 lotes</option><option value="30">30 lotes</option></select>
         <details><summary>Opciones de descarga</summary><label for="lot-id">Un predio específico (opcional)</label><input id="lot-id" inputmode="numeric" maxlength="18" placeholder="Código catastral del lote"><label class="catastro-check"><input type="checkbox" id="retry-missing"> Reintentar documentos pendientes</label></details>
         <p class="catastro-help">Descarga todos los predios publicados del distrito, con todas sus fichas, reportes y fotografías disponibles. Continúa desde los que faltan y conserva lo ya archivado.</p>
-        <div class="catastro-actions"><button class="btn btn-success catastro-button" id="start-collection" type="submit" disabled>Descargar distrito completo</button><button class="btn btn-danger catastro-button" id="stop-collection" type="button" hidden>Pausar descarga</button></div>
+        <div class="catastro-actions"><button class="btn btn-success catastro-button" id="complete-pipeline" type="button" disabled>Completar distrito: COFOPRI → R2 → D1</button><button class="btn btn-secondary catastro-button" id="start-collection" type="submit" disabled>Solo descargar a R2</button><button class="btn btn-danger catastro-button" id="stop-collection" type="button" hidden>Pausar descarga</button></div>
       </form>
       <p id="collection-message" role="status" aria-live="polite"></p>
       <p id="collector-status" class="catastro-help" role="status"></p>
@@ -63,4 +67,4 @@
   <section class="catastro-card"><h2>Predios del archivo</h2><p class="catastro-help">Últimos 50 predios del distrito seleccionado. Abre un predio para revisar sus documentos y fotos.</p><div class="catastro-table-wrap"><table><thead><tr><th>Código del lote</th><th>Estado</th><th>Documentos</th><th>Fachadas</th><th>Pendientes</th><th>Archivo</th></tr></thead><tbody id="lots-list"><tr><td colspan="6">Consultando el archivo catastral…</td></tr></tbody></table></div></section>
 </main>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=11" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/catastro-dashboard.js' %}?v=12" defer></script>{% endblock %}

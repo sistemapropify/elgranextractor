@@ -702,10 +702,20 @@ def summary(value, record_id=None):
             else attributes.get('perimeter')),
         'boundaries': boundaries,
     }
+    calculated_metrics = {
+        'land_area': metric(
+            (value.get('geometry_metrics') or {}).get('area_m2')),
+        'perimeter': metric(
+            (value.get('geometry_metrics') or {}).get('perimeter_m')),
+    }
+    has_master_geometry = any(
+        item not in (None, '') for item in calculated_metrics.values())
     document_status = (
         'available' if (media or reports)
         else 'master_data_only'
-        if any(
+        if has_master_geometry
+        or value.get('master_status') == 'normalized_d1'
+        or any(
             item not in (None, '')
             for key, item in master_metrics.items()
             if key != 'boundaries'
@@ -721,12 +731,7 @@ def summary(value, record_id=None):
             'floors': metric(attributes.get('floors')),
             'units': metric(attributes.get('units')),
         },
-        'calculated_metrics': {
-            'land_area': metric(
-                (value.get('geometry_metrics') or {}).get('area_m2')),
-            'perimeter': metric(
-                (value.get('geometry_metrics') or {}).get('perimeter_m')),
-        },
+        'calculated_metrics': calculated_metrics,
         'verified': bool(value.get('master_status') == 'normalized_d1' or
                          any(item not in (None, '') for item in boundaries.values())),
         'facade_url': facade.get('url') if facade else None,
