@@ -174,9 +174,12 @@
             if(!source.active||!masterRole(source)||!enabled.get(source.id)
                 ||(district!==ALL_DISTRICTS&&!source.districts.includes(district)))continue;
             for(const key of ['manzanas','lotes']){
-                const count=Number(source.layers?.[key]?.count||0),breakdown=source.layers?.[key]?.sources||{};
+                const count=Number(source.layers?.[key]?.count||0),breakdown=source.layers?.[key]?.sources||{},groups=source.layers?.[key]?.groups||{};
                 values[key]+=count;
-                if(key==='lotes'&&Object.keys(breakdown).length){
+                if(key==='lotes'&&Object.keys(groups).length){
+                    values.lotes_pcdpi+=Number(groups.pcdpi||0);
+                    values.lotes_formalizacion+=Number(groups.formalizacion||0);
+                }else if(key==='lotes'&&Object.keys(breakdown).length){
                     for(const [sourceId,sourceCount] of Object.entries(breakdown))
                         values[isFormalizationSourceId(sourceId)?'lotes_formalizacion':'lotes_pcdpi']+=Number(sourceCount||0);
                 }

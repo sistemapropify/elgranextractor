@@ -127,18 +127,24 @@ def _master_metadata(source_id, summary=None):
                 'kind': 'polygon',
                 'sources': (
                     summary.get('source_counts', {}).get('lote') or {}),
+                'groups': (
+                    summary.get('source_group_counts', {}).get('lote') or {}),
             },
             'manzanas': {
                 'count': summary['manzanas'],
                 'kind': 'polygon',
                 'sources': (
                     summary.get('source_counts', {}).get('manzana') or {}),
+                'groups': (
+                    summary.get('source_group_counts', {}).get('manzana') or {}),
             },
             'vias': {
                 'count': summary.get('vias', 0),
                 'kind': 'line',
                 'sources': (
                     summary.get('source_counts', {}).get('via') or {}),
+                'groups': (
+                    summary.get('source_group_counts', {}).get('via') or {}),
             },
         },
     }

@@ -303,19 +303,38 @@ class D1ReadModel:
                           WHERE e.kind IN ('lote','manzana','via')
                           GROUP BY e.ubigeo,e.kind,v.source_id
                           ORDER BY e.ubigeo,e.kind,v.source_id"""
+        group_query = """SELECT e.ubigeo,e.kind,
+                                CASE
+                                  WHEN v.source_id LIKE 'cofopri-formalizacion-%'
+                                    THEN 'formalizacion'
+                                  WHEN v.source_id LIKE 'cofopri-pcdpi-%'
+                                    OR v.source_id LIKE 'geollaqta-%'
+                                    THEN 'pcdpi'
+                                  ELSE 'otras'
+                                END AS family,
+                                COUNT(DISTINCT e.id) AS count
+                         FROM entities e
+                         JOIN identities i ON i.entity_id=e.id
+                          AND i.layer=e.kind
+                         JOIN versions v ON v.id=i.version_id
+                         WHERE e.kind IN ('lote','manzana','via')
+                         GROUP BY e.ubigeo,e.kind,family
+                         ORDER BY e.ubigeo,e.kind,family"""
         if revision is None:
-            revision_rows, count_rows, source_rows = self.gateway.read_many([
+            revision_rows, count_rows, source_rows, group_rows = self.gateway.read_many([
                 {'sql': "SELECT value FROM meta WHERE key='revision'", 'params': []},
                 {'sql': query, 'params': []},
                 {'sql': source_query, 'params': []},
+                {'sql': group_query, 'params': []},
             ])
             if len(revision_rows) != 1:
                 raise StorageError('El esquema de D1 no está inicializado.')
             revision = int(revision_rows[0]['value'])
         else:
-            count_rows, source_rows = self.gateway.read_many([
+            count_rows, source_rows, group_rows = self.gateway.read_many([
                 {'sql': query, 'params': []},
                 {'sql': source_query, 'params': []},
+                {'sql': group_query, 'params': []},
             ])
         summaries = {}
         for row in count_rows:
@@ -323,6 +342,9 @@ class D1ReadModel:
                 'ubigeo': row['ubigeo'], 'revision': revision,
                 'lotes': 0, 'manzanas': 0, 'vias': 0,
                 'source_counts': {
+                    'lote': {}, 'manzana': {}, 'via': {},
+                },
+                'source_group_counts': {
                     'lote': {}, 'manzana': {}, 'via': {},
                 },
             })
@@ -336,6 +358,11 @@ class D1ReadModel:
             item = summaries.get(row['ubigeo'])
             if item:
                 item['source_counts'][row['kind']][row['source_id']] = int(
+                    row['count'])
+        for row in group_rows:
+            item = summaries.get(row['ubigeo'])
+            if item:
+                item['source_group_counts'][row['kind']][row['family']] = int(
                     row['count'])
         return summaries
 
