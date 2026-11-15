@@ -851,7 +851,9 @@ class D1ReadModel:
             'features': features,
             'revision': revision if revision is not None else self.gateway.revision(),
             'crs': 'EPSG:4326',
-            'next_cursor': rows[-1]['id'] if len(rows) == limit else None,
+            # A worker may cap a response below the requested row limit. Never
+            # interpret that truncation as the end of the district.
+            'next_cursor': rows[-1]['id'] if rows else None,
         }
 
     def collection(self, ubigeo, kind, revision=None):

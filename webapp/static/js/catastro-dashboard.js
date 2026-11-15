@@ -68,13 +68,6 @@
   function renderGlobalJob(job){
     if(!job || !job.id)return false;
     const running=job.status==='running',stale=job.status==='stale';
-    if(Number.isFinite(Number(job.source_lots)))el('master-source-lots').textContent=Number(job.source_lots).toLocaleString('es-PE');
-    if(Number.isFinite(Number(job.linked_lots)))el('master-linked-lots').textContent=Number(job.linked_lots).toLocaleString('es-PE');
-    if(Number.isFinite(Number(job.pending_lots)))el('master-pending-lots').textContent=Number(job.pending_lots).toLocaleString('es-PE');
-    if(Number.isFinite(Number(job.last_batch_revision)))el('master-last-revision').textContent=Number(job.last_batch_revision).toLocaleString('es-PE');
-    const progress=el('master-migration-progress');
-    if(Number.isFinite(Number(job.source_lots)))progress.max=Math.max(1,Number(job.source_lots));
-    if(Number.isFinite(Number(job.linked_lots)))progress.value=Math.min(progress.max,Number(job.linked_lots));
     const button=el('migrate-master');
     button.disabled=migrationBusy||running;
     button.textContent=running?'Migrando TODOS los distritos…':'Migrar TODOS los pendientes al Catastro Maestro';
@@ -82,7 +75,8 @@
     if(running||stale){
       migrationScope='all';
       el('master-audit-status').textContent=stale?'Reanudando':'En curso';
-      migrationMessage(job.message||('Migrando '+(job.current_district||'distritos')+'…'),stale);
+      migrationMessage((job.message||('Migrando '+(job.current_district||'distritos')+'…'))+
+        ' Los contadores de arriba corresponden al distrito seleccionado, no al total global.',stale);
       scheduleMigrationPoll();
       return true;
     }
