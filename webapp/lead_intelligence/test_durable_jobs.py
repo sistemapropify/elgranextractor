@@ -5,7 +5,13 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 
-from lead_intelligence.durable_jobs import claim_next_job, enqueue_durable_job, finish_job, owned_job
+from lead_intelligence.durable_jobs import (
+    claim_next_job,
+    enqueue_durable_job,
+    enqueue_lead_analysis_burst,
+    finish_job,
+    owned_job,
+)
 from lead_intelligence.models import DurableJob
 
 
@@ -88,6 +94,37 @@ class DurableJobQueueTests(TestCase):
         self.assertFalse(created_second)
         self.assertEqual(first.pk, second.pk)
         self.assertEqual(DurableJob.objects.count(), 1)
+
+    def test_delayed_job_is_not_claimed_before_available_at(self):
+        enqueue_durable_job(
+            DurableJob.Kind.LEAD_ANALYSIS,
+            {},
+            "analysis:delayed",
+            available_at=timezone.now() + timedelta(seconds=30),
+        )
+
+        self.assertIsNone(claim_next_job())
+
+    def test_lead_message_burst_uses_one_durable_job(self):
+        first, created_first = enqueue_lead_analysis_burst(
+            5726,
+            {"lead_id": 5726, "workers": 1},
+            history_hash="a" * 64,
+            delay_seconds=15,
+        )
+        second, created_second = enqueue_lead_analysis_burst(
+            5726,
+            {"lead_id": 5726, "workers": 1},
+            history_hash="b" * 64,
+            delay_seconds=15,
+        )
+
+        self.assertTrue(created_first)
+        self.assertTrue(created_second)
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(DurableJob.objects.count(), 1)
+        second.refresh_from_db()
+        self.assertEqual(second.status, DurableJob.Status.PENDING)
 
     def test_expired_lease_is_recovered_after_restart(self):
         job = DurableJob.objects.create(

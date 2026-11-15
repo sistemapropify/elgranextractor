@@ -14,6 +14,7 @@ from lead_intelligence.contextual_analysis import (
     ANALYSIS_VERSION,
     conversation_hash,
 )
+from lead_intelligence.conversation_identity import analysis_input_hash
 from lead_intelligence.conversation_analysis import analyze_chat_history
 from lead_intelligence.models import (
     AnalysisRun,
@@ -99,7 +100,35 @@ class Command(BaseCommand):
         return " · ".join(parts) if parts else "evaluado"
 
     @staticmethod
-    def _process_row(row, *, force, dry_run, existing_keys, stages="entered"):
+    def _reuse_assessment(previous, history_hash, semantic_hash):
+        """Copy a valid assessment when only non-semantic messages changed."""
+        values = {
+            field.attname: getattr(previous, field.attname)
+            for field in LeadConversationAssessment._meta.concrete_fields
+            if field.attname
+            not in {"id", "history_hash", "semantic_hash", "analyzed_at"}
+        }
+        values.update(
+            history_hash=history_hash,
+            semantic_hash=semantic_hash,
+        )
+        LeadConversationAssessment.objects.using("default").update_or_create(
+            source_lead_id=previous.source_lead_id,
+            history_hash=history_hash,
+            analysis_version=ANALYSIS_VERSION,
+            defaults=values,
+        )
+
+    @staticmethod
+    def _process_row(
+        row,
+        *,
+        force,
+        dry_run,
+        existing_keys,
+        latest_assessments,
+        stages="entered",
+    ):
         if _cancel_event.is_set():
             return "cancelled", None
         close_old_connections()
@@ -121,6 +150,27 @@ class Command(BaseCommand):
             # Filtro por etapa mínima del canal (programada vs tiempo real).
             if not Command._min_stage_ok(stages, structural):
                 return "skipped", None
+
+            semantic_hash = analysis_input_hash(structural["messages"])
+            previous = latest_assessments.get(row["id"])
+            if (
+                not force
+                and previous is not None
+                and previous.semantic_hash
+                and previous.semantic_hash == semantic_hash
+            ):
+                if not dry_run:
+                    with transaction.atomic(using="default"):
+                        Command._reuse_assessment(
+                            previous,
+                            history_hash,
+                            semantic_hash,
+                        )
+                return (
+                    "skipped",
+                    "Gasto IA evitado: solo cambiaron mensajes posteriores "
+                    "del agente/bot que no alteran la evaluación.",
+                )
 
             skill = AnalizarConversacionLeadSkill()
             result = skill.execute({"messages": structural["messages"]})
@@ -145,6 +195,7 @@ class Command(BaseCommand):
                         history_hash=history_hash,
                         analysis_version=ANALYSIS_VERSION,
                         defaults={
+                            "semantic_hash": semantic_hash,
                             "qualified_status": assessment[
                                 "qualified_status"
                             ],
@@ -256,15 +307,25 @@ class Command(BaseCommand):
         if workers < 1 or workers > 8:
             raise CommandError("--workers debe estar entre 1 y 8.")
         existing_keys = set()
+        latest_assessments = {}
         if rows and not options["force"]:
-            existing_keys = set(
+            previous_assessments = list(
                 LeadConversationAssessment.objects.using("default")
                 .filter(
                     source_lead_id__in=[row["id"] for row in rows],
                     analysis_version=ANALYSIS_VERSION,
                 )
-                .values_list("source_lead_id", "history_hash")
+                .order_by("source_lead_id", "-analyzed_at")
             )
+            existing_keys = {
+                (assessment.source_lead_id, assessment.history_hash)
+                for assessment in previous_assessments
+            }
+            for assessment in previous_assessments:
+                latest_assessments.setdefault(
+                    assessment.source_lead_id,
+                    assessment,
+                )
 
         run = None
         if not options["dry_run"]:
@@ -312,6 +373,7 @@ class Command(BaseCommand):
                     force=options["force"],
                     dry_run=options["dry_run"],
                     existing_keys=existing_keys,
+                    latest_assessments=latest_assessments,
                     stages=stages,
                 ): row
                 for row in rows

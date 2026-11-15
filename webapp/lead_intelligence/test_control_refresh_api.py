@@ -69,7 +69,7 @@ class LeadControlRefreshApiTests(SimpleTestCase):
         {"ANALYTICS_BRIDGE_API_KEY": "clave-test"},
     )
     @patch("lead_intelligence.durable_jobs.wake_durable_worker")
-    @patch("lead_intelligence.durable_jobs.enqueue_durable_job")
+    @patch("lead_intelligence.durable_jobs.enqueue_lead_analysis_burst")
     @patch("lead_intelligence.control_views.send_pending")
     @patch("lead_intelligence.control_views.enabled", return_value=False)
     @patch("lead_intelligence.control_views.tick")
@@ -113,10 +113,13 @@ class LeadControlRefreshApiTests(SimpleTestCase):
         self.assertEqual(response.json()["analysis_job_id"], 88)
         source_snapshot.assert_called_once_with(5726)
         tick.assert_called_once_with(lead_id=5726)
-        kind, payload, dedupe_key = enqueue.call_args.args
-        self.assertEqual(kind, "lead_analysis")
+        lead_id, payload = enqueue.call_args.args
+        self.assertEqual(lead_id, 5726)
         self.assertEqual(payload, {"lead_id": 5726, "workers": 1})
-        self.assertTrue(dedupe_key.startswith("lead-analysis:5726:"))
-        wake.assert_called_once_with()
+        self.assertEqual(
+            enqueue.call_args.kwargs["delay_seconds"],
+            15,
+        )
+        wake.assert_called_once_with(delay_seconds=15)
         send_pending.assert_not_called()
 

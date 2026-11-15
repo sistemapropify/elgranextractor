@@ -18,6 +18,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--once", action="store_true")
         parser.add_argument("--poll-seconds", type=int, default=5)
+        parser.add_argument("--delay-seconds", type=int, default=0)
 
     def _heartbeat(self, job, stop, lease_seconds=180):
         close_old_connections()
@@ -83,6 +84,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         import time
+        delay_seconds = max(0, min(120, options["delay_seconds"]))
+        if delay_seconds:
+            time.sleep(delay_seconds)
         while True:
             close_old_connections()
             job = claim_next_job()

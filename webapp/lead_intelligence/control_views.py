@@ -1,5 +1,6 @@
 import hmac
 import json
+import os
 import threading
 import uuid
 from datetime import timedelta
@@ -369,18 +370,27 @@ def refresh_lead(request):
 
     try:
         from .conversation_identity import conversation_hash
-        from .durable_jobs import enqueue_durable_job, wake_durable_worker
-        from .models import DurableJob
+        from .durable_jobs import (
+            enqueue_lead_analysis_burst,
+            wake_durable_worker,
+        )
 
         history_hash = conversation_hash(snapshot.get('messages'))
-        job, created = enqueue_durable_job(
-            DurableJob.Kind.LEAD_ANALYSIS,
+        try:
+            delay_seconds = int(
+                os.environ.get("LEAD_ANALYSIS_DEBOUNCE_SECONDS", "15")
+            )
+        except ValueError:
+            delay_seconds = 15
+        delay_seconds = max(1, min(120, delay_seconds))
+        job, created = enqueue_lead_analysis_burst(
+            lead_id,
             {'lead_id': lead_id, 'workers': 1},
-            f'lead-analysis:{lead_id}:{history_hash}',
-            max_attempts=3,
+            history_hash=history_hash,
+            delay_seconds=delay_seconds,
         )
         if created:
-            wake_durable_worker()
+            wake_durable_worker(delay_seconds=delay_seconds)
     except Exception:
         # Conversation analysis is independent of assignment, but a queue
         # outage must be retryable by the CRM outbox.

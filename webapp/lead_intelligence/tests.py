@@ -644,6 +644,95 @@ class ConversationHashVersionTests(SimpleTestCase):
         self.assertNotEqual(conversation_hash(with_bot), conversation_hash(with_agent))
         self.assertEqual(conversation_hash(lead_only), conversation_hash(lead_only))
 
+    def test_semantic_hash_ignores_agent_messages_after_first_response(self):
+        from .conversation_identity import analysis_input_hash
+
+        messages = [
+            {
+                "sender": "lead",
+                "source_sender": "lead",
+                "text": "Quiero información",
+                "timestamp": datetime(
+                    2026, 7, 25, tzinfo=datetime_timezone.utc
+                ),
+            },
+            {
+                "sender": "agent",
+                "source_sender": "agent",
+                "text": "Tenemos este departamento.",
+                "timestamp": datetime(
+                    2026, 7, 25, 0, 1, tzinfo=datetime_timezone.utc
+                ),
+            },
+            {
+                "sender": "lead",
+                "source_sender": "lead",
+                "text": "¿Cuál es el precio?",
+                "timestamp": datetime(
+                    2026, 7, 25, 0, 2, tzinfo=datetime_timezone.utc
+                ),
+            },
+        ]
+        original = analysis_input_hash(messages)
+        with_later_agent_message = messages + [
+            {
+                "sender": "agent",
+                "source_sender": "bot",
+                "text": "El precio es 120000.",
+                "timestamp": datetime(
+                    2026, 7, 25, 0, 3, tzinfo=datetime_timezone.utc
+                ),
+            }
+        ]
+        self.assertEqual(
+            original,
+            analysis_input_hash(with_later_agent_message),
+        )
+
+    def test_semantic_hash_changes_with_lead_or_first_response(self):
+        from .conversation_identity import analysis_input_hash
+
+        lead = {
+            "sender": "lead",
+            "source_sender": "lead",
+            "text": "Quiero información",
+            "timestamp": datetime(2026, 7, 25, tzinfo=datetime_timezone.utc),
+        }
+        first_agent = {
+            "sender": "agent",
+            "source_sender": "agent",
+            "text": "Tenemos este departamento.",
+            "timestamp": datetime(
+                2026, 7, 25, 0, 1, tzinfo=datetime_timezone.utc
+            ),
+        }
+        new_lead = {
+            "sender": "lead",
+            "source_sender": "lead",
+            "text": "Me interesa visitarlo.",
+            "timestamp": datetime(
+                2026, 7, 25, 0, 2, tzinfo=datetime_timezone.utc
+            ),
+        }
+        base = analysis_input_hash([lead, first_agent])
+        self.assertNotEqual(
+            base,
+            analysis_input_hash([lead, first_agent, new_lead]),
+        )
+        self.assertNotEqual(
+            base,
+            analysis_input_hash(
+                [
+                    lead,
+                    {
+                        **first_agent,
+                        "text": "El precio es 120000.",
+                    },
+                ]
+            ),
+        )
+
+
 class ConversationReviewTests(SimpleTestCase):
     def test_correct_review_copies_current_ai_value(self):
         assessment = Mock(

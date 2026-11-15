@@ -202,7 +202,9 @@ def analyze_conversation_context(messages: list[dict]) -> dict:
     }
     extracted = None
     message = ""
-    for _attempt in range(3):
+    # One paid retry is enough for transient malformed JSON. Avoid a third
+    # paid call when the provider returns the same invalid structure twice.
+    for _attempt in range(2):
         success, message, extracted = LLMService.extract_structured_data(
             text=json.dumps(instructions, ensure_ascii=False),
             schema=schema,

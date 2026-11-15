@@ -172,6 +172,12 @@ class LeadConversationAssessment(models.Model):
 
     source_lead_id = models.BigIntegerField(db_index=True)
     history_hash = models.CharField(max_length=64, db_index=True)
+    semantic_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+    )
     analysis_version = models.CharField(max_length=40, default="context-v2")
     qualified_status = models.CharField(max_length=20, choices=Decision.choices)
     visit_intent_status = models.CharField(max_length=20, choices=Decision.choices)
@@ -619,6 +625,7 @@ class DurableJob(models.Model):
     payload = models.JSONField(default=dict, blank=True)
     attempts = models.PositiveSmallIntegerField(default=0)
     max_attempts = models.PositiveSmallIntegerField(default=3)
+    available_at = models.DateTimeField(default=timezone.now, db_index=True)
     lease_until = models.DateTimeField(null=True, blank=True, db_index=True)
     heartbeat_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
