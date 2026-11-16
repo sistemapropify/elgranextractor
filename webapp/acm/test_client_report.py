@@ -89,7 +89,8 @@ class ClientReportTests(SimpleTestCase):
                     self.assertEqual(photo.called, permitted)
 
     def test_date_uses_peru_time_and_absent_data_is_not_invented(self):
-        data = prepare_report(self.p, [], {'new': None}, generated_at=datetime(2026, 10, 17, 2, tzinfo=timezone.utc), fetch_images=False)
+        params = {key: value for key, value in self.p.items() if key != 'manual_valuation'}
+        data = prepare_report(params, [], {'new': None}, generated_at=datetime(2026, 10, 17, 2, tzinfo=timezone.utc), fetch_images=False)
         self.assertEqual(data['date'].day, 16)
         self.assertIsNone(data['values'])
         self.assertNotIn('expectation', data)
