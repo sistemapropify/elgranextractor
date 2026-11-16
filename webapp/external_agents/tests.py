@@ -606,6 +606,29 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(dashboard, 'Egreso · Planillas')
         self.assertNotContains(dashboard, 'Total ingresos')
 
+    def test_payroll_dashboard_shows_active_workers_before_month_is_generated(self):
+        self.authenticate_propify()
+        period = timezone.localdate().strftime('%Y-%m')
+        employee = PayrollEmployee.objects.create(
+            full_name='Ana Torres',
+            document_number='71234567',
+            position='Contadora',
+            area='Administración y finanzas',
+            base_salary='3500.00',
+        )
+
+        dashboard = self.client.get(
+            reverse('external_agents:payroll_dashboard'),
+            {'periodo': period, 'estado': 'todos'},
+        )
+
+        self.assertContains(dashboard, 'Ana Torres')
+        self.assertContains(dashboard, 'Pendiente de generar')
+        self.assertContains(dashboard, '1 trabajador activo')
+        self.assertFalse(
+            PayrollEntry.objects.filter(employee=employee).exists()
+        )
+
     def test_payroll_entry_supports_commissions_seguro_and_payment(self):
         self.authenticate_propify()
         period = timezone.localdate().replace(day=1)

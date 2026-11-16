@@ -30,6 +30,24 @@
         gap: 8px;
         margin-bottom: 13px;
     }
+    .pr-roster {
+        margin-bottom: 13px;
+    }
+    .pr-roster-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+        padding: 10px 12px;
+        border: 1px solid var(--ea-border);
+        border-radius: 9px;
+        background: var(--ea-panel);
+    }
+    .pr-roster-head span {
+        color: var(--ea-muted);
+        font-size: .86rem;
+    }
     .pr-kpi {
         padding: 10px 12px;
         border: 1px solid var(--ea-border);
@@ -200,6 +218,38 @@
 </section>
 {% endfor %}
 
+{% if pending_employees %}
+<div class="pr-roster">
+    <div class="pr-roster-head">
+        <strong>Trabajadores activos sin planilla generada</strong>
+        <span>Se muestran aunque todavía no tengan una fila para {{ period_value }}.</span>
+    </div>
+    <div class="pr-grid-wrap">
+        <table class="pr-grid">
+            <thead>
+                <tr>
+                    <th>#</th><th>Trabajador</th><th>DNI</th><th>Cargo</th><th>Área</th>
+                    <th class="num">Sueldo base</th><th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for employee in pending_employees %}
+                <tr>
+                    <td class="num">{{ forloop.counter }}</td>
+                    <td class="worker">{{ employee.full_name }}</td>
+                    <td>{{ employee.document_number|default:"—" }}</td>
+                    <td>{{ employee.position|default:"—" }}</td>
+                    <td>{{ employee.area|default:"—" }}</td>
+                    <td class="num">{{ employee.currency_code }} {{ employee.base_salary|floatformat:0|intcomma }}</td>
+                    <td><span class="ea-badge amber">Pendiente de generar</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 {% if rows %}
 <div class="pr-grid-wrap">
     <table class="pr-grid">
@@ -271,7 +321,7 @@
         </tbody>
     </table>
 </div>
-{% else %}
+{% elif not pending_employees %}
 <div class="pr-empty">
     <strong>No hay planilla generada para {{ period_value }}.</strong>
     <p>Agrega trabajadores y pulsa “Generar planilla”.</p>

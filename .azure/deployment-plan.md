@@ -1,3 +1,71 @@
+# External real estate agents follow-up release - 2026-11-16
+
+Status: Validated.
+Recipe: existing serialized GitHub Actions App Service pipeline.
+Authorization: the user explicitly requested publication and Azure deployment
+verification of the completed external-agent registry module.
+Base: origin/main f9da1acd.
+Target: existing granextractorservice / rg-elgranextractor, Brazil South,
+subscription 0219eecc-9920-4789-9929-3091a2f09daf.
+Public: https://acm.propifai.com/agentes-externos/
+
+## Scope
+Publish the external-agent module changes that allow duplicate personal
+document type/number values independently of Propify and show each agent's
+Propify registration date when detected by DNI or mobile number. The date is
+read-only from `user.date_joined` and `user_profile`; this release does not
+modify Propify dates or records.
+
+Publish the payroll visibility correction: active workers appear in
+`/agentes-externos/planillas/` as `Pendiente de generar` until a monthly
+`PayrollEntry` exists, instead of disappearing when no planilla has been
+generated. Viewing the page does not create payroll rows.
+
+No infrastructure, RBAC, runtime settings, dependencies or database migrations
+change. The two reviewed commits are `85251dc5` and `4e7535d6`.
+
+## All validation checks pass
+- Fetch current `origin/main` and confirm the release remains based on the
+  latest production revision without force-pushing.
+- Run the complete 37-test `external_agents.tests` suite with
+  `settings_tests_external_agents`.
+- Run Django system checks and migration drift checks for the module.
+- Verify Python syntax for changed files and the production workflow YAML.
+- Confirm the changed files are limited to the external-agent module and no
+  Propify write path was introduced.
+- Confirm the existing Azure App Service target is available before publication.
+
+## Execution and rollback
+Push the reviewed commits to `main`; the existing GitHub Actions workflow
+builds, tests, collects static files, deploys and restarts App Service. Verify
+the public route and authenticated module after deployment. Rollback is a
+scoped revert through the same pipeline.
+
+## Validation Proof
+2026-11-16 America/Lima:
+- `git fetch origin --prune` found no newer `origin/main` revision; the release
+  remained two commits ahead before the payroll correction was added.
+- `python webapp/manage.py test external_agents.tests
+  --settings=settings_tests_external_agents --noinput`: 37 tests passed;
+  Django system check identified no issues.
+- `python webapp/manage.py check` and
+  `makemigrations --check --dry-run` passed with no migration drift.
+- `py_compile` passed for the changed Python modules and
+  `collectstatic --noinput` completed in an isolated temporary static root.
+- The production workflow YAML parsed successfully.
+- The only application files in scope are `webapp/external_agents`; the plan,
+  tests and templates introduce no database schema or migration changes.
+- The Propify query uses `SELECT` only from `[user]` and `user_profile`; no
+  insert, update or delete statement targets either table.
+- Azure CLI confirmed subscription
+  `0219eecc-9920-4789-9929-3091a2f09daf`,
+  `granextractorservice`, resource group `rg-elgranextractor`, Brazil South,
+  state `Running`.
+- Bicep/Terraform and role-code review are not applicable because this
+  application-only release changes no infrastructure or RBAC.
+
+---
+
 # Catastro Maestro canonical dossier and compact lot card - 2026-10-28
 
 Status: Validated

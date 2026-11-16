@@ -2021,6 +2021,7 @@ def _money_input(value):
 def payroll_dashboard(request):
     period = _parse_payroll_period(request.GET.get('periodo'))
     status_filter = str(request.GET.get('estado') or 'todos').strip()
+    active_employee_roster = PayrollEmployee.objects.filter(is_active=True)
     entries = (
         PayrollEntry.objects
         .filter(period=period)
@@ -2031,6 +2032,11 @@ def payroll_dashboard(request):
     elif status_filter == 'pagados':
         entries = entries.filter(status=PayrollEntry.Status.PAID)
     rows = list(entries)
+    pending_employees = []
+    if status_filter != 'pagados':
+        pending_employees = list(
+            active_employee_roster.exclude(payroll_entries__period=period)
+        )
     totals = {}
     for row in rows:
         currency = row.currency_code or 'PEN'
@@ -2054,9 +2060,10 @@ def payroll_dashboard(request):
         'period': period,
         'period_value': period.strftime('%Y-%m'),
         'rows': rows,
+        'pending_employees': pending_employees,
         'totals': list(totals.values()),
         'status_filter': status_filter,
-        'active_employees': PayrollEmployee.objects.filter(is_active=True).count(),
+        'active_employees': active_employee_roster.count(),
         'employee_submission_token': _new_finance_submission_token(),
         'generate_submission_token': _new_finance_submission_token(),
         'edit_submission_token': _new_finance_submission_token(),
