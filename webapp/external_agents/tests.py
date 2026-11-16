@@ -934,7 +934,7 @@ class ExternalAgentsViewsTests(TestCase):
         )
         self.assertFalse(ExternalAgent.objects.filter(document_number='87654321').exists())
 
-    def test_duplicate_person_document_is_rejected(self):
+    def test_duplicate_person_document_is_allowed_across_independent_records(self):
         form = ExternalAgentForm(data={
             'full_name': 'Otra Persona',
             'personal_document_type': self.personal_type.pk,
@@ -943,8 +943,27 @@ class ExternalAgentsViewsTests(TestCase):
             'email': 'otra@example.com',
             'mobile': '+51 900 000 000',
         })
-        self.assertFalse(form.is_valid())
-        self.assertIn('document_number', form.errors)
+        self.assertTrue(form.is_valid(), form.errors)
+
+        self.authenticate_propify()
+        response = self.client.post(reverse('external_agents:agent_create'), {
+            'full_name': 'Jonathan Alvaro Ascarza Lazo',
+            'personal_document_type': self.personal_type.pk,
+            'document_number': self.agent.document_number,
+            'address': 'Dirección independiente',
+            'observations': 'Registro independiente de Propify.',
+            'email': 'jonathan@example.com',
+            'mobile': '+51 999 888 777',
+            'level': ExternalAgent.Level.SENIOR,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            ExternalAgent.objects.filter(
+                personal_document_type=self.personal_type,
+                document_number=self.agent.document_number,
+            ).count(),
+            2,
+        )
 
     def test_all_agent_fields_are_optional(self):
         form = ExternalAgentForm()

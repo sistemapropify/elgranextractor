@@ -126,7 +126,7 @@
                 <div class="ea-field">
                     <label class="ea-label" for="{{ form.document_number.id_for_label }}">Número de documento</label>
                     {{ form.document_number }}
-                    <span class="ea-help">La combinación tipo + número no puede repetirse.</span>
+                    <span class="ea-help">Puede coincidir con un documento ya existente en Propify o en este directorio.</span>
                     {% if form.document_number.errors %}<div class="ea-errors">{{ form.document_number.errors }}</div>{% endif %}
                 </div>
                 <div class="ea-field">
@@ -220,7 +220,7 @@
         <h2>Antes de guardar</h2>
         <p>Todos los campos son opcionales. Puedes completar la ficha progresivamente.</p>
         <ul>
-            <li>Si completas tipo y número, verifica que correspondan al mismo documento.</li>
+            <li>Este directorio es independiente de Propify; el mismo documento puede registrarse más de una vez.</li>
             <li>El apellido materno puede quedar vacío.</li>
             <li>Puedes cargar varios documentos durante el alta; después podrás agregar más desde la ficha.</li>
         </ul>

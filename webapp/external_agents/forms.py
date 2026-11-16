@@ -87,21 +87,8 @@ class ExternalAgentForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        document_type = cleaned.get('personal_document_type')
         document_number = (cleaned.get('document_number') or '').strip()
         cleaned['document_number'] = document_number
-        if document_type and document_number:
-            duplicates = ExternalAgent.objects.filter(
-                personal_document_type=document_type,
-                document_number=document_number,
-            )
-            if self.instance.pk:
-                duplicates = duplicates.exclude(pk=self.instance.pk)
-            if duplicates.exists():
-                self.add_error(
-                    'document_number',
-                    'Ya existe un agente externo con este tipo y número de documento.',
-                )
         return cleaned
 
 
