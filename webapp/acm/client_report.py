@@ -68,7 +68,12 @@ def author_name(user):
 
 def prepare_report(params, records, result, excluded=(), generated_at=None, user=None, fetch_images=True):
     from . import components_pdf as media
-    from .report_selection import report_records, report_values, report_unit_price
+    from .report_selection import (
+        report_records,
+        report_total,
+        report_values,
+        report_unit_price,
+    )
     peru = timezone(timedelta(hours=-5))
     generated_at = generated_at or datetime.now(peru)
     if generated_at.tzinfo:
@@ -125,7 +130,11 @@ def prepare_report(params, records, result, excluded=(), generated_at=None, user
     return dict(params=params, result=result, rows=rows, groups=groups, photos=photos,
                 map=map_image, croquis=croquis, chart=chart, average=average,
                 address=address, author=author_name(user), date=generated_at, summary=summary,
-                values=report_values(params, result) if result.get('new') else None,
+                values=(
+                    report_values(params, result)
+                    if report_total(params, result) is not None
+                    else None
+                ),
                 notes=params.get('report_notes', ''), logo=media._logo_bytes(),
                 pdm=pdm_zone(params))
 
