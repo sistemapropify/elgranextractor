@@ -141,7 +141,8 @@ class ReportSelectionTests(SimpleTestCase):
     def test_map_can_recover_after_previous_errors(self):
         bad=SimpleNamespace(status_code=403,content=b'API disabled',headers={'Content-Type':'text/plain'})
         good=SimpleNamespace(status_code=200,content=b'png',headers={'Content-Type':'image/png'})
-        with patch('requests.get',side_effect=[bad,bad,good]):
+        with patch('requests.get',side_effect=[bad,bad,good]), \
+             patch('acm.components_pdf._osm_map', return_value=None):
             self.assertIsNone(_static_map((-16.4,-71.5),[],'test'))
             self.assertIsNone(_static_map((-16.4,-71.5),[],'test'))
             self.assertEqual(_static_map((-16.4,-71.5),[],'test'),b'png')
