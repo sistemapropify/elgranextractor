@@ -23,7 +23,13 @@ from .models import (
     PayrollEntry,
     ServicePayment,
 )
-from .views import _add_months, _amount_to_usd, _normalize_closing
+from .views import (
+    _add_months,
+    _amount_to_usd,
+    _normalize_closing,
+    _normalize_document,
+    _normalize_phone,
+)
 
 
 class ExternalAgentsViewsTests(TestCase):
@@ -185,6 +191,7 @@ class ExternalAgentsViewsTests(TestCase):
             'Nombres y apellidos',
             'Nivel',
             'DNI / documento',
+            'Alta en Propify',
             'Celular',
             'Correo',
             'Dirección',
@@ -195,6 +202,41 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'Ana Quispe Rojas')
         self.assertContains(response, 'Disponible para proyectos en Arequipa.')
         self.assertContains(response, 'DNI y certificado.pdf')
+
+    def test_dashboard_and_detail_show_propify_registration_date(self):
+        self.authenticate_propify()
+        registered_on = timezone.localdate()
+
+        def attach_registration(agents):
+            agents = list(agents)
+            for agent in agents:
+                agent.propify_registered_at = registered_on
+                agent.propify_user_id = 987
+                agent.propify_match_by = 'DNI / documento'
+            return agents
+
+        with patch(
+            'external_agents.views._attach_propify_registrations',
+            side_effect=attach_registration,
+        ):
+            matrix = self.client.get(
+                reverse('external_agents:dashboard'),
+                {'vista': 'matriz'},
+            )
+            detail = self.client.get(
+                reverse('external_agents:agent_detail', kwargs={'pk': self.agent.pk}),
+            )
+
+        expected_date = registered_on.strftime('%d/%m/%Y')
+        self.assertContains(matrix, 'Alta en Propify')
+        self.assertContains(matrix, expected_date)
+        self.assertContains(matrix, 'Coincide por DNI / documento')
+        self.assertContains(detail, 'Registro en Propify')
+        self.assertContains(detail, f'Alta el {expected_date}')
+
+    def test_propify_match_keys_normalize_documents_and_phones(self):
+        self.assertEqual(_normalize_document(' 41-238.897 '), '41238897')
+        self.assertEqual(_normalize_phone('+51 (999) 111-222'), '999111222')
 
     def test_service_payments_dashboard_renders_excel_grid_and_alarm(self):
         self.authenticate_propify()

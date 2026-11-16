@@ -509,6 +509,113 @@ def _username(request):
     return str(getattr(principal, 'username', '') or '').strip()
 
 
+def _normalize_document(value):
+    return re.sub(r'[^0-9a-z]', '', str(value or '').lower())
+
+
+def _normalize_phone(value):
+    digits = re.sub(r'\D', '', str(value or ''))
+    if digits.startswith('51') and len(digits) >= 11:
+        digits = digits[2:]
+    return digits[-9:] if len(digits) >= 9 else digits
+
+
+def _attach_propify_registrations(agents):
+    """Completa cada agente con su alta real en Propify, sin persistirla aquí."""
+    agents = list(agents)
+    for agent in agents:
+        agent.propify_registered_at = None
+        agent.propify_user_id = None
+        agent.propify_match_by = ''
+    if not agents or 'propifai' not in connections.settings:
+        return agents
+
+    documents = sorted({
+        _normalize_document(agent.document_number)
+        for agent in agents
+        if _normalize_document(agent.document_number)
+    })
+    phones = sorted({
+        _normalize_phone(agent.mobile)
+        for agent in agents
+        if _normalize_phone(agent.mobile)
+    })
+    if not documents and not phones:
+        return agents
+
+    filters = []
+    parameters = []
+    if documents:
+        placeholders = ', '.join(['%s'] * len(documents))
+        filters.append(
+            f"LOWER(REPLACE(REPLACE(p.nro_document, ' ', ''), '-', '')) "
+            f"IN ({placeholders})"
+        )
+        parameters.extend(documents)
+    if phones:
+        placeholders = ', '.join(['%s'] * len(phones))
+        normalized_phone = (
+            "RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE("
+            "COALESCE({column}, ''), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), 9)"
+        )
+        filters.append(
+            f"({normalized_phone.format(column='p.phone')} IN ({placeholders}) "
+            f"OR {normalized_phone.format(column='p.secondary_phone')} IN ({placeholders}))"
+        )
+        parameters.extend(phones)
+        parameters.extend(phones)
+
+    try:
+        with connections['propifai'].cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT
+                    u.id,
+                    u.date_joined,
+                    p.created_at,
+                    p.nro_document,
+                    p.phone,
+                    p.secondary_phone
+                FROM [user] u
+                INNER JOIN user_profile p ON p.user_id = u.id
+                WHERE {' OR '.join(filters)}
+                """,
+                parameters,
+            )
+            profiles = cursor.fetchall()
+    except (KeyError, DatabaseError, ConnectionDoesNotExist):
+        return agents
+
+    for user_id, date_joined, profile_created_at, document, phone, secondary_phone in profiles:
+        profile_document = _normalize_document(document)
+        profile_phones = {
+            normalized
+            for normalized in (
+                _normalize_phone(phone),
+                _normalize_phone(secondary_phone),
+            )
+            if normalized
+        }
+        for agent in agents:
+            if agent.propify_user_id is not None:
+                continue
+            document_match = (
+                profile_document
+                and profile_document == _normalize_document(agent.document_number)
+            )
+            phone_match = (
+                profile_phones
+                and _normalize_phone(agent.mobile) in profile_phones
+            )
+            if document_match or phone_match:
+                agent.propify_registered_at = date_joined or profile_created_at
+                agent.propify_user_id = user_id
+                agent.propify_match_by = (
+                    'DNI / documento' if document_match else 'celular'
+                )
+    return agents
+
+
 def _new_finance_submission_token():
     return uuid.uuid4().hex
 
@@ -2139,6 +2246,7 @@ def dashboard(request):
         18,
     )
     page = paginator.get_page(request.GET.get('page'))
+    page_agents = _attach_propify_registrations(page.object_list)
     querystring = request.GET.copy()
     querystring.pop('page', None)
     view_query = request.GET.copy()
@@ -2146,7 +2254,7 @@ def dashboard(request):
     view_query.pop('vista', None)
     return render(request, 'external_agents/dashboard.html', {
         'page': page,
-        'agents': page.object_list,
+        'agents': page_agents,
         'query': query,
         'status_filter': status,
         'document_type_filter': document_type,
@@ -2242,6 +2350,7 @@ def agent_detail(request, pk):
         ExternalAgent.objects.select_related('personal_document_type'),
         pk=pk,
     )
+    agent = _attach_propify_registrations([agent])[0]
     attachment_forms = _empty_attachment_forms()
     empty_attachment_form = AttachmentForm(prefix='doc___index__')
     return render(request, 'external_agents/agent_detail.html', {

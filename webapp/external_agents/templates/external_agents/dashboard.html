@@ -117,7 +117,7 @@
     }
     .ea-matrix {
         width: 100%;
-        min-width: 1320px;
+        min-width: 1420px;
         border-collapse: separate;
         border-spacing: 0;
         font-size: 12px;
@@ -164,6 +164,23 @@
         white-space: nowrap;
     }
     .ea-matrix-empty { color: #6e7681; }
+    .ea-propify-date {
+        display: block;
+        color: #f0f6fc;
+        font-size: 11px;
+        font-weight: 750;
+        white-space: nowrap;
+    }
+    .ea-propify-match {
+        display: block;
+        margin-top: 2px;
+        color: var(--ea-muted);
+        font-size: 9px;
+    }
+    .ea-propify-none {
+        color: var(--ea-muted);
+        font-size: 10px;
+    }
     .ea-doc-title {
         display: block;
         max-width: 240px;
@@ -374,6 +391,7 @@
                 <th>Nombres y apellidos</th>
                 <th>Nivel</th>
                 <th>DNI / documento</th>
+                <th>Alta en Propify</th>
                 <th>Celular</th>
                 <th>Correo</th>
                 <th>Dirección</th>
@@ -396,6 +414,14 @@
                         {{ agent.document_number }}
                     {% else %}
                         <span class="ea-matrix-empty">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if agent.propify_registered_at %}
+                    <span class="ea-propify-date">{{ agent.propify_registered_at|date:"d/m/Y" }}</span>
+                    <span class="ea-propify-match">Coincide por {{ agent.propify_match_by }}</span>
+                    {% else %}
+                    <span class="ea-propify-none">No registrado</span>
                     {% endif %}
                 </td>
                 <td>{% if agent.mobile %}<a href="tel:{{ agent.mobile }}">{{ agent.mobile }}</a>{% else %}<span class="ea-matrix-empty">—</span>{% endif %}</td>
@@ -444,6 +470,16 @@
             <div class="ea-data-line"><span aria-hidden="true">✉</span><span>{{ agent.email }}</span></div>
             <div class="ea-data-line"><span aria-hidden="true">☎</span><span>{{ agent.mobile }}</span></div>
             <div class="ea-data-line"><span aria-hidden="true">⌖</span><span>{{ agent.address }}</span></div>
+            <div class="ea-data-line">
+                <span aria-hidden="true">◇</span>
+                <span>
+                    {% if agent.propify_registered_at %}
+                    Alta en Propify: {{ agent.propify_registered_at|date:"d/m/Y" }} · {{ agent.propify_match_by }}
+                    {% else %}
+                    No registrado en Propify
+                    {% endif %}
+                </span>
+            </div>
         </div>
         <footer class="ea-card-footer">
             <div class="ea-card-meta">

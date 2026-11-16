@@ -382,6 +382,16 @@
                     <div class="ea-data-value">{% if agent.mobile %}<a href="tel:{{ agent.mobile }}">{{ agent.mobile }}</a>{% else %}No registrado{% endif %}</div>
                 </div>
                 <div class="ea-data-block wide">
+                    <span class="ea-data-label">Registro en Propify</span>
+                    <div class="ea-data-value">
+                        {% if agent.propify_registered_at %}
+                            Alta el {{ agent.propify_registered_at|date:"d/m/Y" }} · coincidencia por {{ agent.propify_match_by }}
+                        {% else %}
+                            No se encontró una cuenta en Propify con este DNI o celular.
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="ea-data-block wide">
                     <span class="ea-data-label">Observaciones</span>
                     <div class="ea-data-value" style="white-space:pre-wrap">{{ agent.observations|default:"Sin observaciones" }}</div>
                 </div>
