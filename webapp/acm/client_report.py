@@ -113,8 +113,17 @@ def prepare_report(params, records, result, excluded=(), generated_at=None, user
     for i, row in enumerate(rows):
         label = f'|label:{i+1}' if i < 9 else ''
         markers.append(f'color:0x475569{label}|{row["lat"]},{row["lng"]}')
-    map_image = media._static_map(center, markers, media._maps_key(), size=(640, 360),
-                                   zoom=15, fetch=fetch_images, deadline=deadline)
+    map_image = media._static_map(
+        center,
+        markers,
+        media._maps_key(),
+        size=(640, 360),
+        zoom=15,
+        fetch=fetch_images,
+        deadline=deadline,
+        points=[(row['lat'], row['lng']) for row in rows],
+        radius=params.get('radius'),
+    )
     croquis = not map_image
     if croquis:
         map_image = media._croquis(center, [(r['lat'], r['lng']) for r in rows], params['radius'])

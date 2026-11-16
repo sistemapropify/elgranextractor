@@ -149,8 +149,17 @@ def _maps_key(static=True):
 _GEOCODE_CACHE = {}
 
 
-def _static_map(center, markers, key, size=(640, 420), zoom=15, fetch=True,
-                deadline=None):
+def _static_map(
+    center,
+    markers,
+    key,
+    size=(640, 420),
+    zoom=15,
+    fetch=True,
+    deadline=None,
+    points=(),
+    radius=None,
+):
     """Descarga un mapa estático sin pines de portales (colores genéricos)."""
     if not fetch or not key or not center:
         return None
@@ -173,6 +182,191 @@ def _static_map(center, markers, key, size=(640, 420), zoom=15, fetch=True,
         logger.warning('ACM PDF: mapa no disponible (HTTP %s). Comprueba Maps Static API y su clave de servidor.', response.status_code)
     except Exception:
         logger.warning('ACM PDF: no se pudo descargar el mapa', exc_info=True)
+    return _osm_map(center, points, radius, size=size, fetch=fetch,
+                    deadline=deadline)
+
+
+def _hex_rgba(value, alpha=92):
+    value = str(value or '').strip().lstrip('#')
+    if len(value) != 6:
+        value = '8b9eb7'
+    try:
+        return tuple(int(value[index:index + 2], 16) for index in (0, 2, 4)) + (alpha,)
+    except ValueError:
+        return (139, 158, 183, alpha)
+
+
+def _osm_map(center, points, radius, size=(640, 420), fetch=True,
+             deadline=None):
+    """Street-map fallback using OpenStreetMap tiles and PDM polygons."""
+    if not fetch or not center:
+        return None
+    if deadline is not None and time.monotonic() > deadline:
+        return None
+    try:
+        import requests
+        from PIL import Image, ImageDraw, ImageFont
+
+        width, height = int(size[0]), int(size[1])
+        lat0, lng0 = map(float, center)
+        span = max(320.0, float(radius or 250) * 2.8)
+        meters_per_pixel = span / max(width, 1)
+        target_zoom = math.log2(
+            156543.03392 * max(0.1, math.cos(math.radians(lat0)))
+            / max(meters_per_pixel, .01)
+        )
+        tile_zoom = max(13, min(18, int(round(target_zoom))))
+        world_size = 256 * (2 ** tile_zoom)
+
+        def project(lat, lng):
+            lat = max(-85.05112878, min(85.05112878, float(lat)))
+            sine = math.sin(math.radians(lat))
+            x = (float(lng) + 180.0) / 360.0 * world_size
+            y = (
+                .5
+                - math.log((1 + sine) / (1 - sine)) / (4 * math.pi)
+            ) * world_size
+            return x, y
+
+        center_x, center_y = project(lat0, lng0)
+        left = center_x - width / 2
+        top = center_y - height / 2
+        first_x = math.floor(left / 256)
+        last_x = math.floor((left + width) / 256)
+        first_y = math.floor(top / 256)
+        last_y = math.floor((top + height) / 256)
+        columns = last_x - first_x + 1
+        rows = last_y - first_y + 1
+        mosaic = Image.new('RGB', (columns * 256, rows * 256), '#e8ecef')
+        loaded = 0
+        headers = {'User-Agent': 'Propify-ACM/1.0 report-map'}
+        for tile_x in range(first_x, last_x + 1):
+            for tile_y in range(first_y, last_y + 1):
+                if deadline is not None and time.monotonic() > deadline:
+                    break
+                wrapped_x = tile_x % (2 ** tile_zoom)
+                if tile_y < 0 or tile_y >= 2 ** tile_zoom:
+                    continue
+                response = requests.get(
+                    f'https://tile.openstreetmap.org/{tile_zoom}/{wrapped_x}/{tile_y}.png',
+                    headers=headers,
+                    timeout=4,
+                )
+                if response.status_code != 200 or not response.content:
+                    continue
+                tile = Image.open(io.BytesIO(response.content)).convert('RGB')
+                mosaic.paste(
+                    tile,
+                    ((tile_x - first_x) * 256, (tile_y - first_y) * 256),
+                )
+                loaded += 1
+        if not loaded:
+            return None
+
+        crop_left = int(round(left - first_x * 256))
+        crop_top = int(round(top - first_y * 256))
+        image = mosaic.crop(
+            (crop_left, crop_top, crop_left + width, crop_top + height)
+        ).convert('RGBA')
+        overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+
+        try:
+            from cuadrantizacion.zonificacion import obtener_clasificador
+            classifier = obtener_clasificador()
+        except Exception:
+            classifier = None
+        if classifier is not None:
+            west = (left / world_size) * 360.0 - 180.0
+            east = ((left + width) / world_size) * 360.0 - 180.0
+            north = math.degrees(
+                math.atan(math.sinh(math.pi * (1 - 2 * top / world_size)))
+            )
+            south = math.degrees(
+                math.atan(
+                    math.sinh(
+                        math.pi * (1 - 2 * (top + height) / world_size)
+                    )
+                )
+            )
+            minimum_lng, maximum_lng = min(west, east), max(west, east)
+            minimum_lat, maximum_lat = min(south, north), max(south, north)
+            for polygon in classifier.poligonos:
+                x0, y0, x1, y1 = polygon['bbox']
+                if x1 < minimum_lng or x0 > maximum_lng:
+                    continue
+                if y1 < minimum_lat or y0 > maximum_lat:
+                    continue
+                points_px = []
+                for lng, lat in polygon['anillo']:
+                    x, y = project(lat, lng)
+                    points_px.append((x - left, y - top))
+                if len(points_px) < 3:
+                    continue
+                info = classifier.leyenda.get(polygon['codigo'], {})
+                color = info.get('color') or polygon.get('color') or '#8b9eb7'
+                overlay_draw.polygon(
+                    points_px,
+                    fill=_hex_rgba(color, 92),
+                    outline=_hex_rgba(color, 230),
+                    width=2,
+                )
+        image = Image.alpha_composite(image, overlay)
+        draw = ImageDraw.Draw(image)
+        for index, point in enumerate(points or []):
+            try:
+                x, y = project(point[0], point[1])
+            except (TypeError, ValueError, IndexError):
+                continue
+            x, y = x - left, y - top
+            if -20 <= x <= width + 20 and -20 <= y <= height + 20:
+                draw.ellipse(
+                    (x - 11, y - 11, x + 11, y + 11),
+                    fill='#d64545',
+                    outline='#ffffff',
+                    width=2,
+                )
+                draw.text(
+                    (x, y),
+                    str(index + 1),
+                    fill='#ffffff',
+                    anchor='mm',
+                )
+        x, y = center_x - left, center_y - top
+        draw.polygon(
+            [
+                (x, y - 13), (x + 11, y), (x, y + 13), (x - 11, y),
+            ],
+            fill='#047d7d',
+            outline='#ffffff',
+        )
+        draw.text((x, y), 'P', fill='#ffffff', anchor='mm')
+        attribution = '© OpenStreetMap contributors'
+        try:
+            font = ImageFont.truetype(
+                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                12,
+            )
+        except OSError:
+            font = ImageFont.load_default()
+        box = draw.textbbox((0, 0), attribution, font=font)
+        text_width = box[2] - box[0]
+        draw.rectangle(
+            (width - text_width - 10, height - 20, width, height),
+            fill=(255, 255, 255, 210),
+        )
+        draw.text(
+            (width - text_width - 5, height - 18),
+            attribution,
+            fill='#334155',
+            font=font,
+        )
+        stream = io.BytesIO()
+        image.convert('RGB').save(stream, format='PNG')
+        return stream.getvalue()
+    except Exception:
+        logger.warning('ACM PDF: no se pudo dibujar el mapa alternativo',
+                       exc_info=True)
     return None
 
 

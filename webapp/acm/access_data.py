@@ -188,7 +188,7 @@ def restore_selection(request, state, data):
 
 def persist_history(user, params, records, result, excluded=()):
     from .access_models import ACMPortalAnalysis
-    if not result.get('new'):
+    if not result.get('new') and params.get('manual_valuation') is None:
         raise ValueError('Primero completa el cálculo.')
     snapshot = {'params': params, 'records': records, 'result': result, 'excluded': list(excluded)}
     fingerprint = hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()

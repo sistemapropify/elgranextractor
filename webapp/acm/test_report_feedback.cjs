@@ -4,7 +4,7 @@ const nodes=new Map(),get=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',hi
 const sent=[],downloads=[];
 const sandbox={snapshot:{token:'signed-analysis',params:{}},result:{new:{total:350000}},reportDownloading:false,
   permissions:{adjust_valuation:true,report_notes:true},excluded:new Set(),unselected:new Set(),
-  comparisonRows:()=>[{id:'selected-property'}],updateReportButtons(){},$:get,
+  comparisonRows:()=>[{id:'selected-property'}],updateReportButtons(){},canEmitReport:()=>true,$:get,
   form:{elements:{csrfmiddlewaretoken:{value:'csrf'}}},
   window:{ACMComparisonValuation:{valid:()=>true,value:()=>487038.39,notes:()=>'Mejoras y conservacion revisadas.'}},
   document:{createElement:()=>({click(){downloads.push(this.download);}})},

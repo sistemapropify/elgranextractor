@@ -489,7 +489,10 @@
   }
   function hasManualReportValue(){return !!(permissions.adjust_valuation&&window.ACMComparisonValuation?.value()!=null);}
   function hasReportValue(){return !!(result?.new||hasManualReportValue());}
-  function updateReportButtons(){const none=reportDownloading||window.ACMComparisonValuation?.valid()===false||!hasReportValue()||!comparisonRows().some(row=>!unselected.has(row.id));['cmp-word','cmp-pdf','cmp-html','cmp-comparison-report','cmp-save'].forEach(id=>$(id).disabled=none);document.querySelectorAll('[data-report-format]').forEach(button=>button.disabled=none);if(none)setReportMenu(false);}
+  function hasSelectedComparable(){return comparisonRows().some(row=>!unselected.has(row.id));}
+  function canEmitManualOnlyReport(){return hasManualReportValue()&&(permissions.report_notes===false||!!currentReportNotes());}
+  function canEmitReport(){return hasReportValue()&&(hasSelectedComparable()||canEmitManualOnlyReport());}
+  function updateReportButtons(){const none=reportDownloading||window.ACMComparisonValuation?.valid()===false||!canEmitReport();['cmp-word','cmp-pdf','cmp-html','cmp-comparison-report','cmp-save'].forEach(id=>$(id).disabled=none);document.querySelectorAll('[data-report-format]').forEach(button=>button.disabled=none);if(none)setReportMenu(false);}
   $('cmp-comparison-content').addEventListener('change',async event=>{
     const id=event.target.dataset.mapSelect;if(!id||!snapshot)return;
     event.target.checked?unselected.delete(id):unselected.add(id);renderMap();updateReportButtons();$('cmp-save').textContent='Guardar en historial';
@@ -642,13 +645,13 @@
     note.value='';error.hidden=true;dialog.showModal();setTimeout(()=>note.focus(),0);
   }
   async function downloadReport(url,extension,label){
-    if(!snapshot||!hasReportValue()||reportDownloading||window.ACMComparisonValuation?.valid()===false||!comparisonRows().some(row=>!unselected.has(row.id)))return;reportDownloading=true;updateReportButtons();let downloaded=false;$('cmp-status').textContent='Generando informe '+label+' con las operaciones del análisis…';reportStatus('Generando informe '+label+'…');
+    if(!snapshot||!canEmitReport()||reportDownloading||window.ACMComparisonValuation?.valid()===false)return;reportDownloading=true;updateReportButtons();let downloaded=false;$('cmp-status').textContent='Generando informe '+label+' con las operaciones del análisis…';reportStatus('Generando informe '+label+'…');
     try{const response=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:JSON.stringify(selection())});
       if(!response.ok){let body={};try{body=await response.json();}catch(e){}throw Error(body.error||('No se pudo generar el informe '+label+'.'));}
       const code=response.headers.get('X-ACM-History-Code')||'';const objectUrl=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=objectUrl;a.download=(code||'informe-acm')+extension;a.click();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);downloaded=true;$('cmp-save').textContent=code?'Guardado · '+code:'Guardado en historial';$('cmp-status').textContent='Informe '+label+' descargado y análisis guardado en el historial.';reportStatus('Informe '+label+' descargado.');
     }catch(error){$('cmp-status').textContent=error.message;reportStatus(error.message);}finally{reportDownloading=false;updateReportButtons();if(downloaded)$('cmp-save').disabled=true;}
   }
-  $('cmp-word').addEventListener('click',()=>downloadReport(form.dataset.reportUrl,'.docx','Word'));
+  $('cmp-word').addEventListener('click',()=>withRequiredPdfNotes(()=>downloadReport(form.dataset.reportUrl,'.docx','Word')));
   $('cmp-pdf').addEventListener('click',()=>withRequiredPdfNotes(()=>downloadReport(form.dataset.pdfUrl,'.pdf','PDF')));
   $('cmp-html').addEventListener('click',()=>downloadReport(form.dataset.htmlUrl,'.html','HTML'));
   $('cmp-comparison-report').addEventListener('click',()=>setReportMenu($('cmp-comparison-downloads').hidden));
@@ -669,7 +672,7 @@
     const button=event.target.closest('[data-report-format]');if(!button)return;
     const formats={pdf:[form.dataset.pdfUrl,'.pdf','PDF'],word:[form.dataset.reportUrl,'.docx','Word'],html:[form.dataset.htmlUrl,'.html','HTML']};
     const format=formats[button.dataset.reportFormat];if(!format)return;
-    if(button.dataset.reportFormat==='pdf')withRequiredPdfNotes(()=>downloadReport(...format));
+    if(button.dataset.reportFormat==='pdf'||button.dataset.reportFormat==='word')withRequiredPdfNotes(()=>downloadReport(...format));
     else downloadReport(...format);
   });
   $('required-notes-form').addEventListener('submit',event=>{

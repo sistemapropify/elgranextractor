@@ -42,7 +42,6 @@
     return html;
   }
   function markup(params,result){
-    if(!result.new&&!result.reference_mode&&!(result.land_unit>0)&&!result.zone_land)return '';
     if(!notesTouched)notes=params.report_notes||'';
     const basis=['land','built'].includes(result.new?.area_basis)?result.new.area_basis:result.model==='land'||params.property_type==='Terreno'?'land':'built';
     unitArea=Number(params[basis]);unitLabel=basis==='land'?'de terreno':'construido';

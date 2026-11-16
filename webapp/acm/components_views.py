@@ -408,11 +408,16 @@ def explain_ai(request):
 def word_report(request):
     try:
         state,excluded=_signed_selection(request)
-        if state['params'].get('report_ids')==[]:
+        manual_value=state['params'].get('manual_valuation') is not None
+        if state['params'].get('report_ids')==[] and not manual_value:
             return JsonResponse({'error':'Marca al menos una propiedad para incluirla en el informe.'},status=422)
         result=calculate(state['records'],state['params'],excluded)
-        if not result.get('new') and state['params'].get('manual_valuation') is None:
+        if not result.get('new') and not manual_value:
             return JsonResponse({'error':'Ingresa un valor ajustado antes de emitir el informe Word.'},status=422)
+        if (not result.get('new') and manual_value
+                and request.acm_access.permissions.get('report_notes')
+                and not str(state['params'].get('report_notes','')).strip()):
+            return JsonResponse({'error':'Escribe la justificación u observaciones antes de emitir el informe Word.'},status=422)
         history,_=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
         from .components_report import build_acm_docx
         safe,visible_result,visible_excluded=project(request,state,result,excluded,report=True)
@@ -438,13 +443,14 @@ def pdf_report(request):
     """Informe PDF con la estructura del ACM de Propify (solo identidad Propify)."""
     try:
         state,excluded=_signed_selection(request)
-        if state['params'].get('report_ids')==[]:
+        manual_value=state['params'].get('manual_valuation') is not None
+        if state['params'].get('report_ids')==[] and not manual_value:
             return JsonResponse({'error':'Marca al menos una propiedad para incluirla en el informe.'},status=422)
         if (request.acm_access.permissions.get('report_notes')
                 and not str(state['params'].get('report_notes','')).strip()):
             return JsonResponse({'error':'Escribe la justificación u observaciones antes de emitir el informe PDF.'},status=422)
         result=calculate(state['records'],state['params'],excluded)
-        if not result.get('new') and state['params'].get('manual_valuation') is None:
+        if not result.get('new') and not manual_value:
             return JsonResponse({'error':'Ingresa un valor ajustado antes de emitir el informe PDF.'},status=422)
         history,_=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
         from .components_pdf import build_acm_pdf

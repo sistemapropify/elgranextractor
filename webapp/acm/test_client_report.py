@@ -10,7 +10,7 @@ from PIL import Image
 
 from .client_report import prepare_report, author_name
 from .components_engine import calculate, candidates
-from .components_pdf import build_acm_pdf
+from .components_pdf import _osm_map, build_acm_pdf
 from .components_report import build_acm_docx
 from .components_html import build_acm_html
 from .test_components import params, sample, _pdf_text
@@ -107,14 +107,47 @@ class ClientReportTests(SimpleTestCase):
         self.p['manual_valuation'] = 180000
         self.p['report_notes'] = 'Valor adoptado por el agente luego de revisar las referencias.'
         pdf = _pdf_text(build_acm_pdf(
-            self.p, self.rows, manual, fetch_images=False,
+            self.p, [], manual, fetch_images=False,
         )).decode('latin1')
         word = self.word_text(build_acm_docx(
-            self.p, self.rows, manual, fetch_images=False,
+            self.p, [], manual, fetch_images=False,
         ))
         for text in (pdf, word):
             self.assertIn('180,000', text)
             self.assertIn('Valor adoptado por el agente', text)
+
+    def test_osm_fallback_map_includes_zoning_color(self):
+        tile = io.BytesIO()
+        Image.new('RGB', (256, 256), 'white').save(tile, 'PNG')
+        response = SimpleNamespace(status_code=200, content=tile.getvalue())
+        classifier = SimpleNamespace(
+            poligonos=[{
+                'codigo': 'RDA-2',
+                'color': '#d6882d',
+                'orden': 1,
+                'bbox': (-71.54, -16.42, -71.53, -16.40),
+                'anillo': [
+                    [-71.54, -16.42],
+                    [-71.53, -16.42],
+                    [-71.53, -16.40],
+                    [-71.54, -16.40],
+                    [-71.54, -16.42],
+                ],
+            }],
+            leyenda={'RDA-2': {'color': '#d6882d'}},
+        )
+        with patch('requests.get', return_value=response), \
+             patch('cuadrantizacion.zonificacion.obtener_clasificador',
+                   return_value=classifier):
+            content = _osm_map(
+                (-16.409, -71.537),
+                [(-16.409, -71.537)],
+                250,
+                deadline=None,
+            )
+
+        self.assertTrue(content.startswith(b'\x89PNG'))
+        self.assertGreater(len(content), 1000)
 
     def test_long_observations_are_preserved_in_both_formats(self):
         self.p['report_notes'] = '\n'.join('Observación '+str(i)+': ubicación y conservación revisadas.' for i in range(100))
