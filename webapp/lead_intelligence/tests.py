@@ -955,6 +955,17 @@ class EvaluationChannelsTests(SimpleTestCase):
         self.assertEqual(Command._assessment_summary({}), "evaluado")
 
 
+class LargeLeadSetQueryTests(SimpleTestCase):
+    def test_sql_in_chunks_stay_below_driver_parameter_limit(self):
+        from .services import SQL_IN_CHUNK_SIZE, _chunks
+
+        chunks = list(_chunks(range(SQL_IN_CHUNK_SIZE * 3 + 17)))
+
+        self.assertEqual(len(chunks), 4)
+        self.assertTrue(all(len(chunk) <= SQL_IN_CHUNK_SIZE for chunk in chunks))
+        self.assertEqual(sum(len(chunk) for chunk in chunks), SQL_IN_CHUNK_SIZE * 3 + 17)
+
+
 class AnalysisProgressHistoricalApiTests(SimpleTestCase):
     """Modo histórico de analysis_progress_api (detalle por lead del periodo)."""
 

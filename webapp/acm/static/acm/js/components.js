@@ -487,7 +487,9 @@
     const menu=$('cmp-comparison-downloads');menu.hidden=!open;$('cmp-comparison-report').setAttribute('aria-expanded',String(open));
     if(open){menu.classList.remove('opens-up');menu.classList.toggle('opens-up',menu.getBoundingClientRect().bottom>$('map-container').getBoundingClientRect().bottom-8);}
   }
-  function updateReportButtons(){const none=reportDownloading||window.ACMComparisonValuation?.valid()===false||!result?.new||!comparisonRows().some(row=>!unselected.has(row.id));['cmp-word','cmp-pdf','cmp-html','cmp-comparison-report','cmp-save'].forEach(id=>$(id).disabled=none);document.querySelectorAll('[data-report-format]').forEach(button=>button.disabled=none);if(none)setReportMenu(false);}
+  function hasManualReportValue(){return !!(permissions.adjust_valuation&&window.ACMComparisonValuation?.value()!=null);}
+  function hasReportValue(){return !!(result?.new||hasManualReportValue());}
+  function updateReportButtons(){const none=reportDownloading||window.ACMComparisonValuation?.valid()===false||!hasReportValue()||!comparisonRows().some(row=>!unselected.has(row.id));['cmp-word','cmp-pdf','cmp-html','cmp-comparison-report','cmp-save'].forEach(id=>$(id).disabled=none);document.querySelectorAll('[data-report-format]').forEach(button=>button.disabled=none);if(none)setReportMenu(false);}
   $('cmp-comparison-content').addEventListener('change',async event=>{
     const id=event.target.dataset.mapSelect;if(!id||!snapshot)return;
     event.target.checked?unselected.delete(id):unselected.add(id);renderMap();updateReportButtons();$('cmp-save').textContent='Guardar en historial';
@@ -553,7 +555,7 @@
     aiProposal=null;$('cmp-proposal').hidden=true;
     if(result.reference_mode){const key=result.model==='land'?'other_reference':'property_reference';document.querySelector('[name=map_layer][value='+key+']').checked=true;}
     result.breakdown.forEach(d=>{const row=snapshot.records.find(r=>r.id===d.id);if(row)for(const key of ['land_similarity','built_similarity','distance_similarity','overall_similarity'])if(d[key]!=null)row[key]=d[key];});
-    renderSummary();renderCalculationExplanation();renderComparison();renderCards();renderMap();renderDetail();renderSimple();$('cmp-export').disabled=false;$('cmp-word').disabled=!result.new;$('cmp-pdf').disabled=!result.new;$('cmp-save').disabled=!result.new;
+    renderSummary();renderCalculationExplanation();renderComparison();renderCards();renderMap();renderDetail();renderSimple();$('cmp-export').disabled=false;updateReportButtons();
     updateReportButtons();
     $('cmp-calculation-open').disabled=false;
     $('cmp-scenario').hidden=result.model!=='components'||!result.new;
@@ -626,7 +628,7 @@
     const url=URL.createObjectURL(new Blob([JSON.stringify(file,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='acm-componentes.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   });
   $('cmp-save').addEventListener('click',async()=>{
-    if(!snapshot||!result||!result.new||window.ACMComparisonValuation?.valid()===false)return;const button=$('cmp-save');button.disabled=true;$('cmp-status').textContent='Guardando análisis y selección en el historial…';
+    if(!snapshot||!result||!hasReportValue()||window.ACMComparisonValuation?.valid()===false)return;const button=$('cmp-save');button.disabled=true;$('cmp-status').textContent='Guardando análisis y selección en el historial…';
     try{const data=await post('guardar',selection());button.textContent='Guardado · '+data.code;$('cmp-status').textContent=data.created?'Análisis guardado en el historial.':'Este mismo análisis ya estaba guardado en el historial.';}
     catch(error){$('cmp-status').textContent=error.message;button.disabled=false;}
   });
@@ -640,7 +642,7 @@
     note.value='';error.hidden=true;dialog.showModal();setTimeout(()=>note.focus(),0);
   }
   async function downloadReport(url,extension,label){
-    if(!snapshot||!result?.new||reportDownloading||window.ACMComparisonValuation?.valid()===false||!comparisonRows().some(row=>!unselected.has(row.id)))return;reportDownloading=true;updateReportButtons();let downloaded=false;$('cmp-status').textContent='Generando informe '+label+' con las operaciones del análisis…';reportStatus('Generando informe '+label+'…');
+    if(!snapshot||!hasReportValue()||reportDownloading||window.ACMComparisonValuation?.valid()===false||!comparisonRows().some(row=>!unselected.has(row.id)))return;reportDownloading=true;updateReportButtons();let downloaded=false;$('cmp-status').textContent='Generando informe '+label+' con las operaciones del análisis…';reportStatus('Generando informe '+label+'…');
     try{const response=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':form.elements.csrfmiddlewaretoken.value},body:JSON.stringify(selection())});
       if(!response.ok){let body={};try{body=await response.json();}catch(e){}throw Error(body.error||('No se pudo generar el informe '+label+'.'));}
       const code=response.headers.get('X-ACM-History-Code')||'';const objectUrl=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=objectUrl;a.download=(code||'informe-acm')+extension;a.click();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);downloaded=true;$('cmp-save').textContent=code?'Guardado · '+code:'Guardado en historial';$('cmp-status').textContent='Informe '+label+' descargado y análisis guardado en el historial.';reportStatus('Informe '+label+' descargado.');

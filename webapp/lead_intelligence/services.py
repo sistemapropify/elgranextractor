@@ -101,6 +101,13 @@ RECONTACT_OPT_OUT = re.compile(
 )
 
 ATTENTION_OVERDUE_SECONDS = 24 * 60 * 60
+SQL_IN_CHUNK_SIZE = 1000
+
+
+def _chunks(values, size=SQL_IN_CHUNK_SIZE):
+    values = list(values)
+    for start in range(0, len(values), size):
+        yield values[start:start + size]
 
 
 def _dict_rows(cursor):
@@ -127,74 +134,76 @@ def _load_assignment_timelines(rows):
     lead_ids = sorted({int(row["id"]) for row in rows})
     if not lead_ids:
         return {}
-    placeholders = ", ".join(["%s"] * len(lead_ids))
+    activity_rows = []
     with connections["propifai"].cursor() as cursor:
-        cursor.execute(
-            f"""
-            SELECT
-                la.lead_id,
-                la.created_at AS effective_at,
-                TRY_CONVERT(
-                    bigint,
-                    CASE WHEN ISJSON(la.data_old) = 1
-                         THEN JSON_VALUE(la.data_old, '$.assigned_to_id')
-                    END
-                ) AS old_agent_id,
-                COALESCE(
-                    NULLIF(
-                        LTRIM(RTRIM(CONCAT(old_u.first_name, ' ', old_u.last_name))),
-                        ''
-                    ),
-                    old_u.username,
-                    'Sin asignar'
-                ) AS old_agent_name,
-                TRY_CONVERT(
-                    bigint,
-                    CASE WHEN ISJSON(la.data_new) = 1
-                         THEN JSON_VALUE(la.data_new, '$.assigned_to_id')
-                    END
-                ) AS new_agent_id,
-                COALESCE(
-                    NULLIF(
-                        LTRIM(RTRIM(CONCAT(new_u.first_name, ' ', new_u.last_name))),
-                        ''
-                    ),
-                    new_u.username,
-                    'Sin asignar'
-                ) AS new_agent_name,
-                la.actor_id,
-                COALESCE(
-                    NULLIF(
-                        LTRIM(RTRIM(CONCAT(actor.first_name, ' ', actor.last_name))),
-                        ''
-                    ),
-                    actor.username,
-                    'Sistema'
-                ) AS actor_name
-            FROM dbo.lead_activity la
-            LEFT JOIN dbo.[user] old_u
-              ON old_u.id = TRY_CONVERT(
-                    bigint,
-                    CASE WHEN ISJSON(la.data_old) = 1
-                         THEN JSON_VALUE(la.data_old, '$.assigned_to_id')
-                    END
-                )
-            LEFT JOIN dbo.[user] new_u
-              ON new_u.id = TRY_CONVERT(
-                    bigint,
-                    CASE WHEN ISJSON(la.data_new) = 1
-                         THEN JSON_VALUE(la.data_new, '$.assigned_to_id')
-                    END
-                )
-            LEFT JOIN dbo.[user] actor ON actor.id = la.actor_id
-            WHERE la.lead_id IN ({placeholders})
-              AND la.activity_type = 'field_update'
-              AND la.field_name = 'assigned_to'
-            ORDER BY la.lead_id, la.created_at
-            """,
-            lead_ids,
-        )
-        activity_rows = _dict_rows(cursor)
+        for lead_chunk in _chunks(lead_ids):
+            placeholders = ", ".join(["%s"] * len(lead_chunk))
+            cursor.execute(
+                f"""
+                SELECT
+                    la.lead_id,
+                    la.created_at AS effective_at,
+                    TRY_CONVERT(
+                        bigint,
+                        CASE WHEN ISJSON(la.data_old) = 1
+                             THEN JSON_VALUE(la.data_old, '$.assigned_to_id')
+                        END
+                    ) AS old_agent_id,
+                    COALESCE(
+                        NULLIF(
+                            LTRIM(RTRIM(CONCAT(old_u.first_name, ' ', old_u.last_name))),
+                            ''
+                        ),
+                        old_u.username,
+                        'Sin asignar'
+                    ) AS old_agent_name,
+                    TRY_CONVERT(
+                        bigint,
+                        CASE WHEN ISJSON(la.data_new) = 1
+                             THEN JSON_VALUE(la.data_new, '$.assigned_to_id')
+                        END
+                    ) AS new_agent_id,
+                    COALESCE(
+                        NULLIF(
+                            LTRIM(RTRIM(CONCAT(new_u.first_name, ' ', new_u.last_name))),
+                            ''
+                        ),
+                        new_u.username,
+                        'Sin asignar'
+                    ) AS new_agent_name,
+                    la.actor_id,
+                    COALESCE(
+                        NULLIF(
+                            LTRIM(RTRIM(CONCAT(actor.first_name, ' ', actor.last_name))),
+                            ''
+                        ),
+                        actor.username,
+                        'Sistema'
+                    ) AS actor_name
+                FROM dbo.lead_activity la
+                LEFT JOIN dbo.[user] old_u
+                  ON old_u.id = TRY_CONVERT(
+                        bigint,
+                        CASE WHEN ISJSON(la.data_old) = 1
+                             THEN JSON_VALUE(la.data_old, '$.assigned_to_id')
+                        END
+                    )
+                LEFT JOIN dbo.[user] new_u
+                  ON new_u.id = TRY_CONVERT(
+                        bigint,
+                        CASE WHEN ISJSON(la.data_new) = 1
+                             THEN JSON_VALUE(la.data_new, '$.assigned_to_id')
+                        END
+                    )
+                LEFT JOIN dbo.[user] actor ON actor.id = la.actor_id
+                WHERE la.lead_id IN ({placeholders})
+                  AND la.activity_type = 'field_update'
+                  AND la.field_name = 'assigned_to'
+                ORDER BY la.lead_id, la.created_at
+                """,
+                lead_chunk,
+            )
+            activity_rows.extend(_dict_rows(cursor))
 
     timelines = {}
     for event in activity_rows:
@@ -207,18 +216,21 @@ def _load_user_logins(user_ids):
     ids = sorted({int(user_id) for user_id in user_ids if user_id})
     if not ids:
         return {}
-    placeholders = ", ".join(["%s"] * len(ids))
+    logins = {}
     with connections["propifai"].cursor() as cursor:
-        cursor.execute(
-            f"""
-            SELECT uc.agent_id, u.username
-            FROM dbo.user_chatwoot uc
-            JOIN dbo.[user] u ON u.id = uc.user_id
-            WHERE uc.agent_id IN ({placeholders})
-            """,
-            ids,
-        )
-        return {row[0]: row[1] for row in cursor.fetchall()}
+        for id_chunk in _chunks(ids):
+            placeholders = ", ".join(["%s"] * len(id_chunk))
+            cursor.execute(
+                f"""
+                SELECT uc.agent_id, u.username
+                FROM dbo.user_chatwoot uc
+                JOIN dbo.[user] u ON u.id = uc.user_id
+                WHERE uc.agent_id IN ({placeholders})
+                """,
+                id_chunk,
+            )
+            logins.update({row[0]: row[1] for row in cursor.fetchall()})
+    return logins
 
 
 def _responsible_at(timeline, moment, current_agent_id, current_agent_name):
@@ -663,19 +675,20 @@ def _assessment_map(rows):
     if not keys:
         return {}
     lead_ids = {lead_id for lead_id, _ in keys}
-    assessments = (
-        LeadConversationAssessment.objects.using("default")
-        .filter(
-            source_lead_id__in=lead_ids,
-            analysis_version=ANALYSIS_VERSION,
-        )
-        .order_by("-analyzed_at")
-    )
     result = {}
-    for assessment in assessments:
-        key = (assessment.source_lead_id, assessment.history_hash)
-        if key in keys and key not in result:
-            result[key] = assessment
+    for id_chunk in _chunks(lead_ids):
+        assessments = (
+            LeadConversationAssessment.objects.using("default")
+            .filter(
+                source_lead_id__in=id_chunk,
+                analysis_version=ANALYSIS_VERSION,
+            )
+            .order_by("-analyzed_at")
+        )
+        for assessment in assessments:
+            key = (assessment.source_lead_id, assessment.history_hash)
+            if key in keys and key not in result:
+                result[key] = assessment
     return result
 
 

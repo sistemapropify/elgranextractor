@@ -94,6 +94,27 @@ class ClientReportTests(SimpleTestCase):
         self.assertIsNone(data['values'])
         self.assertNotIn('expectation', data)
 
+    def test_manual_value_emits_reports_when_automatic_valuation_is_unavailable(self):
+        manual = {
+            'new': None,
+            'model': 'built',
+            'reference_mode': True,
+            'status': 'insufficient',
+            'land_unit': None,
+            'zone_land': None,
+        }
+        self.p['manual_valuation'] = 180000
+        self.p['report_notes'] = 'Valor adoptado por el agente luego de revisar las referencias.'
+        pdf = _pdf_text(build_acm_pdf(
+            self.p, self.rows, manual, fetch_images=False,
+        )).decode('latin1')
+        word = self.word_text(build_acm_docx(
+            self.p, self.rows, manual, fetch_images=False,
+        ))
+        for text in (pdf, word):
+            self.assertIn('180,000', text)
+            self.assertIn('Valor adoptado por el agente', text)
+
     def test_long_observations_are_preserved_in_both_formats(self):
         self.p['report_notes'] = '\n'.join('Observación '+str(i)+': ubicación y conservación revisadas.' for i in range(100))
         pdf = _pdf_text(build_acm_pdf(self.p, self.rows, self.result, fetch_images=False))

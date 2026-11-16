@@ -411,6 +411,8 @@ def word_report(request):
         if state['params'].get('report_ids')==[]:
             return JsonResponse({'error':'Marca al menos una propiedad para incluirla en el informe.'},status=422)
         result=calculate(state['records'],state['params'],excluded)
+        if not result.get('new') and state['params'].get('manual_valuation') is None:
+            return JsonResponse({'error':'Ingresa un valor ajustado antes de emitir el informe Word.'},status=422)
         history,_=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
         from .components_report import build_acm_docx
         safe,visible_result,visible_excluded=project(request,state,result,excluded,report=True)
@@ -442,6 +444,8 @@ def pdf_report(request):
                 and not str(state['params'].get('report_notes','')).strip()):
             return JsonResponse({'error':'Escribe la justificación u observaciones antes de emitir el informe PDF.'},status=422)
         result=calculate(state['records'],state['params'],excluded)
+        if not result.get('new') and state['params'].get('manual_valuation') is None:
+            return JsonResponse({'error':'Ingresa un valor ajustado antes de emitir el informe PDF.'},status=422)
         history,_=_persist_history(session_user(request),state['params'],state['records'],result,excluded)
         from .components_pdf import build_acm_pdf
         safe,visible_result,visible_excluded=project(request,state,result,excluded,report=True)
