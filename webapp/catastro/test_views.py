@@ -100,14 +100,16 @@ class DashboardTests(TestCase):
         with patch('catastro.views.start_job',return_value='example-job') as start:
             response=self.client.post('/catastro/api/start/',data=json.dumps({'ubigeo':'040117','limit':10,'credentials':'ignored'}),content_type='application/json')
             self.assertEqual(response.status_code,202)
-            start.assert_called_once_with('040117',10,None,False,workers=None)
+            start.assert_called_once_with(
+                '040117',10,None,False,workers=None,auto_migrate=False)
 
     def test_default_request_downloads_whole_district_without_a_limit(self):
         self.client.force_login(self.admin)
         with patch('catastro.views.start_job',return_value='district-job') as start:
             response=self.client.post('/catastro/api/start/',data=json.dumps({'ubigeo':'040117'}),content_type='application/json')
             self.assertEqual(response.status_code,202)
-            start.assert_called_once_with('040117',None,None,False,workers=None)
+            start.assert_called_once_with(
+                '040117',None,None,False,workers=None,auto_migrate=False)
 
     def test_selected_parallelism_is_persisted_and_out_of_range_requests_do_not_launch(self):
         self.client.force_login(self.admin)

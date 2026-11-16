@@ -22,7 +22,10 @@ Publish the payroll visibility correction: active workers appear in
 generated. Viewing the page does not create payroll rows.
 
 No infrastructure, RBAC, runtime settings, dependencies or database migrations
-change. The two reviewed commits are `85251dc5` and `4e7535d6`.
+change. The original reviewed commits are `85251dc5` and `4e7535d6`.
+The follow-up CI repair only updates two stale Catastro test expectations for
+the existing `auto_migrate=False` job contract; it does not change application
+behavior.
 
 ## All validation checks pass
 - Fetch current `origin/main` and confirm the release remains based on the
@@ -63,6 +66,12 @@ scoped revert through the same pipeline.
   state `Running`.
 - Bicep/Terraform and role-code review are not applicable because this
   application-only release changes no infrastructure or RBAC.
+- Reproduced the common CI failure from runs `43900806727` and `43754003605`:
+  `catastro.test_views` expected the pre-existing `start_job` call without
+  `auto_migrate=False`.
+- After updating those two test expectations, the exact failing workflow suite
+  `catastro.test_parallel catastro.test_collector catastro.test_external_worker
+  catastro.test_views --settings=catastro.test_settings` passed all 59 tests.
 
 ---
 
