@@ -17,6 +17,17 @@
         const polygons=geometry.type==='Polygon'?[geometry.coordinates]:geometry.coordinates;
         return polygons.some(rings=>ringContains(point,rings[0])&&!rings.slice(1).some(r=>ringContains(point,r)));
     }
+    function geometryCenter(geometry) {
+        if(!geometry)return null;
+        const parts=geometry.type==='Polygon'?[geometry.coordinates]:
+            geometry.type==='MultiPolygon'?geometry.coordinates:
+            geometry.type==='LineString'?[[geometry.coordinates]]:
+            geometry.type==='MultiLineString'?geometry.coordinates.map(line=>[line]):[];
+        const points=parts.flat(2).filter(point=>Array.isArray(point)&&Number.isFinite(Number(point[0]))&&Number.isFinite(Number(point[1])));
+        if(!points.length)return null;
+        return {lat:points.reduce((sum,point)=>sum+Number(point[1]),0)/points.length,
+            lng:points.reduce((sum,point)=>sum+Number(point[0]),0)/points.length};
+    }
     function record(feature,source,key) {
         const geometry=feature.geometry;
         if(!['Polygon','MultiPolygon','LineString','MultiLineString'].includes(geometry?.type))return null;
@@ -40,7 +51,7 @@
     const el=id=>document.getElementById('master-'+id);
     if(!el('workspace'))return;
     const fmt=n=>n.toLocaleString('es-PE');
-    let map,vectorLayer,catalog,district,controller,selected=null,selectedFeature=null,detailRequest=0;
+    let map,vectorLayer,catalog,district,controller,selected=null,selectedFeature=null,detailRequest=0,selectionMarker=null,streetView=null;
     let cataloguePromise=null;
     const collections=new Map(),enabled=new Map(),pending=new Map();
     const dataFeatures=new Map();
@@ -233,6 +244,8 @@
     }
     function closeDetailCard(deselect=true) {
         ++detailRequest;
+        streetView?.destroy();streetView=null;
+        selectionMarker?.setMap(null);selectionMarker=null;
         const card=el('detail-card');
         if(card)card.hidden=true;
         if(deselect){
@@ -450,10 +463,34 @@
             photo.addEventListener('error',()=>{photo.remove();showEmptyHero();},{once:true});
             photo.src=galleryItems[0].url;photoBox.append(photo);
         }else showEmptyHero();
+        const streetSection=document.createElement('section');
+        streetSection.className='master-dossier-street';streetSection.hidden=true;
+        streetSection.setAttribute('aria-label','Street View orientado hacia el marcador del lote');
+        const streetLabel=document.createElement('span');streetLabel.className='master-dossier-media-label';
+        streetLabel.append(document.createTextNode('Street View'));
+        const streetDate=document.createElement('time');streetDate.id='master-street-date';streetDate.hidden=true;streetLabel.append(streetDate);
+        const streetPreview=document.createElement('div');streetPreview.id='master-street-preview';streetPreview.className='master-street-preview';streetPreview.hidden=true;
+        const streetStatus=document.createElement('p');streetStatus.id='master-street-status';streetStatus.className='master-dossier-street-status';streetStatus.setAttribute('role','status');streetStatus.setAttribute('aria-live','polite');
+        const streetActions=document.createElement('div');streetActions.className='master-dossier-street-actions';
+        const streetOpen=document.createElement('button');streetOpen.id='master-street-open';streetOpen.type='button';streetOpen.textContent='Ampliar Street View';streetOpen.hidden=true;
+        const streetRetry=document.createElement('button');streetRetry.id='master-street-retry';streetRetry.type='button';streetRetry.textContent='Volver a consultar';streetRetry.hidden=true;
+        streetActions.append(streetOpen,streetRetry);streetSection.append(streetLabel,streetPreview,streetStatus,streetActions);
+        const heroMediaBox=document.createElement('div');heroMediaBox.className='master-dossier-media';
+        heroMediaBox.append(photoBox,streetSection);
         const heroCopy=document.createElement('div');heroCopy.className='master-dossier-hero-copy';
         const heroTitle=document.createElement('h2');heroTitle.textContent='Lote '+(attributes.lot||item.feature?.properties?.COD_LOTE||data.lot_id.slice(-3));
         const heroLine=document.createElement('p');heroLine.textContent=[attributes.district||districtLabel(sourceDistrict(item.source)),attributes.sector&&('Sector '+attributes.sector),attributes.block&&('Mz. '+attributes.block),'Lote '+(attributes.lot||data.lot_id.slice(-3))].filter(Boolean).join(' · ');
-        heroCopy.append(heroTitle,heroLine);hero.append(photoBox,heroCopy);host.append(hero);
+        heroCopy.append(heroTitle,heroLine);hero.append(heroMediaBox,heroCopy);host.append(hero);
+        streetView?.destroy();
+        streetView=window.StreetFacadeView?.create(map,{
+            section:streetSection,preview:streetPreview,status:streetStatus,
+            open:streetOpen,retry:streetRetry,date:streetDate
+        },{
+            targetLabel:'el marcador',
+            targetInstruction:'Selecciona el lote en un punto más cercano a la calle para orientar Street View.'
+        })||null;
+        const markerPosition=selectionMarker?.getPosition?.();
+        if(streetView&&markerPosition)streetView.queue(markerPosition);
         const tabList=document.createElement('div');tabList.className='master-dossier-tabs';tabList.setAttribute('role','tablist');tabList.setAttribute('aria-label','Información del lote');
         const panelHost=document.createElement('div');panelHost.className='master-dossier-panels';host.append(tabList,panelHost);
         const tabs=[];
@@ -608,6 +645,14 @@
     function selectFeature(item,feature) {
         if(selectedFeature&&selectedFeature!==feature)vectorLayer.revertStyle(selectedFeature);
         selected=item;selectedFeature=feature;
+        selectionMarker?.setMap(null);selectionMarker=null;
+        if(item?.key==='lotes'&&map){
+            const center=geometryCenter(item.feature?.geometry);
+            if(center)selectionMarker=new google.maps.Marker({
+                map,position:center,title:'Marcador del lote seleccionado',
+                zIndex:100000
+            });
+        }
         if(feature)vectorLayer.overrideStyle(feature,{
             visible:true,fillColor:'#ffff55',fillOpacity:.2,strokeColor:'#ffffff',
             strokeOpacity:1,strokeWeight:3,clickable:true
