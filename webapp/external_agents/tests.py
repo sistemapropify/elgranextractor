@@ -828,6 +828,15 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'Total del monto')
         self.assertContains(response, 'class="fx-total-label-wrap"')
         self.assertContains(response, 'id="fxTotals"')
+        self.assertContains(response, 'id="fxSummaryIncome"')
+        self.assertContains(response, 'id="fxSummaryExpense"')
+        self.assertContains(response, 'id="fxSummaryProfitability"')
+        self.assertContains(response, '.fx-summary-income strong')
+        self.assertContains(response, 'color: #79c0ff')
+        self.assertContains(response, '.fx-summary-expense strong')
+        self.assertContains(response, 'color: #ff6b64')
+        self.assertContains(response, "row.dataset.month !== selectedMonth")
+        self.assertContains(response, 'updateBalanceSummary();')
         self.assertNotContains(response, 'class="fx-total-row"')
         self.assertNotContains(response, 'Suma visible')
         self.assertNotContains(
@@ -844,6 +853,19 @@ class ExternalAgentsViewsTests(TestCase):
         )
         rows = response.context['rows']
         self.assertEqual(response.context['total_count'], 8)
+        commission_income_row = next(
+            row
+            for row in rows
+            if row['category'] == 'Cobro · Venta'
+        )
+        self.assertEqual(
+            commission_income_row['summary_income_usd'],
+            Decimal('500.00'),
+        )
+        self.assertEqual(
+            commission_income_row['summary_expense_usd'],
+            Decimal('300.00'),
+        )
         self.assertEqual(
             {row['module'] for row in rows},
             {'Comisiones', 'Servicios', 'Gastos fijos', 'Marketing', 'Planillas'},

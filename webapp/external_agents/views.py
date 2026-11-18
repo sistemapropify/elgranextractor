@@ -2127,12 +2127,23 @@ def _financial_simulator_row(
     reference='',
     notes='',
     module_class='',
+    summary_income_usd=Decimal('0'),
+    summary_expense_usd=Decimal('0'),
 ):
     amount_value = Decimal(amount or 0).quantize(Decimal('0.01'))
     display_status, status_class = _financial_simulator_status(
         status,
         status_label,
         due_date,
+    )
+    if status_class == 'annulled':
+        summary_income_usd = Decimal('0')
+        summary_expense_usd = Decimal('0')
+    summary_income_value = Decimal(summary_income_usd or 0).quantize(
+        Decimal('0.01')
+    )
+    summary_expense_value = Decimal(summary_expense_usd or 0).quantize(
+        Decimal('0.01')
     )
     month = _month_start(
         corresponding_month or due_date or payment_date
@@ -2159,6 +2170,10 @@ def _financial_simulator_row(
         'status': display_status,
         'status_class': status_class,
         'include_in_total': status_class != 'annulled',
+        'summary_income_usd': summary_income_value,
+        'summary_income_usd_value': f'{summary_income_value:.2f}',
+        'summary_expense_usd': summary_expense_value,
+        'summary_expense_usd_value': f'{summary_expense_value:.2f}',
         'responsible': responsible or '',
         'reference': reference or '',
         'notes': notes or '',
@@ -2169,6 +2184,16 @@ def _financial_simulator_row(
 @external_agent_access_required
 def financial_excel_simulator(request):
     rows = []
+    pen_per_usd, _, _ = _usd_pen_rate()
+    usd_per_eur, _, _ = _usd_eur_rate()
+
+    def to_usd(amount, currency):
+        return _amount_to_usd(
+            amount,
+            currency,
+            pen_per_usd,
+            usd_per_eur,
+        )
 
     collections = (
         CommissionCollection.objects
@@ -2210,6 +2235,14 @@ def financial_excel_simulator(request):
             responsible=collection.created_by_username,
             reference=collection.operation_code,
             notes=detail_notes,
+            summary_income_usd=to_usd(
+                collection.amount_for_propify,
+                collection.currency_code,
+            ),
+            summary_expense_usd=to_usd(
+                collection.amount_for_agents,
+                collection.currency_code,
+            ),
         ))
         for entry in entries:
             rows.append(_financial_simulator_row(
@@ -2292,6 +2325,10 @@ def financial_excel_simulator(request):
                 f'Pagado {payment.currency_code} {payment.paid_amount:,.2f} · '
                 f'{payment.get_recurrence_display()}. {payment.notes}'
             ).strip(),
+            summary_expense_usd=to_usd(
+                effective_amount,
+                payment.currency_code,
+            ),
         ))
 
     operating_expenses = OperatingExpense.objects.order_by('-due_date', '-pk')
@@ -2325,6 +2362,10 @@ def financial_excel_simulator(request):
                 f'Pagado {expense.currency_code} {expense.paid_amount:,.2f} · '
                 f'{expense.get_recurrence_display()}. {expense.notes}'
             ).strip(),
+            summary_expense_usd=to_usd(
+                effective_amount,
+                expense.currency_code,
+            ),
         ))
 
     payroll_entries = PayrollEntry.objects.select_related('employee').order_by(
@@ -2356,6 +2397,10 @@ def financial_excel_simulator(request):
                 f'EsSalud {entry.currency_code} {entry.essalud_amount:,.2f}. '
                 f'{entry.notes}'
             ).strip(),
+            summary_expense_usd=to_usd(
+                entry.employer_cost,
+                entry.currency_code,
+            ),
         ))
 
     current_period = timezone.localdate().replace(day=1)

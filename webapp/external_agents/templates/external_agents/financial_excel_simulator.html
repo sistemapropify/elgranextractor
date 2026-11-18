@@ -79,6 +79,51 @@
         white-space: nowrap;
     }
 
+    .fx-balance-summary {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        white-space: nowrap;
+    }
+
+    .fx-balance-item {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 5px;
+        color: #8b949e;
+        font-size: 9px;
+        font-weight: 750;
+        letter-spacing: .035em;
+        text-transform: uppercase;
+    }
+
+    .fx-balance-item + .fx-balance-item {
+        padding-left: 12px;
+        border-left: 1px solid #30363d;
+    }
+
+    .fx-balance-item strong {
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .fx-summary-income strong {
+        color: #79c0ff;
+    }
+
+    .fx-summary-expense strong {
+        color: #ff6b64;
+    }
+
+    .fx-summary-profitability strong.positive {
+        color: #56d364;
+    }
+
+    .fx-summary-profitability strong.negative {
+        color: #ff6b64;
+    }
+
     .fx-actions {
         display: flex;
         align-items: center;
@@ -422,6 +467,11 @@
     <div class="fx-toolbar-copy">
         <strong>Simulador Excel</strong>
         <span class="fx-visible"><span id="fxVisibleCount">{{ total_count }}</span>&nbsp;de&nbsp;<span id="fxTotalCount">{{ total_count }}</span></span>
+        <div class="fx-balance-summary" id="fxBalanceSummary" aria-live="polite">
+            <span class="fx-balance-item fx-summary-income">Ingresos <strong id="fxSummaryIncome">USD 0</strong></span>
+            <span class="fx-balance-item fx-summary-expense">Egresos <strong id="fxSummaryExpense">USD 0</strong></span>
+            <span class="fx-balance-item fx-summary-profitability">Rentabilidad <strong class="positive" id="fxSummaryProfitability">0.0%</strong></span>
+        </div>
     </div>
     <div class="fx-actions">
         <button class="ea-btn ea-btn-small" id="fxReset" type="button">Limpiar filtros</button>
@@ -463,6 +513,8 @@
                 data-amount="{{ row.amount_value }}"
                 data-currency="{{ row.currency }}"
                 data-include-total="{% if row.include_in_total %}1{% else %}0{% endif %}"
+                data-summary-income-usd="{{ row.summary_income_usd_value }}"
+                data-summary-expense-usd="{{ row.summary_expense_usd_value }}"
             >
                 <td class="fx-month" data-value="{{ row.month_value }}">{{ row.month_text }}</td>
                 <td class="fx-muted" data-value="{{ row.due_date_value }}">{{ row.due_date_text }}</td>
@@ -502,12 +554,25 @@
     const totalCount = document.getElementById('fxTotalCount');
     const totals = document.getElementById('fxTotals');
     const noData = document.getElementById('fxNoData');
+    const balanceSummary = document.getElementById('fxBalanceSummary');
+    const summaryIncome = document.getElementById('fxSummaryIncome');
+    const summaryExpense = document.getElementById('fxSummaryExpense');
+    const summaryProfitability = document.getElementById('fxSummaryProfitability');
+    const monthFilter = filters.find(input => input.dataset.filter === 'month');
     let sortKey = 'month';
     let sortDirection = 'desc';
 
     const numberFormatter = new Intl.NumberFormat('es-PE', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
+    });
+    const balanceFormatter = new Intl.NumberFormat('es-PE', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    });
+    const percentageFormatter = new Intl.NumberFormat('es-PE', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
     });
     const currencyOrder = new Map([
         ['USD', 0],
@@ -625,6 +690,34 @@
         totals.innerHTML = amounts;
     }
 
+    function updateBalanceSummary() {
+        const selectedMonth = monthFilter?.value || '';
+        let income = 0;
+        let expense = 0;
+
+        rows.forEach(row => {
+            if (selectedMonth && row.dataset.month !== selectedMonth) {
+                return;
+            }
+            const rowIncome = parseAmount(row.dataset.summaryIncomeUsd);
+            const rowExpense = parseAmount(row.dataset.summaryExpenseUsd);
+            if (rowIncome !== null) income += rowIncome;
+            if (rowExpense !== null) expense += rowExpense;
+        });
+
+        const profitability = income > 0
+            ? ((income - expense) / income) * 100
+            : 0;
+        summaryIncome.textContent = `USD ${balanceFormatter.format(income)}`;
+        summaryExpense.textContent = `USD ${balanceFormatter.format(expense)}`;
+        summaryProfitability.textContent = `${percentageFormatter.format(profitability)}%`;
+        summaryProfitability.classList.toggle('positive', profitability >= 0);
+        summaryProfitability.classList.toggle('negative', profitability < 0);
+        balanceSummary.title = selectedMonth
+            ? `Resumen del balance para ${selectedMonth}`
+            : 'Resumen del balance de todos los meses';
+    }
+
     function applyView() {
         const activeFilters = filters
             .map(input => ({
@@ -669,6 +762,7 @@
             visibleRows.length === 0 && rows.length === 0,
         );
         updateTotals(visibleRows);
+        updateBalanceSummary();
         updateSortIndicators();
     }
 
