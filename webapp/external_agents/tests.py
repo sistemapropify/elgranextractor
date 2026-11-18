@@ -774,6 +774,34 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'data-filter="dueText"')
         self.assertContains(response, 'data-sort-key="amount"')
         self.assertContains(response, 'id="fxCsv"')
+        self.assertEqual(
+            response.content.count(b'class="fx-sort"'),
+            5,
+        )
+        for heading in (
+            'Fecha de vencimiento',
+            'Categoría',
+            'Concepto',
+            'Fecha de pago',
+            'Monto',
+        ):
+            self.assertContains(response, heading)
+        for removed_sort_key in (
+            'module',
+            'currency',
+            'status',
+            'responsible',
+            'reference',
+            'notes',
+        ):
+            self.assertNotContains(
+                response,
+                f'data-sort-key="{removed_sort_key}"',
+            )
+        self.assertContains(response, 'scrollbar-width: auto')
+        self.assertContains(response, '::-webkit-scrollbar')
+        self.assertContains(response, 'height: max(560px')
+        self.assertContains(response, 'min-width: 1080px')
         rows = response.context['rows']
         self.assertEqual(response.context['total_count'], 8)
         self.assertEqual(

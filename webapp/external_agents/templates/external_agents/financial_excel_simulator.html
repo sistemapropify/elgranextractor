@@ -148,17 +148,47 @@
 
     .fx-sheet-wrap {
         overflow: auto;
-        max-height: calc(100vh - 315px);
-        min-height: 390px;
+        height: max(560px, calc(100vh - 285px));
+        height: max(560px, calc(100dvh - 285px));
+        min-height: 560px;
+        max-height: none;
         border: 1px solid var(--ea-border);
         border-radius: 0 0 13px 13px;
         background: #fff;
         box-shadow: 0 18px 45px rgba(0, 0, 0, .22);
+        scrollbar-color: #1f7a4a #e7eee9;
+        scrollbar-width: auto;
+        scrollbar-gutter: stable both-edges;
+    }
+
+    .fx-sheet-wrap::-webkit-scrollbar {
+        width: 18px;
+        height: 18px;
+    }
+
+    .fx-sheet-wrap::-webkit-scrollbar-track {
+        background: #e7eee9;
+    }
+
+    .fx-sheet-wrap::-webkit-scrollbar-thumb {
+        min-width: 56px;
+        min-height: 56px;
+        border: 3px solid #e7eee9;
+        border-radius: 999px;
+        background: #1f7a4a;
+    }
+
+    .fx-sheet-wrap::-webkit-scrollbar-thumb:hover {
+        background: #155b37;
+    }
+
+    .fx-sheet-wrap::-webkit-scrollbar-corner {
+        background: #e7eee9;
     }
 
     .fx-sheet {
-        width: max-content;
-        min-width: 100%;
+        width: 100%;
+        min-width: 1080px;
         border-collapse: separate;
         border-spacing: 0;
         table-layout: fixed;
@@ -306,40 +336,11 @@
         background: #fff;
     }
 
-    .fx-sheet .col-index { width: 46px; }
-    .fx-sheet .col-module { width: 128px; }
-    .fx-sheet .col-date { width: 120px; }
-    .fx-sheet .col-category { width: 185px; }
-    .fx-sheet .col-concept { width: 280px; }
-    .fx-sheet .col-amount { width: 125px; }
-    .fx-sheet .col-currency { width: 85px; }
-    .fx-sheet .col-status { width: 135px; }
-    .fx-sheet .col-responsible { width: 175px; }
-    .fx-sheet .col-reference { width: 145px; }
-    .fx-sheet .col-notes { width: 330px; }
-
-    .fx-row-number {
-        color: #8a9891;
-        font-size: 10px;
-        text-align: center;
-    }
-
-    .fx-module {
-        display: inline-flex;
-        align-items: center;
-        min-height: 23px;
-        padding: 0 8px;
-        border-radius: 5px;
-        font-size: 10px;
-        font-weight: 800;
-        white-space: nowrap;
-    }
-
-    .fx-module.commissions { background: #e8e5ff; color: #5843b8; }
-    .fx-module.services { background: #e2f1ff; color: #1767a8; }
-    .fx-module.fixed { background: #f1eee6; color: #625842; }
-    .fx-module.marketing { background: #ffe7ef; color: #a52a5b; }
-    .fx-module.payroll { background: #e4f5e8; color: #237a3b; }
+    .fx-sheet .col-due-date { width: 17%; }
+    .fx-sheet .col-category { width: 20%; }
+    .fx-sheet .col-concept { width: 32%; }
+    .fx-sheet .col-payment-date { width: 16%; }
+    .fx-sheet .col-amount { width: 15%; }
 
     .fx-concept {
         color: #172b23;
@@ -350,48 +351,12 @@
         color: #687a72;
     }
 
-    .fx-notes {
-        display: block;
-        max-width: 310px;
-        overflow: hidden;
-        color: #687a72;
-        line-height: 1.35;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
     .fx-num {
         font-variant-numeric: tabular-nums;
         font-weight: 800;
         text-align: right;
         white-space: nowrap;
     }
-
-    .fx-status {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        min-height: 24px;
-        padding: 0 8px;
-        border-radius: 999px;
-        font-size: 10px;
-        font-weight: 800;
-        white-space: nowrap;
-    }
-
-    .fx-status::before {
-        content: "";
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: currentColor;
-    }
-
-    .fx-status.paid { background: #e2f5e8; color: #1f7a3a; }
-    .fx-status.pending { background: #fff1cc; color: #8b5d00; }
-    .fx-status.overdue { background: #ffe3e1; color: #b42318; }
-    .fx-status.partial { background: #e5efff; color: #225ba8; }
-    .fx-status.annulled { background: #eceeed; color: #65706b; }
 
     .fx-empty {
         display: none;
@@ -464,9 +429,7 @@
             grid-column: 1 / -1;
         }
 
-        .fx-sheet-wrap {
-            max-height: none;
-        }
+        .fx-sheet-wrap { height: 620px; }
     }
 
     @media (max-width: 680px) {
@@ -501,7 +464,7 @@
         <span class="fx-note-icon" aria-hidden="true">▧</span>
         <div>
             <strong>Hoja de trabajo, no asiento contable</strong>
-            Consolida los registros existentes de Gestión Financiera. Cada fila conserva su módulo de origen y los importes pagados usan el monto real registrado.
+            Consolida los registros existentes de Gestión Financiera en una sola hoja filtrable por vencimiento, categoría, concepto, fecha de pago y monto.
         </div>
     </div>
     <div class="fx-stat">
@@ -534,39 +497,23 @@
     <table class="fx-sheet" id="fxSheet" aria-label="Simulador Excel de Gestión Financiera">
         <thead>
             <tr class="fx-head-row">
-                <th class="col-index" scope="col"><button class="fx-sort" type="button" data-sort-key="index" aria-label="Ordenar por número de fila">#<span class="fx-sort-indicator"></span></button></th>
-                <th class="col-module" scope="col"><button class="fx-sort" type="button" data-sort-key="module" aria-label="Ordenar por módulo">Módulo<span class="fx-sort-indicator"></span></button></th>
-                <th class="col-date" scope="col"><button class="fx-sort" type="button" data-sort-key="dueDate" aria-label="Ordenar por fecha de vencimiento">Vencimiento<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-due-date" scope="col"><button class="fx-sort" type="button" data-sort-key="dueDate" aria-label="Ordenar por fecha de vencimiento">Fecha de vencimiento<span class="fx-sort-indicator"></span></button></th>
                 <th class="col-category" scope="col"><button class="fx-sort" type="button" data-sort-key="category" aria-label="Ordenar por categoría">Categoría<span class="fx-sort-indicator"></span></button></th>
                 <th class="col-concept" scope="col"><button class="fx-sort" type="button" data-sort-key="concept" aria-label="Ordenar por concepto">Concepto<span class="fx-sort-indicator"></span></button></th>
-                <th class="col-date" scope="col"><button class="fx-sort" type="button" data-sort-key="paymentDate" aria-label="Ordenar por fecha de pago">Fecha de pago<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-payment-date" scope="col"><button class="fx-sort" type="button" data-sort-key="paymentDate" aria-label="Ordenar por fecha de pago">Fecha de pago<span class="fx-sort-indicator"></span></button></th>
                 <th class="col-amount" scope="col"><button class="fx-sort" type="button" data-sort-key="amount" aria-label="Ordenar por monto">Monto<span class="fx-sort-indicator"></span></button></th>
-                <th class="col-currency" scope="col"><button class="fx-sort" type="button" data-sort-key="currency" aria-label="Ordenar por moneda">Moneda<span class="fx-sort-indicator"></span></button></th>
-                <th class="col-status" scope="col"><button class="fx-sort" type="button" data-sort-key="status" aria-label="Ordenar por estado">Estado<span class="fx-sort-indicator"></span></button></th>
-                <th class="col-responsible" scope="col"><button class="fx-sort" type="button" data-sort-key="responsible" aria-label="Ordenar por responsable">Responsable<span class="fx-sort-indicator"></span></button></th>
-                <th class="col-reference" scope="col"><button class="fx-sort" type="button" data-sort-key="reference" aria-label="Ordenar por referencia">Referencia<span class="fx-sort-indicator"></span></button></th>
-                <th class="col-notes" scope="col"><button class="fx-sort" type="button" data-sort-key="notes" aria-label="Ordenar por observaciones">Observaciones<span class="fx-sort-indicator"></span></button></th>
             </tr>
             <tr class="fx-filter-row">
-                <th><span class="fx-muted" style="display:block;text-align:center">—</span></th>
-                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="module" aria-label="Filtrar módulo" placeholder="Filtrar…"><button class="fx-clear-one" type="button" data-clear="module" aria-label="Limpiar filtro de módulo">×</button></div></th>
                 <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="dueText" aria-label="Filtrar vencimiento" placeholder="dd/mm/aaaa"><button class="fx-clear-one" type="button" data-clear="dueText" aria-label="Limpiar filtro de vencimiento">×</button></div></th>
                 <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="category" aria-label="Filtrar categoría" placeholder="Filtrar…"><button class="fx-clear-one" type="button" data-clear="category" aria-label="Limpiar filtro de categoría">×</button></div></th>
                 <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="concept" aria-label="Filtrar concepto" placeholder="Buscar concepto…"><button class="fx-clear-one" type="button" data-clear="concept" aria-label="Limpiar filtro de concepto">×</button></div></th>
                 <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="paymentText" aria-label="Filtrar fecha de pago" placeholder="dd/mm/aaaa"><button class="fx-clear-one" type="button" data-clear="paymentText" aria-label="Limpiar filtro de fecha de pago">×</button></div></th>
                 <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="amount" aria-label="Filtrar monto" placeholder="Importe"><button class="fx-clear-one" type="button" data-clear="amount" aria-label="Limpiar filtro de monto">×</button></div></th>
-                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="currency" aria-label="Filtrar moneda" placeholder="PEN"><button class="fx-clear-one" type="button" data-clear="currency" aria-label="Limpiar filtro de moneda">×</button></div></th>
-                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="status" aria-label="Filtrar estado" placeholder="Estado"><button class="fx-clear-one" type="button" data-clear="status" aria-label="Limpiar filtro de estado">×</button></div></th>
-                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="responsible" aria-label="Filtrar responsable" placeholder="Responsable"><button class="fx-clear-one" type="button" data-clear="responsible" aria-label="Limpiar filtro de responsable">×</button></div></th>
-                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="reference" aria-label="Filtrar referencia" placeholder="Referencia"><button class="fx-clear-one" type="button" data-clear="reference" aria-label="Limpiar filtro de referencia">×</button></div></th>
-                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="notes" aria-label="Filtrar observaciones" placeholder="Buscar observación…"><button class="fx-clear-one" type="button" data-clear="notes" aria-label="Limpiar filtro de observaciones">×</button></div></th>
             </tr>
         </thead>
         <tbody id="fxRows">
             {% for row in rows %}
             <tr
-                data-index="{{ forloop.counter }}"
-                data-module="{{ row.module }}"
                 data-due-date="{{ row.due_date_value }}"
                 data-due-text="{{ row.due_date_text }}"
                 data-category="{{ row.category }}"
@@ -575,24 +522,13 @@
                 data-payment-text="{{ row.payment_date_text }}"
                 data-amount="{{ row.amount }}"
                 data-currency="{{ row.currency }}"
-                data-status="{{ row.status }}"
-                data-responsible="{{ row.responsible }}"
-                data-reference="{{ row.reference }}"
-                data-notes="{{ row.notes }}"
                 data-include-total="{% if row.include_in_total %}1{% else %}0{% endif %}"
             >
-                <td class="fx-row-number" data-value="{{ forloop.counter }}">{{ forloop.counter }}</td>
-                <td><span class="fx-module {{ row.module_class }}">{{ row.module }}</span></td>
                 <td class="fx-muted" data-value="{{ row.due_date_value }}">{{ row.due_date_text }}</td>
                 <td data-value="{{ row.category }}">{{ row.category }}</td>
                 <td class="fx-concept" data-value="{{ row.concept }}">{{ row.concept }}</td>
                 <td class="fx-muted" data-value="{{ row.payment_date_value }}">{{ row.payment_date_text }}</td>
                 <td class="fx-num" data-value="{{ row.amount }}">{{ row.currency }} {{ row.amount|floatformat:2|intcomma }}</td>
-                <td data-value="{{ row.currency }}">{{ row.currency }}</td>
-                <td data-value="{{ row.status }}"><span class="fx-status {{ row.status_class }}">{{ row.status }}</span></td>
-                <td data-value="{{ row.responsible }}">{{ row.responsible|default:"—" }}</td>
-                <td data-value="{{ row.reference }}">{{ row.reference|default:"—" }}</td>
-                <td data-value="{{ row.notes }}"><span class="fx-notes" title="{{ row.notes }}">{{ row.notes|default:"—" }}</span></td>
             </tr>
             {% endfor %}
         </tbody>
@@ -656,9 +592,6 @@
     }
 
     function getSortValue(row, key) {
-        if (key === 'index') {
-            return Number(row.dataset.index);
-        }
         if (key === 'amount') {
             return Number(row.dataset.amount);
         }
@@ -781,7 +714,7 @@
                 sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
             } else {
                 sortKey = nextKey;
-                sortDirection = ['amount', 'index', 'dueDate', 'paymentDate'].includes(nextKey)
+                sortDirection = ['amount', 'dueDate', 'paymentDate'].includes(nextKey)
                     ? 'desc'
                     : 'asc';
             }
