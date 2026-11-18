@@ -148,7 +148,11 @@ def _read_meta(gateway, key):
 def _oversize(error):
     text = str(error)
     return any(marker in text for marker in (
-        '12 MB', '413', 'overloaded', 'Divide la versión', 'excede los límites'))
+        '12 MB', '413', 'Divide la versión', 'excede los límites'))
+
+
+def _overloaded(error):
+    return 'overloaded' in str(error).lower()
 
 
 def _commit_cursor(gateway, key, value, actor):
@@ -179,6 +183,7 @@ def _commit_cursor(gateway, key, value, actor):
                 ],
                 'result': {'revision': next_revision, 'key': key},
             })
+            time.sleep(0.5)
             return
         except master_store.Conflict:
             time.sleep(attempt + 1)
@@ -282,7 +287,14 @@ def _commit_chunk(gateway, ubigeo, district, chunk, actor, created_at,
             'Formalización · ' + ubigeo,
             digest, digest, created_at, str(actor)[:160],
             master_store.encoded({
-                'records': [item[1] for item in chunk],
+                'records': [
+                    {
+                        'ID_PREDIO_RPU': item[1].get('ID_PREDIO_RPU'),
+                        'object_key': item[2],
+                        'sha256': item[3],
+                    }
+                    for item in chunk
+                ],
             }),
         ]],
         'deletes': [],
@@ -443,6 +455,7 @@ def _commit_chunk(gateway, ubigeo, district, chunk, actor, created_at,
                     'records': len(chunk),
                 },
             })
+            time.sleep(1.0)
             source_exists = True
             break
         except master_store.Conflict:
@@ -465,26 +478,33 @@ def _process_chunk_adaptive(gateway, ubigeo, district, chunk, actor,
                             cursor_key):
     if not chunk:
         return {'records': 0, 'batches': []}, source_exists
-    try:
-        result = _commit_chunk(
-            gateway, ubigeo, district, chunk, actor, created_at,
-            source_id, source_exists, cursor_key=cursor_key,
-            cursor_value=chunk[-1][2])
-        return result, result['source_exists']
-    except (StorageError, ValueError) as error:
-        if not _oversize(error) or len(chunk) <= 1:
-            raise
-        middle = len(chunk) // 2
-        left, left_exists = _process_chunk_adaptive(
-            gateway, ubigeo, district, chunk[:middle], actor, created_at,
-            source_id, source_exists, cursor_key)
-        right, right_exists = _process_chunk_adaptive(
-            gateway, ubigeo, district, chunk[middle:], actor, created_at,
-            source_id, left_exists, cursor_key)
-        return {
-            'records': left['records'] + right['records'],
-            'batches': left['batches'] + right['batches'],
-        }, right_exists
+    for overload_attempt in range(3):
+        try:
+            result = _commit_chunk(
+                gateway, ubigeo, district, chunk, actor, created_at,
+                source_id, source_exists, cursor_key=cursor_key,
+                cursor_value=chunk[-1][2])
+            return result, result['source_exists']
+        except (StorageError, ValueError) as error:
+            if _overloaded(error):
+                if overload_attempt == 2:
+                    raise
+                time.sleep(11)
+                continue
+            if not _oversize(error) or len(chunk) <= 1:
+                raise
+            break
+    middle = len(chunk) // 2
+    left, left_exists = _process_chunk_adaptive(
+        gateway, ubigeo, district, chunk[:middle], actor, created_at,
+        source_id, source_exists, cursor_key)
+    right, right_exists = _process_chunk_adaptive(
+        gateway, ubigeo, district, chunk[middle:], actor, created_at,
+        source_id, left_exists, cursor_key)
+    return {
+        'records': left['records'] + right['records'],
+        'batches': left['batches'] + right['batches'],
+    }, right_exists
 
 
 def _migrate_source(gateway, ubigeo, district, lots, cloud, source,

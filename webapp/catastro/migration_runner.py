@@ -269,12 +269,13 @@ def _run(ubigeo, actor, batch_size, job_id, progress=None):
                 advanced = processed > 0
                 batch_revision = result.get('batch_revision')
             elif formal_lots and not details_imported:
+                details_batch_size = min(max(int(batch_size) // 5, 10), 20)
                 details_import = migrate_formalization_details(
                     gateway,
                     ubigeo,
                     geollaqta.DISTRICTS[ubigeo]['name'],
                     formal_lots,
-                    batch_size=min(max(batch_size, 50), 100),
+                    batch_size=details_batch_size,
                     actor=actor,
                     cloud=cloud,
                 )
