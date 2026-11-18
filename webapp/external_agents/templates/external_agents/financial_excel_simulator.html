@@ -3,113 +3,52 @@
 
 {% block title %}Simulador Excel · Gestión Financiera{% endblock %}
 {% block page_title %}Simulador Excel{% endblock %}
-{% block hero_title %}Simulador Excel financiero{% endblock %}
-{% block hero_subtitle %}Borrador de trabajo que consolida los movimientos de comisiones, servicios, gastos fijos, marketing y planillas en una sola hoja filtrable.{% endblock %}
-
-{% block head_actions %}
-<span class="fx-draft-pill">Borrador local</span>
-<a class="ea-btn" href="{% url 'external_agents:payroll_dashboard' %}">Volver a Planillas</a>
-{% endblock %}
 
 {% block extra_module_css %}
 <style>
-    .fx-draft-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        min-height: 38px;
-        padding: 0 14px;
-        border: 1px solid rgba(210, 153, 34, .5);
-        border-radius: 999px;
-        background: rgba(210, 153, 34, .12);
-        color: #e3b341;
-        font-size: 12px;
-        font-weight: 800;
-        letter-spacing: .04em;
-        text-transform: uppercase;
+    body:has(.fx-page) {
+        overflow: hidden;
     }
 
-    .fx-draft-pill::before {
-        content: "";
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: currentColor;
-        box-shadow: 0 0 0 4px rgba(210, 153, 34, .12);
+    body:has(.fx-page) .app-layout {
+        height: 100vh;
+        height: 100dvh;
+        min-height: 0;
+        overflow: hidden;
     }
 
-    .fx-intro {
-        display: grid;
-        grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(120px, .55fr));
-        gap: 12px;
-        margin-bottom: 14px;
+    body:has(.fx-page) .content-area {
+        min-height: 0;
+        overflow: hidden;
     }
 
-    .fx-note,
-    .fx-stat {
-        border: 1px solid var(--ea-border);
-        border-radius: 13px;
-        background: var(--ea-panel);
-    }
-
-    .fx-note {
+    .fx-page {
         display: flex;
-        align-items: center;
-        gap: 13px;
-        padding: 15px 17px;
-        color: var(--ea-muted);
-        font-size: 13px;
-        line-height: 1.5;
+        flex-direction: column;
+        width: 100%;
+        max-width: none;
+        height: calc(100vh - var(--header-height, 60px) - 48px);
+        height: calc(100dvh - var(--header-height, 60px) - 48px);
+        min-height: 360px;
+        margin: 0;
     }
 
-    .fx-note-icon {
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
-        display: grid;
-        place-items: center;
+    .fx-page .ea-messages {
         flex: 0 0 auto;
-        background: rgba(88, 166, 255, .12);
-        color: var(--ea-blue);
-        font-size: 18px;
-    }
-
-    .fx-note strong {
-        display: block;
-        margin-bottom: 2px;
-        color: var(--ea-text);
-        font-size: 13px;
-    }
-
-    .fx-stat {
-        padding: 13px 15px;
-    }
-
-    .fx-stat span {
-        display: block;
-        margin-bottom: 5px;
-        color: var(--ea-muted);
-        font-size: 10px;
-        font-weight: 800;
-        letter-spacing: .08em;
-        text-transform: uppercase;
-    }
-
-    .fx-stat strong {
-        color: #f0f6fc;
-        font-size: 23px;
-        line-height: 1;
+        margin-bottom: 6px;
     }
 
     .fx-toolbar {
         display: flex;
+        flex: 0 0 auto;
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        padding: 12px 14px;
+        min-height: 46px;
+        padding: 6px 10px;
         border: 1px solid var(--ea-border);
         border-bottom: 0;
-        border-radius: 13px 13px 0 0;
+        border-radius: 10px 10px 0 0;
         background: #161b22;
     }
 
@@ -147,15 +86,15 @@
     }
 
     .fx-sheet-wrap {
+        flex: 1 1 0;
         overflow: auto;
-        height: max(560px, calc(100vh - 285px));
-        height: max(560px, calc(100dvh - 285px));
-        min-height: 560px;
+        width: 100%;
+        height: auto;
+        min-height: 0;
         max-height: none;
         border: 1px solid var(--ea-border);
-        border-radius: 0 0 13px 13px;
+        border-radius: 0;
         background: #fff;
-        box-shadow: 0 18px 45px rgba(0, 0, 0, .22);
         scrollbar-color: #1f7a4a #e7eee9;
         scrollbar-width: auto;
         scrollbar-gutter: stable both-edges;
@@ -371,13 +310,14 @@
 
     .fx-footer {
         display: flex;
+        flex: 0 0 auto;
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        padding: 11px 14px;
+        padding: 8px 12px;
         border: 1px solid #2b5140;
         border-top: 0;
-        border-radius: 0 0 13px 13px;
+        border-radius: 0 0 10px 10px;
         background: #173d2e;
         color: #c9e7d7;
         font-size: 11px;
@@ -420,23 +360,14 @@
         white-space: nowrap;
     }
 
-    @media (max-width: 1050px) {
-        .fx-intro {
-            grid-template-columns: repeat(3, 1fr);
+    @media (max-width: 768px) {
+        .fx-page {
+            height: calc(100vh - var(--header-height, 60px) - 32px);
+            height: calc(100dvh - var(--header-height, 60px) - 32px);
         }
-
-        .fx-note {
-            grid-column: 1 / -1;
-        }
-
-        .fx-sheet-wrap { height: 620px; }
     }
 
     @media (max-width: 680px) {
-        .fx-intro {
-            grid-template-columns: 1fr 1fr;
-        }
-
         .fx-toolbar,
         .fx-footer {
             align-items: flex-start;
@@ -458,34 +389,20 @@
 </style>
 {% endblock %}
 
-{% block module_content %}
-<section class="fx-intro" aria-label="Resumen del simulador">
-    <div class="fx-note">
-        <span class="fx-note-icon" aria-hidden="true">▧</span>
-        <div>
-            <strong>Hoja de trabajo, no asiento contable</strong>
-            Consolida los registros existentes de Gestión Financiera en una sola hoja filtrable por vencimiento, categoría, concepto, fecha de pago y monto.
-        </div>
+{% block content %}
+<main class="ea-shell fx-page">
+    {% if messages %}
+    <div class="ea-messages" aria-live="polite">
+        {% for message in messages %}
+        <div class="ea-message {{ message.tags }}">{{ message }}</div>
+        {% endfor %}
     </div>
-    <div class="fx-stat">
-        <span>Filas cargadas</span>
-        <strong id="fxTotalCount">{{ total_count }}</strong>
-    </div>
-    <div class="fx-stat">
-        <span>Módulos</span>
-        <strong>{{ module_count }}</strong>
-    </div>
-    <div class="fx-stat">
-        <span>Fecha de corte</span>
-        <strong style="font-size:16px">{{ generated_on|date:"d/m/Y" }}</strong>
-    </div>
-</section>
+    {% endif %}
 
 <div class="fx-toolbar">
     <div class="fx-toolbar-copy">
-        <strong>Hoja consolidada</strong>
-        <span class="fx-visible"><span id="fxVisibleCount">{{ total_count }}</span>&nbsp;visibles</span>
-        <span>Haz clic en una cabecera para ordenar</span>
+        <strong>Simulador Excel</strong>
+        <span class="fx-visible"><span id="fxVisibleCount">{{ total_count }}</span>&nbsp;de&nbsp;<span id="fxTotalCount">{{ total_count }}</span></span>
     </div>
     <div class="fx-actions">
         <button class="ea-btn ea-btn-small" id="fxReset" type="button">Limpiar filtros</button>
@@ -504,10 +421,10 @@
                 <th class="col-amount" scope="col"><button class="fx-sort" type="button" data-sort-key="amount" aria-label="Ordenar por monto">Monto<span class="fx-sort-indicator"></span></button></th>
             </tr>
             <tr class="fx-filter-row">
-                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="dueText" aria-label="Filtrar vencimiento" placeholder="dd/mm/aaaa"><button class="fx-clear-one" type="button" data-clear="dueText" aria-label="Limpiar filtro de vencimiento">×</button></div></th>
+                <th><div class="fx-filter-box"><input class="fx-filter" type="date" data-filter="dueText" aria-label="Filtrar vencimiento"><button class="fx-clear-one" type="button" data-clear="dueText" aria-label="Limpiar filtro de vencimiento">×</button></div></th>
                 <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="category" aria-label="Filtrar categoría" placeholder="Filtrar…"><button class="fx-clear-one" type="button" data-clear="category" aria-label="Limpiar filtro de categoría">×</button></div></th>
                 <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="concept" aria-label="Filtrar concepto" placeholder="Buscar concepto…"><button class="fx-clear-one" type="button" data-clear="concept" aria-label="Limpiar filtro de concepto">×</button></div></th>
-                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="paymentText" aria-label="Filtrar fecha de pago" placeholder="dd/mm/aaaa"><button class="fx-clear-one" type="button" data-clear="paymentText" aria-label="Limpiar filtro de fecha de pago">×</button></div></th>
+                <th><div class="fx-filter-box"><input class="fx-filter" type="date" data-filter="paymentText" aria-label="Filtrar fecha de pago"><button class="fx-clear-one" type="button" data-clear="paymentText" aria-label="Limpiar filtro de fecha de pago">×</button></div></th>
                 <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="amount" aria-label="Filtrar monto" placeholder="Importe"><button class="fx-clear-one" type="button" data-clear="amount" aria-label="Limpiar filtro de monto">×</button></div></th>
             </tr>
         </thead>
@@ -694,6 +611,16 @@
         input.addEventListener('input', applyView);
     });
 
+    filters.filter(input => input.type === 'date').forEach(input => {
+        input.addEventListener('click', () => {
+            try {
+                input.showPicker?.();
+            } catch (error) {
+                // The native picker icon remains available in stricter browsers.
+            }
+        });
+    });
+
     document.querySelectorAll('[data-clear]').forEach(button => {
         button.addEventListener('click', () => {
             const input = filters.find(item => (
@@ -758,4 +685,5 @@
     applyView();
 })();
 </script>
+</main>
 {% endblock %}

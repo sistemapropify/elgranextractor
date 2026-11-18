@@ -769,9 +769,23 @@ class ExternalAgentsViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('no-store', response['Cache-Control'])
-        self.assertContains(response, 'Borrador local')
+        self.assertNotContains(response, 'Borrador local')
+        self.assertNotContains(response, 'Hoja de trabajo, no asiento contable')
+        self.assertNotContains(response, 'Filas cargadas')
+        self.assertNotContains(response, 'Fecha de corte')
+        self.assertNotContains(response, 'class="ea-module-head"')
+        self.assertNotContains(response, 'class="fx-intro"')
+        self.assertContains(response, 'class="ea-shell fx-page"')
         self.assertContains(response, 'data-filter="concept"')
         self.assertContains(response, 'data-filter="dueText"')
+        self.assertContains(
+            response,
+            'type="date" data-filter="dueText"',
+        )
+        self.assertContains(
+            response,
+            'type="date" data-filter="paymentText"',
+        )
         self.assertContains(response, 'data-sort-key="amount"')
         self.assertContains(response, 'id="fxCsv"')
         self.assertEqual(
@@ -800,7 +814,12 @@ class ExternalAgentsViewsTests(TestCase):
             )
         self.assertContains(response, 'scrollbar-width: auto')
         self.assertContains(response, '::-webkit-scrollbar')
-        self.assertContains(response, 'height: max(560px')
+        self.assertContains(
+            response,
+            'height: calc(100dvh - var(--header-height, 60px) - 48px)',
+        )
+        self.assertContains(response, 'flex: 1 1 0')
+        self.assertContains(response, 'input.showPicker?.()')
         self.assertContains(response, 'min-width: 1080px')
         rows = response.context['rows']
         self.assertEqual(response.context['total_count'], 8)
