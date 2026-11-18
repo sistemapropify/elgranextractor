@@ -425,8 +425,8 @@ def migrate_selected(gateway, ubigeo, selected, actor='sistema-geollaqta',
                      cloud=None):
     """Activate one explicit batch without recomputing the district inventory."""
     selected = list(selected)
-    if not selected or len(selected) > 50:
-        raise ValueError('La tanda debe contener entre 1 y 50 lotes.')
+    if not selected or len(selected) > 200:
+        raise ValueError('La tanda debe contener entre 1 y 200 lotes.')
     cloud = cloud or R2(timeout=20)
     result = None
     last_conflict = None
@@ -450,8 +450,8 @@ def migrate_selected(gateway, ubigeo, selected, actor='sistema-geollaqta',
 
 def migrate_pending(gateway, ubigeo='040126', limit=20, actor='sistema-geollaqta',
                     cloud=None):
-    if type(limit) is not int or not 1 <= limit <= 50:
-        raise ValueError('La tanda debe contener entre 1 y 50 lotes.')
+    if type(limit) is not int or not 1 <= limit <= 200:
+        raise ValueError('La tanda debe contener entre 1 y 200 lotes.')
     cloud = cloud or R2(timeout=20)
     ids, truncated = lot_ids(ubigeo, cloud)
     linked = linked_lot_ids(gateway, ubigeo)

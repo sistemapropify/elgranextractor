@@ -97,6 +97,13 @@ class State:
         base = dict(object_id=None, status='failed', uploaded=0, missing=0, reports=0,
                     photos=0, bytes=0, error='', updated=time.time())
         base.update(values)
+        previous = self.lot(lot_id)
+        if previous and previous.get('uploaded') and not base.get('uploaded'):
+            # R2 is append-only for a captured lot. A later source retry must
+            # not make an already archived lot disappear from the totals.
+            base['uploaded'] = 1
+            base['bytes'] = max(int(previous.get('bytes') or 0),
+                                int(base.get('bytes') or 0))
         self.db.execute('INSERT OR REPLACE INTO lots VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                         (lot_id, ubigeo, *(base[k] for k in ('object_id','status','uploaded','missing',
                                                          'reports','photos','bytes','updated','error'))))

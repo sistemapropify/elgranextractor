@@ -148,7 +148,8 @@ class R2:
         return self.request('PUT', key, data, 'application/json',
                             condition=('if-match', etag) if etag else ('if-none-match', '*'))
 
-    def list_prefixes(self, prefix, delimiter='/', max_pages=25):
+    def list_prefixes(self, prefix, delimiter='/', max_pages=25,
+                      start_after=None):
         """List logical folders without reading every archived object."""
         if not prefix.startswith('geollaqta/') or '..' in prefix.split('/'):
             raise StorageError('Prefijo catastral no válido.')
@@ -158,7 +159,7 @@ class R2:
             raise StorageError('Límite de páginas no válido.')
         import xml.etree.ElementTree as ET
         from urllib.parse import quote_plus
-        folders, token, pages = [], None, 0
+        folders, token, pages = [], start_after, 0
         while pages < max_pages:
             pages += 1
             now = datetime.datetime.now(datetime.timezone.utc)
@@ -204,18 +205,24 @@ class R2:
             token = root.findtext('s:NextContinuationToken', default=None,
                                   namespaces=namespace)
             if not truncated or not token:
-                return {'prefixes': folders, 'truncated': False, 'pages': pages}
-        return {'prefixes': folders, 'truncated': True, 'pages': pages}
+                return {'prefixes': folders, 'truncated': False,
+                        'pages': pages, 'next_token': None}
+        return {'prefixes': folders, 'truncated': True, 'pages': pages,
+                'next_token': token}
 
-    def list_objects(self, prefix, max_pages=25):
+    def list_objects(self, prefix, max_pages=25, start_after=None,
+                     start_after_key=None):
         """List archived object keys under an exact private prefix."""
         if not prefix.startswith('geollaqta/') or '..' in prefix.split('/'):
             raise StorageError('Prefijo catastral no válido.')
         if type(max_pages) is not int or not 1 <= max_pages <= 100:
             raise StorageError('Límite de páginas no válido.')
+        if start_after and start_after_key:
+            raise StorageError(
+                'No se puede combinar token de continuación y clave de reanudación.')
         import xml.etree.ElementTree as ET
         from urllib.parse import quote_plus
-        objects, token, pages = [], None, 0
+        objects, token, pages = [], start_after, 0
         while pages < max_pages:
             pages += 1
             now = datetime.datetime.now(datetime.timezone.utc)
@@ -225,6 +232,8 @@ class R2:
                 'prefix': prefix,
                 'max-keys': '1000',
             }
+            if start_after_key:
+                query_values['start-after'] = start_after_key
             if token:
                 query_values['continuation-token'] = token
             query = '&'.join(
@@ -298,9 +307,11 @@ class R2:
                     'objects': objects,
                     'truncated': False,
                     'pages': pages,
+                    'next_token': None,
                 }
         return {
             'objects': objects,
             'truncated': True,
             'pages': pages,
+            'next_token': token,
         }

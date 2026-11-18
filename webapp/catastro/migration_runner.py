@@ -85,7 +85,7 @@ def _claim(gateway, ubigeo, actor, batch_size):
             'attempts': (int(current.get('attempts', 0)) +
                          (1 if current.get('status') == 'error' else 0)),
             'started_at': now,
-            'processed_lots': 0,
+            'processed_lots': int(current.get('processed_lots', 0)),
             'linked_lots': int(current.get('linked_lots', 0)),
             'pending_lots': int(current.get('pending_lots', 0)),
             'message': 'Migración iniciada en segundo plano.',
@@ -148,6 +148,31 @@ def start_all(actor='sistema-geollaqta', batch_size=SAFE_BATCH_SIZE):
     return {'started': True, 'job': value}
 
 
+def recover_global(actor='azure-migration-watchdog', batch_size=None):
+    """Resume a stale, interrupted or retryable global migration in-process."""
+    gateway = Gateway()
+    current = job(gateway, ALL_SCOPE)
+    batch_size = max(
+        1,
+        min(int(batch_size or current.get('batch_size') or SAFE_BATCH_SIZE),
+            SAFE_BATCH_SIZE),
+    )
+    attempts = int(current.get('attempts', 0))
+    recoverable = (
+        current.get('status') == 'stale'
+        or (current.get('status') == 'error'
+            and attempts < 3
+            and current.get('retryable') is True)
+    )
+    if not recoverable:
+        return {'recovered': False, 'job': current}
+    claimed, value = _claim(gateway, ALL_SCOPE, actor, batch_size)
+    if not claimed:
+        return {'recovered': False, 'job': value}
+    _run_all(actor, batch_size, value['id'])
+    return {'recovered': True, 'job': _read_job(gateway, ALL_SCOPE)}
+
+
 def _owns(gateway, ubigeo, job_id):
     current = _read_job(gateway, ubigeo)
     return current.get('id') == job_id and current.get('status') == 'running'
@@ -193,7 +218,8 @@ def audit_existing(ubigeo='040126', actor='azure-migration-watchdog'):
 def _run(ubigeo, actor, batch_size, job_id, progress=None):
     gateway = Gateway()
     cloud = R2(timeout=20)
-    total = 0
+    initial = _read_job(gateway, ubigeo)
+    total = int(initial.get('processed_lots', 0))
     details_imported = False
     details_import = None
     try:
@@ -224,9 +250,21 @@ def _run(ubigeo, actor, batch_size, job_id, progress=None):
                     formal['batches'][-1]['revision']
                     if formal.get('batches') else None)
             elif status['pcdpi_pending_lots']:
-                selected = min(batch_size, 50)
-                result = geollaqta_bulk.migrate_pending(
-                    gateway, ubigeo, selected, actor, cloud)
+                selected = min(batch_size, 200)
+                result = None
+                while selected >= 1:
+                    try:
+                        result = geollaqta_bulk.migrate_pending(
+                            gateway, ubigeo, selected, actor, cloud)
+                        break
+                    except StorageError as error:
+                        detail = str(error)
+                        too_large = any(marker in detail for marker in (
+                            '12 MB', 'supera', '413', 'overloaded',
+                        ))
+                        if not too_large or selected <= 1:
+                            raise
+                        selected = max(1, selected // 2)
                 processed = int(result.get('processed_lots', 0))
                 advanced = processed > 0
                 batch_revision = result.get('batch_revision')
@@ -236,7 +274,7 @@ def _run(ubigeo, actor, batch_size, job_id, progress=None):
                     ubigeo,
                     geollaqta.DISTRICTS[ubigeo]['name'],
                     formal_lots,
-                    batch_size=5,
+                    batch_size=min(max(batch_size, 50), 100),
                     actor=actor,
                     cloud=cloud,
                 )
@@ -290,14 +328,6 @@ def _run_all(actor, batch_size, job_id):
     gateway = Gateway()
     cloud = R2(timeout=20)
     stop_heartbeat = threading.Event()
-    totals = {
-        'processed_lots': 0,
-        'linked_lots': 0,
-        'pending_lots': 0,
-        'source_lots': 0,
-        'completed_districts': 0,
-        'failed_districts': [],
-    }
 
     def heartbeat():
         while not stop_heartbeat.wait(60):
@@ -320,28 +350,30 @@ def _run_all(actor, batch_size, job_id):
         from cuadrantizacion import geollaqta
 
         districts = sorted(geollaqta.DISTRICTS)
+        empty_districts = set()
+        source_lots = 0
+        skipped_districts = []
         for ubigeo in districts:
             try:
                 ids, truncated = geollaqta_bulk.lot_ids(ubigeo, cloud)
             except StorageError as error:
-                totals['failed_districts'].append({
-                    'ubigeo': ubigeo,
-                    'error': str(error),
-                })
+                skipped_districts.append(
+                    {'ubigeo': ubigeo, 'error': str(error)})
                 continue
             if truncated:
-                totals['failed_districts'].append({
+                skipped_districts.append({
                     'ubigeo': ubigeo,
                     'error': 'El inventario R2 está truncado.',
                 })
                 continue
-            if ids:
-                totals['source_lots'] += len(ids)
+            if not ids:
+                empty_districts.add(ubigeo)
+            source_lots += len(ids)
 
         current = {
             **_read_job(gateway, ALL_SCOPE),
-            **totals,
             'scope': ALL_SCOPE,
+            'source_lots': source_lots,
             'districts_total': len(districts),
             'districts_list': districts,
             'current_ubigeo': None,
@@ -355,6 +387,28 @@ def _run_all(actor, batch_size, job_id):
             if not _owns(gateway, ALL_SCOPE, job_id):
                 return
             district_name = geollaqta.DISTRICTS[ubigeo]['name']
+            district_job = _read_job(gateway, ubigeo)
+            if (district_job.get('status') == 'done'
+                    and district_job.get('audit')):
+                _write_job(gateway, ALL_SCOPE, {
+                    **_read_job(gateway, ALL_SCOPE),
+                    'current_ubigeo': ubigeo,
+                    'current_district': district_name,
+                    'message': (
+                        'Distrito %d de %d ya estaba terminado: %s.' %
+                        (index, len(districts), district_name)),
+                })
+                continue
+            if ubigeo in empty_districts:
+                _write_job(gateway, ALL_SCOPE, {
+                    **_read_job(gateway, ALL_SCOPE),
+                    'current_ubigeo': ubigeo,
+                    'current_district': district_name,
+                    'message': (
+                        'Distrito %d de %d sin lotes R2: %s.' %
+                        (index, len(districts), district_name)),
+                })
+                continue
             current = {
                 **_read_job(gateway, ALL_SCOPE),
                 'current_ubigeo': ubigeo,
@@ -367,33 +421,22 @@ def _run_all(actor, batch_size, job_id):
             claimed, district_job = _claim(
                 gateway, ubigeo, actor, batch_size)
             if not claimed:
-                totals['failed_districts'].append({
+                skipped_districts.append({
                     'ubigeo': ubigeo,
                     'error': 'Ya existe una migración activa para el distrito.',
                 })
                 continue
 
             def progress(current_ubigeo, district_value):
-                linked = totals['linked_lots'] + int(
-                    district_value.get('linked_lots', 0))
-                pending = totals['pending_lots'] + int(
-                    district_value.get('pending_lots', 0))
-                processed = totals['processed_lots'] + int(
-                    district_value.get('processed_lots', 0))
                 latest = _read_job(gateway, ALL_SCOPE)
                 _write_job(gateway, ALL_SCOPE, {
                     **latest,
                     'current_ubigeo': current_ubigeo,
-                    'processed_lots': processed,
-                    'linked_lots': linked,
-                    'pending_lots': pending,
-                    'source_lots': totals['source_lots'],
+                    'source_lots': source_lots,
                     'current_linked_lots': int(
                         district_value.get('linked_lots', 0)),
                     'current_pending_lots': int(
                         district_value.get('pending_lots', 0)),
-                    'current_linked_total': linked,
-                    'current_pending_total': pending,
                     'last_batch_revision': district_value.get(
                         'last_batch_revision'),
                     'message': latest.get('message'),
@@ -404,22 +447,13 @@ def _run_all(actor, batch_size, job_id):
                 progress=progress,
             )
             finished = _read_job(gateway, ubigeo)
-            totals['processed_lots'] += int(
-                finished.get('processed_lots', 0))
-            totals['linked_lots'] += int(
-                finished.get('linked_lots', 0))
-            totals['pending_lots'] += int(
-                finished.get('pending_lots', 0))
-            if finished.get('status') == 'done':
-                totals['completed_districts'] += 1
-            else:
-                totals['failed_districts'].append({
+            if finished.get('status') != 'done':
+                skipped_districts.append({
                     'ubigeo': ubigeo,
                     'error': finished.get('message', 'No terminó.'),
                 })
             current = {
                 **_read_job(gateway, ALL_SCOPE),
-                **totals,
                 'current_ubigeo': ubigeo,
                 'current_district': district_name,
                 'last_batch_revision': finished.get(
@@ -430,6 +464,35 @@ def _run_all(actor, batch_size, job_id):
             }
             _write_job(gateway, ALL_SCOPE, current)
 
+        totals = {
+            'processed_lots': 0,
+            'linked_lots': 0,
+            'pending_lots': 0,
+            'source_lots': source_lots,
+            'completed_districts': 0,
+            'failed_districts': [],
+        }
+        for ubigeo in districts:
+            district_job = _read_job(gateway, ubigeo)
+            totals['processed_lots'] += int(
+                district_job.get('processed_lots', 0))
+            totals['linked_lots'] += int(
+                district_job.get('linked_lots', 0))
+            totals['pending_lots'] += int(
+                district_job.get('pending_lots', 0))
+            if ubigeo in empty_districts:
+                totals['completed_districts'] += 1
+            elif (district_job.get('status') == 'done'
+                  and district_job.get('audit')):
+                totals['completed_districts'] += 1
+            elif district_job.get('status') != 'done':
+                totals['failed_districts'].append({
+                    'ubigeo': ubigeo,
+                    'error': district_job.get('message', 'No terminó.'),
+                })
+        totals['failed_districts'].extend(
+            item for item in skipped_districts
+            if item not in totals['failed_districts'])
         final = {
             **_read_job(gateway, ALL_SCOPE),
             **totals,
@@ -455,7 +518,6 @@ def _run_all(actor, batch_size, job_id):
         try:
             _write_job(gateway, ALL_SCOPE, {
                 **current,
-                **totals,
                 'status': 'error',
                 'message': str(error),
                 'retryable': isinstance(error, (StorageError, OSError)),

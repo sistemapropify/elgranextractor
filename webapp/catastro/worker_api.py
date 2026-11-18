@@ -158,7 +158,8 @@ def job_action(request, data, job_id, action):
                     message=(str(values.get('message') or '') +
                              ' La descarga terminó, pero R2 → D1 requiere reintento: ' +
                              str(exc))[:500])
-        if action=='lot' and row['uploaded'] and not held:
+        if (action == 'lot' and row['uploaded'] and not held
+                and not job.get('auto_migrate')):
             from . import source_manager
             if source_manager.durable():
                 from .master_indexing import stage_archived_lot

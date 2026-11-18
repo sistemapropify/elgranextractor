@@ -285,7 +285,7 @@ if [ "${CATASTRO_MIGRATION_WORKER_ENABLED:-1}" = "1" ]; then
         cd "$APP_ROOT/webapp"
         while true; do
             echo "[$(date -u)] Checking for an interrupted Catastro migration..."
-            python manage.py catastro_migration_worker --ubigeo 040126 --once
+            python manage.py catastro_migration_worker --once
             sleep 15
         done
     ) 2>&1 | python -u "$APP_ROOT/scripts/rotate_stream_log.py" /home/LogFiles/catastro-migration.log &
