@@ -826,8 +826,9 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'input.showPicker?.()')
         self.assertContains(response, 'min-width: 1180px')
         self.assertContains(response, 'Total del monto')
-        self.assertContains(response, 'class="fx-total-label-cell" colspan="5"')
+        self.assertContains(response, 'class="fx-total-label-wrap"')
         self.assertContains(response, 'id="fxTotals"')
+        self.assertNotContains(response, 'class="fx-total-row"')
         self.assertNotContains(response, 'Suma visible')
         self.assertNotContains(
             response,
@@ -857,6 +858,10 @@ class ExternalAgentsViewsTests(TestCase):
             for row in rows
         ))
         html = response.content.decode()
+        self.assertLess(
+            html.index('</table>'),
+            html.index('class="fx-footer"'),
+        )
         self.assertLess(
             html.index('>Total del monto<'),
             html.index('id="fxTotals"'),
