@@ -1,3 +1,192 @@
+# Financial Excel simulator - 2026-11-18
+
+Status: Validated.
+Recipe: existing serialized GitHub Actions App Service pipeline.
+Authorization: the user explicitly requested deployment on 2026-11-18 with
+"HAZ EL DESPLIEGUE".
+Base: `origin/main`.
+Target: existing `granextractorservice` in `rg-elgranextractor`, Brazil South,
+subscription `0219eecc-9920-4789-9929-3091a2f09daf`.
+Public: https://acm.propifai.com/agentes-externos/simulador-excel/
+
+## 1. Project Overview
+
+Deploy the reviewed financial Excel simulator to the existing production Django
+application. The module consolidates commission collections and payments,
+service payments, fixed expenses, marketing expenses and payroll data into one
+filterable and sortable sheet. It also exposes active payroll workers that do not
+yet have an entry for the current month.
+
+Path: existing application update.
+
+## 2. Requirements
+
+| Attribute | Value |
+|-----------|-------|
+| Classification | Production |
+| Scale | Existing application; no additional capacity |
+| Budget | No incremental Azure resources |
+| Subscription | `0219eecc-9920-4789-9929-3091a2f09daf` |
+| Location | Brazil South |
+| Access | Existing `external_agent_access_required` protection |
+
+## 3. Components Detected
+
+| Component | Type | Technology | Path |
+|-----------|------|------------|------|
+| Financial simulator view | Django view | Python / Django | `webapp/external_agents/views.py` |
+| Protected URL | Route | Django URLconf | `webapp/external_agents/urls.py` |
+| Excel-like sheet | Frontend | Django template, HTML, CSS, JavaScript | `webapp/external_agents/templates/external_agents/financial_excel_simulator.html` |
+| Financial menu | Navigation | Django template | `webapp/external_agents/templates/external_agents/base.html` |
+| Regression coverage | Test | Django TestCase | `webapp/external_agents/tests.py` |
+
+## 4. Recipe Selection
+
+Selected: existing GitHub Actions workflow
+`.github/workflows/main_granextractorservice.yml`.
+
+Rationale: this is an application-only update to an established App Service.
+The workflow already builds and tests the Django application, collects static
+files, deploys to Azure App Service and verifies the production artifact. It is
+serialized to prevent overlapping production deploys.
+
+## 5. Architecture
+
+Stack: existing Azure App Service.
+
+The simulator is rendered server-side from existing Django models. Browser-side
+JavaScript applies header filters, sorting and CSV export to the rendered rows.
+The view is `no-store` and retains the existing external-agent access guard.
+No new service, datastore, worker, queue, secret or managed identity is needed.
+
+## 6. Provisioning Limit Checklist
+
+| Resource Type | Number to Deploy | Total After Deployment | Limit/Quota | Notes |
+|---------------|------------------|------------------------|-------------|-------|
+| `Microsoft.Web/sites` | 0 | Existing `granextractorservice` | Existing subscription limit unaffected | Code-only update |
+| Databases / managed services | 0 | Existing services unchanged | Not applicable | No schema or service change |
+
+Status: all resources within limits; no provisioning is performed by this
+release.
+
+## 7. Execution Checklist
+
+- [x] Analyze workspace.
+- [x] Identify the five simulator files and isolate them on `origin/main`.
+- [x] Confirm the existing subscription, resource group, App Service and region.
+- [x] Confirm no infrastructure, schema, dependency, secret or RBAC change.
+- [x] Select the existing serialized GitHub Actions deployment recipe.
+- [x] Receive explicit deployment authorization from the user.
+- [x] Integrate the reviewed source files.
+- [x] Add recipe-specific validation steps.
+- [x] Run all application, migration, syntax, static and target checks.
+- [x] Record validation proof and complete the azure-validate workflow.
+- [ ] Commit only the simulator files and this release plan.
+- [ ] Fetch latest `origin/main` and perform a non-forced push to `main`.
+- [ ] Supervise the GitHub Actions deployment to completion.
+- [ ] Verify the protected production route and application health.
+
+## 8. Validation Proof
+
+2026-11-18 10:57 America/Lima:
+
+- Release worktree is rooted at `origin/main`
+  `0d005e0a2601c7b356c126fddb0677aa463f9f67`. The five integrated simulator
+  files were also executed from the full checkout; each matched the reviewed
+  SHA-256 value:
+  - `views.py`: `A185DF732C26F644ED1FBB216078582D0971C0AA335D9288B41181B3CFE779B6`
+  - `urls.py`: `C3FDE81B54533B6A01D2A62778CA0A1934E8AA5C6E55E8A83A762DB0AF2CA2B6`
+  - `tests.py`: `C73ADD53BF6847B4745DFFE369CC7F406256BC274C2D7A4041413FB627578FBE`
+  - `base.html`: `83BFB06AB95B1D05CB3E1E5DFF04BA78A76EF67D637F61720FF411236CE1A466`
+  - `financial_excel_simulator.html`: `156F5245FFEFAEFF3BF92D0F2AF957F05AB9E25219A52B572C9EEEE3086C527E`
+- `py -3 webapp/manage.py test external_agents.tests
+  --settings=settings_tests_external_agents --noinput`: 38 tests passed in
+  1.590 seconds; Django system check found no issues.
+- `py -3 webapp/manage.py check --settings=settings_tests_external_agents`:
+  system check identified no issues.
+- `py -3 webapp/manage.py makemigrations --check --dry-run
+  --settings=settings_tests_external_agents`: `No changes detected`.
+- `py_compile` passed for `views.py`, `urls.py` and `tests.py`.
+- The production workflow YAML parsed successfully as a mapping with the
+  expected workflow name. Its fixed deploy target is
+  `granextractorservice` in `rg-elgranextractor`, Brazil South.
+- `git diff --check` passed. The changed tracked files are limited to the five
+  simulator files and this release plan.
+- Isolated `collectstatic` against a temporary static root copied 2 static
+  files successfully.
+- Regression coverage confirms the simulator URL remains protected by
+  `external_agent_access_required`, filters and sorting work, CSV export works,
+  eight consolidated financial rows are rendered and responses set
+  `Cache-Control: no-store`.
+- The current interactive Azure CLI has no signed-in account, so Azure
+  management authentication was verified through the fixed production
+  workflow and its successful base-revision deployment instead:
+  GitHub Actions run `44178239693` for base commit `0d005e0a` completed with
+  `cad-reader`, `build` and `deploy` successful. In that deploy job, Azure
+  deployment, startup configuration, App Service restart and production
+  verification all concluded successfully.
+- Live production health returned HTTP 200 from
+  `https://acm.propifai.com/api/v1/intelligence/health/` with
+  `{"status":"ok","service":"intelligence","version":"2.0.0"}` before the
+  release. The simulator route currently returns HTTP 404, which is expected
+  because this source revision has not yet been published.
+- No requirements, infrastructure, managed identity, RBAC, database schema,
+  runtime setting or secret changes are present.
+
+## Role Assignment Verification
+
+- Status: Verified, not applicable.
+- Identities checked: none added or changed; the existing App Service deploy
+  identity is managed by the established production workflow.
+- Roles confirmed: unchanged. This code-only release has no Bicep or Terraform
+  changes and no new service-to-identity relationship.
+- Issues: none.
+
+## All validation checks pass
+
+- [x] Confirm the release is based on current `origin/main` and contains only
+  the five simulator files plus this plan.
+- [x] Verify all five integrated files match the reviewed source SHA-256 hashes.
+- [x] Run the complete `external_agents.tests` suite with
+  `settings_tests_external_agents`; all 38 tests must pass.
+- [x] Run Django system checks and confirm no migration drift.
+- [x] Compile the changed Python modules.
+- [x] Parse the existing production workflow YAML.
+- [x] Run `git diff --check` and verify no whitespace errors.
+- [x] Run isolated `collectstatic` against a temporary static root.
+- [x] Verify the new URL remains behind `external_agent_access_required` and
+  responses use `Cache-Control: no-store`.
+- [x] Verify the fixed `granextractorservice` target through the successful
+  base-revision production workflow and live read-only health endpoint.
+- [x] Confirm no infrastructure, RBAC, schema, dependency or runtime-setting
+  changes are present.
+
+## 9. Files in Scope
+
+| File | Purpose |
+|------|---------|
+| `webapp/external_agents/views.py` | Consolidates financial sources and builds rows |
+| `webapp/external_agents/urls.py` | Exposes `/agentes-externos/simulador-excel/` |
+| `webapp/external_agents/tests.py` | Regression and access/content coverage |
+| `webapp/external_agents/templates/external_agents/base.html` | Financial menu entry |
+| `webapp/external_agents/templates/external_agents/financial_excel_simulator.html` | Excel-like interface |
+| `.azure/deployment-plan.md` | Release plan and validation evidence |
+
+## Execution and rollback
+
+Run the 38-test `external_agents.tests` suite with
+`settings_tests_external_agents`, Django system and migration checks, Python
+compilation, workflow YAML validation, whitespace checks, isolated
+`collectstatic`, and read-only Azure target verification. Commit only the files
+listed above, fetch `origin/main`, and push without force. Monitor the existing
+GitHub Actions run through deploy and verification.
+
+After deployment, verify `/api/v1/intelligence/health/`, the external-agent
+login and the protected simulator route. Rollback is a scoped revert of the
+release commit through the same pipeline.
+
+---
+
 # External real estate agents follow-up release - 2026-11-16
 
 Status: Validated.

@@ -2071,6 +2071,312 @@ def payroll_dashboard(request):
     })
 
 
+def _financial_simulator_status(status_value, status_label, due_date):
+    status_key = str(status_value or 'pendiente').strip().lower()
+    today = timezone.localdate()
+    if status_key in {'pagado', 'cobrado'}:
+        return status_label or 'Pagado', 'paid'
+    if status_key == 'anulado':
+        return status_label or 'Anulado', 'annulled'
+    if status_key == 'sin_generar':
+        return 'Pendiente de generar', 'pending'
+    if status_key == 'parcial':
+        if due_date and due_date < today:
+            return 'Parcial vencido', 'overdue'
+        return status_label or 'Parcial', 'partial'
+    if due_date and due_date < today:
+        return 'Vencido', 'overdue'
+    if due_date == today:
+        return 'Vence hoy', 'pending'
+    return status_label or 'Pendiente', 'pending'
+
+
+def _financial_simulator_row(
+    *,
+    module,
+    category,
+    concept,
+    amount,
+    currency,
+    status,
+    status_label='',
+    due_date=None,
+    payment_date=None,
+    responsible='',
+    reference='',
+    notes='',
+    module_class='',
+):
+    display_status, status_class = _financial_simulator_status(
+        status,
+        status_label,
+        due_date,
+    )
+    return {
+        'module': module,
+        'module_class': module_class or module.lower().replace(' ', '-'),
+        'due_date': due_date,
+        'due_date_text': due_date.strftime('%d/%m/%Y') if due_date else '—',
+        'due_date_value': due_date.isoformat() if due_date else '',
+        'category': category,
+        'concept': concept,
+        'payment_date': payment_date,
+        'payment_date_text': (
+            payment_date.strftime('%d/%m/%Y') if payment_date else '—'
+        ),
+        'payment_date_value': payment_date.isoformat() if payment_date else '',
+        'amount': Decimal(amount or 0).quantize(Decimal('0.01')),
+        'currency': (currency or 'PEN').strip().upper(),
+        'status': display_status,
+        'status_class': status_class,
+        'include_in_total': status_class != 'annulled',
+        'responsible': responsible or '',
+        'reference': reference or '',
+        'notes': notes or '',
+    }
+
+
+@never_cache
+@external_agent_access_required
+def financial_excel_simulator(request):
+    rows = []
+
+    collections = (
+        CommissionCollection.objects
+        .prefetch_related('entries')
+        .order_by('-closing_date', '-pk')
+    )
+    for collection in collections:
+        entries = list(collection.entries.all())
+        latest_collection_date = max(
+            (
+                entry.collection_date
+                for entry in entries
+                if entry.collection_date
+            ),
+            default=None,
+        )
+        deal_label = collection.get_deal_type_display()
+        detail_notes = (
+            f'Cobrado {collection.currency_code} {collection.collected_amount:,.2f} '
+            f'de {collection.currency_code} {collection.amount_to_collect:,.2f}. '
+            f'Agentes {collection.currency_code} {collection.amount_for_agents:,.2f} · '
+            f'Brokers {collection.currency_code} {collection.amount_for_brokers:,.2f} · '
+            f'Propify {collection.currency_code} {collection.amount_for_propify:,.2f}.'
+        )
+        rows.append(_financial_simulator_row(
+            module='Comisiones',
+            module_class='commissions',
+            category=f'Cobro · {deal_label}',
+            concept=f'{collection.operation_code} · {collection.property_name}'.strip(' ·'),
+            due_date=collection.closing_date,
+            payment_date=latest_collection_date,
+            amount=collection.amount_to_collect,
+            currency=collection.currency_code,
+            status=collection.status,
+            status_label=collection.get_status_display(),
+            responsible=collection.created_by_username,
+            reference=collection.operation_code,
+            notes=detail_notes,
+        ))
+        for entry in entries:
+            rows.append(_financial_simulator_row(
+                module='Comisiones',
+                module_class='commissions',
+                category=f'Abono · {deal_label}',
+                concept=(
+                    f'{collection.operation_code} · '
+                    f'{collection.property_name or "Cobro de comisión"}'
+                ),
+                due_date=collection.closing_date,
+                payment_date=entry.collection_date,
+                amount=entry.amount,
+                currency=collection.currency_code,
+                status='cobrado',
+                status_label='Abono recibido',
+                responsible=entry.registered_by_username,
+                reference=entry.voucher or collection.operation_code,
+                notes=entry.notes or f'Abono de {collection.operation_code}.',
+            ))
+
+    commission_payments = (
+        CommissionPayment.objects
+        .order_by('-payment_date', '-due_date', '-pk')
+    )
+    for payment in commission_payments:
+        rows.append(_financial_simulator_row(
+            module='Comisiones',
+            module_class='commissions',
+            category=f'Pago · {payment.get_beneficiary_type_display()}',
+            concept=(
+                f'{payment.operation_code} · '
+                f'{payment.beneficiary_name or payment.property_name or "Comisión"}'
+            ),
+            due_date=payment.due_date,
+            payment_date=payment.payment_date,
+            amount=payment.amount,
+            currency=payment.currency_code,
+            status=payment.status,
+            status_label=payment.get_status_display(),
+            responsible=payment.beneficiary_name,
+            reference=payment.voucher or payment.operation_code,
+            notes=payment.notes or (
+                f'Propiedad: {payment.property_name or "—"} · '
+                f'Medio: {payment.payment_method or "—"} · '
+                f'Cuenta: {payment.account or "—"}.'
+            ),
+        ))
+
+    service_payments = ServicePayment.objects.order_by('-due_date', '-pk')
+    for payment in service_payments:
+        effective_amount = (
+            payment.paid_amount
+            if payment.status == ServicePayment.Status.PAID
+            and payment.paid_amount
+            else payment.estimated_amount
+        )
+        rows.append(_financial_simulator_row(
+            module='Servicios',
+            module_class='services',
+            category=f'Servicio · {payment.get_subcategory_display()}',
+            concept=payment.concept,
+            due_date=payment.due_date,
+            payment_date=payment.payment_date,
+            amount=effective_amount,
+            currency=payment.currency_code,
+            status=payment.status,
+            status_label=payment.get_status_display(),
+            responsible=payment.provider,
+            reference=payment.reference or payment.voucher,
+            notes=(
+                f'Estimado {payment.currency_code} {payment.estimated_amount:,.2f} · '
+                f'Pagado {payment.currency_code} {payment.paid_amount:,.2f} · '
+                f'{payment.get_recurrence_display()}. {payment.notes}'
+            ).strip(),
+        ))
+
+    operating_expenses = OperatingExpense.objects.order_by('-due_date', '-pk')
+    for expense in operating_expenses:
+        effective_amount = (
+            expense.paid_amount
+            if expense.status == OperatingExpense.Status.PAID
+            and expense.paid_amount
+            else expense.amount
+        )
+        is_marketing = (
+            expense.expense_category
+            == OperatingExpense.ExpenseCategory.MARKETING
+        )
+        rows.append(_financial_simulator_row(
+            module='Marketing' if is_marketing else 'Gastos fijos',
+            module_class='marketing' if is_marketing else 'fixed',
+            category=expense.get_subcategory_display(),
+            concept=expense.concept,
+            due_date=expense.due_date,
+            payment_date=expense.payment_date,
+            amount=effective_amount,
+            currency=expense.currency_code,
+            status=expense.status,
+            status_label=expense.get_status_display(),
+            responsible=expense.provider,
+            reference=expense.reference or expense.voucher,
+            notes=(
+                f'Presupuesto {expense.currency_code} {expense.amount:,.2f} · '
+                f'Pagado {expense.currency_code} {expense.paid_amount:,.2f} · '
+                f'{expense.get_recurrence_display()}. {expense.notes}'
+            ).strip(),
+        ))
+
+    payroll_entries = PayrollEntry.objects.select_related('employee').order_by(
+        '-period',
+        'employee__full_name',
+    )
+    for entry in payroll_entries:
+        employee = entry.employee
+        rows.append(_financial_simulator_row(
+            module='Planillas',
+            module_class='payroll',
+            category=f'Planilla · {employee.area or employee.position or "Equipo"}',
+            concept=(
+                f'{employee.full_name}'
+                f'{f" · {employee.position}" if employee.position else ""}'
+            ),
+            due_date=entry.period,
+            payment_date=entry.payment_date,
+            amount=entry.employer_cost,
+            currency=entry.currency_code,
+            status=entry.status,
+            status_label=entry.get_status_display(),
+            responsible=employee.full_name,
+            reference=employee.document_number,
+            notes=(
+                f'Neto {entry.currency_code} {entry.net_pay:,.2f} · '
+                f'AFP/ONP {entry.currency_code} {entry.pension_deduction:,.2f} · '
+                f'EsSalud {entry.currency_code} {entry.essalud_amount:,.2f}. '
+                f'{entry.notes}'
+            ).strip(),
+        ))
+
+    current_period = timezone.localdate().replace(day=1)
+    employees_without_entry = (
+        PayrollEmployee.objects
+        .filter(is_active=True)
+        .exclude(payroll_entries__period=current_period)
+        .order_by('full_name')
+    )
+    for employee in employees_without_entry:
+        rows.append(_financial_simulator_row(
+            module='Planillas',
+            module_class='payroll',
+            category='Planilla · Pendiente de generar',
+            concept=(
+                f'{employee.full_name}'
+                f'{f" · {employee.position}" if employee.position else ""}'
+            ),
+            due_date=current_period,
+            amount=employee.base_salary,
+            currency=employee.currency_code,
+            status='sin_generar',
+            status_label='Pendiente de generar',
+            responsible=employee.full_name,
+            reference=employee.document_number,
+            notes=(
+                f'Trabajador activo sin planilla generada para '
+                f'{current_period:%Y-%m}. Monto referencial: sueldo base; '
+                f'sistema {employee.get_pension_system_display()} '
+                f'{employee.pension_pct:.2f}%.'
+            ),
+        ))
+
+    rows.sort(
+        key=lambda row: (
+            row['due_date'] or date.min,
+            row['module'],
+            row['concept'],
+        ),
+        reverse=True,
+    )
+    currency_totals = {}
+    for row in rows:
+        if not row['include_in_total']:
+            continue
+        currency = row['currency']
+        currency_totals[currency] = (
+            currency_totals.get(currency, Decimal('0')) + row['amount']
+        )
+
+    return render(request, 'external_agents/financial_excel_simulator.html', {
+        'rows': rows,
+        'currency_totals': [
+            {'currency': currency, 'amount': amount}
+            for currency, amount in sorted(currency_totals.items())
+        ],
+        'module_count': len({row['module'] for row in rows}),
+        'total_count': len(rows),
+        'generated_on': timezone.localdate(),
+    })
+
+
 @never_cache
 @external_agent_access_required
 def payroll_employee_add(request):

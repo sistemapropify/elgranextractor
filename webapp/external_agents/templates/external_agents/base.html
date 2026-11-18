@@ -70,6 +70,10 @@
             <span class="submenu-icon">▥</span>
             <span>Planillas de Sueldos</span>
         </a>
+        <a href="{% url 'external_agents:financial_excel_simulator' %}" class="submenu-item {% if request.resolver_match.url_name == 'financial_excel_simulator' %}active{% endif %}">
+            <span class="submenu-icon">▧</span>
+            <span>Simulador Excel</span>
+        </a>
     </div>
 </div>
 {% endblock %}

@@ -1,0 +1,828 @@
+{% extends "external_agents/base.html" %}
+{% load humanize %}
+
+{% block title %}Simulador Excel · Gestión Financiera{% endblock %}
+{% block page_title %}Simulador Excel{% endblock %}
+{% block hero_title %}Simulador Excel financiero{% endblock %}
+{% block hero_subtitle %}Borrador de trabajo que consolida los movimientos de comisiones, servicios, gastos fijos, marketing y planillas en una sola hoja filtrable.{% endblock %}
+
+{% block head_actions %}
+<span class="fx-draft-pill">Borrador local</span>
+<a class="ea-btn" href="{% url 'external_agents:payroll_dashboard' %}">Volver a Planillas</a>
+{% endblock %}
+
+{% block extra_module_css %}
+<style>
+    .fx-draft-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 38px;
+        padding: 0 14px;
+        border: 1px solid rgba(210, 153, 34, .5);
+        border-radius: 999px;
+        background: rgba(210, 153, 34, .12);
+        color: #e3b341;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .fx-draft-pill::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+        box-shadow: 0 0 0 4px rgba(210, 153, 34, .12);
+    }
+
+    .fx-intro {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(120px, .55fr));
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .fx-note,
+    .fx-stat {
+        border: 1px solid var(--ea-border);
+        border-radius: 13px;
+        background: var(--ea-panel);
+    }
+
+    .fx-note {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        padding: 15px 17px;
+        color: var(--ea-muted);
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
+    .fx-note-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        background: rgba(88, 166, 255, .12);
+        color: var(--ea-blue);
+        font-size: 18px;
+    }
+
+    .fx-note strong {
+        display: block;
+        margin-bottom: 2px;
+        color: var(--ea-text);
+        font-size: 13px;
+    }
+
+    .fx-stat {
+        padding: 13px 15px;
+    }
+
+    .fx-stat span {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--ea-muted);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    .fx-stat strong {
+        color: #f0f6fc;
+        font-size: 23px;
+        line-height: 1;
+    }
+
+    .fx-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1px solid var(--ea-border);
+        border-bottom: 0;
+        border-radius: 13px 13px 0 0;
+        background: #161b22;
+    }
+
+    .fx-toolbar-copy {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        color: var(--ea-muted);
+        font-size: 12px;
+    }
+
+    .fx-toolbar-copy strong {
+        color: var(--ea-text);
+        font-size: 13px;
+    }
+
+    .fx-visible {
+        display: inline-flex;
+        align-items: center;
+        min-height: 27px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: rgba(63, 185, 80, .12);
+        color: #56d364;
+        font-size: 11px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .fx-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .fx-sheet-wrap {
+        overflow: auto;
+        max-height: calc(100vh - 315px);
+        min-height: 390px;
+        border: 1px solid var(--ea-border);
+        border-radius: 0 0 13px 13px;
+        background: #fff;
+        box-shadow: 0 18px 45px rgba(0, 0, 0, .22);
+    }
+
+    .fx-sheet {
+        width: max-content;
+        min-width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+        color: #263238;
+        font-size: 12px;
+    }
+
+    .fx-sheet th,
+    .fx-sheet td {
+        border-right: 1px solid #dce3e8;
+        border-bottom: 1px solid #e2e8ec;
+        vertical-align: middle;
+    }
+
+    .fx-sheet thead {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+    }
+
+    .fx-sheet .fx-head-row th {
+        height: 39px;
+        padding: 0;
+        background: #eef3f1;
+        color: #30423b;
+        text-align: left;
+        box-shadow: inset 0 -1px 0 #bfd0c8;
+    }
+
+    .fx-sheet .fx-filter-row th {
+        top: 39px;
+        z-index: 4;
+        height: 43px;
+        padding: 5px;
+        background: #f7faf8;
+    }
+
+    .fx-sort {
+        appearance: none;
+        width: 100%;
+        min-height: 38px;
+        padding: 0 12px;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        font: inherit;
+        font-size: 10px;
+        font-weight: 850;
+        letter-spacing: .055em;
+        text-align: left;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .fx-sort:hover {
+        background: #e2ebe6;
+    }
+
+    .fx-sort:focus-visible,
+    .fx-filter:focus-visible,
+    .fx-clear-one:focus-visible {
+        outline: 2px solid #18794e;
+        outline-offset: -2px;
+    }
+
+    .fx-sort-indicator {
+        float: right;
+        margin-left: 8px;
+        color: #6b7c75;
+        font-size: 12px;
+    }
+
+    .fx-sort[data-direction="asc"] .fx-sort-indicator::after {
+        content: "▲";
+        color: #18794e;
+    }
+
+    .fx-sort[data-direction="desc"] .fx-sort-indicator::after {
+        content: "▼";
+        color: #18794e;
+    }
+
+    .fx-sort:not([data-direction]) .fx-sort-indicator::after {
+        content: "↕";
+        opacity: .55;
+    }
+
+    .fx-filter-box {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .fx-filter {
+        width: 100%;
+        min-width: 0;
+        height: 31px;
+        padding: 0 8px;
+        border: 1px solid #c5d1ca;
+        border-radius: 5px;
+        background: #fff;
+        color: #263238;
+        font: inherit;
+        font-size: 11px;
+    }
+
+    .fx-filter::placeholder {
+        color: #8b9a93;
+    }
+
+    .fx-clear-one {
+        width: 24px;
+        height: 24px;
+        flex: 0 0 auto;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        color: #7a8882;
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 1;
+    }
+
+    .fx-clear-one:hover {
+        background: #e6ece9;
+        color: #263238;
+    }
+
+    .fx-sheet tbody tr:nth-child(even) td {
+        background: #fbfcfb;
+    }
+
+    .fx-sheet tbody tr:hover td {
+        background: #edf7f1;
+    }
+
+    .fx-sheet tbody tr[hidden] {
+        display: none;
+    }
+
+    .fx-sheet td {
+        height: 44px;
+        padding: 7px 10px;
+        background: #fff;
+    }
+
+    .fx-sheet .col-index { width: 46px; }
+    .fx-sheet .col-module { width: 128px; }
+    .fx-sheet .col-date { width: 120px; }
+    .fx-sheet .col-category { width: 185px; }
+    .fx-sheet .col-concept { width: 280px; }
+    .fx-sheet .col-amount { width: 125px; }
+    .fx-sheet .col-currency { width: 85px; }
+    .fx-sheet .col-status { width: 135px; }
+    .fx-sheet .col-responsible { width: 175px; }
+    .fx-sheet .col-reference { width: 145px; }
+    .fx-sheet .col-notes { width: 330px; }
+
+    .fx-row-number {
+        color: #8a9891;
+        font-size: 10px;
+        text-align: center;
+    }
+
+    .fx-module {
+        display: inline-flex;
+        align-items: center;
+        min-height: 23px;
+        padding: 0 8px;
+        border-radius: 5px;
+        font-size: 10px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .fx-module.commissions { background: #e8e5ff; color: #5843b8; }
+    .fx-module.services { background: #e2f1ff; color: #1767a8; }
+    .fx-module.fixed { background: #f1eee6; color: #625842; }
+    .fx-module.marketing { background: #ffe7ef; color: #a52a5b; }
+    .fx-module.payroll { background: #e4f5e8; color: #237a3b; }
+
+    .fx-concept {
+        color: #172b23;
+        font-weight: 750;
+    }
+
+    .fx-muted {
+        color: #687a72;
+    }
+
+    .fx-notes {
+        display: block;
+        max-width: 310px;
+        overflow: hidden;
+        color: #687a72;
+        line-height: 1.35;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .fx-num {
+        font-variant-numeric: tabular-nums;
+        font-weight: 800;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .fx-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 24px;
+        padding: 0 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .fx-status::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    .fx-status.paid { background: #e2f5e8; color: #1f7a3a; }
+    .fx-status.pending { background: #fff1cc; color: #8b5d00; }
+    .fx-status.overdue { background: #ffe3e1; color: #b42318; }
+    .fx-status.partial { background: #e5efff; color: #225ba8; }
+    .fx-status.annulled { background: #eceeed; color: #65706b; }
+
+    .fx-empty {
+        display: none;
+        padding: 44px 18px;
+        color: #687a72;
+        text-align: center;
+    }
+
+    .fx-empty.visible {
+        display: block;
+    }
+
+    .fx-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 11px 14px;
+        border: 1px solid #2b5140;
+        border-top: 0;
+        border-radius: 0 0 13px 13px;
+        background: #173d2e;
+        color: #c9e7d7;
+        font-size: 11px;
+    }
+
+    .fx-totals {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .fx-total {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 7px;
+        min-height: 27px;
+        padding: 0 10px;
+        border: 1px solid rgba(207, 236, 221, .2);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, .06);
+    }
+
+    .fx-total span {
+        color: #9cc8b2;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: .07em;
+        text-transform: uppercase;
+    }
+
+    .fx-total strong {
+        color: #fff;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .fx-legend {
+        color: #9cc8b2;
+        white-space: nowrap;
+    }
+
+    @media (max-width: 1050px) {
+        .fx-intro {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .fx-note {
+            grid-column: 1 / -1;
+        }
+
+        .fx-sheet-wrap {
+            max-height: none;
+        }
+    }
+
+    @media (max-width: 680px) {
+        .fx-intro {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .fx-toolbar,
+        .fx-footer {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .fx-actions {
+            width: 100%;
+        }
+
+        .fx-actions .ea-btn {
+            flex: 1;
+        }
+
+        .fx-legend {
+            white-space: normal;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block module_content %}
+<section class="fx-intro" aria-label="Resumen del simulador">
+    <div class="fx-note">
+        <span class="fx-note-icon" aria-hidden="true">▧</span>
+        <div>
+            <strong>Hoja de trabajo, no asiento contable</strong>
+            Consolida los registros existentes de Gestión Financiera. Cada fila conserva su módulo de origen y los importes pagados usan el monto real registrado.
+        </div>
+    </div>
+    <div class="fx-stat">
+        <span>Filas cargadas</span>
+        <strong id="fxTotalCount">{{ total_count }}</strong>
+    </div>
+    <div class="fx-stat">
+        <span>Módulos</span>
+        <strong>{{ module_count }}</strong>
+    </div>
+    <div class="fx-stat">
+        <span>Fecha de corte</span>
+        <strong style="font-size:16px">{{ generated_on|date:"d/m/Y" }}</strong>
+    </div>
+</section>
+
+<div class="fx-toolbar">
+    <div class="fx-toolbar-copy">
+        <strong>Hoja consolidada</strong>
+        <span class="fx-visible"><span id="fxVisibleCount">{{ total_count }}</span>&nbsp;visibles</span>
+        <span>Haz clic en una cabecera para ordenar</span>
+    </div>
+    <div class="fx-actions">
+        <button class="ea-btn ea-btn-small" id="fxReset" type="button">Limpiar filtros</button>
+        <button class="ea-btn ea-btn-small ea-btn-blue" id="fxCsv" type="button">Exportar vista</button>
+    </div>
+</div>
+
+<div class="fx-sheet-wrap" id="fxSheetWrap">
+    <table class="fx-sheet" id="fxSheet" aria-label="Simulador Excel de Gestión Financiera">
+        <thead>
+            <tr class="fx-head-row">
+                <th class="col-index" scope="col"><button class="fx-sort" type="button" data-sort-key="index" aria-label="Ordenar por número de fila">#<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-module" scope="col"><button class="fx-sort" type="button" data-sort-key="module" aria-label="Ordenar por módulo">Módulo<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-date" scope="col"><button class="fx-sort" type="button" data-sort-key="dueDate" aria-label="Ordenar por fecha de vencimiento">Vencimiento<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-category" scope="col"><button class="fx-sort" type="button" data-sort-key="category" aria-label="Ordenar por categoría">Categoría<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-concept" scope="col"><button class="fx-sort" type="button" data-sort-key="concept" aria-label="Ordenar por concepto">Concepto<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-date" scope="col"><button class="fx-sort" type="button" data-sort-key="paymentDate" aria-label="Ordenar por fecha de pago">Fecha de pago<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-amount" scope="col"><button class="fx-sort" type="button" data-sort-key="amount" aria-label="Ordenar por monto">Monto<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-currency" scope="col"><button class="fx-sort" type="button" data-sort-key="currency" aria-label="Ordenar por moneda">Moneda<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-status" scope="col"><button class="fx-sort" type="button" data-sort-key="status" aria-label="Ordenar por estado">Estado<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-responsible" scope="col"><button class="fx-sort" type="button" data-sort-key="responsible" aria-label="Ordenar por responsable">Responsable<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-reference" scope="col"><button class="fx-sort" type="button" data-sort-key="reference" aria-label="Ordenar por referencia">Referencia<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-notes" scope="col"><button class="fx-sort" type="button" data-sort-key="notes" aria-label="Ordenar por observaciones">Observaciones<span class="fx-sort-indicator"></span></button></th>
+            </tr>
+            <tr class="fx-filter-row">
+                <th><span class="fx-muted" style="display:block;text-align:center">—</span></th>
+                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="module" aria-label="Filtrar módulo" placeholder="Filtrar…"><button class="fx-clear-one" type="button" data-clear="module" aria-label="Limpiar filtro de módulo">×</button></div></th>
+                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="dueText" aria-label="Filtrar vencimiento" placeholder="dd/mm/aaaa"><button class="fx-clear-one" type="button" data-clear="dueText" aria-label="Limpiar filtro de vencimiento">×</button></div></th>
+                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="category" aria-label="Filtrar categoría" placeholder="Filtrar…"><button class="fx-clear-one" type="button" data-clear="category" aria-label="Limpiar filtro de categoría">×</button></div></th>
+                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="concept" aria-label="Filtrar concepto" placeholder="Buscar concepto…"><button class="fx-clear-one" type="button" data-clear="concept" aria-label="Limpiar filtro de concepto">×</button></div></th>
+                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="paymentText" aria-label="Filtrar fecha de pago" placeholder="dd/mm/aaaa"><button class="fx-clear-one" type="button" data-clear="paymentText" aria-label="Limpiar filtro de fecha de pago">×</button></div></th>
+                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="amount" aria-label="Filtrar monto" placeholder="Importe"><button class="fx-clear-one" type="button" data-clear="amount" aria-label="Limpiar filtro de monto">×</button></div></th>
+                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="currency" aria-label="Filtrar moneda" placeholder="PEN"><button class="fx-clear-one" type="button" data-clear="currency" aria-label="Limpiar filtro de moneda">×</button></div></th>
+                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="status" aria-label="Filtrar estado" placeholder="Estado"><button class="fx-clear-one" type="button" data-clear="status" aria-label="Limpiar filtro de estado">×</button></div></th>
+                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="responsible" aria-label="Filtrar responsable" placeholder="Responsable"><button class="fx-clear-one" type="button" data-clear="responsible" aria-label="Limpiar filtro de responsable">×</button></div></th>
+                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="reference" aria-label="Filtrar referencia" placeholder="Referencia"><button class="fx-clear-one" type="button" data-clear="reference" aria-label="Limpiar filtro de referencia">×</button></div></th>
+                <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="notes" aria-label="Filtrar observaciones" placeholder="Buscar observación…"><button class="fx-clear-one" type="button" data-clear="notes" aria-label="Limpiar filtro de observaciones">×</button></div></th>
+            </tr>
+        </thead>
+        <tbody id="fxRows">
+            {% for row in rows %}
+            <tr
+                data-index="{{ forloop.counter }}"
+                data-module="{{ row.module }}"
+                data-due-date="{{ row.due_date_value }}"
+                data-due-text="{{ row.due_date_text }}"
+                data-category="{{ row.category }}"
+                data-concept="{{ row.concept }}"
+                data-payment-date="{{ row.payment_date_value }}"
+                data-payment-text="{{ row.payment_date_text }}"
+                data-amount="{{ row.amount }}"
+                data-currency="{{ row.currency }}"
+                data-status="{{ row.status }}"
+                data-responsible="{{ row.responsible }}"
+                data-reference="{{ row.reference }}"
+                data-notes="{{ row.notes }}"
+                data-include-total="{% if row.include_in_total %}1{% else %}0{% endif %}"
+            >
+                <td class="fx-row-number" data-value="{{ forloop.counter }}">{{ forloop.counter }}</td>
+                <td><span class="fx-module {{ row.module_class }}">{{ row.module }}</span></td>
+                <td class="fx-muted" data-value="{{ row.due_date_value }}">{{ row.due_date_text }}</td>
+                <td data-value="{{ row.category }}">{{ row.category }}</td>
+                <td class="fx-concept" data-value="{{ row.concept }}">{{ row.concept }}</td>
+                <td class="fx-muted" data-value="{{ row.payment_date_value }}">{{ row.payment_date_text }}</td>
+                <td class="fx-num" data-value="{{ row.amount }}">{{ row.currency }} {{ row.amount|floatformat:2|intcomma }}</td>
+                <td data-value="{{ row.currency }}">{{ row.currency }}</td>
+                <td data-value="{{ row.status }}"><span class="fx-status {{ row.status_class }}">{{ row.status }}</span></td>
+                <td data-value="{{ row.responsible }}">{{ row.responsible|default:"—" }}</td>
+                <td data-value="{{ row.reference }}">{{ row.reference|default:"—" }}</td>
+                <td data-value="{{ row.notes }}"><span class="fx-notes" title="{{ row.notes }}">{{ row.notes|default:"—" }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="fx-empty{% if not rows %} visible{% endif %}" id="fxNoData">
+        No hay movimientos financieros cargados todavía. Cuando registres comisiones, servicios, gastos o planillas aparecerán aquí.
+    </div>
+</div>
+
+<div class="fx-footer">
+    <div class="fx-totals" id="fxTotals" aria-live="polite">
+        {% for total in currency_totals %}
+        <span class="fx-total" data-currency="{{ total.currency }}">
+            <span>Suma {{ total.currency }}</span>
+            <strong>{{ total.currency }} {{ total.amount|floatformat:2|intcomma }}</strong>
+        </span>
+        {% empty %}
+        <span class="fx-total"><span>Suma visible</span><strong>Sin importes</strong></span>
+        {% endfor %}
+    </div>
+    <span class="fx-legend">Los anulados permanecen visibles, pero no se suman.</span>
+</div>
+
+<script>
+(function () {
+    const table = document.getElementById('fxSheet');
+    const rows = Array.from(document.querySelectorAll('#fxRows tr'));
+    const filters = Array.from(document.querySelectorAll('[data-filter]'));
+    const sortButtons = Array.from(document.querySelectorAll('[data-sort-key]'));
+    const visibleCount = document.getElementById('fxVisibleCount');
+    const totalCount = document.getElementById('fxTotalCount');
+    const totals = document.getElementById('fxTotals');
+    const noData = document.getElementById('fxNoData');
+    let sortKey = 'dueDate';
+    let sortDirection = 'desc';
+
+    const numberFormatter = new Intl.NumberFormat('es-PE', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+
+    function normalize(value) {
+        return String(value ?? '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .trim();
+    }
+
+    function getFilterValue(row, key) {
+        if (key === 'dueText') {
+            return `${row.dataset.dueText} ${row.dataset.dueDate}`;
+        }
+        if (key === 'paymentText') {
+            return `${row.dataset.paymentText} ${row.dataset.paymentDate}`;
+        }
+        if (key === 'amount') {
+            return `${row.dataset.amount} ${Number(row.dataset.amount).toFixed(2)}`;
+        }
+        return row.dataset[key] || '';
+    }
+
+    function getSortValue(row, key) {
+        if (key === 'index') {
+            return Number(row.dataset.index);
+        }
+        if (key === 'amount') {
+            return Number(row.dataset.amount);
+        }
+        if (key === 'dueDate') {
+            return row.dataset.dueDate || '0000-00-00';
+        }
+        if (key === 'paymentDate') {
+            return row.dataset.paymentDate || '0000-00-00';
+        }
+        return normalize(row.dataset[key]);
+    }
+
+    function updateSortIndicators() {
+        sortButtons.forEach(button => {
+            button.removeAttribute('data-direction');
+            button.removeAttribute('aria-sort');
+            if (button.dataset.sortKey === sortKey) {
+                button.dataset.direction = sortDirection;
+                button.setAttribute(
+                    'aria-sort',
+                    sortDirection === 'asc' ? 'ascending' : 'descending',
+                );
+            }
+        });
+    }
+
+    function updateTotals(visibleRows) {
+        const byCurrency = new Map();
+        visibleRows.forEach(row => {
+            if (row.dataset.includeTotal !== '1') return;
+            const currency = row.dataset.currency || 'PEN';
+            byCurrency.set(
+                currency,
+                (byCurrency.get(currency) || 0) + Number(row.dataset.amount || 0),
+            );
+        });
+        if (!byCurrency.size) {
+            totals.innerHTML = '<span class="fx-total"><span>Suma visible</span><strong>Sin importes</strong></span>';
+            return;
+        }
+        totals.innerHTML = Array.from(byCurrency.entries())
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([currency, amount]) => `
+                <span class="fx-total" data-currency="${currency}">
+                    <span>Suma ${currency}</span>
+                    <strong>${currency} ${numberFormatter.format(amount)}</strong>
+                </span>
+            `)
+            .join('');
+    }
+
+    function applyView() {
+        const activeFilters = filters
+            .map(input => ({
+                key: input.dataset.filter,
+                value: normalize(input.value),
+            }))
+            .filter(item => item.value);
+        const visibleRows = [];
+
+        rows.forEach(row => {
+            const matches = activeFilters.every(filter => (
+                normalize(getFilterValue(row, filter.key)).includes(filter.value)
+            ));
+            row.hidden = !matches;
+            if (matches) visibleRows.push(row);
+        });
+
+        visibleRows.sort((left, right) => {
+            const leftValue = getSortValue(left, sortKey);
+            const rightValue = getSortValue(right, sortKey);
+            let comparison = 0;
+            if (typeof leftValue === 'number' && typeof rightValue === 'number') {
+                comparison = leftValue - rightValue;
+            } else {
+                comparison = String(leftValue).localeCompare(
+                    String(rightValue),
+                    'es',
+                    { numeric: true, sensitivity: 'base' },
+                );
+            }
+            return sortDirection === 'asc' ? comparison : -comparison;
+        });
+
+        const fragment = document.createDocumentFragment();
+        visibleRows.forEach(row => fragment.appendChild(row));
+        document.getElementById('fxRows').appendChild(fragment);
+
+        visibleCount.textContent = visibleRows.length;
+        totalCount.textContent = rows.length;
+        noData.classList.toggle(
+            'visible',
+            visibleRows.length === 0 && rows.length === 0,
+        );
+        updateTotals(visibleRows);
+        updateSortIndicators();
+    }
+
+    filters.forEach(input => {
+        input.addEventListener('input', applyView);
+    });
+
+    document.querySelectorAll('[data-clear]').forEach(button => {
+        button.addEventListener('click', () => {
+            const input = filters.find(item => (
+                item.dataset.filter === button.dataset.clear
+            ));
+            if (input) {
+                input.value = '';
+                input.focus();
+                applyView();
+            }
+        });
+    });
+
+    sortButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const nextKey = button.dataset.sortKey;
+            if (sortKey === nextKey) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortKey = nextKey;
+                sortDirection = ['amount', 'index', 'dueDate', 'paymentDate'].includes(nextKey)
+                    ? 'desc'
+                    : 'asc';
+            }
+            applyView();
+        });
+    });
+
+    document.getElementById('fxReset').addEventListener('click', () => {
+        filters.forEach(input => {
+            input.value = '';
+        });
+        sortKey = 'dueDate';
+        sortDirection = 'desc';
+        applyView();
+        filters[0].focus();
+    });
+
+    document.getElementById('fxCsv').addEventListener('click', () => {
+        const headers = Array.from(table.querySelectorAll('.fx-head-row .fx-sort'))
+            .map(button => button.textContent.replace(/[▲▼↕]/g, '').trim());
+        const visibleRows = rows.filter(row => !row.hidden);
+        const escapeCsv = value => `"${String(value ?? '').replaceAll('"', '""')}"`;
+        const lines = [
+            headers.map(escapeCsv).join(','),
+            ...visibleRows.map(row => Array.from(row.cells)
+                .map(cell => escapeCsv(cell.innerText.trim()))
+                .join(','))
+        ];
+        const blob = new Blob(['\ufeff' + lines.join('\r\n')], {
+            type: 'text/csv;charset=utf-8;',
+        });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'simulador-financiero.csv';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(link.href);
+    });
+
+    applyView();
+})();
+</script>
+{% endblock %}

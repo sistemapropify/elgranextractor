@@ -25,6 +25,7 @@ urlpatterns = [
     path('planillas/generar/', views.payroll_generate, name='payroll_generate'),
     path('planillas/<int:pk>/editar/', views.payroll_entry_update, name='payroll_entry_update'),
     path('planillas/<int:pk>/pagar/', views.payroll_entry_pay, name='payroll_entry_pay'),
+    path('simulador-excel/', views.financial_excel_simulator, name='financial_excel_simulator'),
     path('nuevo/', views.agent_create, name='agent_create'),
     path('configuracion/', views.configuration, name='configuration'),
     path(

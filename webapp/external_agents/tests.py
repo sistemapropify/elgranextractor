@@ -683,6 +683,113 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertEqual(entry.status, PayrollEntry.Status.PAID)
         self.assertEqual(entry.payment_date, timezone.localdate())
 
+    def test_financial_excel_simulator_consolidates_financial_templates(self):
+        self.authenticate_propify()
+        today = timezone.localdate()
+        period = today.replace(day=1)
+
+        collection = CommissionCollection.objects.create(
+            operation_code='SIM-COM-001',
+            property_name='Cierre simulador',
+            deal_type='sale',
+            currency_code='USD',
+            amount_to_collect='1000.00',
+            collected_amount='200.00',
+            amount_for_agents='300.00',
+            amount_for_propify='500.00',
+            closing_date=today,
+            created_by_username='tester',
+        )
+        CommissionCollectionEntry.objects.create(
+            collection=collection,
+            amount='200.00',
+            collection_date=today,
+            registered_by_username='tester',
+        )
+        CommissionPayment.objects.create(
+            operation_code='SIM-COM-001',
+            property_name='Cierre simulador',
+            beneficiary_type=CommissionPayment.BeneficiaryType.PROPIFFY,
+            beneficiary_name='Propify',
+            amount='500.00',
+            currency_code='USD',
+            due_date=today,
+            payment_date=today,
+            status=CommissionPayment.Status.PAID,
+        )
+        ServicePayment.objects.create(
+            concept='Internet simulador',
+            provider='Proveedor de red',
+            subcategory=ServicePayment.Subcategory.INTERNET,
+            currency_code='PEN',
+            estimated_amount='120.00',
+            paid_amount='120.00',
+            service_month=period,
+            due_date=today,
+            payment_date=today,
+            status=ServicePayment.Status.PAID,
+        )
+        OperatingExpense.objects.create(
+            expense_category=OperatingExpense.ExpenseCategory.FIXED,
+            subcategory=OperatingExpense.Subcategory.RENT,
+            concept='Alquiler simulador',
+            amount='900.00',
+            expense_month=period,
+            due_date=today,
+        )
+        OperatingExpense.objects.create(
+            expense_category=OperatingExpense.ExpenseCategory.MARKETING,
+            subcategory=OperatingExpense.Subcategory.META_ADS,
+            concept='Meta Ads simulador',
+            amount='250.00',
+            expense_month=period,
+            due_date=today,
+        )
+        payroll_employee = PayrollEmployee.objects.create(
+            full_name='Trabajador con planilla',
+            base_salary='2000.00',
+            pension_pct='10.00',
+        )
+        PayrollEntry.objects.create(
+            employee=payroll_employee,
+            period=period,
+            base_salary='2000.00',
+            pension_deduction='200.00',
+        )
+        PayrollEmployee.objects.create(
+            full_name='Trabajador pendiente',
+            position='Asistente',
+            base_salary='1800.00',
+            pension_pct='10.00',
+        )
+
+        response = self.client.get(
+            reverse('external_agents:financial_excel_simulator')
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('no-store', response['Cache-Control'])
+        self.assertContains(response, 'Borrador local')
+        self.assertContains(response, 'data-filter="concept"')
+        self.assertContains(response, 'data-filter="dueText"')
+        self.assertContains(response, 'data-sort-key="amount"')
+        self.assertContains(response, 'id="fxCsv"')
+        rows = response.context['rows']
+        self.assertEqual(response.context['total_count'], 8)
+        self.assertEqual(
+            {row['module'] for row in rows},
+            {'Comisiones', 'Servicios', 'Gastos fijos', 'Marketing', 'Planillas'},
+        )
+        self.assertNotIn(
+            'Balance General',
+            {row['module'] for row in rows},
+        )
+        self.assertTrue(any(
+            row['concept'].startswith('Trabajador pendiente')
+            and row['status'] == 'Pendiente de generar'
+            for row in rows
+        ))
+
     def test_fixed_and_marketing_expenses_have_separate_templates(self):
         self.authenticate_propify()
         today = timezone.localdate()
