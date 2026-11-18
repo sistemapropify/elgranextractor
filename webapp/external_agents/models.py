@@ -179,6 +179,12 @@ class CommissionPayment(models.Model):
         blank=True,
         verbose_name='Propiedad',
     )
+    corresponding_month = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Mes correspondiente',
+    )
     beneficiary_type = models.CharField(
         max_length=30,
         choices=BeneficiaryType.choices,
@@ -300,6 +306,12 @@ class CommissionCollection(models.Model):
         blank=True,
         verbose_name='Propiedad',
     )
+    corresponding_month = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Mes correspondiente',
+    )
     amount_to_collect = models.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -378,6 +390,12 @@ class CommissionCollectionEntry(models.Model):
         on_delete=models.CASCADE,
         related_name='entries',
         verbose_name='Cobro de comisión',
+    )
+    corresponding_month = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Mes correspondiente',
     )
     amount = models.DecimalField(
         max_digits=14,

@@ -127,7 +127,7 @@
 
     .fx-sheet {
         width: 100%;
-        min-width: 1080px;
+        min-width: 1180px;
         border-collapse: separate;
         border-spacing: 0;
         table-layout: fixed;
@@ -275,15 +275,23 @@
         background: #fff;
     }
 
-    .fx-sheet .col-due-date { width: 17%; }
-    .fx-sheet .col-category { width: 20%; }
-    .fx-sheet .col-concept { width: 32%; }
-    .fx-sheet .col-payment-date { width: 16%; }
-    .fx-sheet .col-amount { width: 15%; }
+    .fx-sheet .col-month { width: 14%; }
+    .fx-sheet .col-due-date { width: 16%; }
+    .fx-sheet .col-category { width: 18%; }
+    .fx-sheet .col-concept { width: 26%; }
+    .fx-sheet .col-payment-date { width: 14%; }
+    .fx-sheet .col-amount { width: 12%; }
 
     .fx-concept {
         color: #172b23;
         font-weight: 750;
+    }
+
+    .fx-month {
+        color: #173d2e;
+        font-weight: 850;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
     }
 
     .fx-muted {
@@ -414,6 +422,7 @@
     <table class="fx-sheet" id="fxSheet" aria-label="Simulador Excel de Gestión Financiera">
         <thead>
             <tr class="fx-head-row">
+                <th class="col-month" scope="col"><button class="fx-sort" type="button" data-sort-key="month" aria-label="Ordenar por mes correspondiente">Mes correspondiente<span class="fx-sort-indicator"></span></button></th>
                 <th class="col-due-date" scope="col"><button class="fx-sort" type="button" data-sort-key="dueDate" aria-label="Ordenar por fecha de vencimiento">Fecha de vencimiento<span class="fx-sort-indicator"></span></button></th>
                 <th class="col-category" scope="col"><button class="fx-sort" type="button" data-sort-key="category" aria-label="Ordenar por categoría">Categoría<span class="fx-sort-indicator"></span></button></th>
                 <th class="col-concept" scope="col"><button class="fx-sort" type="button" data-sort-key="concept" aria-label="Ordenar por concepto">Concepto<span class="fx-sort-indicator"></span></button></th>
@@ -421,6 +430,7 @@
                 <th class="col-amount" scope="col"><button class="fx-sort" type="button" data-sort-key="amount" aria-label="Ordenar por monto">Monto<span class="fx-sort-indicator"></span></button></th>
             </tr>
             <tr class="fx-filter-row">
+                <th><div class="fx-filter-box"><input class="fx-filter" type="month" data-filter="month" aria-label="Filtrar mes correspondiente"><button class="fx-clear-one" type="button" data-clear="month" aria-label="Limpiar filtro de mes correspondiente">×</button></div></th>
                 <th><div class="fx-filter-box"><input class="fx-filter" type="date" data-filter="dueText" aria-label="Filtrar vencimiento"><button class="fx-clear-one" type="button" data-clear="dueText" aria-label="Limpiar filtro de vencimiento">×</button></div></th>
                 <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="category" aria-label="Filtrar categoría" placeholder="Filtrar…"><button class="fx-clear-one" type="button" data-clear="category" aria-label="Limpiar filtro de categoría">×</button></div></th>
                 <th><div class="fx-filter-box"><input class="fx-filter" type="search" data-filter="concept" aria-label="Filtrar concepto" placeholder="Buscar concepto…"><button class="fx-clear-one" type="button" data-clear="concept" aria-label="Limpiar filtro de concepto">×</button></div></th>
@@ -431,6 +441,8 @@
         <tbody id="fxRows">
             {% for row in rows %}
             <tr
+                data-month="{{ row.month_value }}"
+                data-month-text="{{ row.month_text }}"
                 data-due-date="{{ row.due_date_value }}"
                 data-due-text="{{ row.due_date_text }}"
                 data-category="{{ row.category }}"
@@ -441,6 +453,7 @@
                 data-currency="{{ row.currency }}"
                 data-include-total="{% if row.include_in_total %}1{% else %}0{% endif %}"
             >
+                <td class="fx-month" data-value="{{ row.month_value }}">{{ row.month_text }}</td>
                 <td class="fx-muted" data-value="{{ row.due_date_value }}">{{ row.due_date_text }}</td>
                 <td data-value="{{ row.category }}">{{ row.category }}</td>
                 <td class="fx-concept" data-value="{{ row.concept }}">{{ row.concept }}</td>
@@ -479,7 +492,7 @@
     const totalCount = document.getElementById('fxTotalCount');
     const totals = document.getElementById('fxTotals');
     const noData = document.getElementById('fxNoData');
-    let sortKey = 'dueDate';
+    let sortKey = 'month';
     let sortDirection = 'desc';
 
     const numberFormatter = new Intl.NumberFormat('es-PE', {
@@ -496,6 +509,9 @@
     }
 
     function getFilterValue(row, key) {
+        if (key === 'month') {
+            return `${row.dataset.monthText} ${row.dataset.month}`;
+        }
         if (key === 'dueText') {
             return `${row.dataset.dueText} ${row.dataset.dueDate}`;
         }
@@ -514,6 +530,9 @@
         }
         if (key === 'dueDate') {
             return row.dataset.dueDate || '0000-00-00';
+        }
+        if (key === 'month') {
+            return row.dataset.month || '0000-00';
         }
         if (key === 'paymentDate') {
             return row.dataset.paymentDate || '0000-00-00';
@@ -611,7 +630,9 @@
         input.addEventListener('input', applyView);
     });
 
-    filters.filter(input => input.type === 'date').forEach(input => {
+    filters.filter(input => (
+        input.type === 'date' || input.type === 'month'
+    )).forEach(input => {
         input.addEventListener('click', () => {
             try {
                 input.showPicker?.();
@@ -653,7 +674,7 @@
         filters.forEach(input => {
             input.value = '';
         });
-        sortKey = 'dueDate';
+        sortKey = 'month';
         sortDirection = 'desc';
         applyView();
         filters[0].focus();

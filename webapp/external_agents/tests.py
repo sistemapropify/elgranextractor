@@ -776,8 +776,13 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertNotContains(response, 'class="ea-module-head"')
         self.assertNotContains(response, 'class="fx-intro"')
         self.assertContains(response, 'class="ea-shell fx-page"')
+        self.assertContains(response, 'data-filter="month"')
         self.assertContains(response, 'data-filter="concept"')
         self.assertContains(response, 'data-filter="dueText"')
+        self.assertContains(
+            response,
+            'type="month" data-filter="month"',
+        )
         self.assertContains(
             response,
             'type="date" data-filter="dueText"',
@@ -786,13 +791,11 @@ class ExternalAgentsViewsTests(TestCase):
             response,
             'type="date" data-filter="paymentText"',
         )
+        self.assertContains(response, 'data-sort-key="month"')
         self.assertContains(response, 'data-sort-key="amount"')
         self.assertContains(response, 'id="fxCsv"')
-        self.assertEqual(
-            response.content.count(b'class="fx-sort"'),
-            5,
-        )
         for heading in (
+            'Mes correspondiente',
             'Fecha de vencimiento',
             'Categoría',
             'Concepto',
@@ -820,12 +823,26 @@ class ExternalAgentsViewsTests(TestCase):
         )
         self.assertContains(response, 'flex: 1 1 0')
         self.assertContains(response, 'input.showPicker?.()')
-        self.assertContains(response, 'min-width: 1080px')
+        self.assertContains(response, 'min-width: 1180px')
         rows = response.context['rows']
         self.assertEqual(response.context['total_count'], 8)
         self.assertEqual(
             {row['module'] for row in rows},
             {'Comisiones', 'Servicios', 'Gastos fijos', 'Marketing', 'Planillas'},
+        )
+        self.assertEqual(
+            response.content.count(b'class="fx-sort"'),
+            6,
+        )
+        self.assertTrue(all(
+            len(row['month_value']) == 7
+            and row['month_value'][4] == '-'
+            for row in rows
+        ))
+        html = response.content.decode()
+        self.assertLess(
+            html.index('>Mes correspondiente<'),
+            html.index('>Fecha de vencimiento<'),
         )
         self.assertNotIn(
             'Balance General',

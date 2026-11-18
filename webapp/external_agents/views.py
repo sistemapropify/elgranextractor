@@ -449,6 +449,10 @@ def _parse_closing_date(value):
         return None
 
 
+def _month_start(value):
+    return value.replace(day=1) if value else None
+
+
 def _sync_commission_collections(rows, request):
     """Sincroniza el cierre de Propify sin perder los abonos locales."""
     username = _username(request)
@@ -457,17 +461,19 @@ def _sync_commission_collections(rows, request):
         if not key:
             continue
         amount = row.get('commission', 0)
+        closing_date = _parse_closing_date(row.get('date'))
         collection, created = CommissionCollection.objects.get_or_create(
             operation_code=key,
             defaults={
                 'deal_type': row.get('deal_type') or 'sale',
                 'property_name': row.get('property') or '',
+                'corresponding_month': _month_start(closing_date),
                 'amount_to_collect': amount,
                 'amount_for_agents': row.get('agents_total', 0),
                 'amount_for_brokers': row.get('brokers_total', 0),
                 'amount_for_propify': row.get('commission_propify', 0),
                 'currency_code': row.get('currency') or 'USD',
-                'closing_date': _parse_closing_date(row.get('date')),
+                'closing_date': closing_date,
                 'status': CommissionCollection.Status.PENDING,
                 'created_by_username': username,
                 'updated_by_username': username,
@@ -481,7 +487,10 @@ def _sync_commission_collections(rows, request):
             collection.amount_for_brokers = row.get('brokers_total', 0)
             collection.amount_for_propify = row.get('commission_propify', 0)
             collection.currency_code = row.get('currency') or collection.currency_code
-            collection.closing_date = _parse_closing_date(row.get('date')) or collection.closing_date
+            collection.closing_date = closing_date or collection.closing_date
+            collection.corresponding_month = _month_start(
+                collection.closing_date
+            )
             collection.updated_by_username = username
         _update_collection_status(collection)
         collection.save()
@@ -1060,13 +1069,19 @@ def collection_add(request):
                 f'{collection.currency_code} {remaining:,.2f}.',
             )
             return _redirect_cierres(collection.deal_type, 'cobros')
+        collection_date = (
+            _parse_date_input(request.POST.get('collection_date'))
+            or timezone.localdate()
+        )
         CommissionCollectionEntry.objects.create(
             collection=collection,
-            amount=amount,
-            collection_date=(
-                _parse_date_input(request.POST.get('collection_date'))
-                or timezone.localdate()
+            corresponding_month=(
+                _month_start(collection.corresponding_month)
+                or _month_start(collection.closing_date)
+                or _month_start(collection_date)
             ),
+            amount=amount,
+            collection_date=collection_date,
             payment_method=str(request.POST.get('payment_method') or '').strip(),
             account=str(request.POST.get('account') or '').strip(),
             voucher=str(request.POST.get('voucher') or '').strip(),
@@ -1132,6 +1147,11 @@ def payment_add(request):
         payment = CommissionPayment(
             operation_code=operation_code,
             property_name=collection.property_name,
+            corresponding_month=(
+                _month_start(collection.corresponding_month)
+                or _month_start(collection.closing_date)
+                or _month_start(payment_date)
+            ),
             beneficiary_type=beneficiary_type,
             beneficiary_name=beneficiary_name,
             amount=amount,
@@ -2100,6 +2120,7 @@ def _financial_simulator_row(
     currency,
     status,
     status_label='',
+    corresponding_month=None,
     due_date=None,
     payment_date=None,
     responsible='',
@@ -2112,9 +2133,15 @@ def _financial_simulator_row(
         status_label,
         due_date,
     )
+    month = _month_start(
+        corresponding_month or due_date or payment_date
+    )
     return {
         'module': module,
         'module_class': module_class or module.lower().replace(' ', '-'),
+        'corresponding_month': month,
+        'month_text': month.strftime('%m/%Y') if month else 'Sin mes',
+        'month_value': month.strftime('%Y-%m') if month else '',
         'due_date': due_date,
         'due_date_text': due_date.strftime('%d/%m/%Y') if due_date else '—',
         'due_date_value': due_date.isoformat() if due_date else '',
@@ -2169,6 +2196,9 @@ def financial_excel_simulator(request):
             module_class='commissions',
             category=f'Cobro · {deal_label}',
             concept=f'{collection.operation_code} · {collection.property_name}'.strip(' ·'),
+            corresponding_month=(
+                collection.corresponding_month or collection.closing_date
+            ),
             due_date=collection.closing_date,
             payment_date=latest_collection_date,
             amount=collection.amount_to_collect,
@@ -2187,6 +2217,11 @@ def financial_excel_simulator(request):
                 concept=(
                     f'{collection.operation_code} · '
                     f'{collection.property_name or "Cobro de comisión"}'
+                ),
+                corresponding_month=(
+                    entry.corresponding_month
+                    or collection.corresponding_month
+                    or collection.closing_date
                 ),
                 due_date=collection.closing_date,
                 payment_date=entry.collection_date,
@@ -2212,6 +2247,7 @@ def financial_excel_simulator(request):
                 f'{payment.operation_code} · '
                 f'{payment.beneficiary_name or payment.property_name or "Comisión"}'
             ),
+            corresponding_month=payment.corresponding_month,
             due_date=payment.due_date,
             payment_date=payment.payment_date,
             amount=payment.amount,
@@ -2240,6 +2276,7 @@ def financial_excel_simulator(request):
             module_class='services',
             category=f'Servicio · {payment.get_subcategory_display()}',
             concept=payment.concept,
+            corresponding_month=payment.service_month,
             due_date=payment.due_date,
             payment_date=payment.payment_date,
             amount=effective_amount,
@@ -2272,6 +2309,7 @@ def financial_excel_simulator(request):
             module_class='marketing' if is_marketing else 'fixed',
             category=expense.get_subcategory_display(),
             concept=expense.concept,
+            corresponding_month=expense.expense_month,
             due_date=expense.due_date,
             payment_date=expense.payment_date,
             amount=effective_amount,
@@ -2301,6 +2339,7 @@ def financial_excel_simulator(request):
                 f'{employee.full_name}'
                 f'{f" · {employee.position}" if employee.position else ""}'
             ),
+            corresponding_month=entry.period,
             due_date=entry.period,
             payment_date=entry.payment_date,
             amount=entry.employer_cost,
@@ -2333,6 +2372,7 @@ def financial_excel_simulator(request):
                 f'{employee.full_name}'
                 f'{f" · {employee.position}" if employee.position else ""}'
             ),
+            corresponding_month=current_period,
             due_date=current_period,
             amount=employee.base_salary,
             currency=employee.currency_code,
