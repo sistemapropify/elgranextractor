@@ -320,9 +320,10 @@
         display: flex;
         flex: 0 0 auto;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-start;
         gap: 16px;
-        padding: 8px 12px;
+        min-height: 43px;
+        padding: 7px 12px;
         border: 1px solid #2b5140;
         border-top: 0;
         border-radius: 0 0 10px 10px;
@@ -335,21 +336,10 @@
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 7px 12px;
     }
 
-    .fx-total {
-        display: inline-flex;
-        align-items: baseline;
-        gap: 7px;
-        min-height: 27px;
-        padding: 0 10px;
-        border: 1px solid rgba(207, 236, 221, .2);
-        border-radius: 6px;
-        background: rgba(255, 255, 255, .06);
-    }
-
-    .fx-total span {
+    .fx-total-label {
         color: #9cc8b2;
         font-size: 9px;
         font-weight: 800;
@@ -357,15 +347,36 @@
         text-transform: uppercase;
     }
 
-    .fx-total strong {
+    .fx-total-values {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 7px;
+    }
+
+    .fx-total-amount {
+        display: inline-flex;
+        align-items: baseline;
+        min-height: 27px;
+        padding: 0 10px;
+        border: 1px solid rgba(207, 236, 221, .2);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, .06);
         color: #fff;
         font-size: 12px;
         font-variant-numeric: tabular-nums;
     }
 
-    .fx-legend {
+    .fx-total-empty {
         color: #9cc8b2;
-        white-space: nowrap;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .fx-total-error {
+        color: #ffb4a8;
+        font-size: 11px;
+        font-weight: 700;
     }
 
     @media (max-width: 768px) {
@@ -376,8 +387,7 @@
     }
 
     @media (max-width: 680px) {
-        .fx-toolbar,
-        .fx-footer {
+        .fx-toolbar {
             align-items: flex-start;
             flex-direction: column;
         }
@@ -390,8 +400,8 @@
             flex: 1;
         }
 
-        .fx-legend {
-            white-space: normal;
+        .fx-footer {
+            align-items: flex-start;
         }
     }
 </style>
@@ -449,7 +459,7 @@
                 data-concept="{{ row.concept }}"
                 data-payment-date="{{ row.payment_date_value }}"
                 data-payment-text="{{ row.payment_date_text }}"
-                data-amount="{{ row.amount }}"
+                data-amount="{{ row.amount_value }}"
                 data-currency="{{ row.currency }}"
                 data-include-total="{% if row.include_in_total %}1{% else %}0{% endif %}"
             >
@@ -470,16 +480,15 @@
 
 <div class="fx-footer">
     <div class="fx-totals" id="fxTotals" aria-live="polite">
+        <span class="fx-total-label">Total del monto</span>
+        <span class="fx-total-values">
         {% for total in currency_totals %}
-        <span class="fx-total" data-currency="{{ total.currency }}">
-            <span>Suma {{ total.currency }}</span>
-            <strong>{{ total.currency }} {{ total.amount|floatformat:2|intcomma }}</strong>
-        </span>
+            <strong class="fx-total-amount" data-currency="{{ total.currency }}">{{ total.currency }} {{ total.amount|floatformat:2|intcomma }}</strong>
         {% empty %}
-        <span class="fx-total"><span>Suma visible</span><strong>Sin importes</strong></span>
+            <strong class="fx-total-empty">Sin importes</strong>
         {% endfor %}
+        </span>
     </div>
-    <span class="fx-legend">Los anulados permanecen visibles, pero no se suman.</span>
 </div>
 
 <script>
@@ -499,6 +508,23 @@
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });
+
+    function parseAmount(value) {
+        const raw = String(value ?? '').trim();
+        if (!raw) return 0;
+        const lastComma = raw.lastIndexOf(',');
+        const lastDot = raw.lastIndexOf('.');
+        let normalized = raw.replace(/\s/g, '');
+        if (lastComma >= 0 && lastDot >= 0) {
+            normalized = lastComma > lastDot
+                ? normalized.replaceAll('.', '').replace(',', '.')
+                : normalized.replaceAll(',', '');
+        } else if (lastComma >= 0) {
+            normalized = normalized.replace(',', '.');
+        }
+        const parsed = Number(normalized);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
 
     function normalize(value) {
         return String(value ?? '')
@@ -556,27 +582,40 @@
 
     function updateTotals(visibleRows) {
         const byCurrency = new Map();
+        let hasInvalidAmount = false;
         visibleRows.forEach(row => {
             if (row.dataset.includeTotal !== '1') return;
             const currency = row.dataset.currency || 'PEN';
+            const amount = parseAmount(row.dataset.amount);
+            if (amount === null) {
+                hasInvalidAmount = true;
+                return;
+            }
             byCurrency.set(
                 currency,
-                (byCurrency.get(currency) || 0) + Number(row.dataset.amount || 0),
+                (byCurrency.get(currency) || 0) + amount,
             );
         });
-        if (!byCurrency.size) {
-            totals.innerHTML = '<span class="fx-total"><span>Suma visible</span><strong>Sin importes</strong></span>';
+        if (hasInvalidAmount) {
+            totals.innerHTML = '<span class="fx-total-label">Total del monto</span><strong class="fx-total-error">No se pudo calcular</strong>';
             return;
         }
-        totals.innerHTML = Array.from(byCurrency.entries())
+        if (!byCurrency.size) {
+            totals.innerHTML = '<span class="fx-total-label">Total del monto</span><strong class="fx-total-empty">Sin importes</strong>';
+            return;
+        }
+        const amounts = Array.from(byCurrency.entries())
             .sort(([left], [right]) => left.localeCompare(right))
             .map(([currency, amount]) => `
-                <span class="fx-total" data-currency="${currency}">
-                    <span>Suma ${currency}</span>
-                    <strong>${currency} ${numberFormatter.format(amount)}</strong>
-                </span>
+                <strong class="fx-total-amount" data-currency="${currency}">
+                    ${currency} ${numberFormatter.format(amount)}
+                </strong>
             `)
             .join('');
+        totals.innerHTML = `
+            <span class="fx-total-label">Total del monto</span>
+            <span class="fx-total-values">${amounts}</span>
+        `;
     }
 
     function applyView() {

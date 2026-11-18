@@ -2128,6 +2128,7 @@ def _financial_simulator_row(
     notes='',
     module_class='',
 ):
+    amount_value = Decimal(amount or 0).quantize(Decimal('0.01'))
     display_status, status_class = _financial_simulator_status(
         status,
         status_label,
@@ -2152,7 +2153,8 @@ def _financial_simulator_row(
             payment_date.strftime('%d/%m/%Y') if payment_date else '—'
         ),
         'payment_date_value': payment_date.isoformat() if payment_date else '',
-        'amount': Decimal(amount or 0).quantize(Decimal('0.01')),
+        'amount': amount_value,
+        'amount_value': f'{amount_value:.2f}',
         'currency': (currency or 'PEN').strip().upper(),
         'status': display_status,
         'status_class': status_class,

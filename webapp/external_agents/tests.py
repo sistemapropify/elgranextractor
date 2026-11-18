@@ -763,9 +763,10 @@ class ExternalAgentsViewsTests(TestCase):
             pension_pct='10.00',
         )
 
-        response = self.client.get(
-            reverse('external_agents:financial_excel_simulator')
-        )
+        with self.settings(LANGUAGE_CODE='es-pe'):
+            response = self.client.get(
+                reverse('external_agents:financial_excel_simulator')
+            )
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('no-store', response['Cache-Control'])
@@ -824,6 +825,13 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'flex: 1 1 0')
         self.assertContains(response, 'input.showPicker?.()')
         self.assertContains(response, 'min-width: 1180px')
+        self.assertContains(response, 'Total del monto')
+        self.assertNotContains(response, 'Suma visible')
+        self.assertNotContains(
+            response,
+            'Los anulados permanecen visibles, pero no se suman.',
+        )
+        self.assertContains(response, 'data-amount="1800.00"')
         rows = response.context['rows']
         self.assertEqual(response.context['total_count'], 8)
         self.assertEqual(
