@@ -2411,7 +2411,13 @@ def financial_excel_simulator(request):
         'rows': rows,
         'currency_totals': [
             {'currency': currency, 'amount': amount}
-            for currency, amount in sorted(currency_totals.items())
+            for currency, amount in sorted(
+                currency_totals.items(),
+                key=lambda item: (
+                    {'USD': 0, 'PEN': 1, 'EUR': 2}.get(item[0], 99),
+                    item[0],
+                ),
+            )
         ],
         'module_count': len({row['module'] for row in rows}),
         'total_count': len(rows),

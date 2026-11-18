@@ -826,12 +826,21 @@ class ExternalAgentsViewsTests(TestCase):
         self.assertContains(response, 'input.showPicker?.()')
         self.assertContains(response, 'min-width: 1180px')
         self.assertContains(response, 'Total del monto')
+        self.assertContains(response, 'class="fx-total-label-cell" colspan="5"')
+        self.assertContains(response, 'id="fxTotals"')
         self.assertNotContains(response, 'Suma visible')
         self.assertNotContains(
             response,
             'Los anulados permanecen visibles, pero no se suman.',
         )
         self.assertContains(response, 'data-amount="1800.00"')
+        self.assertEqual(
+            [
+                total['currency']
+                for total in response.context['currency_totals']
+            ],
+            ['USD', 'PEN'],
+        )
         rows = response.context['rows']
         self.assertEqual(response.context['total_count'], 8)
         self.assertEqual(
@@ -848,6 +857,10 @@ class ExternalAgentsViewsTests(TestCase):
             for row in rows
         ))
         html = response.content.decode()
+        self.assertLess(
+            html.index('>Total del monto<'),
+            html.index('id="fxTotals"'),
+        )
         self.assertLess(
             html.index('>Mes correspondiente<'),
             html.index('>Fecha de vencimiento<'),

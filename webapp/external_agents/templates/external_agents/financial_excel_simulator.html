@@ -316,27 +316,25 @@
         display: block;
     }
 
-    .fx-footer {
-        display: flex;
-        flex: 0 0 auto;
-        align-items: center;
-        justify-content: flex-start;
-        gap: 16px;
-        min-height: 43px;
-        padding: 7px 12px;
-        border: 1px solid #2b5140;
-        border-top: 0;
-        border-radius: 0 0 10px 10px;
-        background: #173d2e;
-        color: #c9e7d7;
-        font-size: 11px;
+    .fx-sheet tfoot {
+        position: sticky;
+        bottom: 0;
+        z-index: 6;
     }
 
-    .fx-totals {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 7px 12px;
+    .fx-sheet .fx-total-row td {
+        height: auto;
+        min-height: 54px;
+        padding: 7px 12px;
+        border-top: 2px solid #2b5140;
+        border-bottom: 0;
+        background: #173d2e;
+        color: #c9e7d7;
+    }
+
+    .fx-total-label-cell {
+        border-right-color: #365e4e !important;
+        text-align: right;
     }
 
     .fx-total-label {
@@ -349,22 +347,19 @@
 
     .fx-total-values {
         display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 7px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 3px;
     }
 
     .fx-total-amount {
-        display: inline-flex;
-        align-items: baseline;
-        min-height: 27px;
-        padding: 0 10px;
-        border: 1px solid rgba(207, 236, 221, .2);
-        border-radius: 6px;
-        background: rgba(255, 255, 255, .06);
+        display: block;
         color: #fff;
-        font-size: 12px;
+        font-size: 11px;
         font-variant-numeric: tabular-nums;
+        line-height: 1.45;
+        text-align: right;
+        white-space: nowrap;
     }
 
     .fx-total-empty {
@@ -400,8 +395,8 @@
             flex: 1;
         }
 
-        .fx-footer {
-            align-items: flex-start;
+        .fx-sheet .fx-total-row td {
+            padding-inline: 8px;
         }
     }
 </style>
@@ -437,7 +432,7 @@
                 <th class="col-category" scope="col"><button class="fx-sort" type="button" data-sort-key="category" aria-label="Ordenar por categoría">Categoría<span class="fx-sort-indicator"></span></button></th>
                 <th class="col-concept" scope="col"><button class="fx-sort" type="button" data-sort-key="concept" aria-label="Ordenar por concepto">Concepto<span class="fx-sort-indicator"></span></button></th>
                 <th class="col-payment-date" scope="col"><button class="fx-sort" type="button" data-sort-key="paymentDate" aria-label="Ordenar por fecha de pago">Fecha de pago<span class="fx-sort-indicator"></span></button></th>
-                <th class="col-amount" scope="col"><button class="fx-sort" type="button" data-sort-key="amount" aria-label="Ordenar por monto">Monto<span class="fx-sort-indicator"></span></button></th>
+                <th class="col-amount" id="fxAmountHeading" scope="col"><button class="fx-sort" type="button" data-sort-key="amount" aria-label="Ordenar por monto">Monto<span class="fx-sort-indicator"></span></button></th>
             </tr>
             <tr class="fx-filter-row">
                 <th><div class="fx-filter-box"><input class="fx-filter" type="month" data-filter="month" aria-label="Filtrar mes correspondiente"><button class="fx-clear-one" type="button" data-clear="month" aria-label="Limpiar filtro de mes correspondiente">×</button></div></th>
@@ -472,22 +467,25 @@
             </tr>
             {% endfor %}
         </tbody>
+        <tfoot>
+            <tr class="fx-total-row">
+                <td class="fx-total-label-cell" colspan="5">
+                    <span class="fx-total-label">Total del monto</span>
+                </td>
+                <td class="fx-total-value-cell" headers="fxAmountHeading">
+                    <div class="fx-total-values" id="fxTotals" aria-live="polite">
+                    {% for total in currency_totals %}
+                        <strong class="fx-total-amount" data-currency="{{ total.currency }}">{{ total.currency }} {{ total.amount|floatformat:2|intcomma }}</strong>
+                    {% empty %}
+                        <strong class="fx-total-empty">Sin importes</strong>
+                    {% endfor %}
+                    </div>
+                </td>
+            </tr>
+        </tfoot>
     </table>
     <div class="fx-empty{% if not rows %} visible{% endif %}" id="fxNoData">
         No hay movimientos financieros cargados todavía. Cuando registres comisiones, servicios, gastos o planillas aparecerán aquí.
-    </div>
-</div>
-
-<div class="fx-footer">
-    <div class="fx-totals" id="fxTotals" aria-live="polite">
-        <span class="fx-total-label">Total del monto</span>
-        <span class="fx-total-values">
-        {% for total in currency_totals %}
-            <strong class="fx-total-amount" data-currency="{{ total.currency }}">{{ total.currency }} {{ total.amount|floatformat:2|intcomma }}</strong>
-        {% empty %}
-            <strong class="fx-total-empty">Sin importes</strong>
-        {% endfor %}
-        </span>
     </div>
 </div>
 
@@ -508,6 +506,11 @@
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });
+    const currencyOrder = new Map([
+        ['USD', 0],
+        ['PEN', 1],
+        ['EUR', 2],
+    ]);
 
     function parseAmount(value) {
         const raw = String(value ?? '').trim();
@@ -597,25 +600,26 @@
             );
         });
         if (hasInvalidAmount) {
-            totals.innerHTML = '<span class="fx-total-label">Total del monto</span><strong class="fx-total-error">No se pudo calcular</strong>';
+            totals.innerHTML = '<strong class="fx-total-error">No se pudo calcular</strong>';
             return;
         }
         if (!byCurrency.size) {
-            totals.innerHTML = '<span class="fx-total-label">Total del monto</span><strong class="fx-total-empty">Sin importes</strong>';
+            totals.innerHTML = '<strong class="fx-total-empty">Sin importes</strong>';
             return;
         }
         const amounts = Array.from(byCurrency.entries())
-            .sort(([left], [right]) => left.localeCompare(right))
+            .sort(([left], [right]) => (
+                (currencyOrder.get(left) ?? 99)
+                - (currencyOrder.get(right) ?? 99)
+                || left.localeCompare(right)
+            ))
             .map(([currency, amount]) => `
                 <strong class="fx-total-amount" data-currency="${currency}">
                     ${currency} ${numberFormatter.format(amount)}
                 </strong>
             `)
             .join('');
-        totals.innerHTML = `
-            <span class="fx-total-label">Total del monto</span>
-            <span class="fx-total-values">${amounts}</span>
-        `;
+        totals.innerHTML = amounts;
     }
 
     function applyView() {
