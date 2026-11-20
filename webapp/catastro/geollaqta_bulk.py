@@ -166,11 +166,14 @@ def _activate_payload(store, payload, ubigeo, actor):
 
 
 def stage_batch(store, cloud, ubigeo, selected, actor='sistema-geollaqta', activate=True):
-    # Large manifests can reach hundreds of MB. Download them one at a time so
-    # memory usage stays bounded even when the batch contains several big files.
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        manifests = list(pool.map(lambda lot_id: _manifest(cloud, ubigeo, lot_id),
-                                  selected))
+    # R2 reads are independent. Fetch them concurrently, but keep the D1
+    # commit/activation phase single-threaded so revision ordering remains
+    # deterministic and conflicts stay recoverable.
+    workers = max(1, min(8, len(selected)))
+    with ThreadPoolExecutor(max_workers=workers,
+                            thread_name_prefix='geollaqta-r2') as pool:
+        manifests = list(pool.map(
+            lambda lot_id: _manifest(cloud, ubigeo, lot_id), selected))
     payload = merge_batch(ubigeo, manifests)
     if activate:
         result = _activate_payload(store, payload, ubigeo, actor)
