@@ -292,6 +292,26 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_0FA92F15F0804AE197DC2EECF943B7DB }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_C521A0DD71BB48CE88443464F4F718FB }}
 
+      # Un 403 por deny assignment (p. ej. [UNUSUALACTIVITY]) bloquea todos los
+      # intentos por igual. Detectarlo aqui lo informa desde el primer intento
+      # y evita gastar los reintentos y sus esperas en un bloqueo que no se
+      # resuelve reintentando.
+      - name: Check publish profile access before deploying
+        run: |
+          if az webapp deployment list-publishing-profiles \
+            --name granextractorservice \
+            --resource-group rg-elgranextractor \
+            --output none 2> /tmp/deploy-auth-error.txt; then
+            echo "Publish profile access confirmed."
+          else
+            cat /tmp/deploy-auth-error.txt
+            if grep -qiE 'AuthorizationFailed|DenyAssignment|deny assignment|UNUSUALACTIVITY|403' /tmp/deploy-auth-error.txt; then
+              echo "::error::Azure devolvió 403 (denegación de autorización) al obtener el perfil de publicación de granextractorservice. Una deny assignment a nivel de suscripción bloquea el despliegue para todos los usuarios y los reintentos no la resuelven. Gestionar el desbloqueo con Microsoft antes de relanzar."
+              exit 1
+            fi
+            echo "Precheck failed with a non-authorization error. Continuing with the normal deploy attempts."
+          fi
+
       - name: Brief pause before deploying
         run: |
           # Este app service no tiene deployment slots (solo el sitio por
